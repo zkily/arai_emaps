@@ -21,7 +21,7 @@ from app.modules.shipping.warehouse_daily_stock_api import router as warehouse_d
 router = APIRouter()
 router.include_router(quick_update_router, tags=["出荷クイック編集"])
 router.include_router(destination_groups_router, prefix="/destination-groups", tags=["出荷・納入先分组"])
-router.include_router(welding_router, prefix="/welding", tags=["溶接出荷管理"])
+router.include_router(welding_router, prefix="/welding", tags=["出荷管理表"])
 router.include_router(picking_router, prefix="/picking", tags=["ピッキング管理"])
 router.include_router(shipping_items_router, prefix="/items", tags=["出荷明細"])
 router.include_router(print_record_router, prefix="/print-record", tags=["印刷記録"])

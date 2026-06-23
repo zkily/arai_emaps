@@ -37,6 +37,11 @@ export interface ReportRecipient {
   source: string
 }
 
+export interface CuttingReportChartData {
+  inventory_trend: { labels: string[]; values: number[] }
+  plan_actual: { labels: string[]; plan: number[]; actual: number[] }
+}
+
 export interface ReportPreview {
   success: boolean
   report_code: string
@@ -45,6 +50,7 @@ export interface ReportPreview {
   period_label: string
   record_count: number
   summary_html: string
+  chart_data?: CuttingReportChartData | null
   attachments: { filename: string; size: number }[]
   email_enabled: boolean
   line_enabled: boolean

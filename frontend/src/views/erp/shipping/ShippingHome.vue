@@ -303,8 +303,8 @@ const modules = [
   },
   {
     path: '/erp/shipping/welding',
-    title: '溶接出荷管理',
-    description: '溶接工程の出荷指示・進捗',
+    title: '出荷管理表',
+    description: '出荷予定の期間別・納入先別検索と印刷',
     icon: markRaw(Connection),
     gradient: 'linear-gradient(135deg, #f56c6c, #f78989)',
   },

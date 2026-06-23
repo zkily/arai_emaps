@@ -1607,6 +1607,32 @@ async function issue(row: ShippingItem): Promise<void> {
   }
 }
 
+interface PrintRecordResponse {
+  success?: boolean
+  count?: number
+  status_updated?: boolean
+  warning?: string
+}
+
+function handlePrintRecordSaved(
+  result: PrintRecordResponse | unknown,
+  shippingNos: Iterable<string>,
+  successMessage: string,
+): void {
+  const data = (result || {}) as PrintRecordResponse
+  if (data.warning) {
+    ElMessage.warning(data.warning)
+  } else {
+    ElMessage.success(successMessage)
+  }
+  if (data.status_updated !== false) {
+    const noSet = new Set(shippingNos)
+    shippingList.value = shippingList.value.map((item) =>
+      noSet.has(item.shipping_no) ? { ...item, status: '発行済' } : item,
+    )
+  }
+}
+
 // 单个出荷データを印刷 - 同一出荷番号の全ての製品を印刷
 async function printShipping(row: ShippingItem): Promise<void> {
   actionLoading.value = true
@@ -1648,18 +1674,14 @@ async function printShipping(row: ShippingItem): Promise<void> {
 
     // 印刷記録をデータベースに保存し、状態を更新
     try {
-      await request.post('/api/shipping/print-record', {
+      const recordResult = await request.post('/api/shipping/print-record', {
         shipping_numbers: [row.shipping_no],
       })
 
-      ElMessage.success(
+      handlePrintRecordSaved(
+        recordResult,
+        [row.shipping_no],
         `出荷番号: ${row.shipping_no} (${sameShippingNoItems.length}件の製品) を印刷し、記録を保存しました`,
-      )
-
-      // 印刷后立即更新本地状態（同一出荷番号の行を発行済に）
-      const no = row.shipping_no
-      shippingList.value = shippingList.value.map((item) =>
-        item.shipping_no === no ? { ...item, status: '発行済' } : item,
       )
 
       // print_history 表に印刷履歴を保存
@@ -1847,19 +1869,14 @@ async function printSelected(): Promise<void> {
 
     // 印刷記録をデータベースに保存し、状態を更新
     try {
-      await request.post('/api/shipping/print-record', {
+      const recordResult = await request.post('/api/shipping/print-record', {
         shipping_numbers: Array.from(selectedShippingNumbers),
       })
 
-      ElMessage.success(
+      handlePrintRecordSaved(
+        recordResult,
+        selectedShippingNumbers,
         `${selectedShippingNumbers.size}件の出荷番号 (計${allItemsToPrint.length}製品) を印刷し、記録を保存しました`,
-      )
-
-      // 選択印刷后立即更新本地状態（与发行一致，无需整表刷新）
-      shippingList.value = shippingList.value.map((item) =>
-        selectedShippingNumbers.has(item.shipping_no)
-          ? { ...item, status: '発行済' }
-          : item,
       )
 
       // print_history 表に印刷履歴を保存
@@ -1984,13 +2001,20 @@ function generatePrintHTML(items: ShippingItem[]): string {
           border-bottom: 1px solid #000;
           margin-bottom: 20px;
         }
-        .shipping-no-left {
+        .page-header-left {
           font-size: 13px;
           font-weight: normal;
           display: flex;
           flex-direction: column;
           align-items: flex-start;
           gap: 6px;
+        }
+        .page-header-right {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
         }
         .weekday-icon {
           width: 40px;
@@ -2169,6 +2193,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
         .shipping-no-suffix {
           font-weight: bold;
           font-size: 16px;
+          margin-left: auto;
         }
 
         /* QRコード */
@@ -2258,10 +2283,13 @@ function generatePrintHTML(items: ShippingItem[]): string {
       <div class="page">
         <!-- 上部 -->
         <div class="page-header">
-          <div class="shipping-no-left">
+          <div class="page-header-left">
+            <div class="shipping-management-no">管理番号: ${shippingNo}</div>
+          </div>
+          <div class="page-header-right">
+            <div class="shipping-date-right">出荷日: ${formatDateWithWeekday(firstItem.shipping_date)}</div>
             ${getShippingWeekdayIconHtml(firstItem.shipping_date)}
           </div>
-          <div class="shipping-date-right">出荷日: ${formatDateWithWeekday(firstItem.shipping_date)}</div>
         </div>
 
         <!-- 中部 -->
@@ -2338,7 +2366,6 @@ function generatePrintHTML(items: ShippingItem[]): string {
 
         <!-- 下部 -->
         <div class="page-footer">
-          <div class="shipping-management-no">管理番号: ${shippingNo}</div>
           <div class="print-datetime">発行日時: ${currentDateTime}</div>
           <div class="shipping-no-suffix">パレット番号${shippingNoLast3}</div>
         </div>

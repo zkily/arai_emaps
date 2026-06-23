@@ -109,7 +109,7 @@
             </el-button>
           </div>
 
-          <div v-if="preview" class="rc-preview">
+            <div v-if="preview" class="rc-preview">
             <div class="rc-preview__meta">
               <span>対象期間: <b>{{ preview.period_label }}</b></span>
               <span>件数: <b>{{ preview.record_count }}</b></span>
@@ -133,7 +133,31 @@
               </ul>
             </div>
 
-            <div class="rc-preview__summary" v-html="preview.summary_html"></div>
+            <!-- 切断工程実績レポート: A4 横向きチャートプレビュー -->
+            <div
+              v-if="isCuttingReportPreview"
+              class="rc-a4-preview"
+            >
+              <div class="rc-a4-sheet rc-a4-sheet--landscape">
+                <header class="rc-a4-sheet__head">
+                  <h3 class="rc-a4-sheet__title">切断工程実績レポート</h3>
+                  <p class="rc-a4-sheet__period">対象期間: {{ preview.period_label }}</p>
+                  <p class="rc-a4-sheet__note">※ 成型前在庫 = 切断在庫 + 面取在庫（日次合計）</p>
+                </header>
+
+                <section class="rc-a4-section">
+                  <h4 class="rc-a4-section__title">成型前在庫推移（日次・単位: 千）</h4>
+                  <div ref="inventoryChartRef" class="rc-a4-chart" />
+                </section>
+
+                <section class="rc-a4-section">
+                  <h4 class="rc-a4-section__title">切断工程 計画 vs 実績（日次・単位: 千）</h4>
+                  <div ref="planActualChartRef" class="rc-a4-chart rc-a4-chart--bar" />
+                </section>
+              </div>
+            </div>
+
+            <div v-else class="rc-preview__summary" v-html="preview.summary_html" />
           </div>
         </div>
         <el-empty v-else description="レポートを選択してください" />
@@ -162,7 +186,7 @@
             <el-switch
               v-model="row.is_active"
               size="small"
-              @change="(v: boolean) => toggleSchedule(row, v)"
+              @change="(v) => onScheduleActiveChange(row, v)"
             />
           </template>
         </el-table-column>
@@ -249,9 +273,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Download, Plus, Promotion, Refresh, View } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
+import type { ECharts } from 'echarts'
 import {
   createReportSchedule,
   deleteReportSchedule,
@@ -262,6 +288,7 @@ import {
   previewReport,
   sendReport,
   updateReportSchedule,
+  type CuttingReportChartData,
   type ReportDefinition,
   type ReportParameterField,
   type ReportPreview,
@@ -287,6 +314,33 @@ const preview = ref<ReportPreview | null>(null)
 const previewLoading = ref(false)
 const sendLoading = ref(false)
 const sendFormat = ref('xlsx')
+
+const inventoryChartRef = ref<HTMLDivElement | null>(null)
+const planActualChartRef = ref<HTMLDivElement | null>(null)
+let inventoryChart: ECharts | null = null
+let planActualChart: ECharts | null = null
+
+const CHART_PRIMARY = '#2563EB'
+const CHART_ACCENT = '#10B981'
+const CHART_AXIS = '#94A3B8'
+const CHART_GRID = '#E2E8F0'
+const INVENTORY_LETTER_LINE = 142000
+const INVENTORY_UNIT_THOUSAND = 1000
+
+function toInventoryThousand(value: number): number {
+  return Math.round((value / INVENTORY_UNIT_THOUSAND) * 10) / 10
+}
+
+function formatInventoryThousand(value: number): string {
+  const thousand = toInventoryThousand(value)
+  return Number.isInteger(thousand) ? `${thousand}` : thousand.toFixed(1)
+}
+
+const isCuttingReportPreview = computed(
+  () =>
+  selected.value?.report_code === 'CUTTING_DAILY_ACTUAL' &&
+  !!preview.value?.chart_data,
+)
 
 const schedules = ref<ReportSchedule[]>([])
 const logs = ref<ReportSendLog[]>([])
@@ -336,6 +390,7 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' | 'info
 function selectDefinition(d: ReportDefinition) {
   selected.value = d
   preview.value = null
+  disposeCharts()
   sendFormat.value = d.default_format === 'both' ? 'both' : (d.default_format || 'xlsx')
   Object.keys(paramState).forEach((k) => delete paramState[k])
   for (const field of d.parameter_schema?.fields || []) {
@@ -359,11 +414,220 @@ function buildParameters(): Record<string, unknown> {
   return params
 }
 
+function disposeCharts() {
+  inventoryChart?.dispose()
+  planActualChart?.dispose()
+  inventoryChart = null
+  planActualChart = null
+}
+
+function buildInventoryChartOption(data: CuttingReportChartData) {
+  const { labels, values } = data.inventory_trend
+  const valuesInThousand = values.map((v) => toInventoryThousand(v))
+  const letterLineThousand = toInventoryThousand(INVENTORY_LETTER_LINE)
+  const yMax = Math.max(...valuesInThousand, letterLineThousand, 1)
+
+  return {
+    animation: true,
+    animationDuration: 600,
+    animationEasing: 'cubicOut' as const,
+    grid: { left: 46, right: 18, top: 28, bottom: 32 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      borderWidth: 0,
+      textStyle: { color: '#f8fafc', fontSize: 11 },
+      formatter: (params: { name: string; value: number; dataIndex: number }[]) => {
+        const p = params[0]
+        const raw = values[p.dataIndex] ?? 0
+        return `${p.name}<br/>成型前在庫: <b>${formatInventoryThousand(raw)}千</b>（${raw.toLocaleString()}）`
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: CHART_GRID } },
+      axisTick: { show: false },
+      axisLabel: { color: CHART_AXIS, fontSize: 10, margin: 8 },
+    },
+    yAxis: {
+      type: 'value',
+      name: '千',
+      min: 0,
+      max: Math.ceil(yMax * 1.1),
+      splitNumber: 5,
+      nameTextStyle: { color: CHART_AXIS, fontSize: 10, padding: [0, 0, 0, -4] },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: CHART_GRID, type: 'dashed' } },
+      axisLabel: {
+        color: CHART_AXIS,
+        fontSize: 10,
+        formatter: (v: number) => `${v}`,
+      },
+    },
+    series: [
+      {
+        name: '成型前在庫',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { width: 2.5, color: CHART_PRIMARY, shadowColor: 'rgba(37,99,235,0.25)', shadowBlur: 6 },
+        itemStyle: { color: CHART_PRIMARY, borderWidth: 2, borderColor: '#fff' },
+        emphasis: {
+          scale: true,
+          itemStyle: { borderWidth: 2, shadowBlur: 8, shadowColor: 'rgba(37,99,235,0.35)' },
+        },
+        label: {
+          show: true,
+          position: 'top',
+          distance: 4,
+          fontSize: 9,
+          fontWeight: 500,
+          color: '#1E40AF',
+          formatter: (p: { value: number }) => `${p.value}`,
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(37, 99, 235, 0.22)' },
+            { offset: 0.6, color: 'rgba(37, 99, 235, 0.06)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0)' },
+          ]),
+        },
+        data: valuesInThousand,
+        markLine: {
+          silent: true,
+          symbol: ['none', 'none'],
+          lineStyle: { color: '#DC2626', width: 1.5, type: 'dashed', opacity: 0.85 },
+          label: { show: false },
+          data: [{ yAxis: letterLineThousand }],
+        },
+      },
+    ],
+  }
+}
+
+function buildPlanActualChartOption(data: CuttingReportChartData) {
+  const { labels, plan, actual } = data.plan_actual
+  const planInThousand = plan.map((v) => toInventoryThousand(v))
+  const actualInThousand = actual.map((v) => toInventoryThousand(v))
+  const yMax = Math.max(...planInThousand, ...actualInThousand, 1)
+
+  return {
+    animation: true,
+    animationDuration: 600,
+    animationEasing: 'cubicOut' as const,
+    legend: {
+      data: ['計画', '実績'],
+      top: 0,
+      right: 8,
+      itemWidth: 12,
+      itemHeight: 8,
+      textStyle: { color: CHART_AXIS, fontSize: 10 },
+    },
+    grid: { left: 46, right: 18, top: 28, bottom: labels.length > 12 ? 44 : 32 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      borderWidth: 0,
+      textStyle: { color: '#f8fafc', fontSize: 11 },
+      axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(37,99,235,0.06)' } },
+      formatter: (params: { seriesName: string; value: number; dataIndex: number }[]) => {
+        const day = labels[params[0]?.dataIndex] ?? ''
+        const lines = params.map((p) => {
+          const raw = p.seriesName === '計画' ? plan[p.dataIndex] : actual[p.dataIndex]
+          return `${p.seriesName}: <b>${formatInventoryThousand(raw ?? 0)}千</b>（${(raw ?? 0).toLocaleString()}）`
+        })
+        return `${day}<br/>${lines.join('<br/>')}`
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: CHART_GRID } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: CHART_AXIS,
+        fontSize: 10,
+        margin: 8,
+        rotate: labels.length > 12 ? 40 : 0,
+      },
+    },
+    yAxis: {
+      type: 'value',
+      name: '千',
+      min: 0,
+      max: Math.ceil(yMax * 1.15),
+      splitNumber: 5,
+      nameTextStyle: { color: CHART_AXIS, fontSize: 10, padding: [0, 0, 0, -4] },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: CHART_GRID, type: 'dashed' } },
+      axisLabel: { color: CHART_AXIS, fontSize: 10 },
+    },
+    series: [
+      {
+        name: '計画',
+        type: 'bar',
+        barGap: '30%',
+        barMaxWidth: 20,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#93C5FD' },
+            { offset: 1, color: '#3B82F6' },
+          ]),
+          borderRadius: [3, 3, 0, 0],
+        },
+        emphasis: { itemStyle: { color: '#2563EB' } },
+        data: planInThousand,
+      },
+      {
+        name: '実績',
+        type: 'bar',
+        barMaxWidth: 20,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#6EE7B7' },
+            { offset: 1, color: '#10B981' },
+          ]),
+          borderRadius: [3, 3, 0, 0],
+        },
+        emphasis: { itemStyle: { color: '#059669' } },
+        data: actualInThousand,
+      },
+    ],
+  }
+}
+
+async function renderCuttingCharts() {
+  disposeCharts()
+  if (!isCuttingReportPreview.value || !preview.value?.chart_data) return
+  await nextTick()
+  const data = preview.value.chart_data
+  if (inventoryChartRef.value) {
+    inventoryChart = echarts.init(inventoryChartRef.value)
+    inventoryChart.setOption(buildInventoryChartOption(data))
+  }
+  if (planActualChartRef.value) {
+    planActualChart = echarts.init(planActualChartRef.value)
+    planActualChart.setOption(buildPlanActualChartOption(data))
+  }
+}
+
+function handleChartResize() {
+  inventoryChart?.resize()
+  planActualChart?.resize()
+}
+
 async function doPreview() {
   if (!selected.value) return
   previewLoading.value = true
+  disposeCharts()
   try {
     preview.value = await previewReport(selected.value.report_code, buildParameters())
+    await renderCuttingCharts()
   } catch {
     // インターセプタでメッセージ表示済み
   } finally {
@@ -476,6 +740,10 @@ async function saveSchedule() {
   }
 }
 
+function onScheduleActiveChange(row: ReportSchedule, val: string | number | boolean) {
+  void toggleSchedule(row, Boolean(val))
+}
+
 async function toggleSchedule(row: ReportSchedule, value: boolean) {
   try {
     await updateReportSchedule(row.id, { is_active: value })
@@ -518,7 +786,20 @@ async function loadAll() {
   }
 }
 
-onMounted(loadAll)
+onMounted(() => {
+  loadAll()
+  window.addEventListener('resize', handleChartResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleChartResize)
+  disposeCharts()
+})
+
+watch(isCuttingReportPreview, (val) => {
+  if (val) void renderCuttingCharts()
+  else disposeCharts()
+})
 </script>
 
 <style scoped>
@@ -684,6 +965,153 @@ onMounted(loadAll)
 .rc-preview__summary :deep(td) {
   border: 1px solid var(--el-border-color);
   padding: 4px 8px;
+}
+
+/* 切断工程実績レポート A4 横向きプレビュー */
+.rc-a4-preview {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: linear-gradient(145deg, #e2e8f0 0%, #f1f5f9 100%);
+  border-radius: 10px;
+}
+.rc-a4-sheet {
+  width: 100%;
+  max-width: 680px;
+  aspect-ratio: 210 / 297;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 28px 32px 24px;
+}
+.rc-a4-sheet--landscape {
+  max-width: min(100%, 1100px);
+  aspect-ratio: 297 / 210;
+  max-height: none;
+  padding: 20px 28px 18px;
+}
+.rc-a4-sheet__head {
+  text-align: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.rc-a4-sheet--landscape .rc-a4-sheet__head {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+}
+.rc-a4-sheet__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+.rc-a4-sheet--landscape .rc-a4-sheet__title {
+  font-size: 16px;
+}
+.rc-a4-sheet__period {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+.rc-a4-sheet__note {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.rc-a4-section {
+  margin-bottom: 10px;
+}
+.rc-a4-section:last-child {
+  margin-bottom: 0;
+}
+.rc-a4-section__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e40af;
+}
+.rc-a4-chart {
+  height: 180px;
+  width: 100%;
+}
+.rc-a4-sheet--landscape .rc-a4-chart {
+  height: 200px;
+}
+.rc-a4-chart--bar {
+  height: 200px;
+}
+.rc-a4-sheet--landscape .rc-a4-chart--bar {
+  height: 200px;
+}
+
+/* summary_html 内スタイル（切断レポート・他レポート用） */
+.rc-preview__summary :deep(.cutting-report-summary .cr-header) {
+  display: none;
+}
+.rc-preview__summary :deep(.cutting-report-summary .cr-kpi-row) {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rc-preview__summary :deep(.cr-kpi) {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: center;
+}
+.rc-preview__summary :deep(.cr-kpi__label) {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+.rc-preview__summary :deep(.cr-kpi b) {
+  font-size: 14px;
+  color: #0f172a;
+}
+.rc-preview__summary :deep(.cr-kpi small) {
+  display: block;
+  font-size: 9px;
+  color: #94a3b8;
+}
+.rc-preview__summary :deep(.cr-pos) {
+  color: #059669;
+}
+.rc-preview__summary :deep(.cr-neg) {
+  color: #dc2626;
+}
+.rc-preview__summary :deep(.cr-note) {
+  font-size: 10px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+}
+.rc-preview__summary :deep(.cr-table) {
+  width: 100%;
+  font-size: 10px;
+  border-collapse: collapse;
+}
+.rc-preview__summary :deep(.cr-table th) {
+  background: #e8eef7;
+  color: #1e3a5f;
+  font-weight: 600;
+  padding: 5px 6px;
+  border: 1px solid #cbd5e1;
+}
+.rc-preview__summary :deep(.cr-table td) {
+  padding: 4px 6px;
+  border: 1px solid #e2e8f0;
+}
+.rc-preview__summary :deep(.cr-table tfoot th) {
+  background: #f8fafc;
 }
 .rc-panel__head {
   display: flex;

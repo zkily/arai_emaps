@@ -103,6 +103,7 @@ async def get_report_preview(
         "period_label": report.period_label,
         "record_count": report.record_count,
         "summary_html": report.summary_html,
+        "chart_data": report.extra_variables.get("chart_data"),
         "attachments": [
             {"filename": a.filename, "size": len(a.content)} for a in report.attachments
         ],

@@ -3508,7 +3508,7 @@ const confirmPrint = async () => {
         <head>
           <title>注文書</title>
           <meta charset="UTF-8">
-          <style>${MARUICHI_ORDER_SHEET_STYLES}</style>
+          <style>${MARUICHI_ORDER_SHEET_STYLES}${MATERIAL_ORDER_SHEET_SIDE_MARGIN_EXTRA_CSS}</style>
         </head>
         <body>${printContent}</body>
         </html>
@@ -3655,6 +3655,18 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
   `
 }
 
+/** 注文書印刷：共通スタイルの左右 0.5cm に加えて各 0.7cm（計 1.2cm） */
+const MATERIAL_ORDER_SHEET_SIDE_MARGIN_EXTRA_CSS = `
+  body {
+    margin-left: 0.7cm !important;
+    margin-right: 0.7cm !important;
+  }
+  @page {
+    margin-left: 0.7cm;
+    margin-right: 0.7cm;
+  }
+`
+
 /** PDF キャプチュラ用：iframe を内容高さに閉じ、余白のないキャンバスにする */
 const ORDER_SHEET_CAPTURE_EXTRA_CSS = `
 html.sheet-capture-doc, html.sheet-capture-doc body {
@@ -3669,9 +3681,9 @@ html.sheet-capture-doc .order-sheet {
   min-height: 277mm !important;
   padding-bottom: 36mm !important;
   position: relative !important;
-  /* 捕获时给左右留白，避免 PDF 内容贴到页面左右边缘 */
-  padding-left: 6mm !important;
-  padding-right: 6mm !important;
+  /* 捕获时给左右留白，避免 PDF 内容贴到页面左右边缘（共通 6mm + 材料注文 0.7cm） */
+  padding-left: 13mm !important;
+  padding-right: 13mm !important;
   box-sizing: border-box !important;
 }
 html.sheet-capture-doc .order-sheet .notes {
@@ -3699,7 +3711,7 @@ const generateOrderSheetImagePdfBlob = (mergedOrderItems: MaterialOrderItem[]): 
       reject(new Error('iframe document'))
       return
     }
-    const html = `<!DOCTYPE html><html class="sheet-capture-doc"><head><meta charset="UTF-8"><style>${MARUICHI_ORDER_SHEET_STYLES}${ORDER_SHEET_CAPTURE_EXTRA_CSS}</style></head><body class="order-pdf-capture">${printContent}</body></html>`
+    const html = `<!DOCTYPE html><html class="sheet-capture-doc"><head><meta charset="UTF-8"><style>${MARUICHI_ORDER_SHEET_STYLES}${MATERIAL_ORDER_SHEET_SIDE_MARGIN_EXTRA_CSS}${ORDER_SHEET_CAPTURE_EXTRA_CSS}</style></head><body class="order-pdf-capture">${printContent}</body></html>`
     doc.open()
     doc.write(html)
     doc.close()

@@ -42,16 +42,27 @@
 
           <el-form-item :label="t('shipping.weldingProduct')" class="form-item-compact">
             <el-select v-model="searchForm.selectedProducts" multiple collapse-tags collapse-tags-tooltip
-              :placeholder="t('shipping.selectWeldingProduct')" class="product-select" :loading="productLoading">
+              :placeholder="t('shipping.selectWeldingProduct')" class="product-select" :loading="productLoading"
+              :disabled="isProductFilterDisabled" @change="onProductsChange">
               <el-option v-for="product in weldingProducts" :key="product.value" :label="product.label"
                 :value="product.value" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item :label="t('shipping.destination')" class="form-item-compact">
+            <el-select v-model="searchForm.selectedDestinations" multiple collapse-tags collapse-tags-tooltip
+              filterable :placeholder="t('shipping.selectDestination')" class="destination-select"
+              :loading="destinationLoading" clearable :disabled="isDestinationFilterDisabled"
+              @change="onDestinationsChange">
+              <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label"
+                :value="dest.value" />
             </el-select>
           </el-form-item>
 
           <div class="form-actions-inline">
             <el-button type="primary" @click="handleSearch" :loading="tableLoading" :disabled="!searchForm.startDate ||
               !searchForm.endDate ||
-              searchForm.selectedProducts.length === 0
+              (searchForm.selectedProducts.length === 0 && searchForm.selectedDestinations.length === 0)
               " class="search-btn">
               <el-icon>
                 <Search />
@@ -93,7 +104,7 @@
       <!-- 统计信息 -->
       <div class="summary-section">
         <el-row :gutter="12" class="stats-row">
-          <el-col :span="8">
+          <el-col :span="6">
             <div class="stat-card period-stat">
               <div class="stat-icon">
                 <el-icon>
@@ -106,7 +117,7 @@
               </div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="6">
             <div class="stat-card products-stat">
               <div class="stat-icon">
                 <el-icon>
@@ -116,12 +127,27 @@
               <div class="stat-content">
                 <div class="stat-label">対象製品数</div>
                 <div class="stat-value">
-                  {{ searchForm.selectedProducts.length }}<span class="stat-unit">種類</span>
+                  {{ displayedProductCount }}<span class="stat-unit">種類</span>
                 </div>
               </div>
             </div>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="6">
+            <div class="stat-card destinations-stat">
+              <div class="stat-icon">
+                <el-icon>
+                  <Location />
+                </el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-label">対象納入先数</div>
+                <div class="stat-value">
+                  {{ displayedDestinationCount }}<span class="stat-unit">件</span>
+                </div>
+              </div>
+            </div>
+          </el-col>
+          <el-col :span="6">
             <div class="stat-card records-stat">
               <div class="stat-icon">
                 <el-icon>
@@ -145,7 +171,7 @@
           <h3 class="table-title">出荷スケジュール詳細</h3>
         </div>
         <div class="table-container">
-          <el-table v-if="tableData && Array.isArray(tableData.products) && tableData.products.length > 0" :data="pivotTableData" border stripe
+          <el-table v-if="hasTableRows" :data="pivotTableData" border stripe
             size="default" class="welding-table" :span-method="objectSpanMethod" empty-text="データがありません">
             <!-- 纳入先列 -->
             <el-table-column prop="destination" label="納入先" width="140" fixed="left" align="center">
@@ -191,6 +217,9 @@
               </template>
             </el-table-column>
           </el-table>
+          <div v-else-if="tableData" class="empty-table-hint">
+            <el-empty description="該当する出荷データがありません" :image-size="80" />
+          </div>
         </div>
       </div>
     </el-card>
@@ -221,7 +250,8 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { TableColumnCtx } from 'element-plus'
-import { Search, Refresh, Printer, Calendar, Box, DataLine, Loading } from '@element-plus/icons-vue'
+import { Search, Refresh, Printer, Calendar, Box, DataLine, Loading, Location } from '@element-plus/icons-vue'
+import request from '@/utils/request'
 import {
   getWeldingProducts,
   getWeldingShippingData,
@@ -252,11 +282,18 @@ const getCurrentMonthRange = (): [string, string] => {
 }
 const initialMonthRange = getCurrentMonthRange()
 
+interface DestinationOption {
+  value: string
+  label: string
+}
+
 // 响应式数据
 const productLoading = ref(false)
+const destinationLoading = ref(false)
 const tableLoading = ref(false)
 const exportLoading = ref(false)
 const weldingProducts = ref<WeldingProduct[]>([])
+const destinationOptions = ref<DestinationOption[]>([])
 const tableData = ref<WeldingShippingData | null>(null)
 const dateRange = ref<[string, string] | undefined>(initialMonthRange)
 
@@ -265,6 +302,7 @@ const searchForm = reactive({
   startDate: initialMonthRange[0],
   endDate: initialMonthRange[1],
   selectedProducts: [] as string[],
+  selectedDestinations: [] as string[],
 })
 
 // 日期快捷选项
@@ -315,6 +353,29 @@ const periodText = computed(() => {
   return ''
 })
 
+const displayedDestinationCount = computed(() => {
+  if (searchForm.selectedDestinations.length > 0) {
+    return searchForm.selectedDestinations.length
+  }
+  if (!tableData.value || !Array.isArray(tableData.value.destinations)) {
+    return 0
+  }
+  return tableData.value.destinations.length
+})
+
+const displayedProductCount = computed(() => {
+  if (searchForm.selectedProducts.length > 0) {
+    return searchForm.selectedProducts.length
+  }
+  if (!tableData.value || !Array.isArray(tableData.value.products)) {
+    return 0
+  }
+  return tableData.value.products.length
+})
+
+const isProductFilterDisabled = computed(() => searchForm.selectedDestinations.length > 0)
+const isDestinationFilterDisabled = computed(() => searchForm.selectedProducts.length > 0)
+
 interface PivotRow {
   destination: string
   productName: string
@@ -356,6 +417,8 @@ const pivotTableData = computed<PivotRow[]>(() => {
   return rows
 })
 
+const hasTableRows = computed(() => pivotTableData.value.length > 0)
+
 const destinationSpans = computed(() => {
   const spans: Record<number, number> = {}
   const data = pivotTableData.value
@@ -380,8 +443,41 @@ const destinationSpans = computed(() => {
 
 // 初始化
 onMounted(() => {
+  loadDestinationOptions()
   loadWeldingProducts()
 })
+
+const loadDestinationOptions = async () => {
+  try {
+    destinationLoading.value = true
+    const response = await request.get('/api/master/destinations/options')
+    const payload =
+      (response as { data?: unknown }).data !== undefined
+        ? (response as { data: unknown }).data
+        : response
+    let data: Array<{ cd: string; name: string }> | null = null
+    if (Array.isArray(payload)) {
+      data = payload
+    } else if (
+      payload &&
+      typeof payload === 'object' &&
+      Array.isArray((payload as { data?: unknown }).data)
+    ) {
+      data = (payload as { data: Array<{ cd: string; name: string }> }).data
+    }
+    if (data && Array.isArray(data)) {
+      destinationOptions.value = data.map((item) => ({
+        value: item.cd,
+        label: `${item.cd} - ${item.name}`,
+      }))
+    }
+  } catch (error) {
+    console.error('納入先取得エラー:', error)
+    ElMessage.error('納入先データの取得に失敗しました')
+  } finally {
+    destinationLoading.value = false
+  }
+}
 
 // 加载溶接产品列表（加载完成后默认全选対象製品，并用默认条件自动检索）
 const loadWeldingProducts = async () => {
@@ -398,10 +494,23 @@ const loadWeldingProducts = async () => {
       await handleSearch()
     }
   } catch (error) {
-    console.error('溶接製品取得エラー:', error)
-    ElMessage.error('溶接製品の取得に失敗しました')
+    console.error('対象製品取得エラー:', error)
+    ElMessage.error('対象製品の取得に失敗しました')
   } finally {
     productLoading.value = false
+  }
+}
+
+// 対象製品・納入先は排他選択
+const onProductsChange = (values: string[]) => {
+  if (values.length > 0) {
+    searchForm.selectedDestinations = []
+  }
+}
+
+const onDestinationsChange = (values: string[]) => {
+  if (values.length > 0) {
+    searchForm.selectedProducts = []
   }
 }
 
@@ -425,22 +534,38 @@ const handleSearch = async () => {
     return
   }
 
-  if (searchForm.selectedProducts.length === 0) {
-    ElMessage.warning('対象製品を選択してください')
+  if (
+    searchForm.selectedProducts.length === 0 &&
+    searchForm.selectedDestinations.length === 0
+  ) {
+    ElMessage.warning('対象製品または納入先を選択してください')
     return
   }
 
   try {
     tableLoading.value = true
-    const response = await getWeldingShippingData({
+    const params: {
+      start_date: string
+      end_date: string
+      products?: string[]
+      destination_cds?: string[]
+    } = {
       start_date: searchForm.startDate,
       end_date: searchForm.endDate,
-      products: searchForm.selectedProducts,
-    })
+    }
+    if (searchForm.selectedProducts.length > 0) {
+      params.products = searchForm.selectedProducts
+    } else {
+      params.destination_cds = searchForm.selectedDestinations
+    }
+    const response = await getWeldingShippingData(params)
 
-    // request工具已经自动提取了data字段
     tableData.value = response
-    ElMessage.success('データを取得しました')
+    if (!response.dates?.length || !response.products?.length) {
+      ElMessage.warning('該当する出荷データがありません')
+    } else {
+      ElMessage.success('データを取得しました')
+    }
   } catch (error) {
     console.error('データ取得エラー:', error)
     ElMessage.error('データの取得に失敗しました')
@@ -455,6 +580,7 @@ const handleReset = () => {
   searchForm.startDate = ''
   searchForm.endDate = ''
   searchForm.selectedProducts = []
+  searchForm.selectedDestinations = []
   tableData.value = null
 }
 
@@ -723,6 +849,11 @@ const getTotalRecordCount = () => {
   border-radius: 6px;
 }
 
+.destination-select {
+  width: 280px;
+  border-radius: 6px;
+}
+
 .form-actions-inline {
   display: flex;
   gap: 8px;
@@ -817,6 +948,11 @@ const getTotalRecordCount = () => {
   animation-delay: 0.2s;
 }
 
+.destinations-stat {
+  border-left: 4px solid #4299e1;
+  animation-delay: 0.25s;
+}
+
 .records-stat {
   border-left: 4px solid #38a169;
   animation-delay: 0.3s;
@@ -891,6 +1027,10 @@ const getTotalRecordCount = () => {
 
 .table-container {
   overflow-x: auto;
+}
+
+.empty-table-hint {
+  padding: 24px 0;
 }
 
 .welding-table {
@@ -1194,7 +1334,8 @@ const getTotalRecordCount = () => {
   }
 
   .date-picker,
-  .product-select {
+  .product-select,
+  .destination-select {
     width: 100%;
   }
 

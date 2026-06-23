@@ -1,8 +1,8 @@
 """
-溶接出荷管理 API（スライディング溶接出荷）
-- GET /welding/products: 溶接製品一覧（product_name に 'SD' を含み、status=active、product_type=量産品）
-- POST /welding/data: 溶接出荷データ（shipping_items から取得、日付・納入先・製品別に明細保持）
-- POST /welding/export: 印刷用レポート HTML
+出荷管理表 API
+- GET /welding/products: 対象製品一覧（product_name に 'SD' を含み、status=active、product_type=量産品）
+- POST /welding/data: 出荷データ（shipping_items から取得、日付・納入先・製品別に明細保持）
+- POST /welding/export: 印刷用レポート HTML（出荷管理表）
 """
 import re
 from datetime import datetime
@@ -17,7 +17,7 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import Product
+from app.modules.master.models import Destination, Product
 
 router = APIRouter()
 
@@ -39,7 +39,8 @@ def _validate_date(s: str) -> bool:
 class WeldingDataRequest(BaseModel):
     start_date: str
     end_date: str
-    products: List[str]
+    products: Optional[List[str]] = None
+    destination_cds: Optional[List[str]] = None
 
 
 @router.get("/products")
@@ -47,7 +48,7 @@ async def get_welding_products(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> List[dict]:
-    """溶接製品一覧。products テーブルから product_name に 'SD' を含む、status=active、product_type=量産品 を取得。"""
+    """対象製品一覧。products テーブルから product_name に 'SD' を含む、status=active、product_type=量産品 を取得。"""
     q = select(Product).where(
         Product.product_name.like("%SD%"),
         Product.status == "active",
@@ -68,9 +69,9 @@ async def get_welding_shipping_data(
     current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """
-    溶接出荷データ。
-    - 検証: start_date, end_date（YYYY-MM-DD）, products（非空）
-    - shipping_items から shipping_date BETWEEN start_date AND end_date, product_cd IN (products), status != 'キャンセル'
+    出荷データ。
+    - 検証: start_date, end_date（YYYY-MM-DD）, products または destination_cds のいずれか一方（同時指定不可）
+    - shipping_items から shipping_date BETWEEN start_date AND end_date, status != 'キャンセル'
     - products で product_name を取得して表示用マッピング
     - メモリ上で data[date][destination][productCd] = その組み合わせの複数件 { boxes }（集計せず明細のまま）
     - 返却: { dates, destinations, products: [{ cd, name }], data }
@@ -85,41 +86,128 @@ async def get_welding_shipping_data(
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date は end_date 以前を指定してください")
 
-    if not body.products or not isinstance(body.products, list):
-        raise HTTPException(status_code=400, detail="products を選択してください")
-    product_cds = [str(p).strip() for p in body.products if p is not None and str(p).strip()]
-    if not product_cds:
-        raise HTTPException(status_code=400, detail="products を選択してください")
+    product_cds = [
+        str(p).strip() for p in (body.products or []) if p is not None and str(p).strip()
+    ]
+    dest_cds = [
+        str(d).strip() for d in (body.destination_cds or []) if d is not None and str(d).strip()
+    ]
+    if product_cds and dest_cds:
+        raise HTTPException(
+            status_code=400,
+            detail="products と destination_cds は同時に指定できません",
+        )
+    if not product_cds and not dest_cds:
+        raise HTTPException(
+            status_code=400,
+            detail="products または destination_cds を選択してください",
+        )
 
-    # 2. shipping_items 取得
-    placeholders = ", ".join([f":pc_{i}" for i in range(len(product_cds))])
-    params_si = {
-        "start_date": start_date,
-        "end_date": end_date,
-        **{f"pc_{i}": product_cds[i] for i in range(len(product_cds))},
-    }
-    q_si = text(f"""
-        SELECT shipping_date, destination_cd, destination_name, product_cd, confirmed_boxes
-        FROM shipping_items
-        WHERE shipping_date BETWEEN :start_date AND :end_date
-          AND product_cd IN ({placeholders})
-          AND (status IS NULL OR status != 'キャンセル')
-        ORDER BY shipping_date, destination_cd, product_cd
-    """)
+    # 納入先のみ指定時は shipping_items を直接参照（製品マスタの SD 条件で絞らない）
+    destination_only = bool(dest_cds) and not product_cds
+    dest_names: List[str] = []
+    if dest_cds:
+        q_dest = select(Destination.destination_name).where(Destination.destination_cd.in_(dest_cds))
+        result_dest = await db.execute(q_dest)
+        dest_names = [
+            str(r.destination_name).strip()
+            for r in result_dest.all()
+            if r.destination_name and str(r.destination_name).strip()
+        ]
+
+    if destination_only:
+        params_si = {
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        dest_cd_ph = ", ".join([f":dc_{i}" for i in range(len(dest_cds))])
+        params_si.update({f"dc_{i}": dest_cds[i] for i in range(len(dest_cds))})
+        dest_filter_parts = [f"destination_cd IN ({dest_cd_ph})"]
+        if dest_names:
+            dest_name_ph = ", ".join([f":dn_{i}" for i in range(len(dest_names))])
+            params_si.update({f"dn_{i}": dest_names[i] for i in range(len(dest_names))})
+            dest_filter_parts.append(f"destination_name IN ({dest_name_ph})")
+        destination_filter_sql = f" AND ({' OR '.join(dest_filter_parts)})"
+
+        q_si = text(f"""
+            SELECT shipping_date, destination_cd, destination_name, product_cd, product_name, confirmed_boxes
+            FROM shipping_items
+            WHERE shipping_date BETWEEN :start_date AND :end_date
+              AND (status IS NULL OR status != 'キャンセル'){destination_filter_sql}
+            ORDER BY shipping_date, destination_cd, product_cd
+        """)
+    else:
+        if not product_cds:
+            q_welding = select(Product.product_cd).where(
+                Product.product_name.like("%SD%"),
+                Product.status == "active",
+                Product.product_type == "量産品",
+            ).order_by(Product.product_cd)
+            result_welding = await db.execute(q_welding)
+            product_cds = [row.product_cd for row in result_welding.all()]
+            if not product_cds:
+                return {"dates": [], "destinations": [], "products": [], "data": {}}
+
+        placeholders = ", ".join([f":pc_{i}" for i in range(len(product_cds))])
+        params_si = {
+            "start_date": start_date,
+            "end_date": end_date,
+            **{f"pc_{i}": product_cds[i] for i in range(len(product_cds))},
+        }
+        destination_filter_sql = ""
+        if dest_cds:
+            dest_cd_ph = ", ".join([f":dc_{i}" for i in range(len(dest_cds))])
+            params_si.update({f"dc_{i}": dest_cds[i] for i in range(len(dest_cds))})
+            dest_filter_parts = [f"destination_cd IN ({dest_cd_ph})"]
+            if dest_names:
+                dest_name_ph = ", ".join([f":dn_{i}" for i in range(len(dest_names))])
+                params_si.update({f"dn_{i}": dest_names[i] for i in range(len(dest_names))})
+                dest_filter_parts.append(f"destination_name IN ({dest_name_ph})")
+            destination_filter_sql = f" AND ({' OR '.join(dest_filter_parts)})"
+
+        q_si = text(f"""
+            SELECT shipping_date, destination_cd, destination_name, product_cd, product_name, confirmed_boxes
+            FROM shipping_items
+            WHERE shipping_date BETWEEN :start_date AND :end_date
+              AND product_cd IN ({placeholders})
+              AND (status IS NULL OR status != 'キャンセル'){destination_filter_sql}
+            ORDER BY shipping_date, destination_cd, product_cd
+        """)
     result_si = await db.execute(q_si, params_si)
     rows_si = result_si.mappings().all()
 
-    # 3. products から product_name 取得（表示用）
+    # 3. products 表示名を組み立て
+    display_product_cds = (
+        sorted({r["product_cd"] for r in rows_si if r.get("product_cd")})
+        if destination_only
+        else product_cds
+    )
+    if not display_product_cds:
+        return {"dates": [], "destinations": [], "products": [], "data": {}}
+
+    # shipping_items.product_name を優先、無ければ products マスタ
+    name_from_rows: dict = {}
+    for r in rows_si:
+        pc = r.get("product_cd")
+        if not pc or pc in name_from_rows:
+            continue
+        row_name = (r.get("product_name") or "").strip()
+        if row_name:
+            name_from_rows[pc] = row_name
+
     q_prod = select(Product.product_cd, Product.product_name).where(
-        Product.product_cd.in_(product_cds)
+        Product.product_cd.in_(display_product_cds)
     ).order_by(Product.product_cd)
     result_prod = await db.execute(q_prod)
     rows_prod = result_prod.all()
     product_name_by_cd = {row.product_cd: (row.product_name or row.product_cd) for row in rows_prod}
-    # リクエストの product_cds 順で products リストを組み立て（存在しない cd は名前を cd とする）
+
     products_out = [
-        {"cd": cd, "name": product_name_by_cd.get(cd, cd)}
-        for cd in product_cds
+        {
+            "cd": cd,
+            "name": name_from_rows.get(cd) or product_name_by_cd.get(cd, cd),
+        }
+        for cd in display_product_cds
     ]
 
     # 4. メモリ上で data[date][destination][productCd] = [{ boxes }, ...]
@@ -183,7 +271,7 @@ def _format_date_short(date_str: str) -> str:
 
 
 def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
-    """table_data から印刷用 HTML を生成（溶接出荷管理表・A4横向）。"""
+    """table_data から印刷用 HTML を生成（出荷管理表・A4横向）。"""
     dates = table_data.get("dates") or []
     destinations = table_data.get("destinations") or []
     products = table_data.get("products") or []
@@ -258,13 +346,14 @@ def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
 
     period = f"{start_date} ~ {end_date}"
     product_labels = "、".join(_escape(p.get("name") or p.get("product_name") or p.get("cd") or "") for p in products)
+    dest_labels = "、".join(_escape(d) for d in destinations) if destinations else "—"
     print_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>溶接出荷管理表</title>
+  <title>出荷管理表</title>
   <style>
     @page {{ size: A4 landscape; margin-left: 5mm; margin-right: 5mm; margin-top: 12mm; margin-bottom: 12mm; }}
     * {{ box-sizing: border-box; }}
@@ -290,9 +379,10 @@ def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
 </head>
 <body>
   <div class="header">
-    <div class="title">溶接出荷管理表</div>
+    <div class="title">出荷管理表</div>
     <div class="period">期間: {_escape(period)}</div>
     <div class="products">対象製品: {product_labels}</div>
+    <div class="destinations">対象納入先: {dest_labels}</div>
   </div>
   <table>
     <thead>

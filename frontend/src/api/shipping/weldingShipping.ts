@@ -1,5 +1,5 @@
 /**
- * 溶接出荷管理 API（スライディング溶接出荷）
+ * 出荷管理表 API
  */
 import request from '@/utils/request'
 
@@ -22,7 +22,8 @@ export interface WeldingShippingData {
 export interface WeldingShippingDataParams {
   start_date: string
   end_date: string
-  products: string[]
+  products?: string[]
+  destination_cds?: string[]
 }
 
 export interface WeldingExportParams {
@@ -32,7 +33,7 @@ export interface WeldingExportParams {
   table_data: WeldingShippingData
 }
 
-/** 溶接製品一覧を取得 */
+/** 対象製品一覧を取得 */
 export function getWeldingProducts(): Promise<WeldingProduct[]> {
   return request.get('/api/shipping/welding/products').then((r: unknown) => {
     if (Array.isArray(r)) return r as WeldingProduct[]
@@ -41,12 +42,17 @@ export function getWeldingProducts(): Promise<WeldingProduct[]> {
   })
 }
 
-/** 溶接出荷データを取得。后端返回 { dates, destinations, products, data }，直接作为整体使用 */
+/** 出荷データを取得。后端返回 { dates, destinations, products, data }，直接作为整体使用 */
 export function getWeldingShippingData(params: WeldingShippingDataParams): Promise<WeldingShippingData> {
   return request.post('/api/shipping/welding/data', params).then((r: unknown) => {
     const body = r as WeldingShippingData
-    if (body && typeof body === 'object' && Array.isArray(body.dates) && Array.isArray(body.products)) {
-      return body
+    if (body && typeof body === 'object' && Array.isArray(body.dates)) {
+      return {
+        dates: body.dates ?? [],
+        destinations: body.destinations ?? [],
+        products: body.products ?? [],
+        data: body.data ?? {},
+      }
     }
     return r as WeldingShippingData
   })

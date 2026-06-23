@@ -104,7 +104,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_REPORT', name: '出荷報告書管理', icon: 'Document', path: '/erp/shipping/report', parentCode: 'ERP_SHIPPING', sortOrder: 2 },
   { code: 'ERP_SHIPPING_OVERVIEW', name: '出荷予定表発行', icon: 'Calendar', path: '/erp/shipping/overview', parentCode: 'ERP_SHIPPING', sortOrder: 3 },
   { code: 'ERP_SHIPPING_CONFIRM', name: '出荷確認リスト', icon: 'CircleCheck', path: '/erp/shipping/confirm', parentCode: 'ERP_SHIPPING', sortOrder: 4 },
-  { code: 'ERP_SHIPPING_WELDING', name: '溶接出荷管理', icon: 'Connection', path: '/erp/shipping/welding', parentCode: 'ERP_SHIPPING', sortOrder: 5 },
+  { code: 'ERP_SHIPPING_WELDING', name: '出荷管理表', icon: 'Connection', path: '/erp/shipping/welding', parentCode: 'ERP_SHIPPING', sortOrder: 5 },
   { code: 'ERP_SHIPPING_PICKING', name: 'ピッキング管理', icon: 'Pointer', path: '/erp/shipping/picking', parentCode: 'ERP_SHIPPING', sortOrder: 6 },
   { code: 'ERP_SHIPPING_INVENTORY_SHORTAGE', name: '倉庫在庫管理', icon: 'Box', path: '/erp/shipping/inventory-shortage', parentCode: 'ERP_SHIPPING', sortOrder: 7 },
   { code: 'ERP_SHIPPING_ABC', name: 'ABC分析', icon: 'PieChart', path: '/erp/shipping/abc-analysis', parentCode: 'ERP_SHIPPING', sortOrder: 8 },
