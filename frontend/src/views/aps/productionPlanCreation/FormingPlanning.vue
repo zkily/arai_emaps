@@ -751,7 +751,7 @@
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
                   <th class="pgs-th-cutting" title="cutting_management（上流切断・実績/計画本数）">切断(本)</th>
                   <th class="pgs-th-status">ステータス</th>
-                  <th class="pgs-th-prediction">完了予測</th>
+                  <th class="pgs-th-period">計画期間</th>
                   <th
                     v-for="d in progressDisplayDates"
                     :key="d"
@@ -796,7 +796,11 @@
                       {{ progressStatusLabel(lot.progress_status) }}
                     </el-tag>
                   </td>
-                  <td class="pgs-prediction-cell">{{ formatPrediction(lot.predicted_completion) }}</td>
+                  <td class="pgs-period-cell" :title="progressPeriodTitle(lot)">
+                    <div class="pgs-period-line">{{ formatPrediction(lot.start_date) }}</div>
+                    <div class="pgs-period-sep">〜</div>
+                    <div class="pgs-period-line">{{ formatPrediction(lot.end_date || lot.predicted_completion) }}</div>
+                  </td>
                   <td
                     v-for="d in progressDisplayDates"
                     :key="d"
@@ -816,6 +820,7 @@
               全ロットを本工程（成型）の計画・実績として表示。日別セルは schedule_details／在庫ログ同期の<strong>成型実績</strong>。
               「計画数」は計画一覧のロット本数。上流不良がある場合は切断+面取の defect を management_code で合算し、<strong>有効</strong>は再計算後の成型ロット本数（aps_batch_plans）に合わせます。
               「ステータス」「切断(本)」は上流（instruction_plans／cutting_management）のみの情報で、行の表示とは独立します。
+              「計画期間」は再計算後のロット start/end（instruction_plans 同期含む）です。
             </p>
           </div>
         </el-tab-pane>
@@ -2711,6 +2716,7 @@ async function replanAll() {
       includeDebug,
     )
     await loadSchedules()
+    await loadProgress()
     ElMessage.success(formatReplanSequenceSuccessMessage(res, elapsedMs))
     if (includeDebug && res?.data) {
       console.debug('[replan-sequence]', res.data)
@@ -3189,6 +3195,12 @@ function formatPrediction(iso: string | null | undefined): string {
     minute: '2-digit',
     hour12: false,
   }).format(d)
+}
+
+function progressPeriodTitle(lot: ProgressLotItem): string {
+  const start = formatPrediction(lot.start_date)
+  const end = formatPrediction(lot.end_date || lot.predicted_completion)
+  return `計画開始 ${start} / 計画終了 ${end}（再計算後 aps_batch_plans・instruction_plans と同期）`
 }
 
 /** cutting_management の実績/計画（成型の日別セル・在庫ログ実績とは別） */
@@ -5394,7 +5406,7 @@ td.gantt-has-actual {
    Progress Gantt (生産進捗)
    ══════════════════════════════════════════════════ */
 .pgs-th-status,
-.pgs-th-prediction {
+.pgs-th-period {
   position: sticky;
   z-index: 100;
   background: #e8edf5 !important;
@@ -5403,7 +5415,7 @@ td.gantt-has-actual {
   white-space: nowrap;
   font-weight: 700;
 }
-/* 生産進捗：計画数右端 382px の次に「切断」、その次ステータス・完了予測 */
+/* 生産進捗：計画数右端 382px の次に「切断」、その次ステータス・計画期間 */
 .pgs-th-cutting {
   position: sticky;
   left: 382px;
@@ -5417,7 +5429,7 @@ td.gantt-has-actual {
 }
 .pgs-th-status     { left: 470px; width: 80px; min-width: 80px; max-width: 80px;
   box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5; }
-.pgs-th-prediction { left: 550px; width: 110px; min-width: 110px; max-width: 110px;
+.pgs-th-period { left: 550px; width: 118px; min-width: 118px; max-width: 118px;
   box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06); }
 .pgs-cutting-cell {
   position: sticky;
@@ -5445,19 +5457,24 @@ td.gantt-has-actual {
   box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
   text-align: center;
 }
-.pgs-prediction-cell {
+.pgs-period-cell {
   position: sticky;
-  left: 550px; width: 110px; min-width: 110px; max-width: 110px;
+  left: 550px; width: 118px; min-width: 118px; max-width: 118px;
   z-index: 100;
   background: #fbfcfe;
   background-color: #fbfcfe !important;
   box-shadow: inset -1px 0 0 #e2e6ed, 3px 0 6px rgba(0,21,41,.06);
   text-align: center;
+  vertical-align: middle;
   font-size: var(--fs-xs);
   color: var(--c-text-m);
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
+  line-height: 1.2;
+  padding: 4px 2px;
 }
+.pgs-period-line { white-space: nowrap; }
+.pgs-period-sep { color: var(--c-text-s); font-size: 10px; line-height: 1; margin: 1px 0; }
 .pgs-footnote {
   margin: 10px 4px 0;
   font-size: var(--fs-xs);

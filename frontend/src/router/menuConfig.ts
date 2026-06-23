@@ -243,6 +243,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_NUMBERING', name: '採番ルール管理', icon: 'Sort', path: '/system/numbering', parentCode: 'SYSTEM_SETTINGS', sortOrder: 1 },
   { code: 'SYSTEM_WORKFLOW', name: 'ワークフロー設定', icon: 'Connection', path: '/system/workflow', parentCode: 'SYSTEM_SETTINGS', sortOrder: 2 },
   { code: 'SYSTEM_NOTIFICATION', name: '通知センター', icon: 'Bell', path: '/system/notification', parentCode: 'SYSTEM_SETTINGS', sortOrder: 3 },
+  { code: 'SYSTEM_REPORTS', name: '報告センター', icon: 'Document', path: '/system/reports', parentCode: 'SYSTEM_SETTINGS', sortOrder: 4 },
   { code: 'SYSTEM_LOGS', name: 'システムログ', icon: 'Notebook', path: '/system/logs', parentCode: 'SYSTEM_SETTINGS', sortOrder: 4 },
   { code: 'SYSTEM_DATA', name: 'データ管理', icon: 'FolderOpened', path: '/system/data', parentCode: 'SYSTEM_SETTINGS', sortOrder: 5 },
   { code: 'SYSTEM_MENUS', name: 'メニュー管理', icon: 'Menu', path: '/system/menus', parentCode: 'SYSTEM_SETTINGS', sortOrder: 6 },

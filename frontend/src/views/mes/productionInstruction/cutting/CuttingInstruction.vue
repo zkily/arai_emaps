@@ -306,6 +306,9 @@
               <el-button type="default" size="small" :loading="printCuttingPlanLoading" @click="printCuttingPlanList">計画印刷</el-button>
               <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
               <el-button type="success" size="small" :loading="confirmCuttingActualLoading" @click="confirmCuttingActual">実績確定</el-button>
+              <router-link to="/system/reports" class="cutting-mgmt-report-link">
+                <el-button type="default" size="small">報告センター</el-button>
+              </router-link>
             </div>
           </div>
           <div v-loading="cuttingManagementLoading" class="cutting-mgmt-table-wrap">

@@ -306,6 +306,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/numbering', name: 'NumberingRule', component: () => import('@/views/system/settings/NumberingRule.vue'), meta: { title: '採番ルール管理', requiresAuth: true } },
       { path: 'system/workflow', name: 'WorkflowSetting', component: () => import('@/views/system/settings/WorkflowSetting.vue'), meta: { title: 'ワークフロー設定', requiresAuth: true } },
       { path: 'system/notification', name: 'NotificationCenter', component: () => import('@/views/system/settings/NotificationCenter.vue'), meta: { title: '通知センター', requiresAuth: true } },
+      { path: 'system/reports', name: 'ReportCenter', component: () => import('@/views/system/reports/ReportCenter.vue'), meta: { title: '報告センター', requiresAuth: true } },
       { path: 'system/logs', name: 'SystemLog', component: () => import('@/views/system/settings/SystemLog.vue'), meta: { title: 'システムログ', requiresAuth: true } },
       { path: 'system/data', name: 'DataManagement', component: () => import('@/views/system/settings/DataManagement.vue'), meta: { title: 'データ管理', requiresAuth: true } },
       { path: 'system/menus', name: 'MenuManagement', component: () => import('@/views/system/settings/MenuManagement.vue'), meta: { title: 'メニュー管理', requiresAuth: true } },
