@@ -1570,7 +1570,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-@import './ipaProductivityAnalysis.shared.scss';
+@use './ipaProductivityAnalysis.shared.scss' as *;
 </style>
 
 <style>
