@@ -73,8 +73,8 @@ ON DUPLICATE KEY UPDATE event_name = VALUES(event_name), description = VALUES(de
 INSERT INTO report_definitions (report_code, report_name, category, default_format, parameter_schema, event_code, description, is_active)
 VALUES
 (
-  'CUTTING_DAILY_ACTUAL', '切断工程実績レポート', 'MES', 'xlsx',
-  '{"fields":[{"key":"date_range","label":"対象期間","type":"date_range","default":"yesterday","presets":["yesterday","today","last_week","this_week","last_month","this_month","custom"]}]}',
+  'CUTTING_DAILY_ACTUAL', '切断工程実績レポート', 'MES', 'pdf',
+  '{"fields":[{"key":"date_range","label":"対象期間","type":"date_range","default":"this_month","presets":["yesterday","today","last_week","this_week","last_month","this_month","custom"]}]}',
   'REPORT_CUTTING_DAILY_ACTUAL', '切断実績（設備別件数・数量・明細）を集計し添付配信', 1
 ),
 (
@@ -95,7 +95,7 @@ VALUES
 (
   'REPORT_CUTTING_DAILY_ACTUAL', '切断工程実績レポート',
   '【Smart-EMAP】{report_name} {period_label}（{record_count}件）',
-  '<p>{report_name}をお届けします。</p><p>対象期間: {period_label}<br>件数: {record_count} 件<br>送信者: {sent_by}<br>送信日時: {sent_at}</p>{summary_html}<p>詳細は添付ファイルをご確認ください。</p><p>Smart-EMAP 生産管理システム</p>',
+  '{summary_html}<p style="margin:12px 0 0;font-size:11px;color:#94a3b8;">※ 本メールは Smart-EMAP システムより自動送信されています。</p><p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">送信者: {sent_by}　送信日時: {sent_at}</p>',
   'REPORT_CUTTING_DAILY_ACTUAL', 'ja',
   '["report_name","period_label","record_count","summary_html","sent_by","sent_at"]', 1
 ),

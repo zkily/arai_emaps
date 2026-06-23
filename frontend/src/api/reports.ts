@@ -38,8 +38,12 @@ export interface ReportRecipient {
 }
 
 export interface CuttingReportChartData {
-  inventory_trend: { labels: string[]; values: number[] }
-  plan_actual: { labels: string[]; plan: number[]; actual: number[] }
+  period_start?: string
+  period_end?: string
+  inventory_trend: { labels: string[]; days?: string[]; values: number[] }
+  plan_actual: { labels: string[]; days?: string[]; plan: number[]; actual: number[] }
+  /** ベースライン管理の切断工程・計画対実績差（対象期間合計） */
+  baseline_actual_diff?: number | null
 }
 
 export interface ReportPreview {

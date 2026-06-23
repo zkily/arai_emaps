@@ -13,6 +13,10 @@ from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.reports.models import ReportDefinition, ReportSchedule, ReportSendLog
+from app.modules.reports.definition_defaults import (
+    apply_cutting_report_defaults,
+    cutting_report_needs_default_sync,
+)
 from app.modules.reports.schemas import (
     ReportDefinitionResponse,
     ReportDownloadRequest,
@@ -27,6 +31,16 @@ from app.modules.reports.schemas import (
 router = APIRouter()
 
 
+async def _sync_definition_defaults(db: AsyncSession, definitions: list[ReportDefinition]) -> None:
+    changed = False
+    for definition in definitions:
+        if cutting_report_needs_default_sync(definition):
+            apply_cutting_report_defaults(definition)
+            changed = True
+    if changed:
+        await db.commit()
+
+
 @router.get("/definitions", response_model=list[ReportDefinitionResponse])
 async def list_report_definitions(
     db: AsyncSession = Depends(get_db),
@@ -35,7 +49,9 @@ async def list_report_definitions(
     result = await db.execute(
         select(ReportDefinition).where(ReportDefinition.is_active.is_(True)).order_by(ReportDefinition.id)
     )
-    return result.scalars().all()
+    definitions = list(result.scalars().all())
+    await _sync_definition_defaults(db, definitions)
+    return definitions
 
 
 @router.get("/definitions/{report_code}", response_model=ReportDefinitionResponse)
@@ -50,6 +66,7 @@ async def get_report_definition(
     definition = result.scalar_one_or_none()
     if not definition:
         raise HTTPException(status_code=404, detail="レポート定義が見つかりません")
+    await _sync_definition_defaults(db, [definition])
     return definition
 
 

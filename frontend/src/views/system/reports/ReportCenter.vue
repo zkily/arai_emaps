@@ -142,18 +142,93 @@
                 <header class="rc-a4-sheet__head">
                   <h3 class="rc-a4-sheet__title">切断工程実績レポート</h3>
                   <p class="rc-a4-sheet__period">対象期間: {{ preview.period_label }}</p>
-                  <p class="rc-a4-sheet__note">※ 成型前在庫 = 切断在庫 + 面取在庫（日次合計）</p>
                 </header>
 
                 <section class="rc-a4-section">
-                  <h4 class="rc-a4-section__title">成型前在庫推移（日次・単位: 千）</h4>
-                  <div ref="inventoryChartRef" class="rc-a4-chart" />
+                  <h4 class="rc-a4-section__title">
+                    切断済在庫推移（日次・単位: 千・レットライン在庫: {{ formatInventoryThousand(INVENTORY_LETTER_LINE) }}）
+                  </h4>
+                  <div class="rc-a4-chart-wrap">
+                    <p v-if="inventoryLetterLineWarning" class="rc-a4-chart-comment">
+                      {{ inventoryLetterLineWarning }}
+                    </p>
+                    <div ref="inventoryChartRef" class="rc-a4-chart" />
+                  </div>
                 </section>
 
                 <section class="rc-a4-section">
-                  <h4 class="rc-a4-section__title">切断工程 計画 vs 実績（日次・単位: 千）</h4>
+                  <h4 class="rc-a4-section__title">
+                    切断工程 計画 vs 実績（日次・単位: 千・計画&gt;実績は赤−／実績&gt;計画は青+）
+                  </h4>
                   <div ref="planActualChartRef" class="rc-a4-chart rc-a4-chart--bar" />
                 </section>
+
+                <footer v-if="cuttingReportSummary" class="rc-a4-summary">
+                  <h4 class="rc-a4-summary__heading">データサマリー（単位: 千）</h4>
+                  <div class="rc-a4-summary__block">
+                    <span class="rc-a4-summary__block-title">切断工程</span>
+                    <div class="rc-a4-summary__grid">
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">計画合計</span>
+                        <b class="rc-a4-summary__value">{{ formatInventoryThousand(cuttingReportSummary.totalPlan) }}</b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">実績合計</span>
+                        <b class="rc-a4-summary__value">{{ formatInventoryThousand(cuttingReportSummary.totalActual) }}</b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">計画残数</span>
+                        <b
+                          class="rc-a4-summary__value"
+                          :class="cuttingReportSummary.planRemaining <= 0 ? 'rc-a4-summary__value--pos' : 'rc-a4-summary__value--neg'"
+                        >{{ formatPlanRemainingThousand(cuttingReportSummary.planRemaining) }}</b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">進捗率</span>
+                        <b class="rc-a4-summary__value">{{ formatProgressRate(cuttingReportSummary.totalPlan, cuttingReportSummary.totalActual) }}</b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">累計差異</span>
+                        <b
+                          class="rc-a4-summary__value"
+                          :class="cuttingReportSummary.baselineActualDiff != null && cuttingReportSummary.baselineActualDiff >= 0 ? 'rc-a4-summary__value--pos' : cuttingReportSummary.baselineActualDiff != null ? 'rc-a4-summary__value--neg' : ''"
+                        >
+                          {{ formatBaselineActualDiff(cuttingReportSummary.baselineActualDiff) }}
+                          <small
+                            v-if="cuttingReportSummary.baselineDiffDateLabel"
+                            class="rc-a4-summary__sub"
+                          >（{{ cuttingReportSummary.baselineDiffDateLabel }}）</small>
+                        </b>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rc-a4-summary__block">
+                    <span class="rc-a4-summary__block-title">切断済在庫</span>
+                    <div class="rc-a4-summary__grid rc-a4-summary__grid--inv">
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">期末予測在庫</span>
+                        <b class="rc-a4-summary__value">
+                          {{ formatInventoryThousand(cuttingReportSummary.invLatest) }}
+                          <small
+                            v-if="cuttingReportSummary.invLatestDateLabel"
+                            class="rc-a4-summary__sub"
+                          >（{{ cuttingReportSummary.invLatestDateLabel }}）</small>
+                        </b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">期間ピーク</span>
+                        <b class="rc-a4-summary__value">
+                          {{ formatInventoryThousand(cuttingReportSummary.invPeak) }}
+                          <small class="rc-a4-summary__sub">（{{ cuttingReportSummary.invPeakLabel }}）</small>
+                        </b>
+                      </div>
+                      <div class="rc-a4-summary__item">
+                        <span class="rc-a4-summary__label">期間平均</span>
+                        <b class="rc-a4-summary__value">{{ formatInventoryThousand(cuttingReportSummary.invAvg) }}</b>
+                      </div>
+                    </div>
+                  </div>
+                </footer>
               </div>
             </div>
 
@@ -326,6 +401,9 @@ const CHART_AXIS = '#94A3B8'
 const CHART_GRID = '#E2E8F0'
 const INVENTORY_LETTER_LINE = 142000
 const INVENTORY_UNIT_THOUSAND = 1000
+const CUTTING_REPORT_CODE = 'CUTTING_DAILY_ACTUAL'
+const CUTTING_DEFAULT_FORMAT = 'pdf'
+const CUTTING_DEFAULT_DATE_RANGE = 'this_month'
 
 function toInventoryThousand(value: number): number {
   return Math.round((value / INVENTORY_UNIT_THOUSAND) * 10) / 10
@@ -335,6 +413,154 @@ function formatInventoryThousand(value: number): string {
   const thousand = toInventoryThousand(value)
   return Number.isInteger(thousand) ? `${thousand}` : thousand.toFixed(1)
 }
+
+function formatPlanRemainingThousand(value: number): string {
+  const thousand = toInventoryThousand(value)
+  return Number.isInteger(thousand) ? `${thousand}` : thousand.toFixed(1)
+}
+
+function formatDiffThousand(value: number): string {
+  const thousand = toInventoryThousand(value)
+  const formatted = Number.isInteger(thousand) ? `${thousand}` : thousand.toFixed(1)
+  if (value > 0) return `+${formatted}`
+  return formatted
+}
+
+function formatChartDiffLabel(planThousand: number, actualThousand: number): string {
+  const gap = Math.round((planThousand - actualThousand) * 10) / 10
+  const absText = Number.isInteger(Math.abs(gap)) ? `${Math.abs(gap)}` : Math.abs(gap).toFixed(1)
+  if (gap > 0) {
+    // 計画 > 実績：赤・マイナス
+    return `{diffNeg|-${absText}}`
+  }
+  if (gap < 0) {
+    // 実績 > 計画：青・プラス
+    return `{diffPos|+${absText}}`
+  }
+  return `{diffPos|0}`
+}
+
+const CHART_DIFF_LABEL_RICH = {
+  diffPos: { color: '#1D4ED8', fontSize: 9, fontWeight: 600 as const },
+  diffNeg: { color: '#DC2626', fontSize: 9, fontWeight: 600 as const },
+}
+
+function formatChartDiffTooltip(planRaw: number, actualRaw: number): string {
+  const gapThousand = toInventoryThousand(planRaw - actualRaw)
+  const absText = Number.isInteger(Math.abs(gapThousand))
+    ? `${Math.abs(gapThousand)}`
+    : Math.abs(gapThousand).toFixed(1)
+  if (gapThousand > 0) return `-${absText}`
+  if (gapThousand < 0) return `+${absText}`
+  return '0'
+}
+
+function formatProgressRate(plan: number, actual: number): string {
+  if (!plan) return '—'
+  return `${(actual / plan * 100).toFixed(1)}%`
+}
+
+function formatBaselineActualDiff(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return formatDiffThousand(value)
+}
+
+function formatSummaryDateLabel(iso: string | undefined): string {
+  if (!iso) return ''
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return iso
+  return `${m[1]}-${m[2]}-${m[3]}`
+}
+
+function resolveBaselineDiffAsOfDate(periodEnd: string | undefined): string {
+  if (!periodEnd) return ''
+  const today = new Date()
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return periodEnd <= todayIso ? periodEnd : todayIso
+}
+
+interface CuttingReportSummaryStats {
+  totalPlan: number
+  totalActual: number
+  planRemaining: number
+  baselineActualDiff: number | null
+  baselineDiffDateLabel: string
+  invLatest: number
+  invLatestDateLabel: string
+  invPeak: number
+  invPeakLabel: string
+  invAvg: number
+}
+
+function resolveTodayInventoryValue(
+  days: string[] | undefined,
+  labels: string[],
+  values: number[],
+): number | null {
+  const now = new Date()
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  if (days?.length) {
+    const idx = days.indexOf(todayIso)
+    if (idx >= 0) return values[idx] ?? null
+    return null
+  }
+  const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`
+  const idx = labels.indexOf(mmdd)
+  if (idx >= 0) return values[idx] ?? null
+  return null
+}
+
+const inventoryLetterLineWarning = computed(() => {
+  const data = preview.value?.chart_data
+  if (!data) return null
+
+  const { values, days, labels } = data.inventory_trend
+  const todayInv = resolveTodayInventoryValue(days, labels, values)
+  if (todayInv == null || todayInv >= INVENTORY_LETTER_LINE) return null
+
+  const todayThousand = formatInventoryThousand(todayInv)
+  const lineThousand = formatInventoryThousand(INVENTORY_LETTER_LINE)
+  const gapThousand = formatInventoryThousand(INVENTORY_LETTER_LINE - todayInv)
+  return `※ 本日在庫（${todayThousand}）がレットライン（${lineThousand}）を下回り、危険水域です（不足 ${gapThousand}）`
+})
+
+const cuttingReportSummary = computed<CuttingReportSummaryStats | null>(() => {
+  const data = preview.value?.chart_data
+  if (!data) return null
+
+  const { plan, actual, labels } = data.plan_actual
+  const { values, days } = data.inventory_trend
+  const periodEnd = data.period_end
+
+  const totalPlan = plan.reduce((sum, v) => sum + v, 0)
+  const totalActual = actual.reduce((sum, v) => sum + v, 0)
+  const planRemaining = totalPlan - totalActual
+
+  let invPeak = 0
+  let invPeakIdx = 0
+  values.forEach((v, i) => {
+    if (v > invPeak) {
+      invPeak = v
+      invPeakIdx = i
+    }
+  })
+  const invSum = values.reduce((sum, v) => sum + v, 0)
+  const invLatestIdx = Math.max(values.length - 1, 0)
+  const invLatestDay = days?.[invLatestIdx] ?? periodEnd
+
+  return {
+    totalPlan,
+    totalActual,
+    planRemaining,
+    baselineActualDiff: data.baseline_actual_diff ?? null,
+    baselineDiffDateLabel: formatSummaryDateLabel(resolveBaselineDiffAsOfDate(periodEnd)),
+    invLatest: values[values.length - 1] ?? 0,
+    invLatestDateLabel: formatSummaryDateLabel(invLatestDay),
+    invPeak,
+    invPeakLabel: labels[invPeakIdx] ?? '—',
+    invAvg: Math.round(invSum / Math.max(values.length, 1)),
+  }
+})
 
 const isCuttingReportPreview = computed(
   () =>
@@ -387,15 +613,34 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' | 'info
   return 'info'
 }
 
+function defaultPeriodForDefinition(def?: ReportDefinition | null): string {
+  if (def?.report_code === CUTTING_REPORT_CODE) return CUTTING_DEFAULT_DATE_RANGE
+  const field = def?.parameter_schema?.fields?.[0]
+  return field?.default || field?.presets?.[0] || 'yesterday'
+}
+
+function applyCuttingReportUiDefaults(d: ReportDefinition) {
+  if (d.report_code !== CUTTING_REPORT_CODE) return
+  sendFormat.value = CUTTING_DEFAULT_FORMAT
+  paramState.date_range = CUTTING_DEFAULT_DATE_RANGE
+}
+
 function selectDefinition(d: ReportDefinition) {
   selected.value = d
   preview.value = null
   disposeCharts()
-  sendFormat.value = d.default_format === 'both' ? 'both' : (d.default_format || 'xlsx')
+  sendFormat.value = d.report_code === CUTTING_REPORT_CODE
+    ? CUTTING_DEFAULT_FORMAT
+    : (d.default_format === 'both' ? 'both' : (d.default_format || 'xlsx'))
   Object.keys(paramState).forEach((k) => delete paramState[k])
   for (const field of d.parameter_schema?.fields || []) {
-    paramState[field.key] = field.default || (field.presets ? field.presets[0] : '')
+    if (d.report_code === CUTTING_REPORT_CODE && field.key === 'date_range') {
+      paramState[field.key] = CUTTING_DEFAULT_DATE_RANGE
+    } else {
+      paramState[field.key] = field.default || (field.presets ? field.presets[0] : '')
+    }
   }
+  applyCuttingReportUiDefaults(d)
 }
 
 function buildParameters(): Record<string, unknown> {
@@ -421,17 +666,37 @@ function disposeCharts() {
   planActualChart = null
 }
 
+function resolveTodayInChart(days: string[] | undefined, labels: string[]): string | null {
+  const now = new Date()
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  if (days?.length) {
+    const idx = days.indexOf(todayIso)
+    if (idx >= 0) return labels[idx] ?? null
+    return null
+  }
+  const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`
+  return labels.includes(mmdd) ? mmdd : null
+}
+
 function buildInventoryChartOption(data: CuttingReportChartData) {
-  const { labels, values } = data.inventory_trend
+  const { labels, values, days } = data.inventory_trend
   const valuesInThousand = values.map((v) => toInventoryThousand(v))
   const letterLineThousand = toInventoryThousand(INVENTORY_LETTER_LINE)
   const yMax = Math.max(...valuesInThousand, letterLineThousand, 1)
+  const todayLabel = resolveTodayInChart(days, labels)
+
+  const markLineData: Array<Record<string, unknown>> = [
+    {
+      yAxis: letterLineThousand,
+      lineStyle: { color: '#DC2626', width: 1, type: 'dashed', opacity: 0.75 },
+    },
+  ]
 
   return {
     animation: true,
     animationDuration: 600,
     animationEasing: 'cubicOut' as const,
-    grid: { left: 46, right: 18, top: 28, bottom: 32 },
+    grid: { left: 40, right: 18, top: 28, bottom: 32 },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.92)',
@@ -440,7 +705,7 @@ function buildInventoryChartOption(data: CuttingReportChartData) {
       formatter: (params: { name: string; value: number; dataIndex: number }[]) => {
         const p = params[0]
         const raw = values[p.dataIndex] ?? 0
-        return `${p.name}<br/>成型前在庫: <b>${formatInventoryThousand(raw)}千</b>（${raw.toLocaleString()}）`
+        return `${p.name}<br/>切断済在庫: <b>${formatInventoryThousand(raw)}</b>（${raw.toLocaleString()}）`
       },
     },
     xAxis: {
@@ -453,11 +718,9 @@ function buildInventoryChartOption(data: CuttingReportChartData) {
     },
     yAxis: {
       type: 'value',
-      name: '千',
       min: 0,
       max: Math.ceil(yMax * 1.1),
       splitNumber: 5,
-      nameTextStyle: { color: CHART_AXIS, fontSize: 10, padding: [0, 0, 0, -4] },
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: CHART_GRID, type: 'dashed' } },
@@ -469,16 +732,24 @@ function buildInventoryChartOption(data: CuttingReportChartData) {
     },
     series: [
       {
-        name: '成型前在庫',
+        name: '切断済在庫',
         type: 'line',
         smooth: 0.35,
         symbol: 'circle',
-        symbolSize: 5,
+        symbolSize: (val: number, params: { dataIndex: number }) =>
+          todayLabel && labels[params.dataIndex] === todayLabel ? 8 : 5,
         lineStyle: { width: 2.5, color: CHART_PRIMARY, shadowColor: 'rgba(37,99,235,0.25)', shadowBlur: 6 },
-        itemStyle: { color: CHART_PRIMARY, borderWidth: 2, borderColor: '#fff' },
+        itemStyle: (params: { dataIndex: number }) => {
+          const isToday = todayLabel && labels[params.dataIndex] === todayLabel
+          return {
+            color: isToday ? '#DC2626' : CHART_PRIMARY,
+            borderWidth: 2,
+            borderColor: '#fff',
+          }
+        },
         emphasis: {
           scale: true,
-          itemStyle: { borderWidth: 2, shadowBlur: 8, shadowColor: 'rgba(37,99,235,0.35)' },
+          itemStyle: { borderWidth: 2, shadowBlur: 8, shadowColor: 'rgba(220,38,38,0.25)' },
         },
         label: {
           show: true,
@@ -486,7 +757,8 @@ function buildInventoryChartOption(data: CuttingReportChartData) {
           distance: 4,
           fontSize: 9,
           fontWeight: 500,
-          color: '#1E40AF',
+          color: (params: { dataIndex: number }) =>
+            todayLabel && labels[params.dataIndex] === todayLabel ? '#DC2626' : '#1E40AF',
           formatter: (p: { value: number }) => `${p.value}`,
         },
         areaStyle: {
@@ -500,9 +772,8 @@ function buildInventoryChartOption(data: CuttingReportChartData) {
         markLine: {
           silent: true,
           symbol: ['none', 'none'],
-          lineStyle: { color: '#DC2626', width: 1.5, type: 'dashed', opacity: 0.85 },
           label: { show: false },
-          data: [{ yAxis: letterLineThousand }],
+          data: markLineData,
         },
       },
     ],
@@ -527,7 +798,7 @@ function buildPlanActualChartOption(data: CuttingReportChartData) {
       itemHeight: 8,
       textStyle: { color: CHART_AXIS, fontSize: 10 },
     },
-    grid: { left: 46, right: 18, top: 28, bottom: labels.length > 12 ? 44 : 32 },
+    grid: { left: 40, right: 18, top: 42, bottom: labels.length > 12 ? 44 : 32 },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(15, 23, 42, 0.92)',
@@ -536,10 +807,16 @@ function buildPlanActualChartOption(data: CuttingReportChartData) {
       axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(37,99,235,0.06)' } },
       formatter: (params: { seriesName: string; value: number; dataIndex: number }[]) => {
         const day = labels[params[0]?.dataIndex] ?? ''
-        const lines = params.map((p) => {
-          const raw = p.seriesName === '計画' ? plan[p.dataIndex] : actual[p.dataIndex]
-          return `${p.seriesName}: <b>${formatInventoryThousand(raw ?? 0)}千</b>（${(raw ?? 0).toLocaleString()}）`
-        })
+        const idx = params[0]?.dataIndex ?? 0
+        const rawPlan = plan[idx] ?? 0
+        const rawActual = actual[idx] ?? 0
+        const lines = params
+          .filter((p) => p.seriesName === '計画' || p.seriesName === '実績')
+          .map((p) => {
+            const raw = p.seriesName === '計画' ? rawPlan : rawActual
+            return `${p.seriesName}: <b>${formatInventoryThousand(raw)}</b>（${raw.toLocaleString()}）`
+          })
+        lines.push(`差異: <b>${formatChartDiffTooltip(rawPlan, rawActual)}</b>`)
         return `${day}<br/>${lines.join('<br/>')}`
       },
     },
@@ -557,11 +834,9 @@ function buildPlanActualChartOption(data: CuttingReportChartData) {
     },
     yAxis: {
       type: 'value',
-      name: '千',
       min: 0,
       max: Math.ceil(yMax * 1.15),
       splitNumber: 5,
-      nameTextStyle: { color: CHART_AXIS, fontSize: 10, padding: [0, 0, 0, -4] },
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: CHART_GRID, type: 'dashed' } },
@@ -596,6 +871,25 @@ function buildPlanActualChartOption(data: CuttingReportChartData) {
         },
         emphasis: { itemStyle: { color: '#059669' } },
         data: actualInThousand,
+      },
+      {
+        name: '差異',
+        type: 'scatter',
+        symbolSize: 0,
+        data: planInThousand.map((p, i) => {
+          const top = Math.max(p, actualInThousand[i])
+          return [labels[i], top > 0 ? top : 0.01]
+        }),
+        label: {
+          show: true,
+          position: 'top',
+          distance: 6,
+          formatter: (param: { dataIndex: number }) =>
+            formatChartDiffLabel(planInThousand[param.dataIndex], actualInThousand[param.dataIndex]),
+          rich: CHART_DIFF_LABEL_RICH,
+        },
+        tooltip: { show: false },
+        z: 20,
       },
     ],
   }
@@ -672,7 +966,16 @@ const editingSchedule = reactive<Partial<ReportSchedule>>({})
 const weekdayValue = ref(0)
 const monthDayValue = ref(1)
 const scheduleTimeValue = ref('08:00:00')
-const scheduleDateRange = ref('yesterday')
+const scheduleDateRange = ref('this_month')
+
+watch(
+  () => editingSchedule.report_code,
+  (code) => {
+    if (!scheduleDialog.value || editingSchedule.id || !code) return
+    const def = definitions.value.find((d) => d.report_code === code)
+    scheduleDateRange.value = defaultPeriodForDefinition(def)
+  },
+)
 
 function openScheduleDialog(row?: ReportSchedule) {
   if (row) {
@@ -681,7 +984,8 @@ function openScheduleDialog(row?: ReportSchedule) {
     monthDayValue.value = Number((row.schedule_config as { day?: number })?.day ?? 1)
     scheduleTimeValue.value = row.schedule_time || '08:00:00'
     scheduleDateRange.value = String((row.parameters as { date_range?: string; month?: string })?.date_range
-      ?? (row.parameters as { month?: string })?.month ?? 'yesterday')
+      ?? (row.parameters as { month?: string })?.month
+      ?? defaultPeriodForDefinition(definitions.value.find((d) => d.report_code === row.report_code)))
   } else {
     Object.keys(editingSchedule).forEach((k) => delete (editingSchedule as Record<string, unknown>)[k])
     editingSchedule.report_code = definitions.value[0]?.report_code
@@ -691,7 +995,9 @@ function openScheduleDialog(row?: ReportSchedule) {
     weekdayValue.value = 0
     monthDayValue.value = 1
     scheduleTimeValue.value = '08:00:00'
-    scheduleDateRange.value = 'yesterday'
+    const def = definitions.value.find((d) => d.report_code === editingSchedule.report_code)
+      ?? definitions.value[0]
+    scheduleDateRange.value = defaultPeriodForDefinition(def)
   }
   scheduleDialog.value = true
 }
@@ -765,7 +1071,10 @@ async function removeSchedule(row: ReportSchedule) {
 
 async function loadDefinitions() {
   definitions.value = await fetchReportDefinitions()
-  if (definitions.value.length && !selected.value) selectDefinition(definitions.value[0])
+  if (definitions.value.length && !selected.value) {
+    const cutting = definitions.value.find((d) => d.report_code === CUTTING_REPORT_CODE)
+    selectDefinition(cutting ?? definitions.value[0])
+  }
 }
 
 async function loadSchedules() {
@@ -996,7 +1305,10 @@ watch(isCuttingReportPreview, (val) => {
   padding: 20px 28px 18px;
 }
 .rc-a4-sheet__head {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 2px solid #e2e8f0;
@@ -1011,19 +1323,20 @@ watch(isCuttingReportPreview, (val) => {
   font-weight: 700;
   color: #0f172a;
   letter-spacing: 0.02em;
+  text-align: left;
+  flex: 1;
+  min-width: 0;
 }
 .rc-a4-sheet--landscape .rc-a4-sheet__title {
   font-size: 16px;
 }
 .rc-a4-sheet__period {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 12px;
   color: #64748b;
-}
-.rc-a4-sheet__note {
-  margin: 4px 0 0;
-  font-size: 11px;
-  color: #94a3b8;
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .rc-a4-section {
   margin-bottom: 10px;
@@ -1037,6 +1350,28 @@ watch(isCuttingReportPreview, (val) => {
   font-weight: 600;
   color: #1e40af;
 }
+.rc-a4-chart-wrap {
+  position: relative;
+}
+.rc-a4-chart-comment {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 2;
+  max-width: 62%;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 9px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #b91c1c;
+  text-align: right;
+  background: rgba(254, 242, 242, 0.94);
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.08);
+  pointer-events: none;
+}
 .rc-a4-chart {
   height: 180px;
   width: 100%;
@@ -1049,6 +1384,78 @@ watch(isCuttingReportPreview, (val) => {
 }
 .rc-a4-sheet--landscape .rc-a4-chart--bar {
   height: 200px;
+}
+
+.rc-a4-summary {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.rc-a4-summary__heading {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+.rc-a4-summary__block {
+  margin-bottom: 8px;
+}
+.rc-a4-summary__block:last-child {
+  margin-bottom: 0;
+}
+.rc-a4-summary__block-title {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #1e40af;
+  margin-bottom: 6px;
+}
+.rc-a4-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.rc-a4-summary__grid--inv {
+  grid-template-columns: repeat(3, 1fr);
+}
+.rc-a4-summary__item {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: center;
+  min-width: 0;
+}
+.rc-a4-summary__label {
+  display: block;
+  font-size: 9px;
+  color: #64748b;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.rc-a4-summary__value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.rc-a4-summary__value--sm {
+  font-size: 12px;
+  font-weight: 600;
+}
+.rc-a4-summary__value--pos {
+  color: #059669;
+}
+.rc-a4-summary__value--neg {
+  color: #dc2626;
+}
+.rc-a4-summary__sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
 /* summary_html 内スタイル（切断レポート・他レポート用） */

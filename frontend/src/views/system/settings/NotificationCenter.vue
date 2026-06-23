@@ -64,7 +64,7 @@
               inline-prompt
               active-text="ON"
               inactive-text="OFF"
-              @change="(v) => patchNotification(row, { is_active: v })"
+              @change="(v) => patchNotification(row, { is_active: !!v })"
             />
           </div>
           <p class="nc-event-card__desc">{{ row.description || '—' }}</p>
@@ -79,7 +79,7 @@
                 v-model="row[ch.field]"
                 :disabled="!isAdmin"
                 size="small"
-                @change="(v) => patchNotification(row, { [ch.field]: v })"
+                @change="(v) => patchNotification(row, { [ch.field]: !!v })"
               />
               <span>{{ ch.label }}</span>
             </label>
@@ -99,7 +99,7 @@
                 v-model="row.auto_schedule_enabled"
                 :disabled="!isAdmin"
                 size="small"
-                @change="(v) => patchNotification(row, { auto_schedule_enabled: v })"
+                @change="(v) => patchNotification(row, { auto_schedule_enabled: !!v })"
               />
             </div>
             <div class="nc-schedule-row">
@@ -195,7 +195,7 @@
                 v-model="row.is_active"
                 :disabled="!isAdmin"
                 size="small"
-                @change="(v) => patchRecipient(row, { is_active: v })"
+                @change="(v) => patchRecipient(row, { is_active: !!v })"
               />
             </template>
           </el-table-column>
@@ -226,7 +226,7 @@
               v-if="isAdmin"
               v-model="tpl.is_active"
               size="small"
-              @change="(v) => patchTemplate(tpl, { is_active: v })"
+              @change="(v) => patchTemplate(tpl, { is_active: !!v })"
             />
           </div>
           <h3 class="nc-template-card__name">{{ tpl.name }}</h3>
@@ -380,10 +380,24 @@
       </el-form-item>
       <template v-if="recipientForm.recipient_type === 'email'">
         <el-form-item label="メール" prop="email">
-          <el-input v-model="recipientForm.email" placeholder="example@company.com" />
+          <el-select
+            v-model="recipientForm.email"
+            filterable
+            clearable
+            placeholder="メールアドレスを選択"
+            style="width:100%"
+            @change="handleRecipientEmailSelect"
+          >
+            <el-option
+              v-for="opt in emailOptions"
+              :key="opt.email"
+              :label="opt.label"
+              :value="opt.email"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="表示名">
-          <el-input v-model="recipientForm.display_name" placeholder="任意" />
+          <el-input v-model="recipientForm.display_name" placeholder="任意（未入力時はユーザー名）" />
         </el-form-item>
       </template>
       <template v-if="recipientForm.recipient_type === 'line'">
@@ -492,6 +506,7 @@ import {
   type NotificationRecipientItem,
   type IntegrationConfigItem,
   type UserListItem,
+  type PaginatedUserResponse,
 } from '@/api/system'
 import { runInventoryStagnationAutoPatrol } from '@/api/database'
 
@@ -604,6 +619,25 @@ const filteredRecipients = computed(() => {
 
 const usersById = computed(() => Object.fromEntries(users.value.map((u) => [u.id, u])))
 
+const emailOptions = computed(() => {
+  const seen = new Set<string>()
+  const opts: Array<{ email: string; label: string }> = []
+  for (const u of users.value) {
+    const email = (u.email || '').trim()
+    if (!email || seen.has(email)) continue
+    seen.add(email)
+    opts.push({
+      email,
+      label: `${u.full_name || u.username} (${email})`,
+    })
+  }
+  const current = recipientForm.email?.trim()
+  if (current && !seen.has(current)) {
+    opts.push({ email: current, label: current })
+  }
+  return opts.sort((a, b) => a.label.localeCompare(b.label, 'ja'))
+})
+
 function eventName(code: string) {
   return notifications.value.find((n) => n.event_code === code)?.event_name || code
 }
@@ -616,8 +650,16 @@ function recipientTypeLabel(t: string) {
   return ({ user: 'ユーザー', role: 'ロール', email: 'メール', line: 'LINE' } as Record<string, string>)[t] || t
 }
 
-function recipientTypeTag(t: string) {
-  return ({ user: 'primary', role: 'warning', email: 'success', line: 'danger' } as Record<string, string>)[t] || 'info'
+type RecipientTagType = 'primary' | 'warning' | 'success' | 'danger' | 'info'
+
+function recipientTypeTag(t: string): RecipientTagType {
+  const map: Record<string, RecipientTagType> = {
+    user: 'primary',
+    role: 'warning',
+    email: 'success',
+    line: 'danger',
+  }
+  return map[t] ?? 'info'
 }
 
 function recipientDisplay(row: NotificationRecipientItem) {
@@ -669,7 +711,7 @@ async function loadAll() {
     notifications.value = notif
     emailTemplates.value = tpls
     recipients.value = recs
-    users.value = userRes.items || []
+    users.value = (userRes as unknown as PaginatedUserResponse).items || []
     applyIntegrationConfig(smtp, smtpForm, smtpConfig)
     applyIntegrationConfig(slack, slackForm, slackConfig)
     applyIntegrationConfig(line, lineForm, lineConfig)
@@ -780,6 +822,7 @@ const recipientForm = reactive({
 const recipientRules: FormRules = {
   event_code: [{ required: true, message: 'イベントを選択', trigger: 'change' }],
   recipient_type: [{ required: true, message: '種別を選択', trigger: 'change' }],
+  email: [{ required: true, message: 'メールを選択', trigger: 'change' }],
   line_user_id: [
     { required: true, message: 'LINE User ID を入力', trigger: 'blur' },
     {
@@ -788,6 +831,14 @@ const recipientRules: FormRules = {
       trigger: 'blur',
     },
   ],
+}
+
+function handleRecipientEmailSelect(email: string) {
+  if (!email) return
+  const u = users.value.find((x) => x.email === email)
+  if (u) {
+    recipientForm.display_name = u.full_name || u.username || ''
+  }
 }
 
 function openRecipientDialog(row?: NotificationRecipientItem) {
@@ -1335,6 +1386,7 @@ onMounted(loadAll)
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1501,6 +1553,7 @@ onMounted(loadAll)
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

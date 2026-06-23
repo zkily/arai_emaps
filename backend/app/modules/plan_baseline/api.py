@@ -395,15 +395,27 @@ def _empty_comparison_response(month_start: str) -> dict:
     }
 
 
-@router.get("/comparison")
-async def get_plan_baseline_comparison(
-    baselineMonth: str = Query(..., description="基準月 YYYY-MM-DD（月初）"),
-    processName: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_aps_operation("delete")),
-):
-    """基準月ベースラインと現行計画・実績の比較を返す"""
-    month_start = _date_str(baselineMonth) or (baselineMonth[:10] if baselineMonth else "")
+def _month_starts_between(start: date, end: date) -> list[str]:
+    """期間 [start, end] がまたがる各月初日（ISO）。"""
+    months: list[str] = []
+    cur = start.replace(day=1)
+    while cur <= end:
+        months.append(cur.isoformat())
+        if cur.month == 12:
+            cur = date(cur.year + 1, 1, 1)
+        else:
+            cur = date(cur.year, cur.month + 1, 1)
+    return months
+
+
+async def build_plan_baseline_comparison(
+    db: AsyncSession,
+    *,
+    baseline_month: str,
+    process_name: Optional[str] = None,
+) -> dict:
+    """基準月ベースラインと現行計画・実績の比較データを構築する（API・レポート共用）。"""
+    month_start = _date_str(baseline_month) or (baseline_month[:10] if baseline_month else "")
     if not month_start:
         return _empty_comparison_response(month_start or "")
 
@@ -424,7 +436,6 @@ async def get_plan_baseline_comparison(
         if not start_date or not end_date:
             return _empty_comparison_response(month_start)
 
-        # 基準月の翌月1日（実績は [monthStart, nextMonthStart) で集計）
         _d = date.fromisoformat(month_start[:10])
         if _d.month == 12:
             next_month_first = date(_d.year + 1, 1, 1)
@@ -432,7 +443,6 @@ async def get_plan_baseline_comparison(
             next_month_first = date(_d.year, _d.month + 1, 1)
         next_month_start_str = next_month_first.isoformat()
 
-        # ベースライン集計（日付×工程）
         base_sql = text("""
             SELECT plan_date, process_name, COALESCE(SUM(plan_quantity), 0) AS baseline_plan
             FROM production_plan_baselines
@@ -440,10 +450,16 @@ async def get_plan_baseline_comparison(
               AND (:process_name IS NULL OR process_name = :process_name)
             GROUP BY plan_date, process_name
         """)
-        base_result = await db.execute(base_sql, {"baseline_month": month_start, "process_name": processName or None})
-        base_rows = {(_date_str(r["plan_date"]), (r.get("process_name") or "").strip()): _decimal_float(r.get("baseline_plan")) for r in base_result.mappings().fetchall()}
+        base_result = await db.execute(
+            base_sql, {"baseline_month": month_start, "process_name": process_name or None}
+        )
+        base_rows = {
+            (_date_str(r["plan_date"]), (r.get("process_name") or "").strip()): _decimal_float(
+                r.get("baseline_plan")
+            )
+            for r in base_result.mappings().fetchall()
+        }
 
-        # 現行計画（production_plan_updates）を同じ月で集計
         curr_sql = text("""
             SELECT plan_date, process_name, COALESCE(SUM(quantity), 0) AS current_plan
             FROM production_plan_updates
@@ -451,19 +467,20 @@ async def get_plan_baseline_comparison(
               AND (:process_name IS NULL OR process_name = :process_name)
             GROUP BY plan_date, process_name
         """)
-        curr_result = await db.execute(curr_sql, {"start_date": start_date, "end_date": end_date, "process_name": processName or None})
-        curr_rows = list(curr_result.mappings().fetchall())
+        curr_result = await db.execute(
+            curr_sql,
+            {"start_date": start_date, "end_date": end_date, "process_name": process_name or None},
+        )
         current_plan_map: Dict[Tuple[str, str], float] = {}
-        for r in curr_rows:
+        for r in curr_result.mappings().fetchall():
             pd = _date_str(r.get("plan_date"))
             proc = (r.get("process_name") or "").strip()
             if proc in BASELINE_SUMMARY_PRIORITY_PROCESSES or proc in CURRENT_PLAN_MIRROR_BASELINE_PROCESSES:
                 continue
             if pd:
                 current_plan_map[(pd, proc)] = _decimal_float(r.get("current_plan"))
-        await _merge_current_plan_from_summary(db, start_date, end_date, processName or None, current_plan_map)
+        await _merge_current_plan_from_summary(db, start_date, end_date, process_name or None, current_plan_map)
 
-        # 現行実績：stock_transaction_logs を日付+工程で集計（transaction_type='実績'、[start_date, next_month_start)）
         actual_sql = text("""
             SELECT
                 DATE(l.transaction_time) AS plan_date_value,
@@ -476,22 +493,25 @@ async def get_plan_baseline_comparison(
               AND (:process_name IS NULL OR pr.process_name = :process_name)
             GROUP BY DATE(l.transaction_time), COALESCE(pr.process_name, '')
         """)
-        actual_result = await db.execute(actual_sql, {
-            "start_date": start_date,
-            "next_month_start": next_month_start_str,
-            "process_name": processName or None,
-        })
+        actual_result = await db.execute(
+            actual_sql,
+            {
+                "start_date": start_date,
+                "next_month_start": next_month_start_str,
+                "process_name": process_name or None,
+            },
+        )
         actual_map = {}
         for r in actual_result.mappings().fetchall():
             k = (_date_str(r.get("plan_date_value")), (r.get("process_name_value") or "").strip())
             actual_map[k] = _decimal_float(r.get("total_actual"))
 
-        # dateKeys = 基準・現行計画・実績のキー和集合
         date_keys = set(base_rows.keys()) | set(current_plan_map.keys()) | set(actual_map.keys())
         today_str = date.today().isoformat()
 
-        def _resolve_current_actual(plan_date: str, baseline_plan: float, current_plan: float, raw_actual: Optional[float]) -> Optional[float]:
-            """現行実績の補正：過去日で計画あり実績なしの場合は 0、それ以外は raw のまま（今日・未来で実績なしは null）"""
+        def _resolve_current_actual(
+            plan_date: str, baseline_plan: float, current_plan: float, raw_actual: Optional[float]
+        ) -> Optional[float]:
             is_future = (plan_date or "") > today_str
             is_today = (plan_date or "") == today_str
             if raw_actual is not None:
@@ -510,19 +530,21 @@ async def get_plan_baseline_comparison(
                 current_plan = baseline_plan
             else:
                 current_plan = current_plan_map.get(key, 0.0)
-            raw_actual = actual_map.get(key)  # 実績テーブルに無い場合は None
+            raw_actual = actual_map.get(key)
             current_actual = _resolve_current_actual(plan_date, baseline_plan, current_plan, raw_actual)
             plan_diff = current_plan - baseline_plan
             actual_diff = (current_actual - baseline_plan) if current_actual is not None else None
-            items.append({
-                "plan_date": plan_date,
-                "process_name": proc,
-                "baseline_plan": baseline_plan,
-                "current_plan": current_plan,
-                "plan_diff": plan_diff,
-                "current_actual": current_actual,
-                "actual_diff": actual_diff,
-            })
+            items.append(
+                {
+                    "plan_date": plan_date,
+                    "process_name": proc,
+                    "baseline_plan": baseline_plan,
+                    "current_plan": current_plan,
+                    "plan_diff": plan_diff,
+                    "current_actual": current_actual,
+                    "actual_diff": actual_diff,
+                }
+            )
 
         items.sort(key=lambda x: (x["plan_date"] or "", x["process_name"] or ""))
 
@@ -530,8 +552,6 @@ async def get_plan_baseline_comparison(
         current_plan_total = sum(i["current_plan"] for i in items)
         plan_diff_total = current_plan_total - baseline_total
 
-        # 現行実績合計：currentActual !== null かつ 非未来日 のときのみ加算（今日実績なしは加算しない）
-        # 計画対実績差：按日 (当日実績−当日基準計画)、非未来かつ実績ありの項のみ合計
         current_actual_total = 0
         plan_vs_actual_diff_total = 0
         for i in items:
@@ -561,6 +581,43 @@ async def get_plan_baseline_comparison(
     except Exception as e:
         logger.exception("plan-baseline comparison failed: %s", e)
         return _empty_comparison_response(month_start)
+
+
+async def sum_baseline_actual_diff_for_period(
+    db: AsyncSession,
+    *,
+    start: date,
+    end: date,
+    process_name: str = "切断",
+) -> Optional[int]:
+    """ベースライン比較の計画対実績差を期間内で合計（ベースライン管理画面と同一ロジック）。"""
+    start_s = start.isoformat()
+    end_s = end.isoformat()
+    total = 0.0
+    has_any = False
+    for month_start in _month_starts_between(start, end):
+        comp = await build_plan_baseline_comparison(
+            db, baseline_month=month_start, process_name=process_name
+        )
+        for item in comp.get("items") or []:
+            pd = item.get("plan_date") or ""
+            if start_s <= pd <= end_s and item.get("actual_diff") is not None:
+                total += float(item["actual_diff"])
+                has_any = True
+    return int(round(total)) if has_any else None
+
+
+@router.get("/comparison")
+async def get_plan_baseline_comparison(
+    baselineMonth: str = Query(..., description="基準月 YYYY-MM-DD（月初）"),
+    processName: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_aps_operation("delete")),
+):
+    """基準月ベースラインと現行計画・実績の比較を返す"""
+    return await build_plan_baseline_comparison(
+        db, baseline_month=baselineMonth, process_name=processName
+    )
 
 
 @router.get("/records")

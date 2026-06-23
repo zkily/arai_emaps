@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import re
 import smtplib
+import time
 from dataclasses import dataclass
 from email import encoders
 from email.mime.base import MIMEBase
@@ -43,6 +44,65 @@ class EmailAttachment:
     filename: str
     content: bytes
     mime_type: str = "application/octet-stream"
+
+
+SMTP_RATE_LIMIT_RETRY_DELAYS_SEC = (12, 25, 45)
+DEFAULT_BULK_EMAIL_INTERVAL_SEC = 3.0
+
+
+def is_smtp_rate_limit_message(message: str) -> bool:
+    text = message.lower()
+    return "too much mail" in text or "4.7.1" in text or "450" in text
+
+
+def is_smtp_rate_limit_error(exc: BaseException) -> bool:
+    return is_smtp_rate_limit_message(str(exc))
+
+
+def _connect_smtp(smtp: SmtpConfig) -> smtplib.SMTP:
+    if smtp.use_tls:
+        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+    else:
+        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
+    if smtp.username:
+        server.login(smtp.username, smtp.password)
+    return server
+
+
+def _build_mime_with_attachments(
+    smtp: SmtpConfig,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    attachments: list[EmailAttachment],
+) -> MIMEMultipart:
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = smtp.from_address
+    msg["To"] = to_email
+
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(body)
+
+    for att in attachments:
+        part = (
+            MIMEBase(*att.mime_type.split("/", 1))
+            if "/" in att.mime_type
+            else MIMEBase("application", "octet-stream")
+        )
+        part.set_payload(att.content)
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=("utf-8", "", att.filename),
+        )
+        msg.attach(part)
+    return msg
 
 
 def render_template(template: str, variables: dict[str, Any]) -> str:
@@ -159,39 +219,75 @@ def _send_smtp_with_attachments_sync(
     html_body: str,
     attachments: list[EmailAttachment],
 ) -> None:
-    msg = MIMEMultipart("mixed")
-    msg["Subject"] = subject
-    msg["From"] = smtp.from_address
-    msg["To"] = to_email
-
-    body = MIMEMultipart("alternative")
-    body.attach(MIMEText(html_body, "html", "utf-8"))
-    msg.attach(body)
-
-    for att in attachments:
-        part = MIMEBase(*att.mime_type.split("/", 1)) if "/" in att.mime_type else MIMEBase("application", "octet-stream")
-        part.set_payload(att.content)
-        encoders.encode_base64(part)
-        part.add_header(
-            "Content-Disposition",
-            "attachment",
-            filename=("utf-8", "", att.filename),
-        )
-        msg.attach(part)
-
-    if smtp.use_tls:
-        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-    else:
-        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
+    msg = _build_mime_with_attachments(smtp, to_email, subject, html_body, attachments)
+    server = _connect_smtp(smtp)
     try:
-        if smtp.username:
-            server.login(smtp.username, smtp.password)
         server.sendmail(smtp.from_address, [to_email], msg.as_string())
     finally:
         server.quit()
+
+
+def _send_one_with_attachments_on_server(
+    smtp: SmtpConfig,
+    server: smtplib.SMTP,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    attachments: list[EmailAttachment],
+) -> None:
+    msg = _build_mime_with_attachments(smtp, to_email, subject, html_body, attachments)
+    server.sendmail(smtp.from_address, [to_email], msg.as_string())
+
+
+def _send_bulk_smtp_with_attachments_sync(
+    smtp: SmtpConfig,
+    deliveries: list[tuple[str, str, str]],
+    attachments: list[EmailAttachment],
+    *,
+    interval_sec: float = DEFAULT_BULK_EMAIL_INTERVAL_SEC,
+) -> list[EmailSendResult]:
+    """1 回の SMTP 接続で複数宛先へ順次送信（レート制限時は待機して再試行）。"""
+    if not deliveries:
+        return []
+
+    results: list[EmailSendResult] = []
+    server = _connect_smtp(smtp)
+    try:
+        for idx, (to_email, subject, html_body) in enumerate(deliveries):
+            if idx > 0:
+                time.sleep(interval_sec)
+
+            last_error: Exception | None = None
+            sent = False
+            for attempt, delay in enumerate((0, *SMTP_RATE_LIMIT_RETRY_DELAYS_SEC)):
+                if delay > 0:
+                    logger.info(
+                        "SMTP レート制限のため {} 秒待機後に再送: to={} attempt={}",
+                        delay,
+                        to_email,
+                        attempt,
+                    )
+                    time.sleep(delay)
+                try:
+                    _send_one_with_attachments_on_server(
+                        smtp, server, to_email, subject, html_body, attachments
+                    )
+                    sent = True
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if not is_smtp_rate_limit_error(exc):
+                        break
+
+            if sent:
+                results.append(EmailSendResult(email=to_email, success=True))
+            else:
+                err = str(last_error) if last_error else "送信失敗"
+                logger.warning("添付メール送信失敗 to={} err={}", to_email, err)
+                results.append(EmailSendResult(email=to_email, success=False, error=err))
+    finally:
+        server.quit()
+    return results
 
 
 async def send_html_email_with_attachments(
@@ -204,11 +300,39 @@ async def send_html_email_with_attachments(
     """HTML 本文 + 添付ファイル付きメールを 1 通送信する。"""
     if not attachments:
         return await send_html_email(smtp, to_email, subject, html_body)
+    results = await send_bulk_html_email_with_attachments(
+        smtp,
+        [(to_email, subject, html_body)],
+        attachments,
+        interval_sec=0,
+    )
+    return results[0]
+
+
+async def send_bulk_html_email_with_attachments(
+    smtp: SmtpConfig,
+    deliveries: list[tuple[str, str, str]],
+    attachments: list[EmailAttachment],
+    *,
+    interval_sec: float = DEFAULT_BULK_EMAIL_INTERVAL_SEC,
+) -> list[EmailSendResult]:
+    """同一内容の添付付きメールを複数宛先へ送信する。"""
+    if not deliveries:
+        return []
+    if not attachments:
+        return [
+            await send_html_email(smtp, to_email, subject, html_body)
+            for to_email, subject, html_body in deliveries
+        ]
     try:
-        await asyncio.to_thread(
-            _send_smtp_with_attachments_sync, smtp, to_email, subject, html_body, attachments
+        return await asyncio.to_thread(
+            _send_bulk_smtp_with_attachments_sync,
+            smtp,
+            deliveries,
+            attachments,
+            interval_sec=interval_sec,
         )
-        return EmailSendResult(email=to_email, success=True)
     except Exception as exc:
-        logger.warning("添付メール送信失敗 to={} err={}", to_email, exc)
-        return EmailSendResult(email=to_email, success=False, error=str(exc))
+        logger.warning("添付メール一括送信失敗 err={}", exc)
+        err = str(exc)
+        return [EmailSendResult(email=to_email, success=False, error=err) for to_email, _, _ in deliveries]

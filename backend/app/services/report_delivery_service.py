@@ -14,11 +14,13 @@ from app.modules.reports.generators import GeneratedReport, get_generator
 from app.modules.reports.models import ReportDefinition, ReportSendLog
 from app.modules.system.settings_models import EmailSendLog, LineSendLog, NotificationSetting
 from app.services.email_service import (
+    DEFAULT_BULK_EMAIL_INTERVAL_SEC,
     EmailAttachment,
+    is_smtp_rate_limit_message,
     load_email_template,
     load_smtp_config,
     render_template,
-    send_html_email_with_attachments,
+    send_bulk_html_email_with_attachments,
 )
 from app.services.line_service import load_line_config, push_line_text_message
 from app.services.notification_recipient_service import (
@@ -27,8 +29,9 @@ from app.services.notification_recipient_service import (
 )
 
 SYSTEM_SENDER_LABEL = "Smart-EMAPシステム"
-# SMTP のレート制限（too much mail）回避用
-EMAIL_SEND_INTERVAL_SEC = 0.8
+AUTO_SEND_NOTICE = "※ 本メールは Smart-EMAP システムより自動送信されています。"
+# SMTP のレート制限（too much mail）回避用：複数宛先の送信間隔（秒）
+EMAIL_SEND_INTERVAL_SEC = DEFAULT_BULK_EMAIL_INTERVAL_SEC
 
 
 async def _get_definition(db: AsyncSession, report_code: str) -> ReportDefinition:
@@ -78,6 +81,10 @@ async def get_report_preview(
     report_code: str,
     parameters: dict,
 ) -> dict:
+    from app.modules.reports.definition_defaults import CUTTING_REPORT_CODE, ensure_cutting_email_template
+
+    if report_code == CUTTING_REPORT_CODE:
+        await ensure_cutting_email_template(db)
     definition, report, resolved_fmt = await generate_report(
         db, report_code=report_code, parameters=parameters
     )
@@ -150,6 +157,10 @@ async def send_report(
     run_date: date | None = None,
 ) -> dict:
     is_auto = trigger == "scheduled"
+    from app.modules.reports.definition_defaults import CUTTING_REPORT_CODE, ensure_cutting_email_template
+
+    if report_code == CUTTING_REPORT_CODE:
+        await ensure_cutting_email_template(db)
     definition, report, resolved_fmt = await generate_report(
         db, report_code=report_code, parameters=parameters, fmt=fmt, run_date=run_date
     )
@@ -199,9 +210,7 @@ async def send_report(
 
     sent_at_dt = now_jst()
     sent_at_str = sent_at_dt.strftime("%Y-%m-%d %H:%M") if isinstance(sent_at_dt, datetime) else str(sent_at_dt)
-    sent_by = (
-        (current_user.full_name or current_user.username) if current_user is not None else SYSTEM_SENDER_LABEL
-    )
+    sent_by = SYSTEM_SENDER_LABEL
     sent_by_user_id = current_user.id if current_user is not None else None
     variables = _build_variables(definition, report, sent_by=sent_by, sent_at=sent_at_str)
 
@@ -218,12 +227,14 @@ async def send_report(
     if can_email:
         subject = render_template(template.subject, variables)
         body = render_template(template.body, variables)
-        for idx, recipient in enumerate(email_recipients):
-            if idx > 0:
-                await asyncio.sleep(EMAIL_SEND_INTERVAL_SEC)
-            result = await send_html_email_with_attachments(
-                smtp, recipient.email, subject, body, attachments
-            )
+        deliveries = [(recipient.email, subject, body) for recipient in email_recipients]
+        email_results = await send_bulk_html_email_with_attachments(
+            smtp,
+            deliveries,
+            attachments,
+            interval_sec=EMAIL_SEND_INTERVAL_SEC,
+        )
+        for recipient, result in zip(email_recipients, email_results, strict=False):
             db.add(
                 EmailSendLog(
                     event_code=event_code,
@@ -245,9 +256,9 @@ async def send_report(
         line_text = "\n\n".join(
             [
                 line_subject,
-                f"対象期間: {report.period_label}\n件数: {report.record_count} 件\n送信者: {sent_by}\n送信日時: {sent_at_str}",
                 report.summary_text,
-                "Smart-EMAP 生産管理システム",
+                AUTO_SEND_NOTICE,
+                f"送信者: {sent_by} / 送信日時: {sent_at_str}",
             ]
         )
         for recipient in line_recipients:
@@ -294,7 +305,10 @@ async def send_report(
     await db.commit()
 
     if total_sent == 0 and not is_auto:
-        raise HTTPException(status_code=500, detail="レポート送信に失敗しました: " + message)
+        detail = "レポート送信に失敗しました: " + message
+        if any(is_smtp_rate_limit_message(err.get("error", "")) for err in email_failed):
+            detail += "（メールサーバーの送信制限です。数分待ってから再送してください）"
+        raise HTTPException(status_code=503, detail=detail)
 
     return {
         "success": True,
