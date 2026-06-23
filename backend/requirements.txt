@@ -44,6 +44,9 @@ mysql-connector-python>=8.0.0
 openpyxl>=3.1.0
 pyodbc
 
+# レポート PDF 生成（日本語 CID フォント内蔵・ネイティブ依存なし）
+reportlab>=4.0.0
+
 # コード品質
 black==24.1.1
 flake8==7.0.0

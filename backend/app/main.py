@@ -40,6 +40,7 @@ from app.modules import (
     part_order,
     fin,
     ai,
+    reports,
 )
 
 
@@ -232,6 +233,23 @@ async def _inventory_stagnation_auto_patrol_loop():
             await asyncio.sleep(300)
 
 
+async def _report_scheduler_loop():
+    from app.services.report_scheduler_service import run_due_report_schedules_once
+
+    logger.info("📨 レポート定時配信タスク開始（設定は報告センター）")
+    await asyncio.sleep(10)
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                await run_due_report_schedules_once(db)
+        except asyncio.CancelledError:
+            logger.info("🛑 レポート定時配信タスク停止")
+            raise
+        except Exception as e:
+            logger.warning("レポート定時配信でエラー: {}", e)
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションライフサイクル管理"""
@@ -252,6 +270,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_api_logs_cleanup_loop()),
         asyncio.create_task(_db_auto_backup_loop()),
         asyncio.create_task(_inventory_stagnation_auto_patrol_loop()),
+        asyncio.create_task(_report_scheduler_loop()),
     ]
     yield
     for t in cleanup_tasks:
@@ -368,6 +387,7 @@ app.include_router(machine_work_time_config.router, prefix="/api/machine-work-ti
 app.include_router(production_schedule.router, prefix="/api", tags=["生産状況・スケジュール"])
 app.include_router(plan_baseline.router, prefix="/api/plan-baseline", tags=["生産計画ベースライン"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI助手"])
+app.include_router(reports.router, prefix="/api/reports", tags=["レポート配信"])
 app.include_router(fin.router, prefix="/api/fin", tags=["FIN 経理・原価・人事"])
 from app.modules.fin.services_api import router as fin_services_router  # noqa: E402
 

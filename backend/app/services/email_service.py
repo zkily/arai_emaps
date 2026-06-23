@@ -5,6 +5,8 @@ import asyncio
 import re
 import smtplib
 from dataclasses import dataclass
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -32,6 +34,15 @@ class EmailSendResult:
     email: str
     success: bool
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class EmailAttachment:
+    """メール添付（PDF / Excel など）。"""
+
+    filename: str
+    content: bytes
+    mime_type: str = "application/octet-stream"
 
 
 def render_template(template: str, variables: dict[str, Any]) -> str:
@@ -139,3 +150,65 @@ async def send_bulk_html_email(
     for email in recipients:
         results.append(await send_html_email(smtp, email, subject, html_body))
     return results
+
+
+def _send_smtp_with_attachments_sync(
+    smtp: SmtpConfig,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    attachments: list[EmailAttachment],
+) -> None:
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = smtp.from_address
+    msg["To"] = to_email
+
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(body)
+
+    for att in attachments:
+        part = MIMEBase(*att.mime_type.split("/", 1)) if "/" in att.mime_type else MIMEBase("application", "octet-stream")
+        part.set_payload(att.content)
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=("utf-8", "", att.filename),
+        )
+        msg.attach(part)
+
+    if smtp.use_tls:
+        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+    else:
+        server = smtplib.SMTP(smtp.host, smtp.port, timeout=60)
+    try:
+        if smtp.username:
+            server.login(smtp.username, smtp.password)
+        server.sendmail(smtp.from_address, [to_email], msg.as_string())
+    finally:
+        server.quit()
+
+
+async def send_html_email_with_attachments(
+    smtp: SmtpConfig,
+    to_email: str,
+    subject: str,
+    html_body: str,
+    attachments: list[EmailAttachment],
+) -> EmailSendResult:
+    """HTML 本文 + 添付ファイル付きメールを 1 通送信する。"""
+    if not attachments:
+        return await send_html_email(smtp, to_email, subject, html_body)
+    try:
+        await asyncio.to_thread(
+            _send_smtp_with_attachments_sync, smtp, to_email, subject, html_body, attachments
+        )
+        return EmailSendResult(email=to_email, success=True)
+    except Exception as exc:
+        logger.warning("添付メール送信失敗 to={} err={}", to_email, exc)
+        return EmailSendResult(email=to_email, success=False, error=str(exc))

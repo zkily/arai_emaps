@@ -2605,7 +2605,52 @@ async def replan_sequence(
     if updated:
         await _purge_pre_forced_start_schedule_rows(db, updated)
 
-    # instruction_plans 同期（事前に共通データを一括取得）
+    # 恢复冻结范围内计划（date < today）：仅恢复 planned_qty 与对应时段分配；
+    # actual/defect 维持重排后最新同步值，remaining 随之重算。
+    if line_schedule_ids:
+        # autoflush=False のため SELECT が同セッション未 flush の明細を見落とし、
+        # 既存行があるのに INSERT して uk_schedule_date に抵触することがある。
+        # MySQL の upsert で冪等に上書きする。
+        for (sid, work_date), frozen_planned in frozen_planned_snapshot.items():
+            fp = int(frozen_planned)
+            ins = mysql_insert(ScheduleDetail.__table__).values(
+                schedule_id=int(sid),
+                schedule_date=work_date,
+                planned_qty=fp,
+                actual_qty=0,
+                defect_qty=0,
+                remaining_qty=fp,
+            )
+            await db.execute(
+                ins.on_duplicate_key_update(
+                    planned_qty=ins.inserted.planned_qty,
+                )
+            )
+
+        # 冻结范围内的时段分配按快照恢复（未快照的工单/日期保持当前结果）
+        if frozen_slice_snapshot:
+            for sid, work_date in frozen_slice_snapshot.keys():
+                await db.execute(
+                    delete(ScheduleSliceAllocation).where(
+                        ScheduleSliceAllocation.schedule_id == int(sid),
+                        ScheduleSliceAllocation.work_date == work_date,
+                    )
+                )
+            for (sid, work_date), rows in frozen_slice_snapshot.items():
+                for r in rows:
+                    db.add(
+                        ScheduleSliceAllocation(
+                            schedule_id=int(sid),
+                            work_date=work_date,
+                            period_start=r["period_start"],
+                            period_end=r["period_end"],
+                            planned_qty=int(r["planned_qty"]),
+                            sort_order=int(r["sort_order"]),
+                        )
+                    )
+        await db.flush()
+
+    # instruction_plans / aps_batch_plans 同期は凍結スライス復元後に行う（ロット start/end が最終スライスと一致）
     # syncInstructionPlans=false のときは成型設備でも instruction_plans に触れない（排産・aps_batch_plans のみ）
     if syncInstructionPlans:
         is_forming_line = await _machine_matches_process_cd(
@@ -2652,51 +2697,6 @@ async def replan_sequence(
             chamfer_sw_cache=chamfer_sw_cache,
         )
     await db.flush()
-
-    # 恢复冻结范围内计划（date < today）：仅恢复 planned_qty 与对应时段分配；
-    # actual/defect 维持重排后最新同步值，remaining 随之重算。
-    if line_schedule_ids:
-        # autoflush=False のため SELECT が同セッション未 flush の明細を見落とし、
-        # 既存行があるのに INSERT して uk_schedule_date に抵触することがある。
-        # MySQL の upsert で冪等に上書きする。
-        for (sid, work_date), frozen_planned in frozen_planned_snapshot.items():
-            fp = int(frozen_planned)
-            ins = mysql_insert(ScheduleDetail.__table__).values(
-                schedule_id=int(sid),
-                schedule_date=work_date,
-                planned_qty=fp,
-                actual_qty=0,
-                defect_qty=0,
-                remaining_qty=fp,
-            )
-            await db.execute(
-                ins.on_duplicate_key_update(
-                    planned_qty=ins.inserted.planned_qty,
-                )
-            )
-
-        # 冻结范围内的时段分配按快照恢复（未快照的工单/日期保持当前结果）
-        if frozen_slice_snapshot:
-            for sid, work_date in frozen_slice_snapshot.keys():
-                await db.execute(
-                    delete(ScheduleSliceAllocation).where(
-                        ScheduleSliceAllocation.schedule_id == int(sid),
-                        ScheduleSliceAllocation.work_date == work_date,
-                    )
-                )
-            for (sid, work_date), rows in frozen_slice_snapshot.items():
-                for r in rows:
-                    db.add(
-                        ScheduleSliceAllocation(
-                            schedule_id=int(sid),
-                            work_date=work_date,
-                            period_start=r["period_start"],
-                            period_end=r["period_end"],
-                            planned_qty=int(r["planned_qty"]),
-                            sort_order=int(r["sort_order"]),
-                        )
-                    )
-        await db.flush()
 
     anchor_debug_payload = {
         "line_id": int(line_id),
@@ -4844,7 +4844,8 @@ async def _sync_instruction_plans_from_aps_schedule(
       が一意で、品番が同じでも順位が違えば管理コードは異なる。
     ・cutting_management に既に取り込まれたロット（管理コード一致 or aps_batch_plan_id 紐付け）は、
       管理コードに関わる identity フィールド（production_month / priority_order /
-      production_lot_size / lot_number / product_cd）を一切更新せず、instruction_plans も触らない。
+      production_lot_size / lot_number / product_cd）を一切更新せず、instruction_plans も identity は触らない。
+      start_date / end_date および数量・製品情報は再計算後に追従する。
       これにより「計画一覧の変更で管理コードが書き換わる」事故を防ぐ。
     ・計画減量等で対象外になった unlocked ロットは両テーブルから削除する。
     ・aps_batch_plans.planned_quantity は full_lot_qty - upstream_defect_qty（成型側有効本数）、
@@ -5266,10 +5267,33 @@ async def _sync_instruction_plans_from_aps_schedule(
         """
     )
 
-    # ── instruction_plans 同期：cutting-locked ロットは管理コード保持のため一切触らない ──
+    _ip_locked_update_sql = text(
+        "UPDATE instruction_plans SET "
+        "product_name=:product_name, "
+        "planned_quantity=:instruction_planned_qty, actual_production_quantity=:batch_planned_qty, "
+        "take_count=:take_count, "
+        "cutting_length=:cutting_length, chamfering_length=:chamfering_length, "
+        "developed_length=:developed_length, scrap_length=:scrap_length, "
+        "material_name=:material_name, material_manufacturer=:material_manufacturer, "
+        "standard_specification=:standard_specification, "
+        "has_chamfering_process=:has_chamfering_process, has_sw_process=:has_sw_process, "
+        "start_date=:start_date, end_date=:end_date, "
+        "aps_batch_plan_id=:aps_batch_plan_id "
+        "WHERE id=:ins_id"
+    )
+
+    def _resolve_instruction_plan_id(lot_idx: int, bp: ApsBatchPlan) -> Optional[int]:
+        if bp.id is not None:
+            ip_id = existing_ip_by_bid.get(int(bp.id))
+            if ip_id is not None:
+                return ip_id
+        legacy = existing_ip_by_mc.get(target_mcs[lot_idx])
+        if legacy is not None:
+            return int(legacy["id"])
+        return None
+
+    # ── instruction_plans 同期 ──
     for idx, lot_num in enumerate(target_lot_nums):
-        if _norm_lot_number(lot_num) in cutting_locked_lot_norms:
-            continue
         bp = bp_by_lot.get(lot_num)
         if bp is None or bp.id is None:
             continue
@@ -5277,6 +5301,7 @@ async def _sync_instruction_plans_from_aps_schedule(
         full_lot_qty = target_lot_qtys[lot_num]
         start_dt, end_dt = batch_dates_by_lot.get(lot_num, (None, None))
         mc = target_mcs[idx]
+        is_locked = _norm_lot_number(lot_num) in cutting_locked_lot_norms
 
         params = {
             "production_month": production_month,
@@ -5302,6 +5327,14 @@ async def _sync_instruction_plans_from_aps_schedule(
             "lot_number": lot_num,
             "aps_batch_plan_id": int(bp.id),
         }
+
+        if is_locked:
+            # 切断取り込み済み：管理コードに影響する identity 列は温存し、期間・数量・製品情報のみ追従
+            ip_id = _resolve_instruction_plan_id(idx, bp)
+            if ip_id is not None:
+                params["ins_id"] = ip_id
+                await db.execute(_ip_locked_update_sql, params)
+            continue
 
         # aps_batch_plan_id 紐付けで既存行があれば UPDATE
         ip_id = existing_ip_by_bid.get(int(bp.id))
