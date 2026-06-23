@@ -9,9 +9,15 @@
         </div>
       </div>
       <div class="header-right">
-        <el-button type="default" size="small" class="done-list-btn done-list-btn--molding-wip" @click="openMoldingPreInventoryDialog">成型前在庫・時間換算</el-button>
-        <el-button type="primary" size="small" class="done-list-btn done-list-btn--cutting" @click="openCuttingDoneDialog">切断済リスト</el-button>
-        <el-button type="success" size="small" class="done-list-btn done-list-btn--chamfering" @click="openChamferingDoneDialog">面取済リスト</el-button>
+        <el-button type="default" size="small" class="header-pill-btn header-pill-btn--molding" @click="openMoldingPreInventoryDialog">成型前在庫・時間換算</el-button>
+        <el-button type="default" size="small" class="header-pill-btn header-pill-btn--cutting" @click="openCuttingDoneDialog">切断済リスト</el-button>
+        <el-button type="default" size="small" class="header-pill-btn header-pill-btn--chamfering" @click="openChamferingDoneDialog">面取済リスト</el-button>
+        <router-link to="/system/reports" class="header-pill-link" title="報告センターへ移動">
+          <el-button type="default" size="small" class="header-pill-btn header-pill-btn--report">
+            <el-icon class="header-pill-btn__icon"><Document /></el-icon>
+            報告センター
+          </el-button>
+        </router-link>
       </div>
     </div>
 
@@ -306,9 +312,6 @@
               <el-button type="default" size="small" :loading="printCuttingPlanLoading" @click="printCuttingPlanList">計画印刷</el-button>
               <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
               <el-button type="success" size="small" :loading="confirmCuttingActualLoading" @click="confirmCuttingActual">実績確定</el-button>
-              <router-link to="/system/reports" class="cutting-mgmt-report-link">
-                <el-button type="default" size="small">報告センター</el-button>
-              </router-link>
             </div>
           </div>
           <div v-loading="cuttingManagementLoading" class="cutting-mgmt-table-wrap">
@@ -3853,7 +3856,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, Document, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
   escapeHtml,
@@ -9754,87 +9757,123 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-pill-link {
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.header-right .header-pill-btn.el-button {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.header-right .header-pill-btn.el-button:hover {
+  transform: translateY(-1px);
+}
+
+.header-right .header-pill-btn.el-button:active {
+  transform: translateY(0);
+}
+
+.header-right .header-pill-btn.el-button:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.4);
+  outline-offset: 2px;
+}
+
+.header-pill-btn__icon {
+  margin-right: 5px;
+  font-size: 14px;
+  vertical-align: -2px;
+}
+
+.header-right .header-pill-btn--molding.el-button {
+  --el-button-text-color: #5b21b6;
+  --el-button-hover-text-color: #4c1d95;
+  --el-button-active-text-color: #4c1d95;
+  border-color: #c4b5fd;
+  color: #5b21b6;
+  background: linear-gradient(135deg, #ffffff 0%, #faf5ff 45%, #ede9fe 100%);
+  box-shadow: 0 8px 18px -10px rgba(124, 58, 237, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.header-right .header-pill-btn--molding.el-button:hover {
+  border-color: #a78bfa;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 40%, #ddd6fe 100%);
+  box-shadow: 0 12px 22px -12px rgba(124, 58, 237, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.header-right .header-pill-btn--cutting.el-button {
+  --el-button-text-color: #1d4ed8;
+  --el-button-hover-text-color: #1e40af;
+  --el-button-active-text-color: #1e40af;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 45%, #dbeafe 100%);
+  box-shadow: 0 8px 18px -10px rgba(37, 99, 235, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.header-right .header-pill-btn--cutting.el-button:hover {
+  border-color: #60a5fa;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 40%, #bfdbfe 100%);
+  box-shadow: 0 12px 22px -12px rgba(37, 99, 235, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.header-right .header-pill-btn--chamfering.el-button {
+  --el-button-text-color: #047857;
+  --el-button-hover-text-color: #065f46;
+  --el-button-active-text-color: #065f46;
+  border-color: #6ee7b7;
+  color: #047857;
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 45%, #d1fae5 100%);
+  box-shadow: 0 8px 18px -10px rgba(5, 150, 105, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.header-right .header-pill-btn--chamfering.el-button:hover {
+  border-color: #34d399;
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 40%, #a7f3d0 100%);
+  box-shadow: 0 12px 22px -12px rgba(5, 150, 105, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.header-right .header-pill-btn--report.el-button {
+  --el-button-text-color: #4338ca;
+  --el-button-hover-text-color: #3730a3;
+  --el-button-active-text-color: #312e81;
+  border-color: #a5b4fc;
+  color: #4338ca;
+  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 45%, #e0e7ff 100%);
+  box-shadow: 0 8px 18px -10px rgba(79, 70, 229, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.header-right .header-pill-btn--report.el-button:hover {
+  border-color: #818cf8;
+  background: linear-gradient(135deg, #ffffff 0%, #eef2ff 40%, #c7d2fe 100%);
+  box-shadow: 0 12px 22px -12px rgba(79, 70, 229, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.header-right .header-pill-btn--report.el-button {
+  padding: 0 16px 0 12px;
+}
+
 .header-title .header-desc {
   font-size: 13px;
   color: #64748b;
   margin: 8px 0 0 0;
   font-weight: 400;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.header-right .done-list-btn {
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border-width: 1px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-}
-.header-right .done-list-btn:hover {
-  transform: translateY(-1px);
-  filter: saturate(1.06);
-}
-.header-right .done-list-btn:active {
-  transform: translateY(0);
-}
-.header-right .done-list-btn:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.45);
-  outline-offset: 1px;
-}
-
-.header-right .done-list-btn--cutting {
-  border-color: #2563eb;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
-  box-shadow: 0 8px 18px -8px rgba(37, 99, 235, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-}
-.header-right .done-list-btn--cutting:hover {
-  box-shadow: 0 12px 22px -10px rgba(37, 99, 235, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.header-right .done-list-btn--chamfering {
-  border-color: #059669;
-  background: linear-gradient(135deg, #10b981 0%, #059669 55%, #047857 100%);
-  box-shadow: 0 8px 18px -8px rgba(5, 150, 105, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.26);
-}
-.header-right .done-list-btn--molding-wip.el-button {
-  --el-button-text-color: #4c1d95;
-  --el-button-hover-text-color: #3b0764;
-  --el-button-active-text-color: #3b0764;
-  border-color: #8b5cf6;
-  background: linear-gradient(135deg, #faf5ff 0%, #ddd6fe 38%, #c4b5fd 72%, #a78bfa 100%);
-  color: #4c1d95;
-  box-shadow:
-    0 8px 18px -8px rgba(124, 58, 237, 0.62),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    inset 0 -1px 0 rgba(109, 40, 217, 0.18);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-.header-right .done-list-btn--molding-wip.el-button:hover {
-  border-color: #7c3aed;
-  background: linear-gradient(135deg, #ffffff 0%, #ede9fe 35%, #c4b5fd 70%, #a78bfa 100%);
-  color: #3b0764;
-  box-shadow:
-    0 12px 22px -10px rgba(124, 58, 237, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-.header-right .done-list-btn--molding-wip.el-button:active {
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 50%, #a78bfa 100%);
-  box-shadow:
-    0 4px 10px -6px rgba(124, 58, 237, 0.45),
-    inset 0 2px 5px rgba(91, 33, 182, 0.14);
-}
-.header-right .done-list-btn--molding-wip.el-button:focus-visible {
-  outline-color: rgba(124, 58, 237, 0.5);
-}
-.header-right .done-list-btn--chamfering:hover {
-  box-shadow: 0 12px 22px -10px rgba(5, 150, 105, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .plan-row {
@@ -14369,6 +14408,15 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(37,99,235,0.08),inset 0 1px 2px rgba(255,255,255,0.5);
 }
 .header-title h1 { font-size: 16px !important; letter-spacing: -0.04em !important; font-weight: 800 !important; }
+.header-right .header-pill-btn.el-button {
+  height: 28px !important;
+  padding: 0 12px !important;
+  font-size: 11px !important;
+}
+.header-right .header-pill-btn--report.el-button {
+  padding: 0 12px 0 10px !important;
+}
+.header-pill-btn__icon { font-size: 13px !important; margin-right: 4px !important; }
 .header-title .header-desc { font-size: 11px !important; margin: 3px 0 0 !important; color: #64748b !important; }
 .page-header-badge { font-size: 9px !important; padding: 2px 6px !important; margin-bottom: 4px !important; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff !important; border-radius: 6px !important; font-weight: 700 !important; }
 
