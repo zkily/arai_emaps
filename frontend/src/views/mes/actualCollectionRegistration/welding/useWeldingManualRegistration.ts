@@ -33,6 +33,7 @@ import {
   formatQtyInputValue,
   formatTimeInputValue,
 } from '../inspection/useInspectionManualRegistration'
+import { confirmWeldingPieceQty } from './confirmPieceQtyDialog'
 
 export type WeldingMgmtRow = WeldingManagementListRow & { id: number }
 
@@ -91,11 +92,6 @@ function pieceQtyFromBoxes(boxes: number, unitPerBox: number): number {
 function boxQtyFromPieces(pieces: number, unitPerBox: number): number {
   if (unitPerBox <= 0) return 0
   return Math.round(pieces / unitPerBox)
-}
-
-function hasPieceBoxQtyMismatch(pieceQty: number, unitPerBox: number): boolean {
-  if (unitPerBox <= 0) return false
-  return pieceQty % unitPerBox !== 0
 }
 
 function parseTimeInput(raw: string | undefined | null): string | null {
@@ -356,14 +352,6 @@ export function useWeldingManualRegistration() {
   })
 
   const unitPerBox = computed(() => resolveUnitPerBox(form.value.productCd, products.value))
-
-  const qtyMismatch = computed(() => {
-    const piece = form.value.pieceQty
-    const upb = unitPerBox.value
-    if (piece == null || !Number.isFinite(piece) || upb <= 0) return null
-    if (!hasPieceBoxQtyMismatch(piece, upb)) return null
-    return { piece: Math.round(piece), upb }
-  })
 
   const timeSummary = computed(() => {
     const { started, ended, endsNextDay } = resolveProductionEndDateTime(
@@ -743,11 +731,6 @@ export function useWeldingManualRegistration() {
       ElMessage.warning('④ 製品名を選択してください')
       return
     }
-    const upb = resolveUnitPerBox(draft.productCd, products.value)
-    if (draft.qtyInputSource === 'box' && upb <= 0) {
-      ElMessage.warning('この製品の入数が未設定のため、本数を入力してください')
-      return
-    }
     if (draft.pieceQty == null || !Number.isFinite(draft.pieceQty) || draft.pieceQty < 0) {
       ElMessage.warning('⑤ 生産数（本数）を入力してください')
       return
@@ -776,20 +759,15 @@ export function useWeldingManualRegistration() {
     const netSec = Math.max(0, Math.round((we - ws) / 1000 - pauseSec))
 
     const pieceQty = Math.max(0, Math.round(draft.pieceQty))
-    if (upb > 0 && hasPieceBoxQtyMismatch(pieceQty, upb)) {
-      try {
-        await ElMessageBox.confirm(
-          `本数 ${pieceQty} は入数 ${upb} で割り切れません（${pieceQty}÷${upb} 箱）。\n入力した本数のまま登録しますか？`,
-          '生産数の確認',
-          {
-            confirmButtonText: '登録する',
-            cancelButtonText: 'キャンセル',
-            type: 'warning',
-          },
-        )
-      } catch {
-        return
-      }
+    try {
+      await confirmWeldingPieceQty({
+        pieceQty,
+        productName: draft.productName.trim(),
+        productCd: draft.productCd.trim(),
+        isEdit: isEdit.value,
+      })
+    } catch {
+      return
     }
 
     saving.value = true
@@ -967,12 +945,9 @@ export function useWeldingManualRegistration() {
     firstDefectId,
     loadRows,
     loadMachines,
-    unitPerBox,
-    qtyMismatch,
     onProductChange,
     onMachineChange,
     formatQtyInputValue,
-    onBoxQtyInput,
     onPieceQtyInput,
     startedAtText,
     endedAtText,

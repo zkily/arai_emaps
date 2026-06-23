@@ -58,7 +58,6 @@ const {
   onProductChange,
   onMachineChange,
   formatQtyInputValue,
-  onBoxQtyInput,
   onPieceQtyInput,
   startedAtText,
   endedAtText,
@@ -66,8 +65,6 @@ const {
   onEndedAtInput,
   onStartedAtBlur,
   onEndedAtBlur,
-  unitPerBox,
-  qtyMismatch,
   onProductionDayChange,
   shiftProductionDay,
   goProductionDayToday,
@@ -330,7 +327,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="iar-form__row iar-form__row--product">
+        <div class="iar-form__row iar-form__row--product-qty">
           <div class="iar-field iar-field--c4-product">
             <label class="iar-field__label"><span class="iar-step iar-step--4">④</span>製品名</label>
             <el-select
@@ -352,6 +349,19 @@ onMounted(() => {
             </el-select>
             <el-input v-else :model-value="form.productName" disabled class="iar-field__control" />
           </div>
+          <div class="iar-qty iar-qty--simple iar-field--c5">
+            <label class="iar-field__label">
+              <span class="iar-step iar-step--5">⑤</span>生産数
+            </label>
+            <el-input
+              :model-value="formatQtyInputValue(form.pieceQty)"
+              :disabled="!productSelected"
+              inputmode="numeric"
+              class="iar-field__control iar-field__qty"
+              placeholder="本"
+              @update:model-value="onPieceQtyInput"
+            />
+          </div>
         </div>
 
         <p v-if="!isEdit && !machineSelected" class="iar-form__lock-hint iar-form__lock-hint--pulse">
@@ -369,54 +379,6 @@ onMounted(() => {
 
         <div class="iar-form__below" :class="{ 'iar-form__below--locked': !productSelected }">
         <div class="iar-form__row--qty-time">
-        <div class="iar-qty iar-field--c5">
-          <label class="iar-field__label">
-            <span class="iar-step iar-step--5">⑤</span>生産数
-            <span v-if="form.productCd && unitPerBox > 0" class="iar-qty__hint">入数 {{ unitPerBox }} 本/箱</span>
-            <span v-else-if="form.productCd" class="iar-qty__hint iar-qty__hint--warn">入数未設定（本数を入力）</span>
-          </label>
-          <div class="iar-qty__panel">
-            <div
-              class="iar-qty__cell"
-              :class="{ 'iar-qty__cell--derived': form.qtyInputSource === 'piece' }"
-            >
-              <span class="iar-qty__cell-label">箱数</span>
-              <el-input
-                :model-value="formatQtyInputValue(form.boxQty)"
-                :disabled="!productSelected"
-                inputmode="numeric"
-                class="iar-field__control iar-field__qty"
-                placeholder="箱"
-                @update:model-value="onBoxQtyInput"
-              />
-            </div>
-            <div class="iar-qty__bridge" aria-hidden="true">
-              <span class="iar-qty__op">×</span>
-              <span class="iar-qty__upb">{{ unitPerBox > 0 ? unitPerBox : '—' }}</span>
-              <span class="iar-qty__op">=</span>
-            </div>
-            <div
-              class="iar-qty__cell"
-              :class="{ 'iar-qty__cell--derived': form.qtyInputSource === 'box' }"
-            >
-              <span class="iar-qty__cell-label">本数</span>
-              <el-input
-                :model-value="formatQtyInputValue(form.pieceQty)"
-                :disabled="!productSelected"
-                inputmode="numeric"
-                class="iar-field__control iar-field__qty"
-                placeholder="本"
-                @update:model-value="onPieceQtyInput"
-              />
-            </div>
-          </div>
-          <p v-if="qtyMismatch" class="iar-qty__warn">
-            <el-icon><Warning /></el-icon>
-            本数 {{ qtyMismatch.piece }} は入数 {{ qtyMismatch.upb }} で割り切れません（{{ qtyMismatch.piece }}÷{{ qtyMismatch.upb }} 箱）。
-            登録時に確認します。箱数は参考表示（四捨五入）です。
-          </p>
-        </div>
-
         <div class="iar-time iar-field--c6">
           <label class="iar-field__label iar-time__heading">
             <span class="iar-step iar-step--6">⑥</span>生産時間
@@ -1229,30 +1191,14 @@ onMounted(() => {
 
 .iar-form__row--qty-time {
   display: grid;
-  grid-template-columns: minmax(240px, 32%) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
 }
 
-.iar-form__row--qty-time .iar-qty,
 .iar-form__row--qty-time .iar-time {
   min-width: 0;
   height: 100%;
-}
-
-.iar-form__row--qty-time .iar-qty__panel {
-  flex-wrap: nowrap;
-  gap: 8px;
-}
-
-.iar-form__row--qty-time .iar-qty__cell {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.iar-form__row--qty-time .iar-qty__bridge {
-  padding-bottom: 8px;
-  gap: 4px;
 }
 
 .iar-form__row--qty-time .iar-time__grid {
@@ -1264,13 +1210,25 @@ onMounted(() => {
   padding: 5px 6px;
 }
 
-@media (max-width: 1100px) {
-  .iar-form__row--qty-time {
-    grid-template-columns: 1fr;
-  }
+.iar-form__row--product-qty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 168px);
+  gap: 10px;
+  align-items: end;
+}
 
-  .iar-form__row--qty-time .iar-qty__panel {
-    flex-wrap: wrap;
+.iar-qty--simple {
+  padding: 10px 12px 12px;
+}
+
+.iar-qty--simple .iar-field__label {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .iar-form__row--product-qty {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
 
@@ -1442,10 +1400,8 @@ onMounted(() => {
 
 .iar-step--8 { background: linear-gradient(145deg, #3b82f6, #2563eb); }
 
-.iar-form__row--product {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+.iar-form__row--product-qty .iar-field--c4-product {
+  min-width: 0;
 }
 
 .iar-field--c4-product {
@@ -2163,5 +2119,169 @@ onMounted(() => {
 
 .iar-table__lock {
   color: #cbd5e1;
+}
+</style>
+
+<style>
+.iar-qty-confirm-box {
+  max-width: 420px;
+  padding-bottom: 8px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.18),
+    0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.iar-qty-confirm-box .el-message-box__header {
+  padding: 18px 20px 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.iar-qty-confirm-box .el-message-box__title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+
+.iar-qty-confirm-box .el-message-box__headerbtn {
+  top: 14px;
+  right: 14px;
+}
+
+.iar-qty-confirm-box .el-message-box__content {
+  padding: 16px 20px 8px;
+}
+
+.iar-qty-confirm-box .el-message-box__status {
+  display: none;
+}
+
+.iar-qty-confirm-box .el-message-box__message {
+  padding-left: 0;
+  width: 100%;
+}
+
+.iar-qty-confirm-box .el-message-box__btns {
+  padding: 12px 20px 18px;
+  gap: 10px;
+}
+
+.iar-qty-confirm-box .el-button {
+  min-width: 96px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.iar-qty-confirm-box .el-button--primary {
+  background: linear-gradient(145deg, #4f46e5, #6366f1);
+  border: none;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.iar-qty-confirm-box .el-button--primary:hover {
+  background: linear-gradient(145deg, #4338ca, #4f46e5);
+}
+
+.iar-qty-confirm {
+  color: #334155;
+}
+
+.iar-qty-confirm__lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.iar-qty-confirm__card {
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, rgba(255, 251, 235, 0.98) 0%, rgba(254, 243, 199, 0.55) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 6px 18px rgba(245, 158, 11, 0.12);
+}
+
+.iar-qty-confirm__card-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.iar-qty-confirm__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #92400e;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.iar-qty-confirm__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.iar-qty-confirm__value {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+
+.iar-qty-confirm__unit {
+  font-size: 15px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.iar-qty-confirm__product {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(245, 158, 11, 0.35);
+}
+
+.iar-qty-confirm__product-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.iar-qty-confirm__product-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.iar-qty-confirm__product-cd {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.iar-qty-confirm__question {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
 }
 </style>
