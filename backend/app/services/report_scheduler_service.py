@@ -8,26 +8,29 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.datetime_utils import now_jst_naive
 from app.modules.reports.models import ReportSchedule
-from app.services.full_database_backup import local_now_for_schedule
 from app.services.report_delivery_service import send_report
 
 
 def _schedule_time(schedule: ReportSchedule) -> time_of_day:
+    """MySQL TIME 列が timedelta で返る場合にも対応。"""
     t = schedule.schedule_time
     if isinstance(t, time_of_day):
         return t
+    if isinstance(t, timedelta):
+        total = int(t.total_seconds()) % (24 * 3600)
+        return (datetime.min + timedelta(seconds=total)).time()
+    if isinstance(t, str):
+        parts = t.strip().split(":")
+        if len(parts) >= 2:
+            h, m = int(parts[0]), int(parts[1])
+            s = int(parts[2]) if len(parts) > 2 else 0
+            return time_of_day(h, m, s)
     return time_of_day(8, 0)
 
 
-def _is_due(schedule: ReportSchedule, now_local: datetime) -> bool:
-    """当日まだ実行していない & 予定時刻を過ぎているか。"""
-    sched_time = _schedule_time(schedule)
-    if now_local.time() < sched_time:
-        return False
-    if schedule.last_run_at and schedule.last_run_at.date() >= now_local.date():
-        return False
-
+def _matches_schedule_calendar(schedule: ReportSchedule, now_local: datetime) -> bool:
     config = schedule.schedule_config or {}
     stype = (schedule.schedule_type or "daily").lower()
     if stype == "daily":
@@ -42,15 +45,35 @@ def _is_due(schedule: ReportSchedule, now_local: datetime) -> bool:
     return False
 
 
-def _compute_next_run_at(schedule: ReportSchedule, from_local: datetime) -> datetime | None:
+def _is_due(schedule: ReportSchedule, now_local: datetime) -> bool:
+    """実行予定時刻（JST）を過ぎており、当該回は未実行か。"""
+    if schedule.next_run_at and now_local < schedule.next_run_at:
+        return False
+
+    sched_time = _schedule_time(schedule)
+
+    if schedule.next_run_at and now_local >= schedule.next_run_at:
+        if schedule.last_run_at and schedule.last_run_at >= schedule.next_run_at:
+            return False
+        return _matches_schedule_calendar(schedule, now_local)
+
+    # next_run_at 未設定（旧データ）のフォールバック
+    if now_local.time() < sched_time:
+        return False
+    if schedule.last_run_at and schedule.last_run_at.date() >= now_local.date():
+        return False
+    return _matches_schedule_calendar(schedule, now_local)
+
+
+def compute_next_run_at(schedule: ReportSchedule, from_local: datetime) -> datetime | None:
+    """次回実行予定（JST 壁時計）を算出。"""
     sched_time = _schedule_time(schedule)
     stype = (schedule.schedule_type or "daily").lower()
     config = schedule.schedule_config or {}
     base = from_local.replace(hour=sched_time.hour, minute=sched_time.minute, second=0, microsecond=0)
 
     if stype == "daily":
-        nxt = base if base > from_local else base + timedelta(days=1)
-        return nxt
+        return base if base > from_local else base + timedelta(days=1)
     if stype == "weekly":
         weekday = int(config.get("weekday", 0))
         days_ahead = (weekday - from_local.weekday()) % 7
@@ -71,16 +94,25 @@ def _compute_next_run_at(schedule: ReportSchedule, from_local: datetime) -> date
     return None
 
 
+async def refresh_schedule_next_run_at(db: AsyncSession, schedule: ReportSchedule) -> None:
+    """スケジュール保存時に次回実行予定を JST で再計算。"""
+    schedule.next_run_at = compute_next_run_at(schedule, now_jst_naive())
+
+
 async def run_due_report_schedules_once(db: AsyncSession) -> dict:
     """有効なスケジュールを走査し、実行時刻を過ぎたものを 1 回ずつ配信する。"""
     result = await db.execute(
         select(ReportSchedule).where(ReportSchedule.is_active.is_(True))
     )
     schedules = result.scalars().all()
-    now_local = local_now_for_schedule()
+    now_local = now_jst_naive()
 
     ran: list[dict] = []
+    backfill_next_run = False
     for schedule in schedules:
+        if schedule.next_run_at is None:
+            schedule.next_run_at = compute_next_run_at(schedule, now_local)
+            backfill_next_run = True
         if not _is_due(schedule, now_local):
             continue
         try:
@@ -94,7 +126,7 @@ async def run_due_report_schedules_once(db: AsyncSession) -> dict:
                 run_date=now_local.date(),
             )
             schedule.last_run_at = now_local
-            schedule.next_run_at = _compute_next_run_at(schedule, now_local)
+            schedule.next_run_at = compute_next_run_at(schedule, now_local)
             await db.commit()
             ran.append({"report_code": schedule.report_code, "status": send_result.get("status")})
             logger.info(
@@ -106,5 +138,8 @@ async def run_due_report_schedules_once(db: AsyncSession) -> dict:
             await db.rollback()
             logger.warning("レポート定時配信でエラー: code={} err={}", schedule.report_code, exc)
             ran.append({"report_code": schedule.report_code, "status": "error", "error": str(exc)})
+
+    if backfill_next_run:
+        await db.commit()
 
     return {"checked": len(schedules), "ran": ran}

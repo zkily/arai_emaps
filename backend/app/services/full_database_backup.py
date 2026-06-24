@@ -143,9 +143,9 @@ async def has_successful_auto_backup_today(db: AsyncSession, *, now_local: datet
 
 def local_now_for_schedule() -> datetime:
     """TIMEZONE（datetime_utils.JST と一致）での現在ローカル時刻（naive・壁時計）。"""
-    from app.core.datetime_utils import JST
+    from app.core.datetime_utils import now_jst_naive
 
-    return datetime.now(JST).replace(tzinfo=None)
+    return now_jst_naive()
 
 
 def seconds_until_next_schedule(now_local: datetime, hour: int, minute: int) -> float:

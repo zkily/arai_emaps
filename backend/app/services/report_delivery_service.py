@@ -181,14 +181,18 @@ async def send_report(
 
     generator = get_generator(report_code)
     run = run_date or now_jst().date()
-    reference_key = generator.reference_key(parameters=parameters or {}, run_date=run)
+    period_key = generator.reference_key(parameters=parameters or {}, run_date=run)
+    # 定時配信は実行日（JST）単位で重複判定（手動送信済みでも当日スケジュールは配信可能）
+    reference_key = (
+        f"{period_key}:scheduled:{run.isoformat()}" if is_auto else period_key
+    )
 
     if is_auto and await _already_sent(db, report_code, reference_key):
         return {
             "success": True,
             "status": "already_sent",
             "reference_key": reference_key,
-            "message": "同一期間のレポートは送信済みです",
+            "message": "本日の定時配信は送信済みです",
         }
 
     smtp = await load_smtp_config(db) if email_enabled else None

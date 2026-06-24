@@ -151,6 +151,8 @@ async def create_schedule(
     if not definition:
         raise HTTPException(status_code=400, detail="存在しないレポートコードです")
 
+    from app.services.report_scheduler_service import refresh_schedule_next_run_at
+
     schedule = ReportSchedule(
         report_code=body.report_code,
         schedule_type=body.schedule_type,
@@ -162,6 +164,8 @@ async def create_schedule(
         created_by=current_user.id,
     )
     db.add(schedule)
+    await db.flush()
+    await refresh_schedule_next_run_at(db, schedule)
     await db.commit()
     await db.refresh(schedule)
     return schedule
@@ -180,8 +184,18 @@ async def update_schedule(
     if not schedule:
         raise HTTPException(status_code=404, detail="スケジュールが見つかりません")
 
-    for field_name, value in body.model_dump(exclude_unset=True).items():
+    from app.services.report_scheduler_service import refresh_schedule_next_run_at
+
+    schedule_fields = body.model_dump(exclude_unset=True)
+    for field_name, value in schedule_fields.items():
         setattr(schedule, field_name, value)
+    if schedule_fields.keys() & {
+        "schedule_type",
+        "schedule_time",
+        "schedule_config",
+        "is_active",
+    }:
+        await refresh_schedule_next_run_at(db, schedule)
     await db.commit()
     await db.refresh(schedule)
     return schedule

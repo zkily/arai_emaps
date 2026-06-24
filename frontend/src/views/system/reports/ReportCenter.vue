@@ -1,34 +1,50 @@
 <template>
   <div class="rc-page" v-loading="pageLoading">
-    <header class="rc-top">
-      <div class="rc-top__brand">
-        <el-icon :size="18"><Document /></el-icon>
-        <div>
-          <h1 class="rc-top__title">報告センター</h1>
-          <span class="rc-top__desc">各種レポートの生成・手動配信・定時配信・送信履歴</span>
+    <div class="rc-page__bg" aria-hidden="true">
+      <div class="rc-page__orb rc-page__orb--1" />
+      <div class="rc-page__orb rc-page__orb--2" />
+    </div>
+
+    <header class="rc-hero">
+      <div class="rc-hero__main">
+        <div class="rc-hero__icon">
+          <el-icon :size="20"><Document /></el-icon>
+        </div>
+        <div class="rc-hero__text">
+          <span class="rc-hero__eyebrow">SYSTEM · レポート</span>
+          <h1 class="rc-hero__title">報告センター</h1>
+          <p class="rc-hero__desc">生成 · 手動配信 · 定時配信 · 送信履歴</p>
         </div>
       </div>
-      <el-button :icon="Refresh" circle size="small" :loading="pageLoading" @click="loadAll" />
+      <el-button class="rc-hero__refresh" :icon="Refresh" circle size="small" :loading="pageLoading" @click="loadAll" />
     </header>
 
-    <nav class="rc-tabs">
+    <nav class="rc-tabs" role="tablist">
       <button
         v-for="tab in tabs"
         :key="tab.name"
         type="button"
+        role="tab"
         class="rc-tab"
         :class="{ 'rc-tab--active': activeTab === tab.name }"
+        :aria-selected="activeTab === tab.name"
         @click="activeTab = tab.name"
       >
         <el-icon :size="14"><component :is="tab.icon" /></el-icon>
-        {{ tab.label }}
+        <span>{{ tab.label }}</span>
+        <span v-if="tab.name === 'schedule' && schedules.length" class="rc-tab__badge">{{ schedules.length }}</span>
+        <span v-if="tab.name === 'logs' && logs.length" class="rc-tab__badge rc-tab__badge--muted">{{ logs.length }}</span>
       </button>
     </nav>
 
     <!-- 配信（手動） -->
-    <section v-show="activeTab === 'send'" class="rc-panel">
+    <section v-show="activeTab === 'send'" class="rc-shell">
       <div class="rc-layout">
         <aside class="rc-list">
+          <div class="rc-list__head">
+            <span class="rc-list__label">レポート一覧</span>
+            <span class="rc-list__count">{{ definitions.length }}</span>
+          </div>
           <article
             v-for="d in definitions"
             :key="d.report_code"
@@ -40,95 +56,113 @@
             <h3 class="rc-def__name">{{ d.report_name }}</h3>
             <p class="rc-def__desc">{{ d.description || '—' }}</p>
           </article>
-          <el-empty v-if="!definitions.length" description="レポート定義がありません" :image-size="60" />
+          <el-empty v-if="!definitions.length" description="レポート定義がありません" :image-size="48" />
         </aside>
 
         <div class="rc-detail" v-if="selected">
-          <h2 class="rc-detail__title">{{ selected.report_name }}</h2>
-
-          <div class="rc-form">
-            <div v-for="field in selectedFields" :key="field.key" class="rc-field">
-              <label class="rc-field__label">{{ field.label }}</label>
-              <template v-if="field.type === 'date_range'">
-                <el-select v-model="paramState[field.key]" size="small" style="width: 160px">
-                  <el-option
-                    v-for="p in field.presets || []"
-                    :key="p"
-                    :label="presetLabel(p)"
-                    :value="p"
-                  />
-                </el-select>
-                <el-date-picker
-                  v-if="paramState[field.key] === 'custom'"
-                  v-model="customRange"
-                  type="daterange"
-                  size="small"
-                  value-format="YYYY-MM-DD"
-                  range-separator="〜"
-                  start-placeholder="開始日"
-                  end-placeholder="終了日"
-                  style="margin-left: 8px"
-                />
-              </template>
-              <template v-else-if="field.type === 'month'">
-                <el-select v-model="paramState[field.key]" size="small" style="width: 160px">
-                  <el-option label="先月" value="last_month" />
-                  <el-option label="今月" value="this_month" />
-                  <el-option label="指定月" value="custom" />
-                </el-select>
-                <el-date-picker
-                  v-if="paramState[field.key] === 'custom'"
-                  v-model="customMonth"
-                  type="month"
-                  size="small"
-                  value-format="YYYY-MM"
-                  placeholder="基準月"
-                  style="margin-left: 8px"
-                />
-              </template>
+          <div class="rc-detail__head">
+            <div>
+              <span class="rc-detail__cat">{{ selected.category }}</span>
+              <h2 class="rc-detail__title">{{ selected.report_name }}</h2>
             </div>
           </div>
 
-          <div class="rc-actions">
-            <el-select v-model="sendFormat" size="small" style="width: 110px">
-              <el-option label="Excel" value="xlsx" />
-              <el-option label="PDF" value="pdf" />
-              <el-option label="両方" value="both" />
-            </el-select>
-            <el-button :icon="View" size="small" :loading="previewLoading" @click="doPreview">プレビュー</el-button>
-            <el-button :icon="Download" size="small" @click="doDownload">ダウンロード</el-button>
-            <el-button
-              type="primary"
-              :icon="Promotion"
-              size="small"
-              :loading="sendLoading"
-              :disabled="!preview?.can_send"
-              @click="doSend"
-            >
-              送信
-            </el-button>
+          <div class="rc-toolbar">
+            <div class="rc-form">
+              <div v-for="field in selectedFields" :key="field.key" class="rc-field">
+                <label class="rc-field__label">{{ field.label }}</label>
+                <template v-if="field.type === 'date_range'">
+                  <el-select v-model="paramState[field.key]" size="small" class="rc-field__control">
+                    <el-option
+                      v-for="p in field.presets || []"
+                      :key="p"
+                      :label="presetLabel(p)"
+                      :value="p"
+                    />
+                  </el-select>
+                  <el-date-picker
+                    v-if="paramState[field.key] === 'custom'"
+                    v-model="customRange"
+                    type="daterange"
+                    size="small"
+                    value-format="YYYY-MM-DD"
+                    range-separator="〜"
+                    start-placeholder="開始"
+                    end-placeholder="終了"
+                    class="rc-field__control rc-field__control--range"
+                  />
+                </template>
+                <template v-else-if="field.type === 'month'">
+                  <el-select v-model="paramState[field.key]" size="small" class="rc-field__control">
+                    <el-option label="先月" value="last_month" />
+                    <el-option label="今月" value="this_month" />
+                    <el-option label="指定月" value="custom" />
+                  </el-select>
+                  <el-date-picker
+                    v-if="paramState[field.key] === 'custom'"
+                    v-model="customMonth"
+                    type="month"
+                    size="small"
+                    value-format="YYYY-MM"
+                    placeholder="基準月"
+                    class="rc-field__control"
+                  />
+                </template>
+              </div>
+            </div>
+            <div class="rc-actions">
+              <el-select v-model="sendFormat" size="small" class="rc-actions__format">
+                <el-option label="Excel" value="xlsx" />
+                <el-option label="PDF" value="pdf" />
+                <el-option label="両方" value="both" />
+              </el-select>
+              <el-button :icon="View" size="small" :loading="previewLoading" @click="doPreview">プレビュー</el-button>
+              <el-button :icon="Download" size="small" @click="doDownload">DL</el-button>
+              <el-button
+                type="primary"
+                :icon="Promotion"
+                size="small"
+                :loading="sendLoading"
+                :disabled="!preview?.can_send"
+                @click="doSend"
+              >
+                送信
+              </el-button>
+            </div>
           </div>
 
-            <div v-if="preview" class="rc-preview">
+          <div v-if="preview" class="rc-preview">
             <div class="rc-preview__meta">
-              <span>対象期間: <b>{{ preview.period_label }}</b></span>
-              <span>件数: <b>{{ preview.record_count }}</b></span>
-              <span>形式: <b>{{ preview.format }}</b></span>
-              <span>添付: <b>{{ preview.attachments.map((a) => a.filename).join(', ') || '—' }}</b></span>
+              <div class="rc-stat">
+                <span class="rc-stat__label">対象期間</span>
+                <b class="rc-stat__value">{{ preview.period_label }}</b>
+              </div>
+              <div class="rc-stat">
+                <span class="rc-stat__label">件数</span>
+                <b class="rc-stat__value">{{ preview.record_count }}</b>
+              </div>
+              <div class="rc-stat">
+                <span class="rc-stat__label">形式</span>
+                <b class="rc-stat__value">{{ preview.format }}</b>
+              </div>
+              <div class="rc-stat rc-stat--wide">
+                <span class="rc-stat__label">添付</span>
+                <b class="rc-stat__value rc-stat__value--truncate">{{ preview.attachments.map((a) => a.filename).join(', ') || '—' }}</b>
+              </div>
             </div>
 
             <div class="rc-preview__recipients">
-              <div>
-                <span class="rc-tag rc-tag--mail">メール {{ preview.recipient_count }} 名</span>
-                <span class="rc-tag rc-tag--line">LINE {{ preview.line_recipient_count }} 名</span>
+              <div class="rc-tags">
+                <span class="rc-tag rc-tag--mail">メール {{ preview.recipient_count }}</span>
+                <span class="rc-tag rc-tag--line">LINE {{ preview.line_recipient_count }}</span>
                 <span v-if="!preview.email_enabled && !preview.line_enabled" class="rc-tag rc-tag--warn">
-                  通知イベントが無効です（通知センターで有効化してください）
+                  通知イベント無効
                 </span>
                 <span v-else-if="!preview.can_send" class="rc-tag rc-tag--warn">
-                  送信できません（SMTP/LINE 設定・受信者を確認してください）
+                  送信不可（設定を確認）
                 </span>
               </div>
-              <ul class="rc-recipients">
+              <ul v-if="preview.recipients.length" class="rc-recipients">
                 <li v-for="r in preview.recipients" :key="r.email">{{ r.name }} &lt;{{ r.email }}&gt;</li>
               </ul>
             </div>
@@ -235,17 +269,22 @@
             <div v-else class="rc-preview__summary" v-html="preview.summary_html" />
           </div>
         </div>
-        <el-empty v-else description="レポートを選択してください" />
+        <div v-else class="rc-detail rc-detail--empty">
+          <el-empty description="レポートを選択してください" :image-size="56" />
+        </div>
       </div>
     </section>
 
     <!-- スケジュール -->
-    <section v-show="activeTab === 'schedule'" class="rc-panel">
+    <section v-show="activeTab === 'schedule'" class="rc-shell">
       <div class="rc-panel__head">
-        <h2 class="rc-panel__title">定時配信スケジュール</h2>
+        <div>
+          <h2 class="rc-panel__title">定時配信スケジュール</h2>
+          <p class="rc-panel__sub">自動送信の頻度・時刻・対象期間を管理</p>
+        </div>
         <el-button type="primary" :icon="Plus" size="small" @click="openScheduleDialog()">新規追加</el-button>
       </div>
-      <el-table :data="schedules" size="small" border>
+      <el-table :data="schedules" size="small" class="rc-table" stripe>
         <el-table-column label="レポート" min-width="160">
           <template #default="{ row }">{{ definitionName(row.report_code) }}</template>
         </el-table-column>
@@ -277,12 +316,15 @@
     </section>
 
     <!-- 送信履歴 -->
-    <section v-show="activeTab === 'logs'" class="rc-panel">
+    <section v-show="activeTab === 'logs'" class="rc-shell">
       <div class="rc-panel__head">
-        <h2 class="rc-panel__title">送信履歴</h2>
+        <div>
+          <h2 class="rc-panel__title">送信履歴</h2>
+          <p class="rc-panel__sub">直近 100 件の配信結果</p>
+        </div>
         <el-button :icon="Refresh" size="small" @click="loadLogs">更新</el-button>
       </div>
-      <el-table :data="logs" size="small" border>
+      <el-table :data="logs" size="small" class="rc-table" stripe>
         <el-table-column label="レポート" min-width="160">
           <template #default="{ row }">{{ definitionName(row.report_code) }}</template>
         </el-table-column>
@@ -1113,213 +1155,535 @@ watch(isCuttingReportPreview, (val) => {
 
 <style scoped>
 .rc-page {
-  padding: 16px;
+  --rc-bg: #f1f5f9;
+  --rc-surface: #ffffff;
+  --rc-border: #e2e8f0;
+  --rc-border-strong: #cbd5e1;
+  --rc-text: #0f172a;
+  --rc-muted: #64748b;
+  --rc-primary: #4f46e5;
+  --rc-primary-soft: #eef2ff;
+  --rc-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 18px rgba(15, 23, 42, 0.06);
+  --rc-radius: 10px;
+  --rc-radius-sm: 8px;
+  position: relative;
+  min-height: 100%;
+  padding: 10px 12px 12px;
+  color: var(--rc-text);
+  overflow: hidden;
 }
-.rc-top {
+
+.rc-page__bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rc-page__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.45;
+}
+
+.rc-page__orb--1 {
+  width: 220px;
+  height: 220px;
+  top: -60px;
+  right: 8%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.28), transparent 70%);
+}
+
+.rc-page__orb--2 {
+  width: 180px;
+  height: 180px;
+  left: -40px;
+  bottom: 10%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.2), transparent 70%);
+}
+
+.rc-page > :not(.rc-page__bg) {
+  position: relative;
+  z-index: 1;
+}
+
+.rc-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: var(--rc-radius);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  box-shadow: var(--rc-shadow);
 }
-.rc-top__brand {
+
+.rc-hero__main {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
-.rc-top__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-.rc-top__desc {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.rc-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--el-border-color);
-  margin-bottom: 12px;
-}
-.rc-tab {
+
+.rc-hero__icon {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--rc-primary);
+  background: linear-gradient(145deg, #eef2ff, #e0e7ff);
+  border: 1px solid #c7d2fe;
+  flex-shrink: 0;
+}
+
+.rc-hero__eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6366f1;
+  margin-bottom: 1px;
+}
+
+.rc-hero__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.rc-hero__desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--rc-muted);
+  line-height: 1.3;
+}
+
+.rc-hero__refresh {
+  flex-shrink: 0;
+}
+
+.rc-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--rc-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.rc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: none;
   background: transparent;
-  padding: 8px 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rc-muted);
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
 }
+
+.rc-tab:hover {
+  color: var(--rc-text);
+  background: #f8fafc;
+}
+
 .rc-tab--active {
-  color: var(--el-color-primary);
-  border-bottom-color: var(--el-color-primary);
+  color: var(--rc-primary);
+  background: var(--rc-primary-soft);
+  box-shadow: inset 0 0 0 1px #c7d2fe;
   font-weight: 600;
 }
+
+.rc-tab__badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: #fff;
+  background: var(--rc-primary);
+}
+
+.rc-tab__badge--muted {
+  background: #94a3b8;
+}
+
+.rc-shell {
+  border-radius: var(--rc-radius);
+  border: 1px solid var(--rc-border);
+  background: var(--rc-surface);
+  box-shadow: var(--rc-shadow);
+  padding: 10px;
+}
+
 .rc-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
 }
+
 .rc-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 70vh;
+  gap: 6px;
+  max-height: calc(100vh - 168px);
   overflow-y: auto;
+  padding-right: 2px;
 }
+
+.rc-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 4px;
+}
+
+.rc-list__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rc-muted);
+}
+
+.rc-list__count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rc-primary);
+  background: var(--rc-primary-soft);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
 .rc-def {
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  padding: 10px 12px;
+  position: relative;
+  border: 1px solid var(--rc-border);
+  border-radius: var(--rc-radius-sm);
+  padding: 8px 10px 8px 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+  background: #fafbfc;
 }
+
+.rc-def::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  transition: background 0.15s;
+}
+
 .rc-def:hover {
-  border-color: var(--el-color-primary-light-5);
+  border-color: #c7d2fe;
+  background: #fff;
 }
+
 .rc-def--active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: #a5b4fc;
+  background: linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
 }
+
+.rc-def--active::before {
+  background: linear-gradient(180deg, #6366f1, #4f46e5);
+}
+
 .rc-def__cat {
-  font-size: 11px;
-  color: var(--el-color-primary);
-  font-weight: 600;
+  font-size: 10px;
+  color: #6366f1;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
+
 .rc-def__name {
-  margin: 2px 0;
-  font-size: 14px;
+  margin: 1px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
 }
+
 .rc-def__desc {
-  margin: 0;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--rc-muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
+
 .rc-detail {
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  padding: 16px;
+  border: 1px solid var(--rc-border);
+  border-radius: var(--rc-radius-sm);
+  padding: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  min-height: 280px;
 }
+
+.rc-detail--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+
+.rc-detail__head {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rc-detail__cat {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6366f1;
+  margin-bottom: 2px;
+}
+
 .rc-detail__title {
-  margin: 0 0 12px;
-  font-size: 16px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
 }
+
+.rc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: var(--rc-radius-sm);
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+}
+
 .rc-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: 8px 12px;
+  align-items: flex-end;
+  flex: 1;
+  min-width: 0;
 }
+
 .rc-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
+
 .rc-field__label {
-  font-size: 13px;
-  color: var(--el-text-color-regular);
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
 }
+
+.rc-field__control {
+  width: 140px;
+}
+
+.rc-field__control--range {
+  width: 220px;
+}
+
 .rc-actions {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
+
+.rc-actions__format {
+  width: 96px;
+}
+
 .rc-preview {
-  border-top: 1px dashed var(--el-border-color);
-  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+  padding-top: 8px;
 }
+
 .rc-preview__meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rc-stat {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+  min-width: 0;
+}
+
+.rc-stat--wide {
+  grid-column: span 1;
+}
+
+.rc-stat__label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--rc-muted);
+  margin-bottom: 2px;
+  letter-spacing: 0.02em;
+}
+
+.rc-stat__value {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rc-text);
+  line-height: 1.25;
+}
+
+.rc-stat__value--truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  font-size: 13px;
-  margin-bottom: 10px;
+  gap: 4px;
 }
+
 .rc-tag {
-  display: inline-block;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
   padding: 2px 8px;
-  border-radius: 10px;
-  margin-right: 6px;
+  border-radius: 999px;
+  line-height: 1.4;
 }
+
 .rc-tag--mail {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
 }
+
 .rc-tag--line {
-  background: #e8f6ec;
-  color: #2f9e44;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
 }
+
 .rc-tag--warn {
-  background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning);
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
 }
+
 .rc-recipients {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  margin: 6px 0 0;
+  padding: 6px 8px 6px 22px;
+  font-size: 11px;
+  color: var(--rc-muted);
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #eef2f7;
+  max-height: 72px;
+  overflow-y: auto;
 }
+
+.rc-recipients li {
+  line-height: 1.45;
+}
+
 .rc-preview__summary {
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: 8px;
+  font-size: 12px;
 }
+
 .rc-preview__summary :deep(table) {
   border-collapse: collapse;
 }
+
 .rc-preview__summary :deep(th),
 .rc-preview__summary :deep(td) {
-  border: 1px solid var(--el-border-color);
-  padding: 4px 8px;
+  border: 1px solid var(--rc-border);
+  padding: 3px 6px;
 }
 
 /* 切断工程実績レポート A4 横向きプレビュー */
 .rc-a4-preview {
-  margin-top: 16px;
+  margin-top: 8px;
   display: flex;
   justify-content: center;
-  padding: 12px;
-  background: linear-gradient(145deg, #e2e8f0 0%, #f1f5f9 100%);
-  border-radius: 10px;
+  padding: 8px;
+  background: linear-gradient(145deg, #e8edf4 0%, #f1f5f9 100%);
+  border-radius: var(--rc-radius-sm);
+  border: 1px solid var(--rc-border);
 }
+
 .rc-a4-sheet {
   width: 100%;
   max-width: 680px;
   aspect-ratio: 210 / 297;
-  max-height: 88vh;
+  max-height: 82vh;
   overflow-y: auto;
   background: #fff;
   border-radius: 4px;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.06),
-    0 8px 24px rgba(15, 23, 42, 0.12);
-  padding: 28px 32px 24px;
+    0 6px 20px rgba(15, 23, 42, 0.1);
+  padding: 20px 24px 16px;
 }
+
 .rc-a4-sheet--landscape {
   max-width: min(100%, 1100px);
   aspect-ratio: 297 / 210;
   max-height: none;
-  padding: 20px 28px 18px;
+  padding: 16px 22px 14px;
 }
+
 .rc-a4-sheet__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 2px solid #e2e8f0;
 }
-.rc-a4-sheet--landscape .rc-a4-sheet__head {
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-}
+
 .rc-a4-sheet__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #0f172a;
   letter-spacing: 0.02em;
@@ -1327,32 +1691,40 @@ watch(isCuttingReportPreview, (val) => {
   flex: 1;
   min-width: 0;
 }
+
 .rc-a4-sheet--landscape .rc-a4-sheet__title {
-  font-size: 16px;
+  font-size: 15px;
 }
+
 .rc-a4-sheet__period {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   text-align: right;
   flex-shrink: 0;
   white-space: nowrap;
 }
+
 .rc-a4-section {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
+
 .rc-a4-section:last-child {
   margin-bottom: 0;
 }
+
 .rc-a4-section__title {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 11px;
   font-weight: 600;
   color: #1e40af;
+  line-height: 1.35;
 }
+
 .rc-a4-chart-wrap {
   position: relative;
 }
+
 .rc-a4-chart-comment {
   position: absolute;
   top: 2px;
@@ -1360,9 +1732,9 @@ watch(isCuttingReportPreview, (val) => {
   z-index: 2;
   max-width: 62%;
   margin: 0;
-  padding: 4px 8px;
+  padding: 3px 6px;
   font-size: 9px;
-  line-height: 1.45;
+  line-height: 1.4;
   font-weight: 600;
   color: #b91c1c;
   text-align: right;
@@ -1372,162 +1744,242 @@ watch(isCuttingReportPreview, (val) => {
   box-shadow: 0 1px 2px rgba(220, 38, 38, 0.08);
   pointer-events: none;
 }
+
 .rc-a4-chart {
-  height: 180px;
+  height: 168px;
   width: 100%;
 }
+
 .rc-a4-sheet--landscape .rc-a4-chart {
-  height: 200px;
+  height: 188px;
 }
+
 .rc-a4-chart--bar {
-  height: 200px;
+  height: 188px;
 }
+
 .rc-a4-sheet--landscape .rc-a4-chart--bar {
-  height: 200px;
+  height: 188px;
 }
 
 .rc-a4-summary {
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid #e2e8f0;
 }
+
 .rc-a4-summary__heading {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 6px;
+  font-size: 10px;
   font-weight: 600;
   color: #475569;
 }
+
 .rc-a4-summary__block {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
+
 .rc-a4-summary__block:last-child {
   margin-bottom: 0;
 }
+
 .rc-a4-summary__block-title {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: #1e40af;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
+
 .rc-a4-summary__grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
+
 .rc-a4-summary__grid--inv {
   grid-template-columns: repeat(3, 1fr);
 }
+
 .rc-a4-summary__item {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: center;
   min-width: 0;
 }
+
 .rc-a4-summary__label {
   display: block;
   font-size: 9px;
   color: #64748b;
-  margin-bottom: 4px;
-  line-height: 1.3;
+  margin-bottom: 2px;
+  line-height: 1.25;
 }
+
 .rc-a4-summary__value {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
   line-height: 1.2;
 }
-.rc-a4-summary__value--sm {
-  font-size: 12px;
-  font-weight: 600;
-}
+
 .rc-a4-summary__value--pos {
   color: #059669;
 }
+
 .rc-a4-summary__value--neg {
   color: #dc2626;
 }
+
 .rc-a4-summary__sub {
   display: block;
-  margin-top: 2px;
-  font-size: 9px;
+  margin-top: 1px;
+  font-size: 8px;
   font-weight: 500;
   color: #94a3b8;
 }
 
-/* summary_html 内スタイル（切断レポート・他レポート用） */
 .rc-preview__summary :deep(.cutting-report-summary .cr-header) {
   display: none;
 }
+
 .rc-preview__summary :deep(.cutting-report-summary .cr-kpi-row) {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
+
 .rc-preview__summary :deep(.cr-kpi) {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: center;
 }
+
 .rc-preview__summary :deep(.cr-kpi__label) {
   display: block;
   font-size: 10px;
   color: #64748b;
   margin-bottom: 2px;
 }
+
 .rc-preview__summary :deep(.cr-kpi b) {
-  font-size: 14px;
+  font-size: 13px;
   color: #0f172a;
 }
+
 .rc-preview__summary :deep(.cr-kpi small) {
   display: block;
   font-size: 9px;
   color: #94a3b8;
 }
+
 .rc-preview__summary :deep(.cr-pos) {
   color: #059669;
 }
+
 .rc-preview__summary :deep(.cr-neg) {
   color: #dc2626;
 }
+
 .rc-preview__summary :deep(.cr-note) {
   font-size: 10px;
   color: #94a3b8;
-  margin: 0 0 8px;
+  margin: 0 0 6px;
 }
+
 .rc-preview__summary :deep(.cr-table) {
   width: 100%;
   font-size: 10px;
   border-collapse: collapse;
 }
+
 .rc-preview__summary :deep(.cr-table th) {
   background: #e8eef7;
   color: #1e3a5f;
   font-weight: 600;
-  padding: 5px 6px;
+  padding: 4px 6px;
   border: 1px solid #cbd5e1;
 }
+
 .rc-preview__summary :deep(.cr-table td) {
-  padding: 4px 6px;
+  padding: 3px 6px;
   border: 1px solid #e2e8f0;
 }
+
 .rc-preview__summary :deep(.cr-table tfoot th) {
   background: #f8fafc;
 }
+
 .rc-panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
+
 .rc-panel__title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.rc-panel__sub {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--rc-muted);
+}
+
+.rc-table {
+  width: 100%;
+  border-radius: var(--rc-radius-sm);
+  overflow: hidden;
+}
+
+.rc-table :deep(.el-table__header th) {
+  background: #f8fafc !important;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 0;
+}
+
+.rc-table :deep(.el-table__body td) {
+  font-size: 12px;
+  padding: 5px 0;
+}
+
+.rc-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .rc-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rc-list {
+    max-height: 200px;
+  }
+
+  .rc-preview__meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rc-actions {
+    justify-content: flex-end;
+  }
 }
 </style>
