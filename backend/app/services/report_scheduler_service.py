@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import calendar
+from dataclasses import dataclass, replace
 from datetime import datetime, time as time_of_day, timedelta
+from typing import Any
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import now_jst_naive
@@ -13,9 +15,38 @@ from app.modules.reports.models import ReportSchedule
 from app.services.report_delivery_service import send_report
 
 
-def _schedule_time(schedule: ReportSchedule) -> time_of_day:
+@dataclass(frozen=True)
+class ScheduleSnapshot:
+    """ORM を同期関数に渡さないためのスナップショット（MissingGreenlet 回避）。"""
+
+    id: int
+    report_code: str
+    schedule_type: str
+    schedule_time: Any
+    schedule_config: dict[str, Any] | None
+    parameters: dict[str, Any] | None
+    format: str | None
+    last_run_at: datetime | None
+    next_run_at: datetime | None
+
+
+def _snapshot_schedule(schedule: ReportSchedule) -> ScheduleSnapshot:
+    return ScheduleSnapshot(
+        id=schedule.id,
+        report_code=schedule.report_code,
+        schedule_type=schedule.schedule_type or "daily",
+        schedule_time=schedule.schedule_time,
+        schedule_config=dict(schedule.schedule_config) if schedule.schedule_config else None,
+        parameters=dict(schedule.parameters) if schedule.parameters else None,
+        format=schedule.format,
+        last_run_at=schedule.last_run_at,
+        next_run_at=schedule.next_run_at,
+    )
+
+
+def _schedule_time(snapshot: ScheduleSnapshot) -> time_of_day:
     """MySQL TIME 列が timedelta で返る場合にも対応。"""
-    t = schedule.schedule_time
+    t = snapshot.schedule_time
     if isinstance(t, time_of_day):
         return t
     if isinstance(t, timedelta):
@@ -30,9 +61,9 @@ def _schedule_time(schedule: ReportSchedule) -> time_of_day:
     return time_of_day(8, 0)
 
 
-def _matches_schedule_calendar(schedule: ReportSchedule, now_local: datetime) -> bool:
-    config = schedule.schedule_config or {}
-    stype = (schedule.schedule_type or "daily").lower()
+def _matches_schedule_calendar(snapshot: ScheduleSnapshot, now_local: datetime) -> bool:
+    config = snapshot.schedule_config or {}
+    stype = snapshot.schedule_type.lower()
     if stype == "daily":
         return True
     if stype == "weekly":
@@ -45,31 +76,31 @@ def _matches_schedule_calendar(schedule: ReportSchedule, now_local: datetime) ->
     return False
 
 
-def _is_due(schedule: ReportSchedule, now_local: datetime) -> bool:
+def _is_due(snapshot: ScheduleSnapshot, now_local: datetime) -> bool:
     """実行予定時刻（JST）を過ぎており、当該回は未実行か。"""
-    if schedule.next_run_at and now_local < schedule.next_run_at:
+    if snapshot.next_run_at and now_local < snapshot.next_run_at:
         return False
 
-    sched_time = _schedule_time(schedule)
+    sched_time = _schedule_time(snapshot)
 
-    if schedule.next_run_at and now_local >= schedule.next_run_at:
-        if schedule.last_run_at and schedule.last_run_at >= schedule.next_run_at:
+    if snapshot.next_run_at and now_local >= snapshot.next_run_at:
+        if snapshot.last_run_at and snapshot.last_run_at >= snapshot.next_run_at:
             return False
-        return _matches_schedule_calendar(schedule, now_local)
+        return _matches_schedule_calendar(snapshot, now_local)
 
     # next_run_at 未設定（旧データ）のフォールバック
     if now_local.time() < sched_time:
         return False
-    if schedule.last_run_at and schedule.last_run_at.date() >= now_local.date():
+    if snapshot.last_run_at and snapshot.last_run_at.date() >= now_local.date():
         return False
-    return _matches_schedule_calendar(schedule, now_local)
+    return _matches_schedule_calendar(snapshot, now_local)
 
 
-def compute_next_run_at(schedule: ReportSchedule, from_local: datetime) -> datetime | None:
+def compute_next_run_at(snapshot: ScheduleSnapshot, from_local: datetime) -> datetime | None:
     """次回実行予定（JST 壁時計）を算出。"""
-    sched_time = _schedule_time(schedule)
-    stype = (schedule.schedule_type or "daily").lower()
-    config = schedule.schedule_config or {}
+    sched_time = _schedule_time(snapshot)
+    stype = snapshot.schedule_type.lower()
+    config = snapshot.schedule_config or {}
     base = from_local.replace(hour=sched_time.hour, minute=sched_time.minute, second=0, microsecond=0)
 
     if stype == "daily":
@@ -94,9 +125,26 @@ def compute_next_run_at(schedule: ReportSchedule, from_local: datetime) -> datet
     return None
 
 
+async def _update_schedule_run_state(
+    db: AsyncSession,
+    *,
+    schedule_id: int,
+    last_run_at: datetime | None = None,
+    next_run_at: datetime | None = None,
+) -> None:
+    values: dict[str, datetime] = {}
+    if last_run_at is not None:
+        values["last_run_at"] = last_run_at
+    if next_run_at is not None:
+        values["next_run_at"] = next_run_at
+    if values:
+        await db.execute(update(ReportSchedule).where(ReportSchedule.id == schedule_id).values(**values))
+
+
 async def refresh_schedule_next_run_at(db: AsyncSession, schedule: ReportSchedule) -> None:
     """スケジュール保存時に次回実行予定を JST で再計算。"""
-    schedule.next_run_at = compute_next_run_at(schedule, now_jst_naive())
+    snapshot = _snapshot_schedule(schedule)
+    schedule.next_run_at = compute_next_run_at(snapshot, now_jst_naive())
 
 
 async def run_due_report_schedules_once(db: AsyncSession) -> dict:
@@ -108,38 +156,46 @@ async def run_due_report_schedules_once(db: AsyncSession) -> dict:
     now_local = now_jst_naive()
 
     ran: list[dict] = []
-    backfill_next_run = False
     for schedule in schedules:
-        if schedule.next_run_at is None:
-            schedule.next_run_at = compute_next_run_at(schedule, now_local)
-            backfill_next_run = True
-        if not _is_due(schedule, now_local):
+        snapshot = _snapshot_schedule(schedule)
+
+        if snapshot.next_run_at is None:
+            next_run = compute_next_run_at(snapshot, now_local)
+            await _update_schedule_run_state(db, schedule_id=snapshot.id, next_run_at=next_run)
+            await db.commit()
+            snapshot = replace(snapshot, next_run_at=next_run)
+
+        if not _is_due(snapshot, now_local):
             continue
+
+        report_code = snapshot.report_code
         try:
             send_result = await send_report(
                 db,
-                report_code=schedule.report_code,
-                parameters=schedule.parameters or {},
-                fmt=schedule.format,
+                report_code=report_code,
+                parameters=snapshot.parameters or {},
+                fmt=snapshot.format,
                 trigger="scheduled",
                 current_user=None,
                 run_date=now_local.date(),
             )
-            schedule.last_run_at = now_local
-            schedule.next_run_at = compute_next_run_at(schedule, now_local)
+            next_run = compute_next_run_at(snapshot, now_local)
+            await _update_schedule_run_state(
+                db,
+                schedule_id=snapshot.id,
+                last_run_at=now_local,
+                next_run_at=next_run,
+            )
             await db.commit()
-            ran.append({"report_code": schedule.report_code, "status": send_result.get("status")})
+            ran.append({"report_code": report_code, "status": send_result.get("status")})
             logger.info(
                 "📨 レポート定時配信: code={} status={}",
-                schedule.report_code,
+                report_code,
                 send_result.get("status"),
             )
         except Exception as exc:
             await db.rollback()
-            logger.warning("レポート定時配信でエラー: code={} err={}", schedule.report_code, exc)
-            ran.append({"report_code": schedule.report_code, "status": "error", "error": str(exc)})
-
-    if backfill_next_run:
-        await db.commit()
+            logger.warning("レポート定時配信でエラー: code={} err={}", report_code, exc)
+            ran.append({"report_code": report_code, "status": "error", "error": str(exc)})
 
     return {"checked": len(schedules), "ran": ran}
