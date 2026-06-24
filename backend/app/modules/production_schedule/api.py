@@ -10828,3 +10828,8 @@ async def get_welding_utilization_analysis(
             "sessions_without_time": sessions_without_time[:100],
         },
     }
+
+
+from app.modules.production_schedule.cutting_productivity_api import register_routes as _register_cutting_productivity_routes
+
+_register_cutting_productivity_routes(router)
