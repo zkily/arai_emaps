@@ -9643,10 +9643,10 @@ async function issueChamferingInstructionSheet() {
       .chamfering-sheet-table th:nth-child(1), .chamfering-sheet-table td:nth-child(1) { width: 6%; }
       .chamfering-sheet-table th:nth-child(2), .chamfering-sheet-table td:nth-child(2) { width: 7%; }
       .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 12%; }
-      .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 12%; }
+      .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 14%; }
       .chamfering-sheet-table th:nth-child(5), .chamfering-sheet-table td:nth-child(5) { width: 5%; }
       .chamfering-sheet-table th:nth-child(6), .chamfering-sheet-table td:nth-child(6) { width: 6%; }
-      .chamfering-sheet-table th:nth-child(7), .chamfering-sheet-table td:nth-child(7) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(7), .chamfering-sheet-table td:nth-child(7) { width: 5%; }
       .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 5%; }
       .chamfering-sheet-table th:nth-child(9), .chamfering-sheet-table td:nth-child(9) { width: 8%; }
       .chamfering-sheet-table th:nth-child(10), .chamfering-sheet-table td:nth-child(10) { width: 8%; }

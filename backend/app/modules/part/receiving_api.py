@@ -9,12 +9,15 @@ GET    /api/part/receiving/suppliers    仕入先一覧
 POST   /api/part/receiving/import-csv  CSVインポート（空 body 時は .env で解決した部品 CSV パスを読込）
 """
 import asyncio
+from pathlib import Path
+from typing import List, Optional, Set
+
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, distinct
-from typing import Optional, List, Set
-from datetime import date
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
@@ -26,6 +29,41 @@ from app.modules.part.schemas import PartLogCreate, PartLogUpdate
 from app.services.file_watcher.sync_services import sync_part_csv_files_from_watch_folder
 
 router = APIRouter()
+
+_PART_LOGS_MIGRATION_SQL: str | None = None
+_part_logs_ready = False
+_part_logs_lock = asyncio.Lock()
+
+
+def _part_logs_migration_sql() -> str:
+    global _PART_LOGS_MIGRATION_SQL
+    if _PART_LOGS_MIGRATION_SQL is None:
+        mig = (
+            Path(__file__).resolve().parents[3]
+            / "database"
+            / "migrations"
+            / "58_part_logs.sql"
+        )
+        _PART_LOGS_MIGRATION_SQL = mig.read_text(encoding="utf-8")
+    return _PART_LOGS_MIGRATION_SQL
+
+
+async def _ensure_part_logs_table(db: AsyncSession) -> None:
+    """旧 DB で migration 58 未適用時に part_logs を自動作成する。"""
+    global _part_logs_ready
+    if _part_logs_ready:
+        return
+    async with _part_logs_lock:
+        if _part_logs_ready:
+            return
+        await db.execute(sql_text(_part_logs_migration_sql()))
+        await db.commit()
+        _part_logs_ready = True
+
+
+async def get_part_logs_db(db: AsyncSession = Depends(get_db)) -> AsyncSession:
+    await _ensure_part_logs_table(db)
+    return db
 
 
 def _escape_like_pattern(text: str) -> str:
@@ -98,7 +136,7 @@ def _log_to_dict(r: PartLog) -> dict:
 
 @router.get("/suppliers")
 async def get_suppliers(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     q = select(distinct(PartLog.supplier)).where(PartLog.supplier.isnot(None)).order_by(PartLog.supplier)
@@ -117,7 +155,7 @@ async def list_receiving_logs(
     supplier: Optional[str] = Query(None),
     startDate: Optional[str] = Query(None),
     endDate: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     q = select(PartLog)
@@ -180,7 +218,7 @@ async def list_receiving_logs(
 @router.get("/{item_id}")
 async def get_receiving_log(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     result = await db.execute(select(PartLog).where(PartLog.id == item_id))
@@ -198,7 +236,7 @@ async def get_receiving_log(
 @router.post("")
 async def create_receiving_log(
     body: PartLogCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(require_purchase_operation("create")),
 ):
     row = PartLog(**body.model_dump())
@@ -217,7 +255,7 @@ async def create_receiving_log(
 async def update_receiving_log(
     item_id: int,
     body: PartLogUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
     result = await db.execute(select(PartLog).where(PartLog.id == item_id))
@@ -239,7 +277,7 @@ async def update_receiving_log(
 @router.delete("/{item_id}")
 async def delete_receiving_log(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(require_purchase_operation("delete")),
 ):
     result = await db.execute(select(PartLog).where(PartLog.id == item_id))
@@ -254,7 +292,7 @@ async def delete_receiving_log(
 @router.post("/import-csv")
 async def import_csv_logs(
     rows: List[PartLogCreate],
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_part_logs_db),
     current_user: User = Depends(require_purchase_operation("export")),
 ):
     if not rows:

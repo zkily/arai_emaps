@@ -14,6 +14,7 @@ from app.services.file_watcher.sync_services import (
 from app.services.file_watcher.excel_processor import is_excel_target_file
 from app.services.file_watcher.inspection_excel_processor import is_inspection_excel_file
 from app.services.file_watcher.welding_excel_processor import is_welding_excel_file
+from app.services.file_watcher.cutting_excel_processor import is_cutting_excel_file
 from app.services.file_watcher.enabled_config import is_file_enabled
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,19 @@ def is_inspection_watch_task(filepath: str, filename: str, configured_path: str 
 def is_welding_watch_task(filepath: str, filename: str, configured_path: str = "") -> bool:
     """設定パスと一致する溶接管理指標 Excel か（同一フォルダ内の他年度ファイルを除外）"""
     if not is_welding_excel_file(filename):
+        return False
+    cfg = (configured_path or "").strip()
+    if not cfg:
+        return True
+    try:
+        return _normalize_path(filepath) == _normalize_path(cfg)
+    except Exception:
+        return False
+
+
+def is_cutting_watch_task(filepath: str, filename: str, configured_path: str = "") -> bool:
+    """設定パスと一致する切断管理指標 Excel か（同一フォルダ内の他年度ファイルを除外）"""
+    if not is_cutting_excel_file(filename):
         return False
     cfg = (configured_path or "").strip()
     if not cfg:
@@ -84,6 +98,8 @@ class UnifiedHandler(FileSystemEventHandler):
         inspection_excel_path: str = "",
         welding_watcher_enabled=True,
         welding_excel_path: str = "",
+        cutting_watcher_enabled=True,
+        cutting_excel_path: str = "",
         in_queue_excel_filenames=None,
         in_queue_csv_paths=None,
         # 後方互換（単一キュー）。指定時は CSV/Excel ともにこのキューへ（非推奨）
@@ -99,6 +115,8 @@ class UnifiedHandler(FileSystemEventHandler):
         self.inspection_excel_path = (inspection_excel_path or "").strip()
         self.welding_watcher_enabled = welding_watcher_enabled
         self.welding_excel_path = (welding_excel_path or "").strip()
+        self.cutting_watcher_enabled = cutting_watcher_enabled
+        self.cutting_excel_path = (cutting_excel_path or "").strip()
         self.in_queue_excel_filenames = (
             in_queue_excel_filenames if in_queue_excel_filenames is not None else set()
         )
@@ -131,12 +149,13 @@ class UnifiedHandler(FileSystemEventHandler):
             filepath, filename, self.inspection_excel_path
         )
         is_welding = is_welding_watch_task(filepath, filename, self.welding_excel_path)
+        is_cutting = is_cutting_watch_task(filepath, filename, self.cutting_excel_path)
         is_excel_plan = is_excel_plan_watch_task(filename)
         is_csv = is_csv_watch_task(filename, filepath)
-        if not is_inspection and not is_welding and not is_excel_plan and not is_csv:
+        if not is_inspection and not is_welding and not is_cutting and not is_excel_plan and not is_csv:
             logger.debug("監視対象外のため無視: %s", filename)
             return
-        if is_inspection or is_welding or is_excel_plan:
+        if is_inspection or is_welding or is_cutting or is_excel_plan:
             if is_inspection:
                 if not self.inspection_watcher_enabled:
                     logger.debug("検査管理指標 Excel 監視は無効のためスキップ: %s", filename)
@@ -144,6 +163,10 @@ class UnifiedHandler(FileSystemEventHandler):
             elif is_welding:
                 if not self.welding_watcher_enabled:
                     logger.debug("溶接管理指標 Excel 監視は無効のためスキップ: %s", filename)
+                    return
+            elif is_cutting:
+                if not self.cutting_watcher_enabled:
+                    logger.debug("切断管理指標 Excel 監視は無効のためスキップ: %s", filename)
                     return
             elif not self.excel_watcher_enabled:
                 logger.debug("Excel 計画監視は無効のためスキップ: %s", filename)
@@ -174,11 +197,13 @@ class UnifiedHandler(FileSystemEventHandler):
             queue_label = "検査Excel"
         elif is_welding:
             queue_label = "溶接Excel"
+        elif is_cutting:
+            queue_label = "切断Excel"
         elif is_excel_plan:
             queue_label = "Excel"
         else:
             queue_label = "CSV"
-        if is_inspection or is_welding or is_excel_plan:
+        if is_inspection or is_welding or is_cutting or is_excel_plan:
             self.in_queue_excel_filenames.add(filename)
         else:
             self.in_queue_csv_paths.add(path_key)
@@ -186,7 +211,7 @@ class UnifiedHandler(FileSystemEventHandler):
         try:
             target_queue.put((filepath, filename))
         except Exception as e:
-            if is_inspection or is_welding or is_excel_plan:
+            if is_inspection or is_welding or is_cutting or is_excel_plan:
                 self.in_queue_excel_filenames.discard(filename)
             else:
                 self.in_queue_csv_paths.discard(path_key)

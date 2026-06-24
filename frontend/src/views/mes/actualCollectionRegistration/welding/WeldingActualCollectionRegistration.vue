@@ -16,12 +16,8 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { useWeldingManualRegistration } from './useWeldingManualRegistration'
-import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
 defineOptions({ name: 'WeldingActualCollectionRegistration' })
-
-const DEFECT_GRID_COL_W = 78
-const DEFECT_GRID_GAP = 4
 
 const reg = useWeldingManualRegistration()
 const {
@@ -32,6 +28,8 @@ const {
   saving,
   deletingRowId,
   filteredRows,
+  listSummaryQtyLabel,
+  listSummaryEfficiencyLabel,
   machines,
   loadingMachines,
   products,
@@ -185,14 +183,6 @@ function defectQtyDisplay(defectCd: string): string {
   return n > 0 ? String(n) : ''
 }
 
-function defectGridStyle(group: MesDefectItemGroup): Record<string, string> {
-  const n = Math.max(1, group.items.length)
-  return {
-    gridTemplateColumns: `repeat(${n}, ${DEFECT_GRID_COL_W}px)`,
-    minWidth: `min(100%, calc(${n} * ${DEFECT_GRID_COL_W}px + ${(n - 1) * DEFECT_GRID_GAP}px))`,
-  }
-}
-
 onMounted(() => {
   void init()
 })
@@ -242,7 +232,7 @@ onMounted(() => {
       </div>
 
       <div class="iar-form">
-        <div class="iar-form__row iar-form__row--triple">
+        <div class="iar-form__row iar-form__row--quad">
           <div class="iar-field iar-field--c1">
             <label class="iar-field__label"><span class="iar-step iar-step--1">①</span>生産日</label>
             <div class="iar-field__date-nav">
@@ -325,9 +315,6 @@ onMounted(() => {
               />
             </el-select>
           </div>
-        </div>
-
-        <div class="iar-form__row iar-form__row--product-qty">
           <div class="iar-field iar-field--c4-product">
             <label class="iar-field__label"><span class="iar-step iar-step--4">④</span>製品名</label>
             <el-select
@@ -349,19 +336,6 @@ onMounted(() => {
             </el-select>
             <el-input v-else :model-value="form.productName" disabled class="iar-field__control" />
           </div>
-          <div class="iar-qty iar-qty--simple iar-field--c5">
-            <label class="iar-field__label">
-              <span class="iar-step iar-step--5">⑤</span>生産数
-            </label>
-            <el-input
-              :model-value="formatQtyInputValue(form.pieceQty)"
-              :disabled="!productSelected"
-              inputmode="numeric"
-              class="iar-field__control iar-field__qty"
-              placeholder="本"
-              @update:model-value="onPieceQtyInput"
-            />
-          </div>
         </div>
 
         <p v-if="!isEdit && !machineSelected" class="iar-form__lock-hint iar-form__lock-hint--pulse">
@@ -379,6 +353,20 @@ onMounted(() => {
 
         <div class="iar-form__below" :class="{ 'iar-form__below--locked': !productSelected }">
         <div class="iar-form__row--qty-time">
+        <div class="iar-qty iar-qty--simple iar-field--c5">
+          <label class="iar-field__label">
+            <span class="iar-step iar-step--5">⑤</span>生産数
+          </label>
+          <el-input
+            :model-value="formatQtyInputValue(form.pieceQty)"
+            :disabled="!productSelected"
+            inputmode="numeric"
+            class="iar-field__control iar-field__qty"
+            placeholder="本"
+            @update:model-value="onPieceQtyInput"
+          />
+        </div>
+
         <div class="iar-time iar-field--c6">
           <label class="iar-field__label iar-time__heading">
             <span class="iar-step iar-step--6">⑥</span>生産時間
@@ -475,7 +463,7 @@ onMounted(() => {
                   <span class="iar-defects__group-label">帰属工程</span>
                   <span class="iar-defects__group-name">{{ group.processName || group.processCd || '—' }}</span>
                 </header>
-                <div class="iar-defects__grid" :style="defectGridStyle(group)">
+                <div class="iar-defects__grid">
                   <div
                     v-for="item in group.items"
                     :key="item.id"
@@ -558,6 +546,8 @@ onMounted(() => {
           <span class="iar-panel__title">登録一覧</span>
           <span class="iar-panel__date">{{ productionDay }}</span>
           <span class="iar-count">{{ filteredRows.length }}件</span>
+          <span class="iar-summary iar-summary--qty">生産数合計 {{ listSummaryQtyLabel }}</span>
+          <span class="iar-summary iar-summary--eff">平均能率 {{ listSummaryEfficiencyLabel }}</span>
         </div>
         <div class="iar-panel__tools">
           <el-select
@@ -948,6 +938,7 @@ onMounted(() => {
 .iar-panel__title-wrap {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -986,6 +977,23 @@ onMounted(() => {
   padding: 2px 8px;
   border-radius: 999px;
   background: #ccfbf1;
+}
+
+.iar-summary {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.iar-summary--qty {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.iar-summary--eff {
+  color: #6d28d9;
+  background: #ede9fe;
 }
 
 .iar-panel__badge {
@@ -1093,13 +1101,26 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.iar-form__row--triple {
+.iar-form__row--triple,
+.iar-form__row--quad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.iar-form__row--triple > .iar-field {
+.iar-form__row--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.iar-form__row--quad {
+  grid-template-columns:
+    minmax(200px, 1.1fr)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 1.65fr);
+}
+
+.iar-form__row--triple > .iar-field,
+.iar-form__row--quad > .iar-field {
   position: relative;
   padding: 10px 12px 12px;
   border-radius: 12px;
@@ -1114,9 +1135,11 @@ onMounted(() => {
     box-shadow 0.22s ease,
     border-color 0.22s ease;
   overflow: hidden;
+  min-width: 0;
 }
 
-.iar-form__row--triple > .iar-field::before {
+.iar-form__row--triple > .iar-field::before,
+.iar-form__row--quad > .iar-field::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1126,7 +1149,8 @@ onMounted(() => {
   opacity: 0.92;
 }
 
-.iar-form__row--triple > .iar-field:hover {
+.iar-form__row--triple > .iar-field:hover,
+.iar-form__row--quad > .iar-field:hover {
   transform: translateY(-2px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 1),
@@ -1141,9 +1165,23 @@ onMounted(() => {
 .iar-field--c1:hover { border-color: rgba(59, 130, 246, 0.28); }
 .iar-field--c2:hover { border-color: rgba(139, 92, 246, 0.28); }
 .iar-field--c3:hover { border-color: rgba(20, 184, 166, 0.28); }
+.iar-field--c4-product::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.iar-field--c4-product:hover { border-color: rgba(245, 158, 11, 0.28); }
+
+@media (max-width: 1100px) {
+  .iar-form__row--quad {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 900px) {
   .iar-form__row--triple {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .iar-form__row--quad {
     grid-template-columns: 1fr;
   }
 }
@@ -1191,11 +1229,12 @@ onMounted(() => {
 
 .iar-form__row--qty-time {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(120px, 22%) minmax(0, 1fr);
   gap: 10px;
   align-items: stretch;
 }
 
+.iar-form__row--qty-time .iar-qty,
 .iar-form__row--qty-time .iar-time {
   min-width: 0;
   height: 100%;
@@ -1210,25 +1249,9 @@ onMounted(() => {
   padding: 5px 6px;
 }
 
-.iar-form__row--product-qty {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 168px);
-  gap: 10px;
-  align-items: end;
-}
-
-.iar-qty--simple {
-  padding: 10px 12px 12px;
-}
-
-.iar-qty--simple .iar-field__label {
-  margin-bottom: 6px;
-}
-
-@media (max-width: 768px) {
-  .iar-form__row--product-qty {
+@media (max-width: 1100px) {
+  .iar-form__row--qty-time {
     grid-template-columns: 1fr;
-    align-items: stretch;
   }
 }
 
@@ -1400,31 +1423,12 @@ onMounted(() => {
 
 .iar-step--8 { background: linear-gradient(145deg, #3b82f6, #2563eb); }
 
-.iar-form__row--product-qty .iar-field--c4-product {
-  min-width: 0;
-}
-
-.iar-field--c4-product {
-  position: relative;
+.iar-qty--simple {
   padding: 10px 12px 12px;
-  border-radius: 12px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.82));
-  border: 1px solid rgba(245, 158, 11, 0.28);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 4px 14px rgba(15, 23, 42, 0.06),
-    0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
-.iar-field--c4-product::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  opacity: 0.92;
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+.iar-qty--simple .iar-field__label {
+  margin-bottom: 6px;
 }
 
 .iar-field__control {
@@ -1645,8 +1649,6 @@ onMounted(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(243, 244, 246, 0.95));
   border: 1px solid rgba(203, 213, 225, 0.65);
   box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.04);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .iar-defects__group + .iar-defects__group {
@@ -1702,9 +1704,34 @@ onMounted(() => {
 
 .iar-defects__grid {
   display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
-  width: max-content;
+  width: 100%;
   padding-top: 4px;
+}
+
+@media (max-width: 1280px) {
+  .iar-defects__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1050px) {
+  .iar-defects__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .iar-defects__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .iar-defects__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .iar-defect {
@@ -1712,7 +1739,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 4px 5px;
+  padding: 5px 6px;
   border-radius: 8px;
   border: 1px solid rgba(203, 213, 225, 0.85);
   background: #fff;
@@ -1804,7 +1831,7 @@ onMounted(() => {
 .iar-defect__qty-input {
   flex: 1;
   min-width: 0;
-  max-width: 40px;
+  max-width: 44px;
 }
 
 .iar-defect__qty-input :deep(.el-input__wrapper) {

@@ -25,6 +25,11 @@ import {
   type MesDefectItemOption,
 } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 import {
+  buildRegistrationListSummary,
+  formatRegistrationListEfficiency,
+  formatRegistrationListQty,
+} from '@/views/mes/actualCollectionRegistration/shared/registrationListSummary'
+import {
   inspectionDataSourceTagType,
   resolveInspectionDataSource,
 } from '@/views/mes/actualDataCollection/inspection/inspectionDataSource'
@@ -368,6 +373,23 @@ export function useInspectionManualRegistration() {
     if (fid == null) return rows.value
     return rows.value.filter((r) => rowInspectorId(r) === fid)
   })
+
+  const listSummary = computed(() =>
+    buildRegistrationListSummary(filteredRows.value, {
+      getQty: (row) => Math.max(0, Number(row.actual_production_quantity ?? 0)),
+      isInProgress: isRowMesInProgress,
+      getNetSec: (row) =>
+        Math.max(0, rowWallElapsedSec(row) - rowPausedAccumSec(row)),
+    }),
+  )
+
+  const listSummaryQtyLabel = computed(() =>
+    formatRegistrationListQty(listSummary.value.totalProductionQty),
+  )
+
+  const listSummaryEfficiencyLabel = computed(() =>
+    formatRegistrationListEfficiency(listSummary.value.avgEfficiencyPerHour, '本/時'),
+  )
 
   const unitPerBox = computed(() => resolveUnitPerBox(form.value.productCd, products.value))
 
@@ -899,6 +921,9 @@ export function useInspectionManualRegistration() {
     deletingRowId,
     rows,
     filteredRows,
+    listSummary,
+    listSummaryQtyLabel,
+    listSummaryEfficiencyLabel,
     products,
     loadingProducts,
     defectItemGroups,

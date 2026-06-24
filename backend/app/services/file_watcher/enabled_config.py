@@ -89,3 +89,15 @@ def is_welding_management_sync_enabled() -> bool:
     """溶接管理指標 Excel → welding_management 同期が有効か（未設定は True）。"""
     raw = _read_raw()
     return raw.get("welding_management_sync_enabled", True)
+
+
+def is_cutting_excel_watcher_enabled() -> bool:
+    """切断管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
+    raw = _read_raw()
+    return raw.get("cutting_excel_watcher_enabled", True)
+
+
+def is_cutting_indicator_sync_enabled() -> bool:
+    """切断管理指標 Excel → cutting_production_indicator 同期が有効か（未設定は True）。"""
+    raw = _read_raw()
+    return raw.get("cutting_indicator_sync_enabled", True)

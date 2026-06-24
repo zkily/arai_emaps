@@ -34,6 +34,7 @@ import {
   resolveWeldingDataSource,
 } from './weldingDataSource'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import { efficiencyPerHourFromNetSec } from '@/views/mes/actualCollectionRegistration/shared/registrationListSummary'
 import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
 defineOptions({ name: 'WeldingActualDataCollection' })
@@ -320,16 +321,10 @@ function formatDefectRate(row: WeldingMgmtRow): string {
   return `${pct.toFixed(1)}%`
 }
 
-/** 能率 = 生産数 ÷（稼働時間 − 一時停止）［時間単位・整数］ */
+/** 能率 = actual_production_quantity ÷ mes_net_production_sec（個/時） */
 function formatEfficiencyRate(row: WeldingMgmtRow): string {
-  const prod = Number(row.actual_production_quantity ?? 0)
-  if (!Number.isFinite(prod) || prod <= 0) return '—'
-  const netSec = Math.max(0, rowWallElapsedSec(row) - rowPausedAccumSec(row))
-  if (netSec <= 0) return '—'
-  const hours = netSec / 3600
-  const rate = prod / hours
-  if (!Number.isFinite(rate)) return '—'
-  return String(Math.round(rate))
+  const rate = efficiencyPerHourFromNetSec(row.actual_production_quantity, row.mes_net_production_sec)
+  return rate == null ? '—' : String(rate)
 }
 
 function escapeHtml(text: string): string {

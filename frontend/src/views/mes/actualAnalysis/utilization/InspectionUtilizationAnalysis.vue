@@ -145,10 +145,6 @@
             <el-option v-for="u in inspectorOptions" :key="u.id" :label="u.name" :value="u.id" />
           </el-select>
         </div>
-        <label class="iua-field iua-field--check">
-          <span class="iua-field__pill iua-field__pill--check">オプション</span>
-          <el-checkbox v-model="includeIncomplete" size="small">未確定を含む</el-checkbox>
-        </label>
       </div>
     </div>
 
@@ -849,7 +845,7 @@ watch(
 )
 
 watch(
-  [dateRange, includeIncomplete],
+  dateRange,
   () => {
     filterInspectorId.value = ''
     loadAnalysis()

@@ -300,6 +300,9 @@ def compute_time_fields(
     row: dict[str, str], production_day: date
 ) -> tuple[int | None, int | None, int | None, int | None, int | None, datetime | None, datetime | None]:
     shift_h = _parse_float(row.get(COL_SHIFT))
+    overtime_h = _parse_float(row.get(COL_OVERTIME)) or 0.0
+    if overtime_h < 0:
+        overtime_h = 0.0
     break_h = _parse_float(row.get(COL_BREAK)) or 0.0
     stop_h = sum(_parse_float(row.get(h)) or 0.0 for h in PAUSE_CATEGORY_HEADERS)
     work_h = _parse_float(row.get(COL_WORK))
@@ -308,16 +311,18 @@ def compute_time_fields(
     if shift_h is None or shift_h <= 0:
         available_h = _parse_float(row.get(COL_AVAILABLE))
         shift_h = available_h if available_h and available_h > 0 else work_h + break_h + stop_h
-    pause_h = max(0.0, shift_h - work_h)
+    effective_shift_h = shift_h + overtime_h
+    pause_h = max(0.0, effective_shift_h - work_h)
     if break_h + stop_h > pause_h:
         pause_h = break_h + stop_h
     net_sec = max(0, round(work_h * 3600))
     pause_sec = max(0, round(pause_h * 3600))
-    shift_sec = max(0, round(shift_h * 3600))
+    shift_sec = max(0, round(effective_shift_h * 3600))
     break_sec = max(0, round(break_h * 3600))
     stop_sec = max(0, round(stop_h * 3600))
     started = datetime.combine(production_day, time(8, 0, 0))
-    ended = started + timedelta(seconds=shift_sec)
+    # 終了時刻はシフト全体ではなく正味稼働（作業時間）に合わせる
+    ended = started + timedelta(seconds=net_sec)
     return net_sec, pause_sec, shift_sec, break_sec, stop_sec, started, ended
 
 

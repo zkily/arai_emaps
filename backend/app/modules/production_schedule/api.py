@@ -562,6 +562,14 @@ def _inspection_row_net_production_sec(item: dict[str, Any]) -> int:
     return 0
 
 
+def _welding_row_net_production_sec(item: dict[str, Any]) -> int:
+    """溶接能率：actual_production_quantity / mes_net_production_sec（秒列のみ）"""
+    net = item.get("mes_net_production_sec")
+    if isinstance(net, (int, float)) and net > 0:
+        return int(net)
+    return 0
+
+
 def _inspection_efficiency_per_hour(actual_qty: Any, net_sec: int) -> Optional[int]:
     actual = int(actual_qty or 0)
     if actual <= 0 or net_sec <= 0:
@@ -10281,7 +10289,7 @@ async def get_welding_productivity_analysis(
 
         actual_qty = int(item.get("actual_production_quantity") or 0)
         defect_qty = int(item.get("defect_qty") or 0)
-        net_sec = _inspection_row_net_production_sec(item)
+        net_sec = _welding_row_net_production_sec(item)
         paused_sec = int(item.get("mes_paused_accum_sec") or 0)
         is_completed = int(item.get("production_completed_check") or 0) == 1
         day_key = str(item.get("production_day") or "")[:10]
@@ -10614,7 +10622,7 @@ async def get_welding_utilization_analysis(
                 or f"ID:{operator_id}"
             )
 
-        net_sec = _inspection_row_net_production_sec(item)
+        net_sec = _welding_row_net_production_sec(item)
         if net_sec <= 0:
             sessions_without_time_count += 1
             sessions_without_time.append(

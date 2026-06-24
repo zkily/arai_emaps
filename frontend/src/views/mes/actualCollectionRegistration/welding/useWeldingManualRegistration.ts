@@ -25,6 +25,13 @@ import {
   type MesDefectItemOption,
 } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 import {
+  buildRegistrationListSummary,
+  efficiencyPerHourFromNetSec,
+  formatRegistrationListEfficiency,
+  formatRegistrationListQty,
+  getMesNetProductionSec,
+} from '@/views/mes/actualCollectionRegistration/shared/registrationListSummary'
+import {
   resolveWeldingDataSource,
   weldingDataSourceTagType,
 } from '@/views/mes/actualDataCollection/welding/weldingDataSource'
@@ -153,43 +160,9 @@ function isRowMesInProgress(row: WeldingManagementListRow): boolean {
   return Boolean(row.mes_production_started_at && !row.mes_production_ended_at)
 }
 
-function rowWallElapsedSec(row: WeldingManagementListRow): number {
-  const started = row.mes_production_started_at
-  if (!started || !String(started).trim()) return Math.max(0, row.mes_net_production_sec ?? 0)
-  const ws = Date.parse(String(started))
-  if (Number.isNaN(ws)) return Math.max(0, row.mes_net_production_sec ?? 0)
-  const ended = row.mes_production_ended_at
-  const we = ended != null && String(ended).trim() ? Date.parse(String(ended)) : Date.now()
-  if (Number.isNaN(we)) return Math.max(0, row.mes_net_production_sec ?? 0)
-  return Math.max(0, Math.floor((we - ws) / 1000))
-}
-
-function rowPausedAccumSec(row: WeldingManagementListRow): number {
-  const stored = row.mes_paused_accum_sec
-  if (stored != null && Number.isFinite(Number(stored))) {
-    return Math.max(0, Math.round(Number(stored)))
-  }
-  const started = row.mes_production_started_at
-  if (!started || !String(started).trim()) return 0
-  const ws = Date.parse(String(started))
-  if (Number.isNaN(ws)) return 0
-  const ended = row.mes_production_ended_at
-  const we = ended != null && String(ended).trim() ? Date.parse(String(ended)) : Date.now()
-  if (Number.isNaN(we)) return 0
-  const wallSec = Math.max(0, Math.floor((we - ws) / 1000))
-  const netSec = Math.max(0, row.mes_net_production_sec ?? 0)
-  return Math.max(0, wallSec - netSec)
-}
-
+/** 能率 = actual_production_quantity ÷ mes_net_production_sec（個/時） */
 function resolveEfficiencyRate(row: WeldingManagementListRow): number | null {
-  const prod = Number(row.actual_production_quantity ?? 0)
-  if (!Number.isFinite(prod) || prod <= 0) return null
-  const netSec = Math.max(0, rowWallElapsedSec(row) - rowPausedAccumSec(row))
-  if (netSec <= 0) return null
-  const hours = netSec / 3600
-  const rate = prod / hours
-  if (!Number.isFinite(rate)) return null
-  return Math.round(rate)
+  return efficiencyPerHourFromNetSec(row.actual_production_quantity, row.mes_net_production_sec)
 }
 
 function formatEfficiencyRate(row: WeldingManagementListRow): string {
@@ -350,6 +323,22 @@ export function useWeldingManualRegistration() {
     if (machine) list = list.filter((r) => (r.welding_machine ?? '').trim() === machine)
     return list
   })
+
+  const listSummary = computed(() =>
+    buildRegistrationListSummary(filteredRows.value, {
+      getQty: (row) => Math.max(0, Number(row.actual_production_quantity ?? 0)),
+      isInProgress: isRowMesInProgress,
+      getNetSec: (row) => getMesNetProductionSec(row),
+    }),
+  )
+
+  const listSummaryQtyLabel = computed(() =>
+    formatRegistrationListQty(listSummary.value.totalProductionQty),
+  )
+
+  const listSummaryEfficiencyLabel = computed(() =>
+    formatRegistrationListEfficiency(listSummary.value.avgEfficiencyPerHour, '個/時'),
+  )
 
   const unitPerBox = computed(() => resolveUnitPerBox(form.value.productCd, products.value))
 
@@ -916,6 +905,9 @@ export function useWeldingManualRegistration() {
     deletingRowId,
     rows,
     filteredRows,
+    listSummary,
+    listSummaryQtyLabel,
+    listSummaryEfficiencyLabel,
     machines,
     loadingMachines,
     products,

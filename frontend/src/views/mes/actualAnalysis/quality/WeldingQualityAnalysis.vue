@@ -75,10 +75,6 @@
             />
           </el-select>
         </div>
-        <label class="ipa-check ipa-field ipa-field--check">
-          <span class="ipa-field__pill ipa-field__pill--check">オプション</span>
-          <el-checkbox v-model="includeIncomplete" size="small">未確定を含む</el-checkbox>
-        </label>
       </div>
     </div>
 
@@ -922,8 +918,6 @@ watch(
 watch(dateRange, () => scheduleLoadAnalysis(), { deep: true })
 watch(filterOperatorId, scheduleLoadAnalysis)
 watch(filterProductCd, scheduleLoadAnalysis)
-watch(includeIncomplete, scheduleLoadAnalysis)
-
 onMounted(async () => {
   await Promise.all([loadOperators(), loadProductOptions()])
   await loadAnalysis({ silent: true })

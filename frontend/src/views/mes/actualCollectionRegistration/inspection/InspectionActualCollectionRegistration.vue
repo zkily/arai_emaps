@@ -31,6 +31,8 @@ const {
   saving,
   deletingRowId,
   filteredRows,
+  listSummaryQtyLabel,
+  listSummaryEfficiencyLabel,
   products,
   loadingProducts,
   defectItemGroups,
@@ -560,6 +562,8 @@ onMounted(() => {
           <span class="iar-panel__title">登録一覧</span>
           <span class="iar-panel__date">{{ productionDay }}</span>
           <span class="iar-count">{{ filteredRows.length }}件</span>
+          <span class="iar-summary iar-summary--qty">生産数合計 {{ listSummaryQtyLabel }}</span>
+          <span class="iar-summary iar-summary--eff">平均能率 {{ listSummaryEfficiencyLabel }}</span>
         </div>
         <div class="iar-panel__tools">
           <el-select
@@ -931,6 +935,7 @@ onMounted(() => {
 .iar-panel__title-wrap {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -969,6 +974,23 @@ onMounted(() => {
   padding: 2px 8px;
   border-radius: 999px;
   background: #ccfbf1;
+}
+
+.iar-summary {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.iar-summary--qty {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.iar-summary--eff {
+  color: #6d28d9;
+  background: #ede9fe;
 }
 
 .iar-panel__badge {
