@@ -150,7 +150,7 @@ class Settings(BaseSettings):
     ACCESS_PRODUCTION_PLAN_TABLE: str = "A生産予定"
 
     # 自動車ニュースティッカー（RSS 集約・MainLayout 上部表示）
-    AUTO_NEWS_ENABLED: bool = True
+    AUTO_NEWS_ENABLED: bool = False
     AUTO_NEWS_CACHE_TTL_SECONDS: int = 1800
     AUTO_NEWS_MAX_ITEMS: int = 20
     # タイトル・概要に含まれるキーワードで絞り込み（カンマ区切り）。空なら絞り込みなし

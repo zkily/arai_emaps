@@ -28,7 +28,6 @@
             <span class="weather-temp">{{ weatherTemp }}</span>
           </span>
           <HeaderTodoTrigger />
-          <AutoNewsTicker />
         </div>
       </div>
 
@@ -255,7 +254,6 @@ import {
 import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
-import AutoNewsTicker from '@/components/layout/AutoNewsTicker.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
 import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
