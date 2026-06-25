@@ -1349,6 +1349,9 @@
             <el-form-item label="面取工程">
               <el-checkbox v-model="kanbanEditForm.has_chamfering_process">あり</el-checkbox>
             </el-form-item>
+            <el-form-item label="初">
+              <el-checkbox v-model="kanbanEditForm.is_first_product">初</el-checkbox>
+            </el-form-item>
             <el-form-item label="ロットNo.">
               <el-input v-model="kanbanEditForm.lot_number" size="small" clearable placeholder="ロットNo." />
             </el-form-item>
@@ -5875,6 +5878,7 @@ interface KanbanIssuanceRow {
   chamfering_length?: number | null
   developed_length?: number | null
   has_chamfering_process?: boolean | null
+  is_first_product?: boolean | null
   lot_number?: string | null
   production_day?: string | null
 }
@@ -5923,6 +5927,7 @@ const kanbanEditForm = reactive<{
   chamfering_length: number | null
   developed_length: number | null
   has_chamfering_process: boolean
+  is_first_product: boolean
   lot_number: string
   production_day: string
 }>({
@@ -5943,6 +5948,7 @@ const kanbanEditForm = reactive<{
   chamfering_length: null,
   developed_length: null,
   has_chamfering_process: false,
+  is_first_product: false,
   lot_number: '',
   production_day: '',
 })
@@ -8362,6 +8368,14 @@ function shiftKanbanFilterDay(delta: number) {
   loadKanbanIssuance()
 }
 
+/** 切断現品票：製品名（「初」マーク付き） */
+function buildKanbanProductNameHtml(row: KanbanIssuanceRow): string {
+  const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const name = esc(row.product_name)
+  if (!row.is_first_product) return name
+  return `<span class="ticket-product-inner"><span class="ticket-first-mark">初</span>${name}</span>`
+}
+
 /** 1枚分の切断現品票HTML（上中下で同じ内容を3回使う） */
 function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): string {
   const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -8390,7 +8404,7 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
           <span class="ticket-qr-label">製品CD</span>
         </div>
       </div>
-      <div class="ticket-product">${esc(row.product_name)}</div>
+      <div class="ticket-product">${buildKanbanProductNameHtml(row)}</div>
       <div class="ticket-top-right">
         <div class="ticket-machine">${lineDisplay}</div>
         <div class="ticket-mgmt-qr-wrap">
@@ -8483,7 +8497,9 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .cut-line-2 { top: calc(281mm * 2 / 3 + 4px); }
     .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
     .ticket-title { font-size: 16px; font-weight: bold; }
-    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
+    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; display: flex; align-items: center; justify-content: center; }
+    .ticket-product-inner { display: inline-flex; align-items: center; gap: 10px; }
+    .ticket-first-mark { display: inline-flex; align-items: center; justify-content: center; width: 1.4em; height: 1.4em; border: 3px solid #cc0000; border-radius: 50%; color: #cc0000; font-size: 42px; font-weight: bold; line-height: 1; flex-shrink: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .ticket-top-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 80px; }
     .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; text-align: right; }
     .ticket-mgmt-qr-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
@@ -8524,6 +8540,7 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
       .page { width: 194mm !important; height: 281mm !important; margin: 0 !important; padding: 0 !important; }
       .ticket-sheet { height: 281mm !important; }
       .ticket-block { flex: 0 0 calc(281mm / 3) !important; height: calc(281mm / 3) !important; }
+      .ticket-first-mark { color: #cc0000 !important; border-color: #cc0000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .tbl-developed-val {
         background-color: #555 !important;
         color: #ffffff !important;
@@ -8593,7 +8610,9 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .cut-line-2 { top: calc(281mm * 2 / 3 + 4px); }
     .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
     .ticket-title { font-size: 16px; font-weight: bold; }
-    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
+    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; display: flex; align-items: center; justify-content: center; }
+    .ticket-product-inner { display: inline-flex; align-items: center; gap: 10px; }
+    .ticket-first-mark { display: inline-flex; align-items: center; justify-content: center; width: 1.4em; height: 1.4em; border: 3px solid #cc0000; border-radius: 50%; color: #cc0000; font-size: 42px; font-weight: bold; line-height: 1; flex-shrink: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .ticket-top-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 80px; }
     .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; text-align: right; }
     .ticket-mgmt-qr-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
@@ -8783,6 +8802,7 @@ function openKanbanEdit(row: KanbanIssuanceRow) {
   kanbanEditForm.chamfering_length = row.chamfering_length != null ? Number(row.chamfering_length) : null
   kanbanEditForm.developed_length = row.developed_length != null ? Number(row.developed_length) : null
   kanbanEditForm.has_chamfering_process = !!row.has_chamfering_process
+  kanbanEditForm.is_first_product = !!row.is_first_product
   kanbanEditForm.lot_number = row.lot_number ?? ''
   kanbanEditForm.production_day = row.production_day ? String(row.production_day).slice(0, 10) : ''
   kanbanEditDialogVisible.value = true
@@ -8813,6 +8833,7 @@ async function saveKanbanEdit() {
       chamfering_length: kanbanEditForm.chamfering_length ?? undefined,
       developed_length: kanbanEditForm.developed_length ?? undefined,
       has_chamfering_process: kanbanEditForm.has_chamfering_process,
+      is_first_product: kanbanEditForm.is_first_product,
       lot_number: kanbanEditForm.lot_number || undefined,
       production_day: kanbanEditForm.production_day || undefined,
     }

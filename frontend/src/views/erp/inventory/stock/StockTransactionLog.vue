@@ -285,11 +285,14 @@
 
 <script lang="ts" setup>
 import { ref, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import request from '@/utils/request'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Document, Search, TrendCharts, DataAnalysis, Histogram, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import type { OptionItem } from '@/types/master'
+
+const route = useRoute()
 
 const locationOptions = ref([
   { cd: '製品倉庫', name: '製品倉庫' },
@@ -356,6 +359,7 @@ const filters = ref({
   location_cd: '',
   transaction_type: '',
   process_cd: '',
+  source_file: '',
   date_range: [dayjs().format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')] as string[],
 })
 
@@ -408,6 +412,7 @@ function buildParams() {
     location_cd: filters.value.location_cd || undefined,
     transaction_type: filters.value.transaction_type || undefined,
     process_cd: filters.value.process_cd || undefined,
+    source_file: filters.value.source_file || undefined,
     date_start: d && d[0] ? d[0] : undefined,
     date_end: d && d[1] ? d[1] : undefined,
     page: pagination.value.page,
@@ -599,6 +604,21 @@ const loadProductOptions = async () => {
 }
 
 onMounted(async () => {
+  const q = route.query
+  if (typeof q.transaction_type === 'string' && q.transaction_type) {
+    filters.value.transaction_type = q.transaction_type
+  }
+  if (typeof q.process_cd === 'string' && q.process_cd) {
+    filters.value.process_cd = q.process_cd
+  }
+  if (typeof q.source_file === 'string' && q.source_file) {
+    filters.value.source_file = q.source_file
+  }
+  const ds = typeof q.date_start === 'string' ? q.date_start : ''
+  const de = typeof q.date_end === 'string' ? q.date_end : ''
+  if (ds && de) {
+    filters.value.date_range = [ds, de]
+  }
   await Promise.all([loadProcessOptions(), loadProductOptions()])
   await fetchLogs()
 })

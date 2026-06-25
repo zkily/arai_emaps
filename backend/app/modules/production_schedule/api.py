@@ -6177,7 +6177,7 @@ async def get_kanban_issuance_list(
             k.start_date, k.end_date, k.planned_quantity, k.production_lot_size,
             k.actual_production_quantity, k.take_count,
             k.cutting_length, k.chamfering_length, k.developed_length,
-            k.has_chamfering_process, k.lot_number, k.production_day
+            k.has_chamfering_process, k.is_first_product, k.lot_number, k.production_day
         FROM kanban_issuance k
         WHERE {" AND ".join(conditions)}
         ORDER BY
@@ -6233,6 +6233,7 @@ async def get_kanban_issuance_list(
             "chamfering_length": float(r["chamfering_length"]) if r.get("chamfering_length") is not None else None,
             "developed_length": float(r["developed_length"]) if r.get("developed_length") is not None else None,
             "has_chamfering_process": bool(r.get("has_chamfering_process")),
+            "is_first_product": bool(r.get("is_first_product")),
             "lot_number": r.get("lot_number"),
             "production_day": _v(r, "production_day"),
         }
@@ -6295,6 +6296,7 @@ class UpdateKanbanIssuanceBody(BaseModel):
     chamfering_length: Optional[float] = None
     developed_length: Optional[float] = None
     has_chamfering_process: Optional[bool] = None
+    is_first_product: Optional[bool] = None
     lot_number: Optional[str] = None
     production_day: Optional[str] = None
 

@@ -253,6 +253,7 @@ export default {
     ERP_INVENTORY_STOCKTAKE_CARRYOVER: '盘点数据结转管理',
     ERP_INVENTORY_STOCK_ENTRY: '在库登记管理',
     ERP_INVENTORY_STOCK_TX_LOG: '在库取引记录',
+    ERP_INVENTORY_MANUAL_ENTRY_STATS: '实绩修正统计',
     ERP_PRODUCTION: '生产管理',
     ERP_PRODUCTION_PLANNING: '生产计划',
     ERP_PRODUCTION_DATA: '生产数据管理',

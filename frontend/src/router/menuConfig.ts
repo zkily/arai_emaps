@@ -70,6 +70,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY_PART_LIST', name: '部品在庫照会', icon: 'Grid', path: '/erp/inventory/part-list', parentCode: 'ERP_INVENTORY', sortOrder: 3 },
   { code: 'ERP_INVENTORY_STOCK_ENTRY', name: '在庫登録管理', icon: 'DocumentAdd', path: '/erp/inventory/stock-entry', parentCode: 'ERP_INVENTORY', sortOrder: 4 },
   { code: 'ERP_INVENTORY_STOCK_TX_LOG', name: '在庫取引記録', icon: 'Notebook', path: '/erp/inventory/stock-transaction-logs', parentCode: 'ERP_INVENTORY', sortOrder: 5 },
+  { code: 'ERP_INVENTORY_MANUAL_ENTRY_STATS', name: '実績修正統計', icon: 'DataAnalysis', path: '/erp/inventory/manual-entry-statistics', parentCode: 'ERP_INVENTORY', sortOrder: 5.5 },
   { code: 'ERP_INVENTORY_STOCKTAKE', name: '棚卸管理', icon: 'Files', path: '/erp/inventory/stocktake', parentCode: 'ERP_INVENTORY', sortOrder: 6 },
   { code: 'ERP_INVENTORY_STOCKTAKE_HOME', name: '棚卸管理ホーム', path: '/erp/inventory/stocktake', icon: 'HomeFilled', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 0 },
   { code: 'ERP_INVENTORY_STOCKTAKE_LIST', name: '棚卸リスト一覧', path: '/erp/inventory/stocktake/list', icon: 'List', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 1 },

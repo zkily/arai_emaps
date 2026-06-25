@@ -254,6 +254,7 @@ export default {
     ERP_INVENTORY_STOCKTAKE_CARRYOVER: 'Stocktake Carryover Management',
     ERP_INVENTORY_STOCK_ENTRY: 'Stock Entry Management',
     ERP_INVENTORY_STOCK_TX_LOG: 'Stock Transaction Log',
+    ERP_INVENTORY_MANUAL_ENTRY_STATS: 'Actual Correction Statistics',
     ERP_PRODUCTION: 'Production Control',
     ERP_PRODUCTION_PLANNING: 'Production Planning',
     ERP_PRODUCTION_DATA: 'Production Data Management',

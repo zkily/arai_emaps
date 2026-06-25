@@ -253,6 +253,7 @@ export default {
     ERP_INVENTORY_STOCKTAKE_CARRYOVER: 'Quản lý chuyển tiếp kiểm kê',
     ERP_INVENTORY_STOCK_ENTRY: 'Quản lý đăng ký tồn kho',
     ERP_INVENTORY_STOCK_TX_LOG: 'Nhật ký giao dịch tồn kho',
+    ERP_INVENTORY_MANUAL_ENTRY_STATS: 'Thống kê chỉnh sửa thực tế',
     ERP_PRODUCTION: 'Sản xuất',
     ERP_PRODUCTION_PLANNING: 'Kế hoạch sản xuất',
     ERP_PRODUCTION_DATA: 'Quản lý dữ liệu sản xuất',

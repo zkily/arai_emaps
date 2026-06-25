@@ -254,6 +254,7 @@ export default {
     ERP_INVENTORY_STOCKTAKE_CARRYOVER: '棚卸繰越管理',
     ERP_INVENTORY_STOCK_ENTRY: '在庫登録管理',
     ERP_INVENTORY_STOCK_TX_LOG: '在庫取引記録',
+    ERP_INVENTORY_MANUAL_ENTRY_STATS: '実績修正統計',
     ERP_PRODUCTION: '生産管理',
     ERP_PRODUCTION_PLANNING: '生産計画',
     ERP_PRODUCTION_DATA: '生産データ管理',

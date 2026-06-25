@@ -1106,6 +1106,7 @@ import { getSuppliers } from '@/api/outsourcing'
 import request from '@/utils/request'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+import { getJSTDayOfWeek, shiftDateYmdJST } from '@/utils/dateFormat'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
 
@@ -1649,7 +1650,7 @@ const debouncedSearch = () => {
 const openCreateDialog = () => {
   isEdit.value = false
   currentEditId.value = undefined
-  const today = new Date().toISOString().split('T')[0]
+  const today = formatDate(getJapanDate())
   Object.assign(formData, {
     supplierCd: undefined,
     orderDate: today,
@@ -2093,27 +2094,24 @@ const loadHolidays = async (destinationCd?: string) => {
   }
 }
 
-// 计算工作日（排除周末和休息日）
+// 计算工作日（排除周末和休息日，JST 暦日）
 const addBusinessDays = (startDate: string, days: number): string => {
   if (!startDate || days <= 0) return ''
 
-  const date = new Date(startDate)
+  let currentYmd = startDate.slice(0, 10)
   let addedDays = 0
-  let currentDate = new Date(date)
 
   while (addedDays < days) {
-    currentDate.setDate(currentDate.getDate() + 1)
-    const dayOfWeek = currentDate.getDay()
-    const dateStr = currentDate.toISOString().split('T')[0]
+    currentYmd = shiftDateYmdJST(currentYmd, 1)
+    const dayOfWeek = getJSTDayOfWeek(currentYmd)
 
-    // 排除周末（0 = 周日, 6 = 周六）
-    // 排除休息日（destination_holidays 表中的日期）
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.value.has(dateStr)) {
+    // 排除周末（0 = 周日, 6 = 周六）及 destination_holidays 休息日
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.value.has(currentYmd)) {
       addedDays++
     }
   }
 
-  return currentDate.toISOString().split('T')[0]
+  return currentYmd
 }
 
 // 计算納期

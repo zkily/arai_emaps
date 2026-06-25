@@ -153,6 +153,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory/part-list', name: 'PartInventoryList', component: () => import('@/views/erp/inventory/Inventory/PartInventoryList.vue'), meta: { title: '部品在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-entry', name: 'StockEntryManagement', component: () => import('@/views/erp/inventory/stockEntry/UnifiedStockEntry.vue'), meta: { title: '在庫登録管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-transaction-logs', name: 'StockTransactionLog', component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'), meta: { title: '在庫取引記録', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/manual-entry-statistics', name: 'ManualEntryStatistics', component: () => import('@/views/erp/inventory/stock/ManualEntryStatistics.vue'), meta: { title: '実績修正統計', group: '在庫管理', requiresAuth: true } },
       {
         path: 'erp/inventory/stocktake',
         name: 'StocktakeManagement',
