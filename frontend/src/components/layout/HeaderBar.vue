@@ -28,6 +28,7 @@
             <span class="weather-temp">{{ weatherTemp }}</span>
           </span>
           <HeaderTodoTrigger />
+          <AutoNewsTicker />
         </div>
       </div>
 
@@ -254,6 +255,7 @@ import {
 import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
+import AutoNewsTicker from '@/components/layout/AutoNewsTicker.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
 import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
@@ -745,6 +747,8 @@ const handleCommand = async (command: string) => {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
+  max-width: 100%;
   padding: 7px 16px;
   background: var(--hdr-glass-strong);
   backdrop-filter: var(--hdr-blur);

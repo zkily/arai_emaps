@@ -34,6 +34,9 @@ loguru==0.7.2
 # HTTP クライアント（Ollama AI 呼び出し）
 httpx==0.26.0
 
+# RSS 解析（自動車ニュースティッカー）
+feedparser==6.0.11
+
 # テスト
 pytest==7.4.4
 pytest-asyncio==0.23.3

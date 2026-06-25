@@ -149,6 +149,27 @@ class Settings(BaseSettings):
     ACCESS_PRODUCTION_PLAN_DB_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\Data\subdata.accdb"
     ACCESS_PRODUCTION_PLAN_TABLE: str = "A生産予定"
 
+    # 自動車ニュースティッカー（RSS 集約・MainLayout 上部表示）
+    AUTO_NEWS_ENABLED: bool = True
+    AUTO_NEWS_CACHE_TTL_SECONDS: int = 1800
+    AUTO_NEWS_MAX_ITEMS: int = 20
+    # タイトル・概要に含まれるキーワードで絞り込み（カンマ区切り）。空なら絞り込みなし
+    AUTO_NEWS_BRAND_KEYWORDS: str = (
+        "トヨタ,豊田,Toyota,TOYOTA,"
+        "ホンダ,本田,Honda,HONDA,"
+        "日産,Nissan,NISSAN"
+    )
+    # カンマ区切り。各要素は `RSS_URL` または `RSS_URL|表示名`
+    AUTO_NEWS_RSS_URLS: str = (
+        "https://news.yahoo.co.jp/rss/media/norimono/all.xml|乗りものニュース,"
+        "https://news.yahoo.co.jp/rss/media/bestcar/all.xml|ベストカーWeb,"
+        "https://news.yahoo.co.jp/rss/media/autocar/all.xml|AUTOCAR JAPAN,"
+        "https://news.yahoo.co.jp/rss/media/motorfan/all.xml|MotorFan,"
+        "https://response.jp/rss/index.rdf|レスポンス,"
+        "https://news.yahoo.co.jp/rss/media/webcg/all.xml|webCG,"
+        "https://news.yahoo.co.jp/rss/media/engine/all.xml|ENGINE WEB"
+    )
+
     # SMTP（integration_configs 未設定時のフォールバック）
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

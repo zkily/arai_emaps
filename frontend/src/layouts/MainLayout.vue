@@ -183,7 +183,7 @@ watch(
 .layout-header {
   flex-shrink: 0;
   z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
 }
 
 .layout-content {
