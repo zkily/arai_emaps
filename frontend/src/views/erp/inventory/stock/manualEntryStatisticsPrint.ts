@@ -36,12 +36,15 @@ export interface PrintTrendRow {
 
 export interface PrintKpiCard {
   label: string
+  desc?: string
+  countLabel?: string
   value: string
   unit?: string
   delta?: string
   sub?: string
   qtyLabel?: string
   qtyValue?: string
+  qtyUnit?: string
   qtyDelta?: string
   qtySub?: string
 }
@@ -157,17 +160,40 @@ body {
   padding: 8px 10px;
   background: #fff;
 }
-.kpi-box-head { font-size: 8pt; font-weight: 700; color: #64748b; margin-bottom: 4px; }
-.kpi-box-val { font-size: 14pt; font-weight: 800; color: #0f172a; }
-.kpi-box-val small { font-size: 8pt; font-weight: 600; color: #94a3b8; margin-left: 2px; }
-.kpi-box-delta { font-size: 7.5pt; color: #475569; margin-top: 3px; }
-.kpi-box-qty {
-  margin-top: 6px;
-  padding-top: 5px;
-  border-top: 1px dashed #e2e8f0;
-  font-size: 7.5pt;
+.kpi-box-head {
+  font-size: 8.5pt;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 1px;
 }
-.kpi-box-qty strong { color: #5b21b6; font-size: 9pt; }
+.kpi-box-desc {
+  font-size: 7pt;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 5px;
+}
+.kpi-box-metric {
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  background: #f8fafc;
+}
+.kpi-box-metric:last-child { margin-bottom: 0; }
+.kpi-box-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.kpi-box-metric-label {
+  font-size: 7pt;
+  font-weight: 700;
+  color: #64748b;
+}
+.kpi-box-val { font-size: 11pt; font-weight: 800; color: #0f172a; text-align: right; }
+.kpi-box-val small { font-size: 7pt; font-weight: 600; color: #94a3b8; margin-left: 2px; }
+.kpi-box-delta { font-size: 7pt; color: #475569; margin-top: 2px; }
 table.data {
   width: 100%;
   border-collapse: collapse;
@@ -247,15 +273,29 @@ function td(text: string, cls = '') {
 function buildKpiSection(cards: PrintKpiCard[]): string {
   const items = cards
     .map((k) => {
-      const qtyBlock = k.qtyValue
-        ? `<div class="kpi-box-qty"><span>${escapeHtml(k.qtyLabel || '数量')}: </span><strong>${escapeHtml(k.qtyValue)}</strong>${k.qtyDelta ? `<div class="kpi-box-delta">${escapeHtml(k.qtyDelta)}</div>` : ''}${k.qtySub ? `<div class="kpi-box-delta">${escapeHtml(k.qtySub)}</div>` : ''}</div>`
+      const countMetric = `<div class="kpi-box-metric">
+        <div class="kpi-box-metric-row">
+          <span class="kpi-box-metric-label">${escapeHtml(k.countLabel || '件数')}</span>
+          <div class="kpi-box-val">${escapeHtml(k.value)}${k.unit ? `<small>${escapeHtml(k.unit)}</small>` : ''}</div>
+        </div>
+        ${k.delta ? `<div class="kpi-box-delta">${escapeHtml(k.delta)}</div>` : ''}
+        ${k.sub ? `<div class="kpi-box-delta">${escapeHtml(k.sub)}</div>` : ''}
+      </div>`
+      const qtyMetric = k.qtyValue
+        ? `<div class="kpi-box-metric">
+        <div class="kpi-box-metric-row">
+          <span class="kpi-box-metric-label">${escapeHtml(k.qtyLabel || '数量')}</span>
+          <div class="kpi-box-val">${escapeHtml(k.qtyValue)}${k.qtyUnit ? `<small>${escapeHtml(k.qtyUnit)}</small>` : ''}</div>
+        </div>
+        ${k.qtyDelta ? `<div class="kpi-box-delta">${escapeHtml(k.qtyDelta)}</div>` : ''}
+        ${k.qtySub ? `<div class="kpi-box-delta">${escapeHtml(k.qtySub)}</div>` : ''}
+      </div>`
         : ''
       return `<div class="kpi-box">
         <div class="kpi-box-head">${escapeHtml(k.label)}</div>
-        <div class="kpi-box-val">${escapeHtml(k.value)}${k.unit ? `<small>${escapeHtml(k.unit)}</small>` : ''}</div>
-        ${k.delta ? `<div class="kpi-box-delta">${escapeHtml(k.delta)}</div>` : ''}
-        ${k.sub ? `<div class="kpi-box-delta">${escapeHtml(k.sub)}</div>` : ''}
-        ${qtyBlock}
+        ${k.desc ? `<div class="kpi-box-desc">${escapeHtml(k.desc)}</div>` : ''}
+        ${countMetric}
+        ${qtyMetric}
       </div>`
     })
     .join('')

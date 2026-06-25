@@ -1210,6 +1210,16 @@
               @row-dblclick="openKanbanEdit"
             >
               <el-table-column type="selection" width="40" align="center" :selectable="(row) => row.status === 'pending' || row.status === 'issued'" />
+              <el-table-column label="初" width="44" align="center">
+                <template #default="{ row }">
+                  <el-checkbox
+                    :model-value="!!row.is_first_product"
+                    :disabled="kanbanFirstProductSaving === row.id"
+                    @change="(val: boolean | string | number) => onKanbanFirstProductChange(row, !!val)"
+                    @click.stop
+                  />
+                </template>
+              </el-table-column>
               <el-table-column prop="status" label="状態" width="76" align="center">
                 <template #default="{ row }">
                   <el-tag v-if="row.status === 'pending'" type="warning" size="small">待発行</el-tag>
@@ -5905,6 +5915,7 @@ const kanbanIssuanceListPaged = computed(() => {
 })
 const kanbanBatchIssueLoading = ref(false)
 const kanbanSyncProductionDayLoading = ref(false)
+const kanbanFirstProductSaving = ref<number | null>(null)
 /** カンバン発行：双击编辑弹窗 */
 const kanbanEditDialogVisible = ref(false)
 const kanbanEditRow = ref<KanbanIssuanceRow | null>(null)
@@ -8806,6 +8817,33 @@ function openKanbanEdit(row: KanbanIssuanceRow) {
   kanbanEditForm.lot_number = row.lot_number ?? ''
   kanbanEditForm.production_day = row.production_day ? String(row.production_day).slice(0, 10) : ''
   kanbanEditDialogVisible.value = true
+}
+
+/** カンバン発行：表格内「初」勾选变更 */
+async function onKanbanFirstProductChange(row: KanbanIssuanceRow, checked: boolean) {
+  if (!guardMesOperation(canEdit)) return
+  const id = row.id
+  if (!id) return
+  const prev = !!row.is_first_product
+  if (prev === checked) return
+  row.is_first_product = checked
+  kanbanFirstProductSaving.value = id
+  try {
+    await request.patch<{ success?: boolean; message?: string }>(
+      `/api/plan/kanban-issuance/${id}`,
+      { is_first_product: checked }
+    )
+    const item = kanbanIssuanceList.value.find((r) => r.id === id)
+    if (item) item.is_first_product = checked
+  } catch (err: unknown) {
+    row.is_first_product = prev
+    const item = kanbanIssuanceList.value.find((r) => r.id === id)
+    if (item) item.is_first_product = prev
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    kanbanFirstProductSaving.value = null
+  }
 }
 
 /** カンバン発行：保存编辑 */

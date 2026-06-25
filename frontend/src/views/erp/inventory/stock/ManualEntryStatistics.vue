@@ -130,39 +130,53 @@
           :style="{ '--delay': `${80 + i * 70}ms`, '--i': i }"
         >
           <div class="kpi-card__glow" aria-hidden="true" />
-          <div class="kpi-card__top">
+          <header class="kpi-card__head">
             <div class="kpi-icon">
-              <el-icon :size="17"><component :is="kpi.icon" /></el-icon>
+              <el-icon :size="18"><component :is="kpi.icon" /></el-icon>
             </div>
-            <span class="kpi-label">{{ kpi.label }}</span>
-          </div>
-          <div class="kpi-value">
-            {{ kpi.value }}<small v-if="kpi.unit" class="kpi-unit">{{ kpi.unit }}</small>
-          </div>
-          <div class="kpi-footer">
-            <span
-              v-if="kpi.delta"
-              class="kpi-delta kpi-badge"
-              :class="deltaClass(kpi.deltaRaw)"
-            >
-              {{ kpi.delta }}
-            </span>
-            <span v-if="kpi.sub" class="kpi-sub">{{ kpi.sub }}</span>
-          </div>
-          <div v-if="kpi.qtyValue" class="kpi-qty-block">
-            <div class="kpi-qty-head">
-              <span class="kpi-qty-label">{{ kpi.qtyLabel || '数量' }}</span>
-              <span class="kpi-qty-value">{{ kpi.qtyValue }}</span>
+            <div class="kpi-card__titles">
+              <h3 class="kpi-card__name">{{ kpi.label }}</h3>
+              <p v-if="kpi.desc" class="kpi-card__desc">{{ kpi.desc }}</p>
             </div>
-            <div class="kpi-footer kpi-footer--qty">
-              <span
-                v-if="kpi.qtyDelta"
-                class="kpi-delta kpi-badge"
-                :class="deltaClass(kpi.qtyDeltaRaw)"
-              >
-                {{ kpi.qtyDelta }}
-              </span>
-              <span v-if="kpi.qtySub" class="kpi-sub">{{ kpi.qtySub }}</span>
+          </header>
+
+          <div class="kpi-metrics">
+            <div class="kpi-metric">
+              <div class="kpi-metric__main">
+                <span class="kpi-metric__label">{{ kpi.countLabel }}</span>
+                <span class="kpi-metric__value">
+                  {{ kpi.value }}<small v-if="kpi.unit" class="kpi-metric__unit">{{ kpi.unit }}</small>
+                </span>
+              </div>
+              <div class="kpi-metric__foot">
+                <span
+                  v-if="kpi.delta"
+                  class="kpi-delta kpi-badge"
+                  :class="deltaClass(kpi.deltaRaw)"
+                >
+                  {{ kpi.delta }}
+                </span>
+                <span v-if="kpi.sub" class="kpi-sub">{{ kpi.sub }}</span>
+              </div>
+            </div>
+
+            <div v-if="kpi.qtyValue" class="kpi-metric kpi-metric--qty">
+              <div class="kpi-metric__main">
+                <span class="kpi-metric__label">{{ kpi.qtyLabel }}</span>
+                <span class="kpi-metric__value kpi-metric__value--qty">
+                  {{ kpi.qtyValue }}
+                </span>
+              </div>
+              <div class="kpi-metric__foot">
+                <span
+                  v-if="kpi.qtyDelta"
+                  class="kpi-delta kpi-badge"
+                  :class="deltaClass(kpi.qtyDeltaRaw)"
+                >
+                  {{ kpi.qtyDelta }}
+                </span>
+                <span v-if="kpi.qtySub" class="kpi-sub">{{ kpi.qtySub }}</span>
+              </div>
             </div>
           </div>
         </article>
@@ -705,10 +719,13 @@ const kpiCards = computed(() => [
     tone: 'prod',
     icon: EditPen,
     label: '実績修正',
+    desc: '生産データ管理由来',
+    countLabel: '修正件数',
     value: fmtNum(current.value?.prodDataMgmt?.count),
     unit: '件',
     delta: `前月比 ${fmtDelta(mom.value?.prodDataMgmtCountChange, mom.value?.prodDataMgmtCountChangeRate)}`,
     deltaRaw: mom.value?.prodDataMgmtCountChange,
+    qtyLabel: '修正数量',
     qtyValue: fmtQty(current.value?.prodDataMgmt?.quantity),
     qtyDelta: `前月比 ${fmtQtyDelta(mom.value?.prodDataMgmtQuantityChange, mom.value?.prodDataMgmtQuantityChangeRate)}`,
     qtyDeltaRaw: mom.value?.prodDataMgmtQuantityChange,
@@ -718,11 +735,14 @@ const kpiCards = computed(() => [
     tone: 'auto',
     icon: TrendCharts,
     label: '実績集計',
+    desc: '手入力を除く実績',
+    countLabel: '集計件数',
     value: fmtNum(current.value?.auto?.count),
     unit: '件',
     delta: `前月比 ${fmtDelta(mom.value?.autoCountChange, mom.value?.autoCountChangeRate)}`,
     deltaRaw: mom.value?.autoCountChange,
     sub: `総件数 ${fmtNum(current.value?.total?.count)}`,
+    qtyLabel: '集計数量',
     qtyValue: fmtQty(current.value?.auto?.quantity),
     qtyDelta: `前月比 ${fmtQtyDelta(mom.value?.autoQuantityChange, mom.value?.autoQuantityChangeRate)}`,
     qtyDeltaRaw: mom.value?.autoQuantityChange,
@@ -733,6 +753,8 @@ const kpiCards = computed(() => [
     tone: 'ratio',
     icon: PieChart,
     label: '修正比率',
+    desc: '修正 ÷ 総計',
+    countLabel: '件数比率',
     value: fmtPct(current.value?.prodDataMgmtCountRatio),
     delta: `前月比 ${fmtPctPoint(mom.value?.prodDataMgmtCountRatioChange)}`,
     deltaRaw: mom.value?.prodDataMgmtCountRatioChange,
@@ -1504,6 +1526,8 @@ function handlePrintReport() {
       monthOverMonth: stats.value.monthOverMonth,
       kpiCards: kpiCards.value.map((k) => ({
         label: k.label,
+        desc: k.desc,
+        countLabel: k.countLabel,
         value: k.value,
         unit: k.unit,
         delta: k.delta,
@@ -2054,25 +2078,25 @@ onBeforeUnmount(() => {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .kpi-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px 10px;
+  gap: 10px;
+  padding: 14px 14px 12px;
   position: relative;
   overflow: hidden;
-  min-height: 128px;
+  min-height: 168px;
 }
 
 .kpi-card--elevated {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.88) 100%);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.92) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: 14px;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95) inset,
     0 10px 28px rgba(15, 23, 42, 0.09),
@@ -2121,8 +2145,8 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
+  top: 12px;
+  bottom: 12px;
   width: 4px;
   border-radius: 0 4px 4px 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -2138,19 +2162,43 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #6ee7b7, #059669);
 }
 
-.kpi-card__top {
+.kpi-card__head {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   position: relative;
   z-index: 1;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.kpi-card__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.kpi-card__name {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+
+.kpi-card__desc {
+  margin: 2px 0 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #94a3b8;
+  line-height: 1.35;
 }
 
 .kpi-icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2174,76 +2222,104 @@ onBeforeUnmount(() => {
   color: #059669;
 }
 
-.kpi-label {
-  font-size: 0.7rem;
-  font-weight: 600;
+.kpi-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.kpi-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: rgba(248, 250, 252, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.kpi-metric--qty {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.kpi-card--prod .kpi-metric {
+  background: rgba(255, 247, 237, 0.65);
+  border-color: rgba(251, 146, 60, 0.18);
+}
+.kpi-card--prod .kpi-metric--qty {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.kpi-card--auto .kpi-metric {
+  background: rgba(236, 253, 245, 0.65);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+.kpi-card--auto .kpi-metric--qty {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.kpi-card--ratio .kpi-metric {
+  background: rgba(239, 246, 255, 0.7);
+  border-color: rgba(96, 165, 250, 0.22);
+}
+.kpi-card--ratio .kpi-metric--qty {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.kpi-metric__main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kpi-metric__label {
+  font-size: 0.68rem;
+  font-weight: 700;
   color: #64748b;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
-.kpi-value {
-  font-size: 1.55rem;
+.kpi-metric__value {
+  font-size: 1.28rem;
   font-weight: 800;
   color: #0f172a;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+  text-align: right;
 }
 
-.kpi-unit {
-  font-size: 0.72rem;
+.kpi-metric__value--qty {
+  font-size: 1.05rem;
+  color: #334155;
+}
+
+.kpi-card--prod .kpi-metric__value--qty {
+  color: #9a3412;
+}
+.kpi-card--auto .kpi-metric__value--qty {
+  color: #047857;
+}
+.kpi-card--ratio .kpi-metric__value--qty {
+  color: #1d4ed8;
+}
+
+.kpi-metric__unit {
+  font-size: 0.68rem;
   font-weight: 700;
   color: #94a3b8;
   margin-left: 2px;
 }
 
-.kpi-qty-block {
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(148, 163, 184, 0.4);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  position: relative;
-  z-index: 1;
-}
-
-.kpi-qty-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.kpi-qty-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: #7c3aed;
-  letter-spacing: 0.02em;
-}
-
-.kpi-qty-value {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #5b21b6;
-  font-variant-numeric: tabular-nums;
-}
-
-.kpi-footer--qty {
-  margin-top: 0;
-}
-
-.kpi-footer {
+.kpi-metric__foot {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  position: relative;
-  z-index: 1;
 }
 
 .kpi-badge {
@@ -2257,9 +2333,9 @@ onBeforeUnmount(() => {
 }
 
 .kpi-sub {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   color: #94a3b8;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .delta-good {
@@ -2968,8 +3044,12 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .kpi-value {
-    font-size: 1rem;
+  .kpi-metric__value {
+    font-size: 1.1rem;
+  }
+
+  .kpi-metric__value--qty {
+    font-size: 0.95rem;
   }
 }
 
