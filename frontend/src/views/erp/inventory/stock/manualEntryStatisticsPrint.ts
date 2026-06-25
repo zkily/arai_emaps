@@ -218,6 +218,17 @@ table.data .group-head { background: #dbeafe; }
   color: #6b7280;
   border-top: 1px solid #e5e7eb;
   padding-top: 5px;
+  line-height: 1.5;
+}
+.footnote p {
+  margin: 0 0 4px;
+}
+.footnote p:last-child {
+  margin-bottom: 0;
+}
+.footnote--note {
+  color: #475569;
+  font-weight: 600;
 }
 @media print {
   .section { break-inside: avoid; }
@@ -492,7 +503,8 @@ export function buildManualEntryStatisticsPrintHtml(input: ManualEntryStatsPrint
     ${buildProcessTable(input)}
     ${buildChartsSection(input.chartImages, input.month)}
     <div class="footnote">
-      ※ 実績修正：source_file=生産データ管理。実績集計：上記以外（手入力を除く）。数量は各取引 quantity の絶対値を合計。
+      <p>※ 実績修正：source_file=生産データ管理。実績集計：上記以外（手入力を除く）。数量は各取引 quantity の絶対値を合計。</p>
+      <p class="footnote--note">※ 実績修正データは、前後工程の実績検証後に登録されたデータです。</p>
     </div>
   </div>`
 
