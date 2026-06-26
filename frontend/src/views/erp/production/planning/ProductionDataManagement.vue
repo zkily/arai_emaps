@@ -867,6 +867,47 @@
       </template>
     </el-dialog>
 
+    <!-- 実績データ更新確認ダイアログ -->
+    <el-dialog
+      v-model="showActualUpdateConfirmDialog"
+      title="実績データ更新確認"
+      width="550px"
+      class="actual-update-confirm-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">実績データを更新しますか？</h3>
+          <div class="confirm-details">
+            <div class="detail-row">
+              <span class="detail-label">クリア開始日:</span>
+              <el-date-picker
+                v-model="actualUpdateStartDate"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                placeholder="開始日を選択"
+                size="small"
+                class="generate-date-picker"
+              />
+            </div>
+            <div class="detail-row">
+              <span class="detail-value">指定日以降の全工程実績列（切断・面取・成型・メッキ・溶接・検査・倉庫ほか）をいったん 0 にクリアしたうえで、在庫取引ログから同日以降の実績を再集計して反映します。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showActualUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" :disabled="!actualUpdateStartDate" @click="confirmUpdateActual" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 在庫・推移更新確認ダイアログ -->
     <el-dialog
       v-model="showInventoryTrendUpdateConfirmDialog"
@@ -2258,6 +2299,8 @@ const updatingInventoryTrend = ref(false)
 const updatingProductMaster = ref(false)
 const showInventoryTrendUpdateConfirmDialog = ref(false)
 const showPlanConfirmDialog = ref(false)
+const showActualUpdateConfirmDialog = ref(false)
+const actualUpdateStartDate = ref('')
 const showProductMasterUpdateDialog = ref(false)
 const productMasterDateRange = ref<[string, string] | null>(null)
 const updatingMachine = ref(false)
@@ -2852,16 +2895,16 @@ const handleUpdateCarryOver = async () => {
  * =============================================================================
  * 一、前端流程（本画面）
  * -----------------------------------------------------------------------------
- * 1. 入口：「その他」→「実績データ更新」→ 确认对话框「実績データ更新確認」→ 点击「実行」
- * 2. API：POST /production-summarys/update-actual（无请求体）
- * 3. 返回：{ data: { updated, skipped, cleared, clearPeriod }, message }；成功后自动 fetchData() 刷新表
+ * 1. 入口：「その他」→「実績データ更新」→ 確認ダイアログでクリア開始日を指定 → 点击「更新」
+ * 2. API：POST /production-summarys/update-actual（body: { startDate }、未指定時は当月月初 JST）
+ * 3. 返回：{ data: { updated, skipped, cleared, clearPeriod, startDate }, message }；成功后自动 fetchData() 刷新表
  *
  * 二、后端算法概要
  * -----------------------------------------------------------------------------
  * 1. 数据来源：stock_transaction_logs（在庫取引履歴）
  * 2. 产品码换算：target_cd 取前 4 位 + '1' → product_cd（与 production_summarys.product_cd 对应）
  * 3. 日期：DATE(transaction_time) → production_summarys.date
- * 4. 处理范围：当月 1 日～当月末日（日本时区）；先对该范围内所有「実績列」清零，再按日志重新汇总写回
+ * 4. 处理范围：startDate 以降；先对该范围内所有「実績列」清零，再按同日以降のログ重新汇总写回
  *
  * 三、数据分类与计算方式
  * -----------------------------------------------------------------------------
@@ -2898,25 +2941,27 @@ const handleUpdateCarryOver = async () => {
  * | KT13       | （非 process 汇总）入出庫净额 → warehouse_actual           | 倉庫実績        |
  * | KT15       | （非 process 汇总）入出庫净额 → outsourced_warehouse_actual | 外注倉庫実績    |
  *
- * 五、被清零的列（ACTUAL_CLEAR_COLUMNS，当月 1 日～当月末日）
+ * 五、被清零的列（ACTUAL_CLEAR_COLUMNS，startDate 以降・終了日上限なし）
  * -----------------------------------------------------------------------------
  * cutting_actual, chamfering_actual, molding_actual, plating_actual, welding_actual,
  * inspection_actual, warehouse_actual, outsourced_plating_actual, outsourced_welding_actual,
  * pre_welding_inspection_actual, pre_inspection_actual, pre_outsourcing_actual,
  * outsourced_warehouse_actual
  */
-const handleUpdateActual = async () => {
+const handleUpdateActual = () => {
   if (!guardApsOperation(canEdit)) return
+  actualUpdateStartDate.value = getFirstDayOfCurrentMonth()
+  showActualUpdateConfirmDialog.value = true
+}
 
-  try {
-    await ElMessageBox.confirm('実績データを更新します。', '実績データ更新確認', {
-      confirmButtonText: '実行',
-      cancelButtonText: 'キャンセル',
-      type: 'info',
-    })
-  } catch {
+const confirmUpdateActual = async () => {
+  if (!guardApsOperation(canEdit)) return
+  if (!actualUpdateStartDate.value) {
+    ElMessage.warning('クリア開始日を選択してください')
     return
   }
+  const startDate = actualUpdateStartDate.value
+  showActualUpdateConfirmDialog.value = false
   updatingActual.value = true
   showProgressDialog.value = true
   progressPercentage.value = 0
@@ -2928,7 +2973,7 @@ const handleUpdateActual = async () => {
       if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
     }, 200)
     progressText.value = '実績データを更新中...'
-    const res = await updateProductionSummarysActual()
+    const res = await updateProductionSummarysActual(startDate)
     if (progressTimer) clearInterval(progressTimer)
     progressTimer = null
     progressPercentage.value = 100
@@ -2937,7 +2982,7 @@ const handleUpdateActual = async () => {
     const d = body?.data ?? body
     const msg =
       body?.message ??
-      `更新 ${d?.updated ?? 0} 件、クリア ${d?.cleared ?? 0} 件（当月開始）、スキップ ${d?.skipped ?? 0} 件`
+      `更新 ${d?.updated ?? 0} 件、クリア ${d?.cleared ?? 0} 件（${d?.clearPeriod ?? startDate + ' ～'}）、スキップ ${d?.skipped ?? 0} 件`
     progressText.value = msg
     ElMessage.success(msg)
     setTimeout(() => {
@@ -3717,7 +3762,7 @@ const confirmAllUpdate = async () => {
   ]
   const steps = [
     () => updateProductionSummarysFromOrderDaily({ updateMode: 'all' }),
-    () => updateProductionSummarysActual(),
+    () => updateProductionSummarysActual(getFirstDayOfCurrentMonth()),
     () => updateProductionSummarysDefect(),
     () => updateProductionSummarysScrap(),
     () => updateProductionSummarysOnHold(),

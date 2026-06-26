@@ -13,6 +13,7 @@ export interface OrderMonthlyItem {
   year: number
   month: number
   product_cd: string
+  part_number?: string
   product_name: string
   product_alias?: string
   product_type: string

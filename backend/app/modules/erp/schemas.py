@@ -183,6 +183,7 @@ class OrderMonthly(OrderMonthlyBase):
     """月別受注レスポンススキーマ。内示差異は常に 確定本数 - 内示本数 で返す。"""
     id: int
     order_id: str
+    part_number: Optional[str] = Field(None, max_length=50, description="品番（製品マスタ）")
     created_at: datetime
     updated_at: datetime
 

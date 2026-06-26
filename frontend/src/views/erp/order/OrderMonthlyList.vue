@@ -356,6 +356,7 @@
         <el-table-column prop="year" :label="t('orderMonthly.tableYear')" width="70" align="center" />
         <el-table-column prop="month" :label="t('orderMonthly.tableMonth')" width="60" align="center" />
         <el-table-column prop="product_cd" :label="t('orderMonthly.tableProductCd')" width="100" />
+        <el-table-column prop="part_number" :label="t('orderMonthly.tablePartNumber')" width="110" show-overflow-tooltip />
         <el-table-column prop="product_name" :label="t('orderMonthly.tableProductName')" min-width="120" show-overflow-tooltip />
         <el-table-column prop="product_type" :label="t('orderMonthly.tableType')" width="90" />
         <el-table-column prop="forecast_units" :label="t('orderMonthly.tableForecastUnits')" width="90" align="right" />

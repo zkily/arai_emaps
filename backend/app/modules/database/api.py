@@ -2393,17 +2393,51 @@ async def _clear_production_summary_columns_jst_month(
     return cleared_count, first_day_str, month_end_str
 
 
+def _parse_start_date_str(start_date_raw: Optional[str], default: str) -> str:
+    """YYYY-MM-DD 形式の開始日を検証。未指定時は default を返す。"""
+    raw = (start_date_raw or "").strip()[:10] or default
+    try:
+        datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+    return raw
+
+
+async def _clear_production_summary_columns_from_date(
+    db: AsyncSession,
+    columns: list[str],
+    start_date_str: str,
+) -> int:
+    """指定日以降の行について指定列を 0 にし commit。戻り値 cleared_rowcount。"""
+    if not columns:
+        return 0
+    start_d = datetime.strptime(start_date_str[:10], "%Y-%m-%d").date()
+    clear_values = {col: 0 for col in columns}
+    stmt_clear = (
+        update(ProductionSummary)
+        .where(ProductionSummary.date >= start_d)
+        .values(**clear_values)
+    )
+    result_clear = await db.execute(stmt_clear)
+    cleared_count = result_clear.rowcount
+    await db.commit()
+    return cleared_count
+
+
 @router.post("/update-actual")
 async def update_production_summarys_actual(
+    body: OptionalStartDateBody = OptionalStartDateBody(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     stock_transaction_logs の実績・不良・入出庫から production_summarys の各 actual 列を再計算して反映する。
-    当月1日～当月末日（日本時区）の actual を一旦クリアしてから、ログを集計して書き戻す。
+    startDate（未指定時は当月1日・JST）以降の actual を一旦クリアしてから、同日以降のログを集計して書き戻す。
     """
-    cleared_count, first_day_str, month_end_str = await _clear_production_summary_columns_jst_month(
-        db, ACTUAL_CLEAR_COLUMNS
+    first_day_str, _month_end_str = _jst_month_first_and_last_day()
+    start_date_str = _parse_start_date_str(body.startDate, first_day_str)
+    cleared_count = await _clear_production_summary_columns_from_date(
+        db, ACTUAL_CLEAR_COLUMNS, start_date_str
     )
 
     # 2) 一般工程：実績+不良 集計（product_cd = 前4桁+'1'）
@@ -2419,10 +2453,12 @@ async def update_production_summarys_actual(
         + process_placeholders
         + """)
           AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND DATE(transaction_time) >= :start_date
         GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time), process_cd
     """)
     try:
         params = {"p%d" % i: c for i, c in enumerate(GENERAL_PROCESS_CDS)}
+        params["start_date"] = start_date_str
         res_general = await db.execute(general_sql, params)
         actual_rows = res_general.mappings().all()
     except Exception:
@@ -2436,10 +2472,11 @@ async def update_production_summarys_actual(
         FROM stock_transaction_logs
         WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT13'
           AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND DATE(transaction_time) >= :start_date
         GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time)
     """)
     try:
-        res_kt13 = await db.execute(kt13_sql)
+        res_kt13 = await db.execute(kt13_sql, {"start_date": start_date_str})
         warehouse_rows = res_kt13.mappings().all()
     except Exception:
         warehouse_rows = []
@@ -2452,10 +2489,11 @@ async def update_production_summarys_actual(
         FROM stock_transaction_logs
         WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT15'
           AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND DATE(transaction_time) >= :start_date
         GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time)
     """)
     try:
-        res_kt15 = await db.execute(kt15_sql)
+        res_kt15 = await db.execute(kt15_sql, {"start_date": start_date_str})
         outsourced_warehouse_rows = res_kt15.mappings().all()
     except Exception:
         outsourced_warehouse_rows = []
@@ -2464,7 +2502,13 @@ async def update_production_summarys_actual(
         msg = f"{cleared_count}件のレコードをクリアしました（集計データなし）"
         return {
             "code": 200,
-            "data": {"updated": 0, "skipped": 0, "cleared": cleared_count, "clearPeriod": f"{first_day_str} ～ {month_end_str}"},
+            "data": {
+                "updated": 0,
+                "skipped": 0,
+                "cleared": cleared_count,
+                "clearPeriod": f"{start_date_str} ～",
+                "startDate": start_date_str,
+            },
             "message": msg,
         }
 
@@ -2551,7 +2595,8 @@ async def update_production_summarys_actual(
             "skipped": skipped_count,
             "total": len(actual_rows) + len(warehouse_rows) + len(outsourced_warehouse_rows),
             "cleared": cleared_count,
-            "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+            "clearPeriod": f"{start_date_str} ～",
+            "startDate": start_date_str,
         },
         "message": message,
     }

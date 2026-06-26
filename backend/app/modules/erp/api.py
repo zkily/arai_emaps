@@ -169,6 +169,21 @@ async def create_product(
 
 # ========== 月別受注 API ==========
 
+async def _order_monthly_part_number_map(db: AsyncSession, rows: list[models.OrderMonthly]) -> dict[str, Optional[str]]:
+    """製品マスタから product_cd に対応する品番（part_number）を一括取得"""
+    from app.modules.master.models import Product as MasterProduct
+
+    product_cds = list({r.product_cd for r in rows if r.product_cd})
+    if not product_cds:
+        return {}
+    result = await db.execute(
+        select(MasterProduct.product_cd, MasterProduct.part_number).where(
+            MasterProduct.product_cd.in_(product_cds)
+        )
+    )
+    return {row.product_cd: row.part_number for row in result.all()}
+
+
 @router.get("/orders/monthly", response_model=List[schemas.OrderMonthly])
 async def list_order_monthly(
     year: Optional[int] = Query(None, description="年"),
@@ -226,9 +241,12 @@ async def list_order_monthly(
             for s in sub_r.all():
                 sum_map[s.monthly_order_id] = int(s.total or 0)
 
+    part_map = await _order_monthly_part_number_map(db, rows)
+
     out = []
     for r in rows:
         item = schemas.OrderMonthly.model_validate(r)
+        item.part_number = part_map.get(r.product_cd)
         item.forecast_total_units = sum_map.get(r.order_id, 0)
         item.forecast_diff = item.forecast_total_units - (r.forecast_units or 0)
         out.append(item)

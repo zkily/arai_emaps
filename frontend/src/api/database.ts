@@ -399,12 +399,18 @@ export function updateProductionSummarysCarryOver() {
   return request.post(`${BASE}/update-carry-over`)
 }
 
-/** 実績データ更新：当月（JST）1 日～当月末日の actual を 0 クリア後、stock_transaction_logs から再集計して反映 */
-export function updateProductionSummarysActual() {
+/** 実績データ更新：startDate 以降の actual を 0 クリア後、同日以降の stock_transaction_logs から再集計して反映（未指定時は当月月初 JST） */
+export function updateProductionSummarysActual(startDate?: string) {
   return request.post<{
-    data?: { updated?: number; skipped?: number; cleared?: number; clearPeriod?: string }
+    data?: {
+      updated?: number
+      skipped?: number
+      cleared?: number
+      clearPeriod?: string
+      startDate?: string
+    }
     message?: string
-  }>(`${BASE}/update-actual`)
+  }>(`${BASE}/update-actual`, startDate ? { startDate } : {})
 }
 
 /** 不良データ更新：当月（JST）1 日～当月末日の各工程 *_defect を 0 クリア後、stock_transaction_logs の不良を集計して反映 */

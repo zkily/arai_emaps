@@ -9,7 +9,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-import feedparser
 import httpx
 from loguru import logger
 
@@ -165,6 +164,13 @@ def _resolve_source_name(parsed_feed: feedparser.FeedParserDict, default: str | 
 
 
 def _parse_feed(body: str, feed_url: str, default_source: str | None) -> list[AutoNewsItem]:
+    try:
+        import feedparser
+    except ImportError as e:
+        raise RuntimeError(
+            "feedparser が未インストールです。pip install feedparser または requirements.txt を再インストールしてください。"
+        ) from e
+
     parsed = feedparser.parse(body)
     source = _resolve_source_name(parsed, default_source)
     items: list[AutoNewsItem] = []
