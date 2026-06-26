@@ -1240,8 +1240,6 @@ function planUpdateCellKey(x: unknown): string {
 }
 
 function buildPlanUpdatesMergeSpans(rows: PlanUpdateRecord[]) {
-  if (!guardApsOperation(canEdit)) return
-
   const n = rows.length
   const process = new Array<number>(n).fill(0)
   const machine = new Array<number>(n).fill(0)
