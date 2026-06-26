@@ -187,6 +187,8 @@ class UserListResponse(BaseModel):
     department: Optional[str]
     section: Optional[str]
     role: str
+    role_id: Optional[int] = None
+    role_name: Optional[str] = None
     status: UserStatus
     two_factor: bool
     last_login: Optional[str]

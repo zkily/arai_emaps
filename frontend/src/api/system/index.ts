@@ -18,6 +18,8 @@ export interface UserListItem {
   department: string | null
   section: string | null
   role: string
+  role_id?: number | null
+  role_name?: string | null
   status: UserStatus
   two_factor: boolean
   last_login: string | null

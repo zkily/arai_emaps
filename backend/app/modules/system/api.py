@@ -41,6 +41,19 @@ ROLE_NAME_TO_CODE = {
     "ゲスト": "guest",
     "閲覧者": "viewer",
 }
+ROLE_CODE_TO_NAME = {code: name for name, code in ROLE_NAME_TO_CODE.items()}
+
+
+async def _fetch_user_role_map(db: AsyncSession, user_ids: List[int]) -> dict:
+    """user_id -> (role_id, role_name) from user_roles + roles."""
+    if not user_ids:
+        return {}
+    result = await db.execute(
+        select(UserRole.user_id, UserRole.role_id, Role.name)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(UserRole.user_id.in_(user_ids))
+    )
+    return {user_id: (role_id, role_name) for user_id, role_id, role_name in result.all()}
 
 
 # ========== ユーザー管理 API ==========
@@ -93,7 +106,8 @@ async def get_users(
     
     result = await db.execute(query)
     users = result.scalars().all()
-    
+    user_role_map = await _fetch_user_role_map(db, [u.id for u in users])
+
     # 部門・課名取得
     org_ids = set()
     for u in users:
@@ -114,6 +128,10 @@ async def get_users(
         sect_id = getattr(user, "section_id", None)
         two_fa = getattr(user, "two_factor_enabled", False)
         last_ln = getattr(user, "last_login_at", None)
+        role_code = user.role or "user"
+        role_id, role_name = user_role_map.get(user.id, (None, None))
+        if role_name is None:
+            role_name = ROLE_CODE_TO_NAME.get(role_code)
         items.append(UserListResponse(
             id=user.id,
             username=user.username,
@@ -121,7 +139,9 @@ async def get_users(
             email=user.email,
             department=org_map.get(dept_id) if dept_id else None,
             section=org_map.get(sect_id) if sect_id else None,
-            role=user.role or "user",
+            role=role_code,
+            role_id=role_id,
+            role_name=role_name,
             status=UserStatus(user_status),
             two_factor=two_fa,
             last_login=last_ln.strftime("%Y-%m-%d %H:%M:%S") if last_ln else None,
@@ -226,7 +246,7 @@ async def create_user(
         last_login=None,
         department_name=dept_name,
         section_name=sect_name,
-        role_name=new_user.role,
+        role_name=role_obj.name,
         created_at=new_user.created_at,
         updated_at=new_user.updated_at,
     )
@@ -253,7 +273,9 @@ async def update_user(
     if "status" in update_data:
         user.is_active = update_data["status"] == "active"
         del update_data["status"]
-    
+
+    assigned_role_id: Optional[int] = None
+    assigned_role_name: Optional[str] = None
     if "role_id" in update_data:
         rid_raw = update_data.pop("role_id")
         rid = int(rid_raw) if rid_raw is not None and rid_raw != "" else None
@@ -271,6 +293,8 @@ async def update_user(
         await db.execute(delete(UserRole).where(UserRole.user_id == user.id))
         user.role = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
         db.add(UserRole(user_id=user.id, role_id=rid))
+        assigned_role_id = rid
+        assigned_role_name = role_obj.name
     
     for field, value in update_data.items():
         if hasattr(user, field):
@@ -292,6 +316,12 @@ async def update_user(
             if ob.id == getattr(user, "section_id", None):
                 sect_name = ob.name
     
+    if assigned_role_id is None:
+        role_map = await _fetch_user_role_map(db, [user.id])
+        assigned_role_id, assigned_role_name = role_map.get(user.id, (None, None))
+        if assigned_role_name is None:
+            assigned_role_name = ROLE_CODE_TO_NAME.get(user.role or "user")
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -299,13 +329,13 @@ async def update_user(
         full_name=user.full_name,
         department_id=getattr(user, "department_id", None),
         section_id=getattr(user, "section_id", None),
-        role_id=None,
+        role_id=assigned_role_id,
         two_factor_enabled=getattr(user, "two_factor_enabled", False),
         status=UserStatus.active if user.is_active else UserStatus.locked,
         last_login=user.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(user, "last_login_at", None) else None,
         department_name=dept_name,
         section_name=sect_name,
-        role_name=user.role,
+        role_name=assigned_role_name,
         created_at=user.created_at,
         updated_at=user.updated_at,
     )

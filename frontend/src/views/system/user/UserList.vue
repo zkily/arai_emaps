@@ -164,7 +164,7 @@
         <el-table-column prop="role" :label="t('systemUser.user.role')" width="130" align="center">
           <template #default="{ row }">
             <el-tag :type="getRoleType(row.role)" size="small" effect="dark" class="role-tag">
-              {{ getRoleLabel(row.role) }}
+              {{ displayUserRoleName(row, t) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -540,6 +540,7 @@ import type { UserListItem, PaginatedUserResponse } from '@/api/system'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { useOperationPermission } from '@/composables/useOperationPermission'
 import { OPERATION_MODULE_SYSTEM } from '@/constants/operationModules'
+import { displayUserRoleName, resolveUserRoleId } from '@/utils/userRoleDisplay'
 
 const { t } = useI18n()
 const userStore = useUserStore()
@@ -554,19 +555,6 @@ const tableRowClassName = ({ row }: { row: UserListItem }) => {
   return row.status === 'locked' ? 'row-locked' : ''
 }
 
-// Role label mapping（i18n）
-const getRoleLabel = (role: string) => {
-  const keyMap: Record<string, string> = {
-    admin: 'roleAdmin',
-    user: 'roleUser',
-    manager: 'roleManager',
-    worker: 'roleWorker',
-    guest: 'roleGuest',
-    viewer: 'roleViewer',
-  }
-  const key = keyMap[role]
-  return key ? t(`systemUser.user.${key}`) : role
-}
 const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
@@ -758,21 +746,9 @@ const handleAdd = () => {
   })
 }
 
-const roleCodeToName = computed(() => ({
-  admin: t('systemUser.user.roleAdmin'),
-  user: t('systemUser.user.roleUser'),
-  manager: t('systemUser.user.roleManager'),
-  worker: t('systemUser.user.roleWorker'),
-  guest: t('systemUser.user.roleGuest'),
-  viewer: t('systemUser.user.roleViewer'),
-}))
-
 const handleEdit = async (row: UserListItem) => {
   isEdit.value = true
   await loadOptions()
-  const roleMap = roleCodeToName.value as Record<string, string>
-  const roleName = roleMap[row.role] || row.role
-  const matchedRole = roleOptions.value.find((r) => r.name === roleName)
   Object.assign(userForm, {
     id: row.id,
     username: row.username,
@@ -780,7 +756,7 @@ const handleEdit = async (row: UserListItem) => {
     email: row.email,
     department_id: null,
     section_id: null,
-    role_id: matchedRole?.id ?? null,
+    role_id: resolveUserRoleId(row, roleOptions.value),
     two_factor_enabled: row.two_factor,
     password: '',
   })
@@ -844,14 +820,6 @@ const handleResetPasswordSubmit = async () => {
 
 const handlePrint = () => {
   const rows = userList.value
-  const roleLabels: Record<string, string> = {
-    admin: t('systemUser.user.roleAdmin'),
-    user: t('systemUser.user.roleUser'),
-    manager: t('systemUser.user.roleManager'),
-    worker: t('systemUser.user.roleWorker'),
-    guest: t('systemUser.user.roleGuest'),
-    viewer: t('systemUser.user.roleViewer'),
-  }
   const statusLabels: Record<string, string> = {
     active: t('systemUser.user.statusActive'),
     locked: t('systemUser.user.statusLocked'),
@@ -876,7 +844,7 @@ const handlePrint = () => {
     r.email,
     r.department || '—',
     r.section || '—',
-    roleLabels[r.role] || r.role,
+    displayUserRoleName(r, t),
     statusLabels[r.status] || r.status,
     r.two_factor ? t('systemUser.user.form2FAOn') : '—',
     r.last_login || '—',
