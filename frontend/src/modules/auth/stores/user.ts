@@ -19,9 +19,12 @@ export interface User {
   email: string
   full_name?: string
   role: string
+  role_name?: string | null
   permissions: string[]
   menu_codes?: string[]
   operation_permissions?: OperationPermission[]
+  is_super_admin?: boolean
+  data_scope?: string
   is_active?: boolean
   department_id?: number | null
   department_name?: string | null

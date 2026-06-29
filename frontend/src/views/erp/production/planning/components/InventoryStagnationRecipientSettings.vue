@@ -138,6 +138,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { isAdminUser } from '@/utils/menuPermissions'
 import {
   createNotificationRecipient,
   getNotificationRecipients,
@@ -161,7 +162,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
-const isAdmin = computed(() => userStore.user?.role === 'admin')
+const isAdmin = computed(() => isAdminUser(userStore.user))
 
 const loading = ref(false)
 const submitting = ref(false)

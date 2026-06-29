@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import now_jst
 from app.modules.auth.api import get_user_menu_codes
 from app.modules.auth.models import User
+from app.modules.auth.permission_service import user_is_super_admin
 from app.modules.auth.shortcut_models import UserPageVisit, UserPinnedPage
 from app.modules.system.models import Menu
 
@@ -42,14 +43,13 @@ async def _can_access_path(
     if normalized == "/access-denied":
         return True
     if normalized == "/system" or normalized.startswith("/system/"):
-        return (user.role or "") == "admin"
+        return await user_is_super_admin(db, user)
 
     codes = await _codes_for_path(db, normalized)
     if not codes:
         return False
 
-    role = user.role or "user"
-    if role == "admin":
+    if await user_is_super_admin(db, user):
         return True
 
     allowed = menu_codes if menu_codes is not None else await get_user_menu_codes(db, user)

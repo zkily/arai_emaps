@@ -2,7 +2,9 @@ import type { User } from '@/modules/auth/stores/user'
 import { codesForPath } from '@/utils/menuCodes'
 
 export function isAdminUser(user: User | null | undefined): boolean {
-  return user?.permissions.includes('all') ?? false
+  if (!user) return false
+  if (user.is_super_admin) return true
+  return user.permissions.includes('all')
 }
 
 /** P0: ログイン済みユーザーは常に menu_codes によるページ制御（admin は全ページ許可） */

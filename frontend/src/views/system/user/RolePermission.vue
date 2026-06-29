@@ -1,116 +1,110 @@
 <template>
   <div class="role-permission">
-    <!-- Modern Gradient Header -->
     <div class="page-header">
-      <div class="header-content">
-        <div class="header-icon">
-          <el-icon :size="28"><Key /></el-icon>
+      <div class="header-left">
+        <div class="header-icon-sm">
+          <el-icon :size="18"><Key /></el-icon>
         </div>
         <div class="header-text">
           <h1>{{ t('systemUser.role.title') }}</h1>
           <p class="subtitle">{{ t('systemUser.role.subtitle') }}</p>
         </div>
       </div>
-      <div class="header-stats">
-        <div class="stat-item">
-          <span class="stat-value">{{ roleList.length }}</span>
-          <span class="stat-label">{{ t('systemUser.role.roleCount') }}</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value highlight">{{ totalUserCount }}</span>
-          <span class="stat-label">{{ t('systemUser.role.totalUsers') }}</span>
-        </div>
+      <div class="header-chips">
+        <span class="h-chip">
+          <strong>{{ roleList.length }}</strong>
+          <em>{{ t('systemUser.role.roleCount') }}</em>
+        </span>
+        <span class="h-chip accent">
+          <strong>{{ totalUserCount }}</strong>
+          <em>{{ t('systemUser.role.totalUsers') }}</em>
+        </span>
       </div>
     </div>
 
-    <!-- Two Column Layout -->
     <div class="layout-grid">
-      <!-- Role List Panel -->
-      <div class="role-panel">
+      <aside class="role-panel">
         <div class="panel-header">
-          <div class="panel-title">
+          <span class="panel-title">
             <el-icon><List /></el-icon>
-            <span>{{ t('systemUser.role.roleList') }}</span>
-          </div>
-          <el-button type="primary" size="small" :icon="Plus" @click="handleAddRole" class="btn-add-sm">
+            {{ t('systemUser.role.roleList') }}
+          </span>
+          <el-button type="primary" size="small" :icon="Plus" class="btn-add-sm" @click="handleAddRole">
             {{ t('systemUser.role.add') }}
           </el-button>
         </div>
-        <div class="panel-body">
-          <el-table
-            :data="roleList"
-            v-loading="rolesLoading"
-            highlight-current-row
-            @current-change="handleRoleSelect"
-            size="small"
-            :row-class-name="roleRowClassName"
-            :header-cell-style="{ background: '#f8fafc', color: '#475569', fontWeight: '600', fontSize: '12px', padding: '8px 6px' }"
+        <div class="panel-body role-list-wrap" v-loading="rolesLoading">
+          <div
+            v-for="row in roleList"
+            :key="row.id"
+            class="role-card"
+            :class="{ active: selectedRole?.id === row.id }"
+            @click="handleRoleSelect(row)"
           >
-            <el-table-column prop="name" :label="t('systemUser.role.roleName')" min-width="90">
-              <template #default="{ row }">
-                <div class="role-name-cell">
-                  <div class="role-avatar" :style="{ background: getRoleColor(row.name) }">
-                    {{ row.name.charAt(0) }}
-                  </div>
-                  <div class="role-info">
-                    <span class="role-name">{{ row.name }}</span>
-                    <span class="role-badge" v-if="row.is_system">{{ t('systemUser.role.systemRole') }}</span>
-                  </div>
+            <div class="role-card-main">
+              <div class="role-avatar" :style="{ background: getRoleColor(row.name) }">
+                {{ row.name.charAt(0) }}
+              </div>
+              <div class="role-info">
+                <div class="role-name-row">
+                  <span class="role-name">{{ row.name }}</span>
+                  <span class="user-count-badge">{{ row.user_count }}</span>
                 </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="user_count" :label="t('systemUser.role.users')" width="80" align="center">
-              <template #default="{ row }">
-                <span class="user-count-badge">{{ row.user_count }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('systemUser.role.actions')" width="85" align="center">
-              <template #default="{ row }">
-                <div class="action-cell">
-                  <el-tooltip :content="t('systemUser.role.edit')" placement="top">
-                    <el-button size="small" type="primary" circle :icon="Edit" @click.stop="handleEditRole(row)" />
-                  </el-tooltip>
-                  <el-tooltip :content="row.is_system ? t('systemUser.role.systemRoleNoDelete') : t('systemUser.role.delete')" placement="top">
-                    <el-button 
-                      size="small" 
-                      type="danger" 
-                      circle 
-                      :icon="Delete" 
-                      @click.stop="handleDeleteRole(row)" 
-                      :disabled="row.is_system"
-                      :class="{ 'btn-disabled': row.is_system }"
-                    />
-                  </el-tooltip>
+                <div class="role-meta">
+                  <span v-if="row.code" class="role-code">{{ row.code }}</span>
+                  <span v-if="row.is_super_admin" class="role-badge admin">{{ t('systemUser.role.superAdminBadge') }}</span>
+                  <span v-else-if="row.is_system" class="role-badge">{{ t('systemUser.role.systemRole') }}</span>
                 </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
-
-      <!-- Permission Panel -->
-      <div class="permission-panel">
-        <div class="panel-header">
-          <div class="panel-title">
-            <el-icon><Setting /></el-icon>
-            <span v-if="selectedRole">{{ selectedRole.name }}</span>
-            <span v-else class="text-muted">{{ t('systemUser.role.selectRole') }}</span>
-            <span class="panel-subtitle" v-if="selectedRole">{{ t('systemUser.role.permissionSettings') }}</span>
+              </div>
+            </div>
+            <div class="role-card-actions" @click.stop>
+              <el-button size="small" text type="primary" :icon="Edit" @click="handleEditRole(row)" />
+              <el-button
+                size="small"
+                text
+                type="danger"
+                :icon="Delete"
+                :disabled="row.is_system"
+                @click="handleDeleteRole(row)"
+              />
+            </div>
           </div>
-          <el-button 
-            v-if="selectedRole" 
-            type="primary" 
-            @click="handleSavePermission" 
+          <div v-if="!rolesLoading && roleList.length === 0" class="role-list-empty">
+            {{ t('systemUser.role.emptyTitle') }}
+          </div>
+        </div>
+      </aside>
+
+      <section class="permission-panel">
+        <div class="panel-header" :class="{ 'has-role': selectedRole }">
+          <div class="panel-title-group" v-if="selectedRole">
+            <div class="selected-role-avatar" :style="{ background: getRoleColor(selectedRole.name) }">
+              {{ selectedRole.name.charAt(0) }}
+            </div>
+            <div class="selected-role-text">
+              <span class="selected-role-name">{{ selectedRole.name }}</span>
+              <span class="selected-role-sub">{{ t('systemUser.role.permissionSettings') }}</span>
+            </div>
+          </div>
+          <span v-else class="panel-title muted">
+            <el-icon><Setting /></el-icon>
+            {{ t('systemUser.role.selectRole') }}
+          </span>
+          <el-button
+            v-if="selectedRole"
+            type="primary"
+            size="small"
             :loading="saveLoading"
             :icon="Check"
+            class="btn-save"
+            @click="handleSavePermission"
           >
             {{ t('systemUser.role.save') }}
           </el-button>
         </div>
 
-        <div class="panel-body" v-if="selectedRole">
-          <el-tabs v-model="activeTab" class="modern-tabs">
+        <div class="panel-body perm-body" v-if="selectedRole">
+          <el-tabs v-model="activeTab" class="compact-tabs">
             <!-- Menu Permissions Tab -->
             <el-tab-pane name="menu">
               <template #label>
@@ -120,16 +114,16 @@
                 </div>
               </template>
               <div class="tab-content menu-permission-content">
-                <div class="menu-permission-toolbar">
-                  <div class="menu-permission-hint">
+                <div class="menu-toolbar">
+                  <span class="menu-hint">
                     <el-icon><InfoFilled /></el-icon>
-                    <span>{{ t('systemUser.role.menuPermissionHint') }}</span>
-                  </div>
-                  <div class="menu-permission-actions">
-                    <el-button size="small" text type="primary" @click="expandAllMenuNodes">
+                    {{ t('systemUser.role.menuPermissionHint') }}
+                  </span>
+                  <div class="menu-toolbar-btns">
+                    <el-button size="small" link type="primary" @click="expandAllMenuNodes">
                       {{ t('systemUser.role.menuExpandAll') }}
                     </el-button>
-                    <el-button size="small" text type="primary" @click="collapseAllMenuNodes">
+                    <el-button size="small" link type="primary" @click="collapseAllMenuNodes">
                       {{ t('systemUser.role.menuCollapseAll') }}
                     </el-button>
                   </div>
@@ -185,47 +179,28 @@
                 </div>
               </template>
               <div class="tab-content">
-                <div class="operation-hint">
+                <p class="inline-hint">
                   <el-icon><InfoFilled /></el-icon>
                   {{ t('systemUser.role.operationHint') }}
+                </p>
+                <div class="op-matrix">
+                  <div class="op-row op-head">
+                    <span class="op-module">{{ t('systemUser.role.module') }}</span>
+                    <span>{{ t('systemUser.role.create') }}</span>
+                    <span>{{ t('systemUser.role.edit') }}</span>
+                    <span>{{ t('systemUser.role.delete') }}</span>
+                    <span>{{ t('systemUser.role.export') }}</span>
+                    <span>{{ t('systemUser.role.approve') }}</span>
+                  </div>
+                  <div v-for="row in operationPermissions" :key="row.module" class="op-row">
+                    <span class="op-module">{{ row.module }}</span>
+                    <span><el-checkbox v-model="row.can_create" /></span>
+                    <span><el-checkbox v-model="row.can_edit" /></span>
+                    <span><el-checkbox v-model="row.can_delete" /></span>
+                    <span><el-checkbox v-model="row.can_export" /></span>
+                    <span><el-checkbox v-model="row.can_approve" /></span>
+                  </div>
                 </div>
-                <el-table 
-                  :data="operationPermissions" 
-                  size="small" 
-                  border
-                  :header-cell-style="{ background: '#f8fafc', color: '#475569', fontWeight: '600', fontSize: '12px', padding: '8px' }"
-                >
-                  <el-table-column prop="module" :label="t('systemUser.role.module')" width="130">
-                    <template #default="{ row }">
-                      <span class="module-name">{{ row.module }}</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('systemUser.role.create')" width="65" align="center">
-                    <template #default="{ row }">
-                      <el-checkbox v-model="row.can_create" class="check-primary" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('systemUser.role.edit')" width="65" align="center">
-                    <template #default="{ row }">
-                      <el-checkbox v-model="row.can_edit" class="check-info" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('systemUser.role.delete')" width="65" align="center">
-                    <template #default="{ row }">
-                      <el-checkbox v-model="row.can_delete" class="check-danger" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('systemUser.role.export')" width="65" align="center">
-                    <template #default="{ row }">
-                      <el-checkbox v-model="row.can_export" class="check-success" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column :label="t('systemUser.role.approve')" width="65" align="center">
-                    <template #default="{ row }">
-                      <el-checkbox v-model="row.can_approve" class="check-warning" />
-                    </template>
-                  </el-table-column>
-                </el-table>
               </div>
             </el-tab-pane>
 
@@ -237,41 +212,39 @@
                   <span>{{ t('systemUser.role.dataScope') }}</span>
                 </div>
               </template>
-              <div class="tab-content">
-                <div class="data-scope-section">
-                  <label class="section-label">{{ t('systemUser.role.dataScopeLabel') }}</label>
-                  <div class="scope-options">
-                    <div 
-                      v-for="option in scopeOptions" 
-                      :key="option.value"
-                      class="scope-option"
-                      :class="{ active: dataScope === option.value }"
-                      @click="dataScope = option.value"
-                    >
-                      <el-icon :size="20">
-                        <component :is="option.icon" />
-                      </el-icon>
-                      <span class="scope-label">{{ option.label }}</span>
-                      <span class="scope-desc">{{ option.desc }}</span>
-                    </div>
-                  </div>
+              <div class="tab-content data-tab">
+                <p class="section-label">{{ t('systemUser.role.dataScopeLabel') }}</p>
+                <div class="scope-chips">
+                  <button
+                    v-for="option in scopeOptions"
+                    :key="option.value"
+                    type="button"
+                    class="scope-chip"
+                    :class="{ active: dataScope === option.value }"
+                    @click="dataScope = option.value"
+                  >
+                    <el-icon><component :is="option.icon" /></el-icon>
+                    <span class="scope-chip-label">{{ option.label }}</span>
+                    <span class="scope-chip-desc">{{ option.desc }}</span>
+                  </button>
                 </div>
-                
                 <transition name="fade">
                   <div class="custom-dept-section" v-if="dataScope === 'custom'">
                     <label class="section-label">{{ t('systemUser.role.customDept') }}</label>
-                    <el-select 
-                      v-model="customDepartments" 
-                      multiple 
-                      :placeholder="t('systemUser.role.selectDept')" 
-                      style="width: 100%"
+                    <el-select
+                      v-model="customDepartments"
+                      multiple
+                      collapse-tags
+                      collapse-tags-tooltip
+                      :placeholder="t('systemUser.role.selectDept')"
+                      class="custom-dept-select"
                       filterable
                     >
-                      <el-option 
-                        v-for="org in departmentOptions" 
-                        :key="org.id" 
-                        :label="org.name" 
-                        :value="org.name" 
+                      <el-option
+                        v-for="org in departmentOptions"
+                        :key="org.id"
+                        :label="org.name"
+                        :value="org.name"
                       />
                     </el-select>
                   </div>
@@ -281,40 +254,107 @@
           </el-tabs>
         </div>
 
-        <!-- Empty State -->
         <div class="empty-state" v-else>
-          <div class="empty-icon">
-            <el-icon :size="48"><Select /></el-icon>
-          </div>
+          <el-icon :size="32" class="empty-icon"><Select /></el-icon>
           <p class="empty-title">{{ t('systemUser.role.emptyTitle') }}</p>
           <p class="empty-desc">{{ t('systemUser.role.emptyDesc') }}</p>
         </div>
-      </div>
+      </section>
     </div>
 
-    <!-- Modern Dialog -->
-    <el-dialog 
-      v-model="roleDialogVisible" 
-      :title="roleDialogTitle" 
-      width="420px" 
+    <!-- Role Edit Dialog -->
+    <el-dialog
+      v-model="roleDialogVisible"
+      width="460px"
       destroy-on-close
-      class="modern-dialog"
+      align-center
+      class="role-edit-dialog"
       :close-on-click-modal="false"
+      :show-close="false"
     >
-      <el-form :model="roleForm" :rules="roleFormRules" ref="roleFormRef" label-width="90px" label-position="left">
-        <el-form-item :label="t('systemUser.role.formRoleName')" prop="name">
-          <el-input v-model="roleForm.name" :placeholder="t('systemUser.role.formRoleNamePlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('systemUser.role.formDesc')">
-          <el-input v-model="roleForm.description" type="textarea" :rows="2" :placeholder="t('systemUser.role.formDescPlaceholder')" />
-        </el-form-item>
-      </el-form>
+      <template #header>
+        <div class="role-dialog-hero">
+          <button type="button" class="role-dialog-close" :aria-label="t('systemUser.role.cancel')" @click="roleDialogVisible = false">
+            <el-icon><Close /></el-icon>
+          </button>
+          <div class="role-dialog-hero-row">
+            <div class="role-dialog-avatar" :style="{ background: roleDialogAvatarColor }">
+              {{ roleDialogInitial }}
+            </div>
+            <div class="role-dialog-titles">
+              <h3 class="role-dialog-title">{{ roleDialogTitle }}</h3>
+              <p class="role-dialog-subtitle">{{ roleDialogSubtitle }}</p>
+            </div>
+            <div class="role-dialog-badges">
+              <span v-if="roleForm.is_system" class="dlg-badge system">{{ t('systemUser.role.systemRole') }}</span>
+              <span v-if="roleForm.is_super_admin" class="dlg-badge admin">{{ t('systemUser.role.superAdminBadge') }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="role-dialog-body">
+        <el-form
+          :model="roleForm"
+          :rules="roleFormRules"
+          ref="roleFormRef"
+          label-position="top"
+          class="role-dialog-form"
+          @submit.prevent="handleRoleSubmit"
+        >
+          <el-form-item :label="t('systemUser.role.formRoleName')" prop="name">
+            <el-input
+              v-model="roleForm.name"
+              :placeholder="t('systemUser.role.formRoleNamePlaceholder')"
+              clearable
+              class="field-input"
+            />
+          </el-form-item>
+          <el-form-item :label="t('systemUser.role.formRoleCode')" prop="code">
+            <el-input
+              v-model="roleForm.code"
+              :placeholder="t('systemUser.role.formRoleCodePlaceholder')"
+              clearable
+              class="field-input code-input"
+            />
+            <p class="field-hint">{{ t('systemUser.role.formRoleCodeHint') }}</p>
+          </el-form-item>
+          <el-form-item :label="t('systemUser.role.formDesc')">
+            <el-input
+              v-model="roleForm.description"
+              type="textarea"
+              :rows="2"
+              :placeholder="t('systemUser.role.formDescPlaceholder')"
+              resize="none"
+              class="field-textarea"
+            />
+          </el-form-item>
+
+          <div class="privilege-row" :class="{ 'is-active': roleForm.is_super_admin }">
+            <div class="privilege-row-main">
+              <el-icon class="privilege-icon"><StarFilled /></el-icon>
+              <div class="privilege-row-text">
+                <span class="privilege-label">{{ t('systemUser.role.formSuperAdmin') }}</span>
+                <span class="privilege-hint">{{ t('systemUser.role.formSuperAdminHint') }}</span>
+              </div>
+              <el-switch v-model="roleForm.is_super_admin" class="privilege-switch" />
+            </div>
+            <div v-if="roleForm.is_super_admin" class="privilege-alert">
+              <el-icon><WarningFilled /></el-icon>
+              <span>{{ t('systemUser.role.formSuperAdminWarn') }}</span>
+            </div>
+          </div>
+        </el-form>
+      </div>
+
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="roleDialogVisible = false">{{ t('systemUser.role.cancel') }}</el-button>
-          <el-button type="primary" @click="handleRoleSubmit" :loading="roleSubmitting">
+        <div class="role-dialog-footer">
+          <el-button class="btn-cancel" @click="roleDialogVisible = false">
+            {{ t('systemUser.role.cancel') }}
+          </el-button>
+          <el-button type="primary" class="btn-submit" :loading="roleSubmitting" @click="handleRoleSubmit">
             <el-icon v-if="!roleSubmitting"><Check /></el-icon>
-            {{ t('systemUser.role.save') }}
+            {{ roleForm.id ? t('systemUser.role.save') : t('systemUser.role.formCreateBtn') }}
           </el-button>
         </div>
       </template>
@@ -326,7 +366,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Key, List, Edit, Delete, Setting, Check, Menu, Operation, DataAnalysis, InfoFilled, Select, User, OfficeBuilding, HomeFilled, Grid } from '@element-plus/icons-vue'
+import { Plus, Key, List, Edit, Delete, Setting, Check, Menu, Operation, DataAnalysis, InfoFilled, Select, User, OfficeBuilding, HomeFilled, Grid, Close, StarFilled, WarningFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
 import type { Role, RoleListItem, OperationPermission } from '@/api/system'
@@ -363,11 +403,6 @@ const getRoleColor = (name: string) => {
   return roleColors[idx]
 }
 
-// Row class for selected role
-const roleRowClassName = ({ row }: { row: RoleListItem }) => {
-  return selectedRole.value?.id === row.id ? 'row-selected' : ''
-}
-
 const activeTab = ref('menu')
 const dataScope = ref<'self' | 'department' | 'department_below' | 'all' | 'custom'>('department')
 const customDepartments = ref<string[]>([])
@@ -377,9 +412,20 @@ const rolesLoading = ref(false)
 const menuTreeLoading = ref(false)
 const saveLoading = ref(false)
 const roleDialogVisible = ref(false)
-const roleDialogTitle = ref('')
 const roleSubmitting = ref(false)
 const roleFormRef = ref<FormInstance>()
+
+const roleDialogTitle = computed(() =>
+  roleForm.value.id ? t('systemUser.role.formEditTitle') : t('systemUser.role.formAddTitle'),
+)
+const roleDialogSubtitle = computed(() =>
+  roleForm.value.id ? t('systemUser.role.formDialogEditDesc') : t('systemUser.role.formDialogAddDesc'),
+)
+const roleDialogInitial = computed(() => {
+  const n = roleForm.value.name.trim()
+  return n ? n.charAt(0).toUpperCase() : '?'
+})
+const roleDialogAvatarColor = computed(() => getRoleColor(roleForm.value.name || '?'))
 
 const roleList = ref<RoleListItem[]>([])
 const selectedRole = ref<Role | null>(null)
@@ -411,9 +457,26 @@ function collapseAllMenuNodes() {
 const departmentOptions = ref<{ id: number; name: string }[]>([])
 const operationPermissions = ref<OperationPermission[]>([])
 
-const roleForm = ref({ id: 0, name: '', description: '' })
+const roleForm = ref({ id: 0, name: '', code: '', description: '', is_super_admin: false, is_system: false })
 const roleFormRules = computed<FormRules>(() => ({
   name: [{ required: true, message: t('systemUser.role.validationRoleName'), trigger: 'blur' }],
+  code: [
+    {
+      validator: (_rule, value, callback) => {
+        const v = (value ?? '').trim()
+        if (!v) {
+          callback()
+          return
+        }
+        if (!/^[a-z][a-z0-9_]{0,49}$/.test(v)) {
+          callback(new Error(t('systemUser.role.validationRoleCode')))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
 }))
 
 async function fetchRoles() {
@@ -484,15 +547,25 @@ async function handleRoleSelect(row: RoleListItem | null) {
 }
 
 const handleAddRole = () => {
-  roleDialogTitle.value = t('systemUser.role.formAddTitle')
-  roleForm.value = { id: 0, name: '', description: '' }
+  roleForm.value = { id: 0, name: '', code: '', description: '', is_super_admin: false, is_system: false }
   roleDialogVisible.value = true
 }
 
-const handleEditRole = (row: RoleListItem) => {
-  roleDialogTitle.value = t('systemUser.role.formEditTitle')
-  roleForm.value = { id: row.id, name: row.name, description: '' }
-  roleDialogVisible.value = true
+const handleEditRole = async (row: RoleListItem) => {
+  try {
+    const role = (await systemApi.getRole(row.id)) as unknown as Role
+    roleForm.value = {
+      id: role.id,
+      name: role.name,
+      code: role.code ?? '',
+      description: role.description ?? '',
+      is_super_admin: Boolean(role.is_super_admin),
+      is_system: role.is_system,
+    }
+    roleDialogVisible.value = true
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgRoleDetailError'))
+  }
 }
 
 const handleRoleSubmit = async () => {
@@ -503,13 +576,17 @@ const handleRoleSubmit = async () => {
     if (roleForm.value.id) {
       await systemApi.updateRole(roleForm.value.id, {
         name: roleForm.value.name,
+        code: roleForm.value.code.trim() || undefined,
         description: roleForm.value.description || undefined,
+        is_super_admin: roleForm.value.is_super_admin,
       })
       ElMessage.success(t('systemUser.role.msgSaveSuccess'))
     } else {
       await systemApi.createRole({
         name: roleForm.value.name,
+        code: roleForm.value.code.trim() || undefined,
         description: roleForm.value.description || undefined,
+        is_super_admin: roleForm.value.is_super_admin,
       })
       ElMessage.success(t('systemUser.role.msgCreateSuccess'))
     }
@@ -544,6 +621,10 @@ const handleSavePermission = async () => {
   const menu_permissions = checkedCodes
     .map((code) => codeToId.get(code))
     .filter((id): id is number => id != null && id > 0)
+  if (checkedCodes.length > 0 && menu_permissions.length === 0) {
+    ElMessage.warning(t('systemUser.role.msgMenuPermEmptyWarn'))
+    return
+  }
   saveLoading.value = true
   try {
     await systemApi.updateRole(selectedRole.value.id, {
@@ -570,108 +651,104 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Base Layout */
 .role-permission {
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
-  min-height: 100vh;
+  padding: 10px 12px;
+  background: #eef2f7;
+  min-height: calc(100vh - 48px);
+  box-sizing: border-box;
 }
 
-/* Modern Gradient Header */
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 16px 24px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #5b6fd6 0%, #7c3aed 100%);
+  box-shadow: 0 4px 14px rgba(91, 111, 214, 0.28);
 }
 
-.header-content {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
 }
 
-.header-icon {
-  width: 48px;
-  height: 48px;
+.header-icon-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .header-text h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
-  color: white;
-  letter-spacing: -0.5px;
+  color: #fff;
+  line-height: 1.25;
 }
 
 .header-text .subtitle {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.header-stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  padding: 10px 20px;
-  border-radius: 10px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 50px;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: white;
-}
-
-.stat-value.highlight { color: #a5f3fc; }
-
-.stat-label {
+  margin: 1px 0 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.3;
 }
 
-.stat-divider {
-  width: 1px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.2);
+.header-chips {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-/* Two Column Grid Layout */
+.h-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 11px;
+}
+
+.h-chip strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.h-chip em {
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.h-chip.accent {
+  background: rgba(255, 255, 255, 0.24);
+}
+
 .layout-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 12px;
-  height: calc(100vh - 140px);
+  grid-template-columns: 272px minmax(0, 1fr);
+  gap: 8px;
+  height: calc(100vh - 108px);
+  min-height: 420px;
 }
 
-/* Panel Styles */
 .role-panel,
 .permission-panel {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -679,80 +756,134 @@ onMounted(async () => {
 
 .panel-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
+  min-height: 40px;
 }
 
 .panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.panel-title .el-icon,
+.panel-title.muted .el-icon {
+  color: #6366f1;
+  font-size: 15px;
+}
+
+.panel-title.muted {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.panel-title-group {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  color: #1e293b;
-  font-size: 14px;
+  min-width: 0;
 }
 
-.panel-title .el-icon {
-  color: #667eea;
-}
-
-.panel-subtitle {
+.selected-role-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
   font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.selected-role-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.selected-role-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-role-sub {
+  font-size: 10px;
   color: #64748b;
-  font-weight: 400;
-  margin-left: 4px;
+  line-height: 1.2;
 }
 
-.panel-subtitle::before {
-  content: '—';
-  margin-right: 6px;
-}
-
-.text-muted {
-  color: #94a3b8;
-  font-weight: 400;
+.btn-save,
+.btn-add-sm {
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  font-weight: 600;
 }
 
 .panel-body {
   flex: 1;
+  overflow: hidden;
+}
+
+.role-list-wrap {
   overflow-y: auto;
-  padding: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-/* Role List Styles */
-.role-panel .panel-body :deep(.el-table) {
-  --el-table-border-color: transparent;
+.role-card {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.role-panel .panel-body :deep(.el-table td.el-table__cell) {
-  padding: 8px 6px;
-  border-bottom: 1px solid #f1f5f9;
+.role-card:hover {
+  background: #f1f5f9;
 }
 
-.role-panel .panel-body :deep(.el-table__row:hover > td) {
-  background-color: #f1f5f9 !important;
+.role-card.active {
+  background: linear-gradient(90deg, #eef2ff, #f5f3ff);
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
-.role-panel .panel-body :deep(.row-selected > td) {
-  background-color: #ede9fe !important;
-}
-
-.role-name-cell {
+.role-card-main {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .role-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -760,159 +891,178 @@ onMounted(async () => {
 }
 
 .role-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.role-name-row {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 6px;
 }
 
 .role-name {
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: #1e293b;
-  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.role-code {
+  font-size: 9px;
+  color: #64748b;
+  font-family: ui-monospace, monospace;
 }
 
 .role-badge {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 4px;
   background: #e0f2fe;
   color: #0369a1;
-  border-radius: 4px;
-  width: fit-content;
+  line-height: 16px;
+}
+
+.role-badge.admin {
+  background: #fef3c7;
+  color: #b45309;
 }
 
 .user-count-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  padding: 2px 6px;
-  background: #f1f5f9;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   color: #64748b;
+  background: #f1f5f9;
+  padding: 0 5px;
+  border-radius: 4px;
+  line-height: 16px;
+  flex-shrink: 0;
 }
 
-.btn-add-sm {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  font-size: 12px;
-  padding: 6px 12px;
-}
-
-/* Action Buttons */
-.action-cell {
+.role-card-actions {
   display: flex;
-  gap: 4px;
-  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity 0.15s;
 }
 
-.action-cell :deep(.el-button.is-circle) {
-  width: 26px;
-  height: 26px;
-  transition: all 0.2s;
+.role-card:hover .role-card-actions,
+.role-card.active .role-card-actions {
+  opacity: 1;
 }
 
-.action-cell :deep(.el-button.is-circle:hover) {
-  transform: translateY(-1px);
+.role-list-empty {
+  padding: 20px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
-.btn-disabled {
-  opacity: 0.4;
-  cursor: not-allowed !important;
+.perm-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-/* Modern Tabs */
-.modern-tabs {
+.compact-tabs {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.modern-tabs :deep(.el-tabs__header) {
+.compact-tabs :deep(.el-tabs__header) {
   margin: 0;
-  padding: 0 16px;
-  background: #f8fafc;
+  padding: 6px 8px 0;
+  background: #fff;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.modern-tabs :deep(.el-tabs__nav-wrap::after) {
+.compact-tabs :deep(.el-tabs__nav-wrap::after) {
   display: none;
 }
 
-.modern-tabs :deep(.el-tabs__item) {
-  height: 44px;
-  padding: 0 16px;
+.compact-tabs :deep(.el-tabs__item) {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
-.modern-tabs :deep(.el-tabs__content) {
+.compact-tabs :deep(.el-tabs__content) {
   flex: 1;
   overflow: hidden;
 }
 
-.modern-tabs :deep(.el-tab-pane) {
+.compact-tabs :deep(.el-tab-pane) {
   height: 100%;
   overflow-y: auto;
 }
 
 .tab-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tab-content {
-  padding: 16px;
+  padding: 8px 10px 10px;
 }
 
-/* Menu Permission */
 .menu-permission-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   height: 100%;
-  padding-bottom: 8px;
 }
 
-.menu-permission-toolbar {
+.menu-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
 }
 
-.menu-permission-hint {
-  display: flex;
+.menu-hint {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #475569;
-  line-height: 1.4;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.3;
+  min-width: 0;
 }
 
-.menu-permission-hint .el-icon {
-  color: #667eea;
+.menu-hint .el-icon {
+  color: #6366f1;
   flex-shrink: 0;
 }
 
-.menu-permission-actions {
+.menu-toolbar-btns {
   display: flex;
-  gap: 4px;
   flex-shrink: 0;
 }
 
 .menu-tree-wrap {
   flex: 1;
-  min-height: 280px;
-  padding: 12px;
-  background: #fff;
+  min-height: 200px;
+  padding: 6px 8px;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: auto;
+  background: #fafbfc;
 }
 
 .permission-tree {
@@ -921,226 +1071,480 @@ onMounted(async () => {
 }
 
 .permission-tree :deep(.el-tree-node__content) {
-  height: 36px;
-  border-radius: 8px;
-  margin: 2px 0;
-  padding-right: 8px;
-}
-
-.permission-tree :deep(.el-tree-node__expand-icon) {
-  color: #94a3b8;
+  height: 30px;
+  border-radius: 6px;
+  margin: 1px 0;
 }
 
 .permission-tree :deep(.el-tree > .el-tree-node > .el-tree-node__content) {
-  background: linear-gradient(90deg, #f8fafc 0%, #fff 100%);
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
   font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.permission-tree :deep(.el-tree > .el-tree-node > .el-tree-node__content:hover) {
-  background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+  margin-bottom: 4px;
 }
 
 .permission-tree-node {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
 
-.permission-tree-node.is-root .node-label {
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.permission-tree-node.is-missing {
-  opacity: 0.72;
-}
-
 .permission-tree-node .node-icon {
-  color: #667eea;
+  color: #6366f1;
+  font-size: 14px;
   flex-shrink: 0;
-}
-
-.permission-tree-node.is-root .node-icon {
-  color: #764ba2;
 }
 
 .permission-tree-node .node-label {
-  min-width: 0;
+  font-size: 12px;
+  color: #334155;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #334155;
-  font-size: 13px;
+}
+
+.permission-tree-node.is-root .node-label {
+  font-weight: 600;
+}
+
+.permission-tree-node.is-missing {
+  opacity: 0.7;
 }
 
 .permission-tree-node .sync-tag {
-  flex-shrink: 0;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
-/* Operation Permissions */
-.operation-hint {
+.inline-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
   background: #f0f9ff;
-  border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: #0369a1;
-  margin-bottom: 12px;
+  line-height: 1.35;
 }
 
-.module-name {
-  font-weight: 500;
-  color: #334155;
+.inline-hint .el-icon {
+  flex-shrink: 0;
 }
 
-/* Data Scope Section */
-.data-scope-section {
-  margin-bottom: 20px;
+.op-matrix {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 11px;
 }
 
-.section-label {
-  display: block;
-  font-size: 13px;
+.op-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1.4fr) repeat(5, minmax(44px, 1fr));
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.op-row:last-child {
+  border-bottom: none;
+}
+
+.op-row.op-head {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  font-size: 10px;
+  padding: 6px 8px;
+}
+
+.op-row:not(.op-head):hover {
+  background: #fafbfc;
+}
+
+.op-module {
   font-weight: 600;
   color: #334155;
-  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.scope-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-}
-
-.scope-option {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 10px;
-  background: #f8fafc;
-  border: 2px solid transparent;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
+.op-row > span:not(.op-module) {
   text-align: center;
 }
 
-.scope-option:hover {
+.op-row :deep(.el-checkbox) {
+  height: auto;
+}
+
+.data-tab .section-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.scope-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px;
+}
+
+.scope-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.scope-chip:hover {
+  border-color: #cbd5e1;
   background: #f1f5f9;
-  border-color: #e2e8f0;
 }
 
-.scope-option.active {
-  background: #ede9fe;
+.scope-chip.active {
   border-color: #8b5cf6;
+  background: #f5f3ff;
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.2);
 }
 
-.scope-option .el-icon {
+.scope-chip .el-icon {
+  font-size: 14px;
   color: #64748b;
 }
 
-.scope-option.active .el-icon {
+.scope-chip.active .el-icon {
   color: #7c3aed;
 }
 
-.scope-label {
-  font-weight: 600;
+.scope-chip-label {
+  font-size: 11px;
+  font-weight: 700;
   color: #1e293b;
-  font-size: 13px;
+  line-height: 1.2;
 }
 
-.scope-desc {
-  font-size: 11px;
+.scope-chip-desc {
+  font-size: 9px;
   color: #64748b;
+  line-height: 1.25;
 }
 
 .custom-dept-section {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
 }
 
-/* Empty State */
+.custom-dept-select {
+  width: 100%;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 40px;
+  padding: 24px 16px;
   text-align: center;
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-}
-
-.empty-icon .el-icon {
   color: #94a3b8;
+  margin-bottom: 8px;
 }
 
 .empty-title {
-  font-size: 16px;
+  margin: 0 0 4px;
+  font-size: 14px;
   font-weight: 600;
   color: #475569;
-  margin: 0 0 8px;
 }
 
 .empty-desc {
-  font-size: 13px;
+  margin: 0;
+  font-size: 11px;
   color: #94a3b8;
-  margin: 0;
+  max-width: 280px;
+  line-height: 1.45;
 }
 
-/* Dialog Styles */
-.modern-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+/* Role Edit Dialog */
+.role-edit-dialog :deep(.el-dialog) {
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.15);
+  padding: 0;
 }
 
-.modern-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 16px 20px;
+.role-edit-dialog :deep(.el-dialog__header) {
+  padding: 0;
   margin: 0;
 }
 
-.modern-dialog :deep(.el-dialog__title) {
-  color: white;
-  font-weight: 600;
+.role-edit-dialog :deep(.el-dialog__body) {
+  padding: 0;
 }
 
-.modern-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+.role-edit-dialog :deep(.el-dialog__footer) {
+  padding: 10px 16px 14px;
+  margin: 0;
+  border-top: 1px solid #e2e8f0;
 }
 
-.modern-dialog :deep(.el-dialog__body) {
-  padding: 24px;
+.role-dialog-hero {
+  position: relative;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #5b6fd6 0%, #7c3aed 100%);
+  color: #fff;
 }
 
-.dialog-footer {
+.role-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.role-dialog-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.role-dialog-hero-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 28px;
+}
+
+.role-dialog-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.role-dialog-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.role-dialog-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.role-dialog-subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-dialog-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dlg-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.dlg-badge.system {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dlg-badge.admin {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.role-dialog-body {
+  padding: 12px 16px 4px;
+}
+
+.role-dialog-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.role-dialog-form :deep(.el-form-item__label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  padding-bottom: 4px;
+  line-height: 1.2;
+}
+
+.field-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.role-dialog-form :deep(.field-input .el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+.role-dialog-form :deep(.field-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+.role-dialog-form :deep(.code-input .el-input__inner) {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.role-dialog-form :deep(.field-textarea .el-textarea__inner) {
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.privilege-row {
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.privilege-row.is-active {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.privilege-row-main {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.dialog-footer :deep(.el-button) {
+.privilege-icon {
+  color: #d97706;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.privilege-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.privilege-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.privilege-hint {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.privilege-switch {
+  flex-shrink: 0;
+}
+
+.privilege-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.privilege-alert .el-icon {
+  margin-top: 1px;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.role-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.role-dialog-footer .btn-cancel {
   border-radius: 8px;
-  padding: 10px 20px;
+  padding: 8px 16px;
+}
+
+.role-dialog-footer .btn-submit {
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+@media (max-width: 520px) {
+  .role-edit-dialog :deep(.el-dialog) {
+    width: calc(100vw - 20px) !important;
+  }
+
+  .role-dialog-subtitle {
+    white-space: normal;
+  }
 }
 
 /* Transitions */
@@ -1155,47 +1559,46 @@ onMounted(async () => {
   transform: translateY(-10px);
 }
 
-/* Responsive Design */
 @media (max-width: 1024px) {
   .layout-grid {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 240px minmax(0, 1fr);
   }
-  
-  .header-stats {
+
+  .header-chips {
     display: none;
   }
 }
 
 @media (max-width: 768px) {
   .role-permission {
-    padding: 12px;
+    padding: 8px;
   }
-  
+
   .page-header {
     flex-direction: column;
-    gap: 12px;
-    text-align: center;
+    align-items: flex-start;
   }
-  
-  .header-content {
-    flex-direction: column;
-  }
-  
+
   .layout-grid {
     grid-template-columns: 1fr;
     height: auto;
   }
-  
+
   .role-panel {
-    max-height: 300px;
+    max-height: 220px;
   }
-  
+
   .permission-panel {
-    min-height: 400px;
+    min-height: 360px;
   }
-  
-  .scope-options {
-    grid-template-columns: repeat(2, 1fr);
+
+  .scope-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .op-row {
+    grid-template-columns: minmax(80px, 1.2fr) repeat(5, minmax(36px, 1fr));
+    font-size: 10px;
   }
 }
 </style>

@@ -151,7 +151,7 @@ import type { LocaleType } from '@/i18n'
 import { formatInteger } from '@/utils/formatInteger'
 import { canAccessPath, isAdminUser } from '@/utils/menuPermissions'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
-import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
+import { displayUserRoleName } from '@/utils/userRoleDisplay'
 import type { InventoryStats } from '@/types/erp/inventory'
 import {
   Sell, Box, Document, List, Grid,
@@ -170,7 +170,7 @@ const displayName = computed(() => {
 
 const avatarLetter = computed(() => avatarLetterFor(displayName.value))
 const avatarGradient = computed(() => avatarGradientFor(displayName.value))
-const roleDisplay = computed(() => builtinRoleDisplayName(userStore.user?.role, t))
+const roleDisplay = computed(() => displayUserRoleName(userStore.user, t))
 const departmentName = computed(() => userStore.user?.department_name?.trim() || '')
 const welcomeSuffix = computed(() => t('dashboard.welcomeSuffix'))
 

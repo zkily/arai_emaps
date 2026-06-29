@@ -1,6 +1,5 @@
 import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
 
-/** 組み込みロールコード → roles テーブルの日本語名（backend ROLE_NAME_TO_CODE と対応） */
 export const BUILTIN_ROLE_CODE_TO_DB_NAME: Record<string, string> = {
   admin: '管理者',
   user: '一般ユーザー',
@@ -23,9 +22,20 @@ export function resolveUserRoleId(
 }
 
 export function displayUserRoleName(
-  row: { role_name?: string | null; role: string },
-  t: (key: string) => string,
+  row: { role_name?: string | null; role?: string | null } | null | undefined,
+  t?: (key: string) => string,
 ): string {
-  if (row.role_name) return row.role_name
-  return builtinRoleDisplayName(row.role, t)
+  if (!row) return '—'
+  const name = row.role_name?.trim()
+  if (name) return name
+  const code = row.role?.trim()
+  if (!code) return '—'
+  if (BUILTIN_ROLE_CODE_TO_DB_NAME[code]) {
+    return BUILTIN_ROLE_CODE_TO_DB_NAME[code]
+  }
+  if (t) {
+    const localized = builtinRoleDisplayName(code, t)
+    if (localized !== code) return localized
+  }
+  return code
 }

@@ -95,9 +95,11 @@ class OperationPermission(BaseModel):
 
 class RoleBase(BaseModel):
     name: str = Field(..., max_length=100, description="ロール名")
+    code: Optional[str] = Field(None, max_length=50, description="ロールコード（英小文字・数字・アンダースコア）")
     description: Optional[str] = Field(None, description="説明")
     data_scope: DataScope = Field(DataScope.department, description="データ参照範囲")
     custom_departments: Optional[List[str]] = Field(None, description="カスタム部門リスト")
+    is_super_admin: bool = Field(False, description="システム管理者（全メニュー・管理API）")
 
 
 class RoleCreate(RoleBase):
@@ -107,12 +109,14 @@ class RoleCreate(RoleBase):
 
 class RoleUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
+    code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
     data_scope: Optional[DataScope] = None
     custom_departments: Optional[List[str]] = None
     menu_permissions: Optional[List[int]] = None
     operation_permissions: Optional[List[OperationPermission]] = None
     is_active: Optional[bool] = None
+    is_super_admin: Optional[bool] = None
 
 
 class RoleResponse(RoleBase):
@@ -132,7 +136,9 @@ class RoleResponse(RoleBase):
 class RoleListResponse(BaseModel):
     id: int
     name: str
+    code: Optional[str] = None
     is_system: bool
+    is_super_admin: bool = False
     user_count: int = 0
     
     class Config:

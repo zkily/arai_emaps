@@ -485,6 +485,7 @@ import {
   Bell, Refresh, Plus, User, View, Message, Connection, Document, Setting,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { isAdminUser } from '@/utils/menuPermissions'
 import {
   getNotificationSettings,
   updateNotificationSetting,
@@ -511,7 +512,7 @@ import {
 import { runInventoryStagnationAutoPatrol } from '@/api/database'
 
 const userStore = useUserStore()
-const isAdmin = computed(() => userStore.user?.role === 'admin')
+const isAdmin = computed(() => isAdminUser(userStore.user))
 
 const lineWebhookUrl = computed(() => {
   if (typeof window === 'undefined') return '/api/line/webhook'

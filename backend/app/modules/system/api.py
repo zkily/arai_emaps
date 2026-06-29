@@ -3,9 +3,10 @@
 ユーザー管理、組織管理、権限・ロール管理
 """
 import logging
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, delete
+from sqlalchemy import select, func, or_, delete, update
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
@@ -14,6 +15,19 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
+from app.modules.auth.permission_service import (
+    assert_super_admin,
+    user_is_super_admin,
+)
+from app.modules.auth.data_scope_service import (
+    apply_scope_to_users_query,
+    resolve_user_data_scope,
+)
+from app.modules.auth.role_codes import (
+    LEGACY_ROLE_NAME_TO_CODE,
+    legacy_role_code_from_name,
+    user_role_code_for_role,
+)
 from app.modules.system.models import (
     Organization, Role, Menu, RoleMenuPermission, 
     RoleOperationPermission, UserRole
@@ -32,16 +46,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ロール名 -> 認証用ロールコード（User.role）
-ROLE_NAME_TO_CODE = {
-    "管理者": "admin",
-    "一般ユーザー": "user",
-    "マネージャー": "manager",
-    "作業者": "worker",
-    "ゲスト": "guest",
-    "閲覧者": "viewer",
-}
-ROLE_CODE_TO_NAME = {code: name for name, code in ROLE_NAME_TO_CODE.items()}
+ROLE_CODE_TO_NAME = {code: name for name, code in LEGACY_ROLE_NAME_TO_CODE.items()}
+_ROLE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
+
+
+def _normalize_role_code(code: str | None) -> str | None:
+    if code is None:
+        return None
+    c = code.strip().lower()
+    return c or None
+
+
+async def _ensure_role_code_unique(
+    db: AsyncSession, code: str, exclude_role_id: int | None = None
+) -> None:
+    q = select(Role.id).where(Role.code == code)
+    if exclude_role_id is not None:
+        q = q.where(Role.id != exclude_role_id)
+    if (await db.execute(q)).scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="このロールコードは既に使用されています")
+
+
+async def _sync_users_role_for_role(db: AsyncSession, role_id: int, role_code: str) -> None:
+    subq = select(UserRole.user_id).where(UserRole.role_id == role_id)
+    await db.execute(update(User).where(User.id.in_(subq)).values(role=role_code[:20]))
 
 
 async def _fetch_user_role_map(db: AsyncSession, user_ids: List[int]) -> dict:
@@ -69,15 +97,11 @@ async def get_users(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """ユーザー一覧を取得（管理者は全件、一般ユーザーは自部門のみ）"""
+    """ユーザー一覧を取得（roles.data_scope に基づくデータ範囲）"""
     query = select(User)
-    
-    # データ範囲: 管理者以外は自部門のみ
-    if current_user.role != "admin":
-        if getattr(current_user, "department_id", None) is not None:
-            query = query.where(User.department_id == current_user.department_id)
-        else:
-            query = query.where(User.id == current_user.id)  # 部門未設定時は自分のみ
+
+    scope = await resolve_user_data_scope(db, current_user)
+    query = apply_scope_to_users_query(query, scope, User)
     
     if keyword and keyword.strip():
         kw = f"%{keyword.strip()}%"
@@ -181,9 +205,7 @@ async def create_user(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """新規ユーザーを登録"""
-    # 権限チェック
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     # 重複チェック
     existing = await db.execute(
@@ -198,7 +220,7 @@ async def create_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定されたロールが見つかりません")
     if not role_obj.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無効なロールは割り当てできません")
-    role_code = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
+    role_code = user_role_code_for_role(role_obj)
 
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
@@ -260,7 +282,7 @@ async def update_user(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ユーザー情報を更新"""
-    if current_user.role != "admin" and current_user.id != user_id:
+    if not await user_is_super_admin(db, current_user) and current_user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="権限がありません")
     
     result = await db.execute(select(User).where(User.id == user_id))
@@ -291,7 +313,7 @@ async def update_user(
         if not role_obj.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無効なロールは割り当てできません")
         await db.execute(delete(UserRole).where(UserRole.user_id == user.id))
-        user.role = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
+        user.role = user_role_code_for_role(role_obj)
         db.add(UserRole(user_id=user.id, role_id=rid))
         assigned_role_id = rid
         assigned_role_name = role_obj.name
@@ -348,8 +370,7 @@ async def lock_user(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ユーザーをロック（自分自身はロック不可）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     if user_id == current_user.id:
         raise HTTPException(
@@ -377,8 +398,7 @@ async def unlock_user(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ユーザーロックを解除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -401,8 +421,7 @@ async def reset_user_password(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """管理者が指定した新しいパスワードでユーザーのパスワードを直接更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -491,8 +510,7 @@ async def create_organization(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """新規組織を作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     # 重複チェック
     existing = await db.execute(select(Organization).where(Organization.code == org_data.code))
@@ -516,8 +534,7 @@ async def update_organization(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """組織を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(Organization).where(Organization.id == org_id))
     org = result.scalar_one_or_none()
@@ -543,8 +560,7 @@ async def delete_organization(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """組織を削除（物理削除：DBから行を削除）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(Organization).where(Organization.id == org_id))
     org = result.scalar_one_or_none()
@@ -583,7 +599,9 @@ async def get_roles(
         role_list.append(RoleListResponse(
             id=role.id,
             name=role.name,
+            code=getattr(role, "code", None),
             is_system=role.is_system,
+            is_super_admin=bool(getattr(role, "is_super_admin", False)),
             user_count=user_count,
         ))
     
@@ -632,8 +650,10 @@ async def get_role(
     return RoleResponse(
         id=role.id,
         name=role.name,
+        code=getattr(role, "code", None),
         description=role.description,
         is_system=role.is_system,
+        is_super_admin=bool(getattr(role, "is_super_admin", False)),
         data_scope=role.data_scope,
         custom_departments=role.custom_departments,
         is_active=role.is_active,
@@ -645,6 +665,14 @@ async def get_role(
     )
 
 
+def _validate_role_code_format(code: str) -> None:
+    if not _ROLE_CODE_RE.match(code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ロールコードは英小文字・数字・アンダースコア（先頭は英字）のみ使用できます",
+        )
+
+
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED, summary="ロール作成")
 async def create_role(
     role_data: RoleCreate,
@@ -652,23 +680,32 @@ async def create_role(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """新規ロールを作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     # 重複チェック
     existing = await db.execute(select(Role).where(Role.name == role_data.name))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ロール名が既に使用されています")
-    
+
+    code = _normalize_role_code(role_data.code)
+    if code:
+        _validate_role_code_format(code)
+        await _ensure_role_code_unique(db, code)
+
     new_role = Role(
         name=role_data.name,
+        code=code,
         description=role_data.description,
         data_scope=role_data.data_scope.value,
         custom_departments=role_data.custom_departments,
         is_system=False,
+        is_super_admin=bool(role_data.is_super_admin),
     )
     db.add(new_role)
     await db.flush()
+    if not new_role.code:
+        new_role.code = f"role_{new_role.id}"
+        await _ensure_role_code_unique(db, new_role.code)
     
     # メニュー権限を追加
     for menu_id in role_data.menu_permissions:
@@ -694,8 +731,10 @@ async def create_role(
     return RoleResponse(
         id=new_role.id,
         name=new_role.name,
+        code=new_role.code,
         description=new_role.description,
         is_system=new_role.is_system,
+        is_super_admin=bool(new_role.is_super_admin),
         data_scope=new_role.data_scope,
         custom_departments=new_role.custom_departments,
         is_active=new_role.is_active,
@@ -715,8 +754,7 @@ async def update_role(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ロールを更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(Role)
@@ -733,9 +771,16 @@ async def update_role(
     
     # 基本情報更新
     update_data = role_data.model_dump(exclude_unset=True, exclude={"menu_permissions", "operation_permissions"})
+    if "code" in update_data:
+        code = _normalize_role_code(update_data.pop("code"))
+        if code:
+            _validate_role_code_format(code)
+            await _ensure_role_code_unique(db, code, exclude_role_id=role_id)
+            role.code = code
+            await _sync_users_role_for_role(db, role_id, code)
     if "data_scope" in update_data and update_data["data_scope"]:
         update_data["data_scope"] = update_data["data_scope"].value
-    
+
     for field, value in update_data.items():
         setattr(role, field, value)
     
@@ -794,8 +839,10 @@ async def update_role(
     return RoleResponse(
         id=role.id,
         name=role.name,
+        code=getattr(role, "code", None),
         description=role.description,
         is_system=role.is_system,
+        is_super_admin=bool(getattr(role, "is_super_admin", False)),
         data_scope=role.data_scope,
         custom_departments=role.custom_departments,
         is_active=role.is_active,
@@ -814,8 +861,7 @@ async def delete_role(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ロールを削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(Role).where(Role.id == role_id))
     role = result.scalar_one_or_none()
@@ -855,8 +901,7 @@ async def create_menu(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """新規メニューを登録（管理者のみ）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     existing = await db.execute(select(Menu).where(Menu.code == data.code))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"メニューコード '{data.code}' は既に存在します")
@@ -875,8 +920,7 @@ async def update_menu(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """メニューを更新（管理者のみ）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     result = await db.execute(select(Menu).where(Menu.id == menu_id))
     menu = result.scalar_one_or_none()
     if not menu:
@@ -895,8 +939,7 @@ async def delete_menu(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """メニューを削除（管理者のみ、子メニューは parent_id が NULL に）"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     result = await db.execute(select(Menu).where(Menu.id == menu_id))
     menu = result.scalar_one_or_none()
     if not menu:
@@ -913,8 +956,7 @@ async def sync_menus(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ルート定義（code 一覧）を DB に同期。既存は更新、新規は追加。code が DB にないものは削除しない。"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     # 既存メニューを code で取得
     result = await db.execute(select(Menu))
     existing_by_code = {m.code: m for m in result.scalars().all()}

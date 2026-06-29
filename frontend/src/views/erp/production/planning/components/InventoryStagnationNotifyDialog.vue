@@ -209,6 +209,7 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { isAdminUser } from '@/utils/menuPermissions'
 import {
   previewInventoryStagnationNotification,
   sendInventoryStagnationNotification,
@@ -231,7 +232,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
-const isAdmin = computed(() => userStore.user?.role === 'admin')
+const isAdmin = computed(() => isAdminUser(userStore.user))
 
 const visible = computed({
   get: () => props.modelValue,

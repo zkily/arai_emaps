@@ -256,7 +256,7 @@ import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
-import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
+import { displayUserRoleName } from '@/utils/userRoleDisplay'
 import { ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ja'
@@ -304,7 +304,7 @@ const userDisplayName = computed(() => {
 
 const userAvatarLetter = computed(() => avatarLetterFor(userDisplayName.value))
 const userAvatarGradient = computed(() => avatarGradientFor(userDisplayName.value))
-const userRoleDisplay = computed(() => builtinRoleDisplayName(userStore.user?.role, t))
+const userRoleDisplay = computed(() => displayUserRoleName(userStore.user, t))
 
 function openManualHome() {
   const resolved = router.resolve({ name: 'ManualHome' })

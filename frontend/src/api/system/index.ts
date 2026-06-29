@@ -118,7 +118,9 @@ export interface OrganizationUpdateParams {
 export interface RoleListItem {
   id: number
   name: string
+  code?: string | null
   is_system: boolean
+  is_super_admin?: boolean
   user_count: number
 }
 
@@ -134,8 +136,10 @@ export interface OperationPermission {
 export interface Role {
   id: number
   name: string
+  code?: string | null
   description: string | null
   is_system: boolean
+  is_super_admin: boolean
   data_scope: 'self' | 'department' | 'department_below' | 'all' | 'custom'
   custom_departments: string[] | null
   is_active: boolean
@@ -148,7 +152,9 @@ export interface Role {
 
 export interface RoleCreateParams {
   name: string
+  code?: string
   description?: string
+  is_super_admin?: boolean
   data_scope?: 'self' | 'department' | 'department_below' | 'all' | 'custom'
   custom_departments?: string[]
   menu_permissions?: number[]
@@ -157,7 +163,9 @@ export interface RoleCreateParams {
 
 export interface RoleUpdateParams {
   name?: string
+  code?: string
   description?: string
+  is_super_admin?: boolean
   data_scope?: 'self' | 'department' | 'department_below' | 'all' | 'custom'
   custom_departments?: string[]
   menu_permissions?: number[]

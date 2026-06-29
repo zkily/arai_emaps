@@ -26,6 +26,11 @@ from app.services.backup_paths import final_backup_storage_dir
 from app.services.full_database_backup import load_backup_run_preferences, perform_full_database_backup
 from app.services.mysql_backup import normalize_backup_storage_path, is_windows_posix_backup_placeholder
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.permission_service import assert_super_admin
+from app.modules.auth.data_scope_service import (
+    apply_scope_to_user_id_column,
+    resolve_user_data_scope,
+)
 from app.modules.auth.models import User
 from app.modules.system.settings_models import (
     OperationLog, ErrorLog, ApiLog,
@@ -70,9 +75,12 @@ async def get_operation_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """操作ログ一覧を取得"""
+    """操作ログ一覧を取得（roles.data_scope で user_id を絞り込み）"""
     try:
         query = select(OperationLog)
+
+        scope = await resolve_user_data_scope(db, current_user)
+        query = apply_scope_to_user_id_column(query, scope, OperationLog.user_id)
         
         if user:
             query = query.where(OperationLog.username.ilike(f"%{user}%"))
@@ -322,8 +330,7 @@ async def create_numbering_rule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """採番ルールを新規作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     # 重複チェック
     existing = await db.execute(
@@ -349,8 +356,7 @@ async def update_numbering_rule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """採番ルールを更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(NumberingRule).where(NumberingRule.id == rule_id)
@@ -376,8 +382,7 @@ async def delete_numbering_rule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """採番ルールを削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(NumberingRule).where(NumberingRule.id == rule_id)
@@ -535,8 +540,7 @@ async def create_approval_route(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """承認ルートを新規作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     route = ApprovalRoute(
         name=data.name,
@@ -573,8 +577,7 @@ async def update_approval_route(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """承認ルートを更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(ApprovalRoute)
@@ -611,8 +614,7 @@ async def delete_approval_route(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """承認ルートを削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(ApprovalRoute).where(ApprovalRoute.id == route_id)
@@ -754,8 +756,7 @@ async def create_workflow_definition(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ワークフロー定義を新規作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     definition = WorkflowDefinition(**data.model_dump())
     db.add(definition)
@@ -774,8 +775,7 @@ async def update_workflow_definition(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ワークフロー定義を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(WorkflowDefinition).where(WorkflowDefinition.id == definition_id)
@@ -799,8 +799,7 @@ async def delete_workflow_definition(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """ワークフロー定義を削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(WorkflowDefinition).where(WorkflowDefinition.id == definition_id)
@@ -836,8 +835,7 @@ async def update_notification_setting(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """通知設定を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(NotificationSetting).where(NotificationSetting.id == setting_id)
@@ -903,8 +901,7 @@ async def create_email_template(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """メールテンプレートを新規作成"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     template = EmailTemplate(**data.model_dump())
     db.add(template)
@@ -921,8 +918,7 @@ async def update_email_template(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """メールテンプレートを更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(EmailTemplate).where(EmailTemplate.id == template_id)
@@ -946,8 +942,7 @@ async def delete_email_template(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """メールテンプレートを削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(EmailTemplate).where(EmailTemplate.id == template_id)
@@ -993,8 +988,7 @@ async def create_notification_recipient(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """通知受信者を追加"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     if data.recipient_type not in ("user", "email", "role", "line"):
         raise HTTPException(status_code=400, detail="recipient_type が不正です")
     if data.recipient_type == "user" and not data.user_id:
@@ -1032,8 +1026,7 @@ async def update_notification_recipient(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """通知受信者を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     result = await db.execute(
         select(NotificationRecipient).where(NotificationRecipient.id == recipient_id)
     )
@@ -1054,8 +1047,7 @@ async def delete_notification_recipient(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """通知受信者を削除"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     result = await db.execute(
         select(NotificationRecipient).where(NotificationRecipient.id == recipient_id)
     )
@@ -1137,8 +1129,7 @@ async def update_integration_config(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """外部連携設定を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(IntegrationConfig).where(IntegrationConfig.service_type == service_type)
@@ -1315,8 +1306,7 @@ async def import_data(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """マスター CSV を取り込み（users は未対応）。"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
 
     raw = await file.read()
     history = ImportExportHistory(
@@ -1375,8 +1365,7 @@ async def export_data(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """マスターを CSV / Excel でダウンロード（DB 現データ）。"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
 
     fmt = (data.format or "csv").lower()
     if fmt not in ("csv", "xlsx"):
@@ -1502,8 +1491,7 @@ async def update_backup_settings(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """バックアップ設定を更新"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(select(BackupSetting).where(BackupSetting.id == 1))
     setting = result.scalar_one_or_none()
@@ -1568,8 +1556,7 @@ async def create_manual_backup(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """mysqldump で DB 全件をバックアップし、設定の保存先（既定は社内共有フォルダ）へ書き込む。"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
 
     _ = data  # include_files 等は将来拡張用
 
@@ -1595,8 +1582,7 @@ async def restore_from_backup(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """バックアップから復元"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     result = await db.execute(
         select(BackupHistory).where(BackupHistory.id == backup_id)
@@ -1626,8 +1612,7 @@ async def download_backup(
     if not backup:
         raise HTTPException(status_code=404, detail="バックアップが見つかりません")
 
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
 
     path = normalize_backup_storage_path(os.path.expandvars(backup.file_path or ""))
     if not path or not os.path.isfile(path):
@@ -1648,8 +1633,7 @@ async def reset_data(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """データを初期化"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    await assert_super_admin(db, current_user)
     
     if data.confirmation != "初期化する":
         raise HTTPException(status_code=400, detail="確認文字列が正しくありません")

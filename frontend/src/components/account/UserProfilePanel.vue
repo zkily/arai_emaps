@@ -84,6 +84,15 @@
         </div>
         <div class="user-profile-panel__field">
           <div class="user-profile-panel__field-icon" aria-hidden="true">
+            <el-icon><InfoFilled /></el-icon>
+          </div>
+          <div class="user-profile-panel__field-body">
+            <span class="user-profile-panel__field-label">{{ t('profilePage.dataScope') }}</span>
+            <span class="user-profile-panel__field-value">{{ dataScopeDisplay }}</span>
+          </div>
+        </div>
+        <div class="user-profile-panel__field">
+          <div class="user-profile-panel__field-icon" aria-hidden="true">
             <el-icon><CircleCheck /></el-icon>
           </div>
           <div class="user-profile-panel__field-body">
@@ -134,7 +143,8 @@ import {
 import { getUserInfo } from '@/modules/auth/api'
 import { useUserStore } from '@/modules/auth/stores/user'
 import type { User } from '@/modules/auth/stores/user'
-import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
+import { displayUserRoleName } from '@/utils/userRoleDisplay'
+import { displayUserDataScope } from '@/utils/dataScope'
 
 const props = withDefaults(
   defineProps<{
@@ -167,7 +177,8 @@ const departmentDisplay = computed(() => {
   return name || '—'
 })
 
-const roleDisplay = computed(() => builtinRoleDisplayName(displayUser.value?.role, t))
+const roleDisplay = computed(() => displayUserRoleName(displayUser.value, t))
+const dataScopeDisplay = computed(() => displayUserDataScope(displayUser.value, t))
 
 function rememberMeFlag(): boolean {
   return localStorage.getItem('smart_emap_remember_me') === 'true'

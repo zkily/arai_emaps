@@ -191,15 +191,16 @@ menus
 
 ## 7. ルーティング・認証
 
-- システム API は `verify_token_and_get_user` で認証。管理者専用操作（ユーザー/組織/ロールの作成・削除・ロック・パスワード再設定など）は `current_user.role == "admin"` をチェック。
-- ユーザー一覧のデータ範囲: 管理者は全件、それ以外は `department_id` が自ユーザーと一致するユーザーのみ（未設定時は自分自身のみ）。
+- システム API は `verify_token_and_get_user` で認証。管理者専用操作は `user_is_super_admin()` で判定。
+- **データ範囲**（`roles.data_scope`）は `app/modules/auth/data_scope_service.py` で解決し、一覧 API に適用（ユーザー一覧・操作ログ等）。ログイン payload に `data_scope` を含む。
+- ユーザー一覧: `resolve_user_data_scope` → `apply_scope_to_users_query`（`self` / `department` / `department_below` / `custom` / `all`）。
 
 ---
 
 ## 8. 補足
 
 - **組織の所属ユーザー**: 組織詳細で「所属ユーザー」を表示する専用 API は現状ない。ユーザー一覧の `department_id` で該当組織を指定して一覧を取得する運用。
-- **ロールと User.role**: ロールテーブル（roles）は「ロール名」と権限を保持し、`user_roles` でユーザーと多対多。一方、`users.role` には認証用のコード（admin/user/manager/worker/guest/viewer）が格納され、API では `ROLE_NAME_TO_CODE` でロール名とコードを対応付けている。
+- **ロールと User.role（路线 B）**: 権限の正は **`roles` + `user_roles`**。`roles.code` を `users.role` に同期（最大 20 文字）。システム全体の管理者は `roles.is_super_admin=1`（迁移 66 後、従来の「管理者」ロールは自動設定）。カスタムロールは権限画面で `code` を設定し、メニュー・操作権限を付与したうえでユーザーを再ログインさせる。
 - **app.models.user と auth.models.User**: システム API が参照するのは **auth.models.User**（`department_id`, `two_factor_enabled` あり）。`app.models.user` は別定義の可能性があり、本機能では auth 側が正とする。
 
 ---

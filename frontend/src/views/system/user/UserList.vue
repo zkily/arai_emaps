@@ -1,78 +1,68 @@
 <template>
   <div class="user-list">
-    <!-- Modern Gradient Header -->
     <div class="page-header">
-      <div class="header-content">
-        <div class="header-icon">
-          <el-icon :size="28"><User /></el-icon>
+      <div class="header-left">
+        <div class="header-icon-sm">
+          <el-icon :size="18"><User /></el-icon>
         </div>
         <div class="header-text">
           <h1>{{ t('systemUser.user.title') }}</h1>
           <p class="subtitle">{{ t('systemUser.user.subtitle') }}</p>
         </div>
       </div>
-      <div class="header-stats">
-        <div class="stat-item">
-          <span class="stat-value">{{ pagination.total }}</span>
-          <span class="stat-label">{{ t('systemUser.user.totalUsers') }}</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value active">{{ activeUserCount }}</span>
-          <span class="stat-label">{{ t('systemUser.user.active') }}</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-value locked">{{ lockedUserCount }}</span>
-          <span class="stat-label">{{ t('systemUser.user.locked') }}</span>
-        </div>
+      <div class="header-chips">
+        <span class="h-chip">
+          <strong>{{ pagination.total }}</strong>
+          <em>{{ t('systemUser.user.totalUsers') }}</em>
+        </span>
+        <span class="h-chip ok">
+          <strong>{{ activeUserCount }}</strong>
+          <em>{{ t('systemUser.user.active') }}</em>
+        </span>
+        <span class="h-chip warn">
+          <strong>{{ lockedUserCount }}</strong>
+          <em>{{ t('systemUser.user.locked') }}</em>
+        </span>
       </div>
     </div>
 
-    <!-- Compact Filter & Actions Card -->
-    <div class="filter-card">
-      <div class="filter-grid">
-        <div class="filter-item">
-          <label>{{ t('systemUser.user.keyword') }}</label>
+    <div class="toolbar-card">
+      <div class="filter-row">
+        <div class="filter-field filter-field--grow">
           <el-input
             v-model="searchForm.keyword"
             :placeholder="t('systemUser.user.keywordPlaceholder')"
             clearable
             :prefix-icon="Search"
-            size="default"
+            size="small"
           />
         </div>
-        <div class="filter-item">
-          <label>{{ t('systemUser.user.department') }}</label>
+        <div class="filter-field">
           <el-select
             v-model="searchForm.department_id"
-            :placeholder="t('systemUser.user.all')"
+            :placeholder="t('systemUser.user.department')"
             clearable
-            size="default"
-            style="width: 100%"
+            size="small"
           >
             <el-option v-for="d in departmentOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </div>
-        <div class="filter-item">
-          <label>{{ t('systemUser.user.section') }}</label>
+        <div class="filter-field">
           <el-select
             v-model="searchForm.section_id"
-            :placeholder="t('systemUser.user.all')"
+            :placeholder="t('systemUser.user.section')"
             clearable
-            size="default"
-            style="width: 100%"
+            size="small"
           >
             <el-option v-for="s in filterSectionOptions" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
         </div>
-        <div class="filter-item">
-          <label>{{ t('systemUser.user.status') }}</label>
+        <div class="filter-field filter-field--sm">
           <el-select
             v-model="searchForm.status"
-            :placeholder="t('systemUser.user.all')"
+            :placeholder="t('systemUser.user.status')"
             clearable
-            size="default"
+            size="small"
           >
             <el-option :label="t('systemUser.user.statusActive')" value="active" />
             <el-option :label="t('systemUser.user.statusLocked')" value="locked" />
@@ -80,192 +70,113 @@
         </div>
       </div>
       <div class="toolbar-actions">
-        <el-button
-          v-if="canCreate"
-          type="primary"
-          :icon="Plus"
-          @click="handleAdd"
-          class="btn-add"
-        >
-          <span>{{ t('systemUser.user.addUser') }}</span>
+        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" class="btn-add" @click="handleAdd">
+          {{ t('systemUser.user.addUser') }}
         </el-button>
-        <el-button v-if="canExport" :icon="Printer" @click="handlePrint" class="btn-print">
+        <el-button v-if="canExport" size="small" :icon="Printer" class="btn-print" @click="handlePrint">
           {{ t('systemUser.user.print') }}
         </el-button>
       </div>
     </div>
 
-    <!-- Enhanced Table Card -->
     <div class="table-card">
       <el-table
         :data="userList"
         v-loading="loading"
-        :header-cell-style="{
-          background: '#f8fafc',
-          color: '#334155',
-          fontWeight: '600',
-          fontSize: '13px',
-        }"
+        :header-cell-style="tableHeaderStyle"
         :row-class-name="tableRowClassName"
-        border
-        size="default"
+        size="small"
+        class="user-table"
       >
-        <el-table-column prop="id" :label="t('systemUser.user.id')" width="80" align="center">
+        <el-table-column prop="id" :label="t('systemUser.user.id')" width="52" align="center">
           <template #default="{ row }">
             <span class="id-badge">{{ row.id }}</span>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="username"
-          :label="t('systemUser.user.username')"
-          width="130"
-          align="center"
-        >
+        <el-table-column :label="t('systemUser.user.username')" min-width="168">
           <template #default="{ row }">
             <div class="user-cell">
-              <div class="avatar-mini">{{ row.username.charAt(0).toUpperCase() }}</div>
-              <span class="username-text">{{ row.username }}</span>
+              <div class="avatar-mini" :style="{ background: getAvatarColor(row.username) }">
+                {{ row.username.charAt(0).toUpperCase() }}
+              </div>
+              <div class="user-cell-text">
+                <span class="username-text">{{ row.username }}</span>
+                <span class="user-sub" v-if="row.full_name">{{ row.full_name }}</span>
+                <span class="user-sub muted">{{ row.email }}</span>
+              </div>
             </div>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="full_name"
-          :label="t('systemUser.user.fullName')"
-          width="100"
-          align="center"
-        />
-        <el-table-column prop="email" :label="t('systemUser.user.email')" width="220">
+        <el-table-column :label="t('systemUser.user.department')" width="140" align="center">
           <template #default="{ row }">
-            <span class="email-text">{{ row.email }}</span>
+            <div class="org-cell">
+              <span v-if="row.department" class="dept-badge">{{ row.department }}</span>
+              <span v-if="row.section" class="dept-badge section-badge">{{ row.section }}</span>
+              <span v-if="!row.department && !row.section" class="text-muted">—</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="department"
-          :label="t('systemUser.user.department')"
-          width="180"
-          align="center"
-        >
+        <el-table-column prop="role" :label="t('systemUser.user.role')" width="118" align="center">
           <template #default="{ row }">
-            <span class="dept-badge" v-if="row.department">{{ row.department }}</span>
-            <span class="text-muted" v-else>—</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="section"
-          :label="t('systemUser.user.section')"
-          width="150"
-          align="center"
-        >
-          <template #default="{ row }">
-            <span class="dept-badge section-badge" v-if="row.section">{{ row.section }}</span>
-            <span class="text-muted" v-else>—</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="role" :label="t('systemUser.user.role')" width="130" align="center">
-          <template #default="{ row }">
-            <el-tag :type="getRoleType(row.role)" size="small" effect="dark" class="role-tag">
+            <span class="role-pill" :class="`role-pill--${row.role || 'user'}`">
               {{ displayUserRoleName(row, t) }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="status"
-          :label="t('systemUser.user.statusCol')"
-          width="110"
-          align="center"
-        >
+        <el-table-column :label="t('systemUser.user.statusCol')" width="88" align="center">
           <template #default="{ row }">
-            <div class="status-indicator" :class="row.status">
-              <span class="status-dot"></span>
-              <span>{{ getStatusLabel(row.status) }}</span>
-            </div>
+            <span class="status-pill" :class="row.status">
+              <i class="status-dot" />
+              {{ getStatusLabel(row.status) }}
+            </span>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="two_factor"
-          :label="t('systemUser.user.twoFA')"
-          width="70"
-          align="center"
-        >
+        <el-table-column :label="t('systemUser.user.twoFA')" width="48" align="center">
           <template #default="{ row }">
             <el-tooltip
-              :content="
-                row.two_factor ? t('systemUser.user.twoFAOn') : t('systemUser.user.twoFAOff')
-              "
+              :content="row.two_factor ? t('systemUser.user.twoFAOn') : t('systemUser.user.twoFAOff')"
               placement="top"
             >
-              <div class="tfa-indicator" :class="{ enabled: row.two_factor }">
-                <el-icon :size="16">
+              <span class="tfa-pill" :class="{ on: row.two_factor }">
+                <el-icon :size="14">
                   <component :is="row.two_factor ? CircleCheck : CircleClose" />
                 </el-icon>
-              </div>
+              </span>
             </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column
           prop="last_login"
           :label="t('systemUser.user.lastLogin')"
-          min-width="180"
+          min-width="128"
           align="center"
         >
           <template #default="{ row }">
             <span class="login-time">{{ row.last_login || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column
-          :label="t('systemUser.user.actions')"
-          width="170"
-          fixed="right"
-          align="center"
-        >
+        <el-table-column :label="t('systemUser.user.actions')" width="118" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-cell">
-              <el-tooltip v-if="canEdit" :content="t('systemUser.user.edit')" placement="top">
-                <el-button
-                  size="small"
-                  type="primary"
-                  circle
-                  :icon="Edit"
-                  @click="handleEdit(row)"
-                />
-              </el-tooltip>
-              <el-tooltip
-                v-if="canEdit"
-                :content="
-                  row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')
-                "
-                placement="top"
-              >
-                <el-button
-                  v-if="row.status === 'locked' || row.id !== userStore.user?.id"
-                  size="small"
-                  :type="row.status === 'locked' ? 'success' : 'warning'"
-                  circle
-                  :icon="row.status === 'locked' ? Unlock : Lock"
-                  @click="handleToggleLock(row)"
-                />
-                <el-button v-else size="small" circle :icon="Lock" disabled class="btn-disabled" />
-              </el-tooltip>
-              <el-tooltip v-if="canEdit" :content="t('systemUser.user.resetPwd')" placement="top">
-                <el-button
-                  size="small"
-                  type="info"
-                  circle
-                  :icon="Key"
-                  @click="handleResetPassword(row)"
-                />
-              </el-tooltip>
+              <el-button v-if="canEdit" size="small" text type="primary" :icon="Edit" @click="handleEdit(row)" />
+              <el-button
+                v-if="canEdit && (row.status === 'locked' || row.id !== userStore.user?.id)"
+                size="small"
+                text
+                :type="row.status === 'locked' ? 'success' : 'warning'"
+                :icon="row.status === 'locked' ? Unlock : Lock"
+                @click="handleToggleLock(row)"
+              />
+              <el-button v-if="canEdit" size="small" text type="info" :icon="Key" @click="handleResetPassword(row)" />
             </div>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="table-footer">
-        <div class="footer-info">
-          {{
-            t('systemUser.user.displayCount', { shown: userList.length, total: pagination.total })
-          }}
-        </div>
+        <span class="footer-info">
+          {{ t('systemUser.user.displayCount', { shown: userList.length, total: pagination.total }) }}
+        </span>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
@@ -550,7 +461,17 @@ const { canCreate, canEdit, canExport } = useOperationPermission(OPERATION_MODUL
 const activeUserCount = computed(() => userList.value.filter((u) => u.status === 'active').length)
 const lockedUserCount = computed(() => userList.value.filter((u) => u.status === 'locked').length)
 
-// Table row class for hover effects
+const avatarColors = ['#6366f1', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444']
+const getAvatarColor = (name: string) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length]
+
+const tableHeaderStyle = {
+  background: '#f8fafc',
+  color: '#475569',
+  fontWeight: '600',
+  fontSize: '11px',
+  padding: '6px 0',
+}
+
 const tableRowClassName = ({ row }: { row: UserListItem }) => {
   return row.status === 'locked' ? 'row-locked' : ''
 }
@@ -658,18 +579,6 @@ const dialogTitle = computed(() =>
   isEdit.value ? t('systemUser.user.formEditTitle') : t('systemUser.user.formAddTitle'),
 )
 
-type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
-const getRoleType = (role: string): TagType => {
-  const types: Record<string, TagType> = {
-    admin: 'danger',
-    user: 'primary',
-    manager: 'success',
-    worker: 'warning',
-    guest: 'info',
-    viewer: 'info',
-  }
-  return types[role] || 'info'
-}
 const getStatusLabel = (status: string) => {
   const keyMap: Record<string, string> = {
     active: 'statusActive',
@@ -995,235 +904,183 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Base Layout */
 .user-list {
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
-  min-height: 100vh;
+  padding: 10px 12px;
+  background: #eef2f7;
+  min-height: calc(100vh - 48px);
+  box-sizing: border-box;
 }
 
-/* Modern Gradient Header */
 .page-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 16px 24px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #0ea5e9 0%, #6366f1 55%, #8b5cf6 100%);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.25);
 }
 
-.header-content {
+.header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
 }
 
-.header-icon {
-  width: 48px;
-  height: 48px;
+.header-icon-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .header-text h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
-  color: white;
-  letter-spacing: -0.5px;
+  color: #fff;
+  line-height: 1.25;
 }
 
 .header-text .subtitle {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.header-stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  padding: 10px 20px;
-  border-radius: 10px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 50px;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: white;
-}
-
-.stat-value.active {
-  color: #a5f3fc;
-}
-.stat-value.locked {
-  color: #fcd34d;
-}
-
-.stat-label {
+  margin: 1px 0 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.3;
 }
 
-.stat-divider {
-  width: 1px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* Glassmorphism Filter Card */
-.filter-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  border-radius: 12px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+.header-chips {
   display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.h-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 11px;
+}
+
+.h-chip strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.h-chip em {
+  font-style: normal;
+  opacity: 0.88;
+}
+
+.h-chip.ok {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.h-chip.warn {
+  background: rgba(251, 191, 36, 0.35);
+}
+
+.toolbar-card {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
   flex-wrap: wrap;
 }
 
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 160px) auto;
-  gap: 12px;
-  align-items: flex-end;
+.filter-field {
+  width: 132px;
 }
 
-.filter-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.filter-field--grow {
+  flex: 1;
+  min-width: 140px;
+  max-width: 280px;
 }
 
-.filter-item label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.filter-field--sm {
+  width: 108px;
 }
 
-.filter-item :deep(.el-input),
-.filter-item :deep(.el-select) {
+.filter-field :deep(.el-input),
+.filter-field :deep(.el-select) {
   width: 100%;
-}
-
-.filter-item :deep(.el-input__wrapper),
-.filter-item :deep(.el-select__wrapper) {
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .toolbar-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .btn-add {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-}
-
-.btn-add:hover {
-  background: linear-gradient(135deg, #5a6fd6 0%, #6a4393 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  font-weight: 600;
 }
 
 .btn-print {
-  background: linear-gradient(135deg, #475569 0%, #334155 100%);
-  border: none;
-  color: #fff;
-  border-radius: 8px;
-  transition: all 0.25s ease;
+  color: #475569;
 }
 
-.btn-print:hover {
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-  color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.35);
-}
-
-.btn-print .el-icon {
-  margin-right: 4px;
-}
-
-/* Enhanced Table Card */
 .table-card {
-  background: white;
-  border-radius: 12px;
-  padding: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   overflow: hidden;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
 }
 
-.table-card :deep(.el-table) {
+.user-table :deep(.el-table) {
+  --el-table-border-color: #f1f5f9;
   --el-table-header-bg-color: #f8fafc;
-  --el-table-row-hover-bg-color: #f1f5f9;
-  border: none;
+  --el-table-row-hover-bg-color: #f8fafc;
 }
 
-.table-card :deep(.el-table th.el-table__cell) {
-  border-bottom: 2px solid #e2e8f0;
-  padding: 10px 8px;
+.user-table :deep(.el-table th.el-table__cell) {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 6px 4px;
 }
 
-.table-card :deep(.el-table td.el-table__cell) {
-  padding: 8px;
-  border-bottom: 1px solid #f1f5f9;
+.user-table :deep(.el-table td.el-table__cell) {
+  padding: 5px 4px;
+  border-bottom: 1px solid #f8fafc;
 }
 
-.table-card :deep(.el-table--border::after),
-.table-card :deep(.el-table--border::before) {
-  display: none;
+.user-table :deep(.row-locked > td) {
+  background: #fffbeb !important;
 }
 
-.table-card :deep(.el-table__border-left-patch) {
-  display: none;
-}
-
-/* Row styling */
-.table-card :deep(.row-locked) {
-  background-color: #fffbeb !important;
-}
-
-.table-card :deep(.el-table__row:hover > td) {
-  background-color: #f1f5f9 !important;
-}
-
-/* Cell Styles */
 .id-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  padding: 2px 8px;
-  background: #f1f5f9;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: #64748b;
 }
 
@@ -1231,170 +1088,185 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  text-align: left;
 }
 
 .avatar-mini {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #fff;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.username-text {
-  font-weight: 500;
-  color: #1e293b;
+.user-cell-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.email-text {
-  font-size: 13px;
-  color: #64748b;
+.username-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.user-sub {
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-sub.muted {
+  color: #94a3b8;
+}
+
+.org-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .dept-badge {
   display: inline-block;
-  padding: 2px 8px;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 4px;
   background: #e0f2fe;
   color: #0369a1;
-  border-radius: 4px;
-  font-size: 12px;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .section-badge {
-  background: #cffafe;
-  color: #0891b2;
+  background: #ecfeff;
+  color: #0e7490;
 }
 
 .text-muted {
   color: #cbd5e1;
-}
-
-.role-tag {
   font-size: 11px;
-  border-radius: 6px;
 }
 
-/* Status Indicator with Dot */
-.status-indicator {
+.role-pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  background: #f1f5f9;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-pill--admin {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.role-pill--manager {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.role-pill--worker {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-indicator.active {
-  color: #16a34a;
-}
-.status-indicator.locked {
-  color: #d97706;
-}
-.status-indicator.inactive {
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
   color: #64748b;
 }
 
+.status-pill.active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.status-pill.locked {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  animation: pulse 2s infinite;
+  background: currentColor;
+  opacity: 0.85;
 }
 
-.status-indicator.active .status-dot {
-  background: #22c55e;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
-}
-
-.status-indicator.locked .status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
-  animation: none;
-}
-
-.status-indicator.inactive .status-dot {
-  background: #94a3b8;
-  animation: none;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-/* 2FA Indicator */
-.tfa-indicator {
+.tfa-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   background: #f1f5f9;
   color: #94a3b8;
-  transition: all 0.2s;
 }
 
-.tfa-indicator.enabled {
+.tfa-pill.on {
   background: #dcfce7;
   color: #16a34a;
 }
 
 .login-time {
-  font-size: 12px;
+  font-size: 10px;
   color: #64748b;
 }
 
-/* Action Buttons */
 .action-cell {
   display: flex;
-  gap: 6px;
   justify-content: center;
+  gap: 0;
 }
 
-.action-cell :deep(.el-button.is-circle) {
-  width: 30px;
-  height: 30px;
-  transition: all 0.2s;
+.action-cell :deep(.el-button) {
+  padding: 4px;
+  margin: 0;
 }
 
-.action-cell :deep(.el-button.is-circle:hover) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.btn-disabled {
-  opacity: 0.4;
-  cursor: not-allowed !important;
-}
-
-/* Table Footer */
 .table-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
 }
 
 .footer-info {
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
-}
-
-.footer-info strong {
-  color: #1e293b;
 }
 
 /* User form dialog */
@@ -1667,48 +1539,50 @@ onMounted(() => {
   box-shadow: 0 6px 18px rgba(102, 126, 234, 0.45);
 }
 
-/* Responsive Design */
-@media (max-width: 1200px) {
-  .filter-grid {
-    grid-template-columns: repeat(2, 1fr) auto;
+@media (max-width: 1100px) {
+  .header-chips {
+    display: none;
   }
 
-  .header-stats {
-    display: none;
+  .filter-field {
+    width: 120px;
   }
 }
 
 @media (max-width: 768px) {
   .user-list {
-    padding: 12px;
+    padding: 8px;
   }
 
   .page-header {
     flex-direction: column;
-    gap: 12px;
-    text-align: center;
+    align-items: flex-start;
   }
 
-  .header-content {
-    flex-direction: column;
-  }
-
-  .filter-card {
+  .toolbar-card {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .filter-grid {
-    grid-template-columns: 1fr;
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-field,
+  .filter-field--grow,
+  .filter-field--sm {
+    width: 100%;
+    max-width: none;
   }
 
   .toolbar-actions {
-    justify-content: center;
+    justify-content: flex-end;
   }
 
   .table-footer {
     flex-direction: column;
-    gap: 12px;
+    align-items: flex-start;
   }
 }
 </style>

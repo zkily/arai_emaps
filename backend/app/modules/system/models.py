@@ -40,8 +40,10 @@ class Role(Base):
     
     id = Column(Integer, primary_key=True, index=True, comment="ロールID（主キー）")
     name = Column(String(100), unique=True, nullable=False, comment="ロール名")
+    code = Column(String(50), unique=True, nullable=True, index=True, comment="ロールコード（users.role 同期）")
     description = Column(Text, nullable=True, comment="説明")
     is_system = Column(Boolean, default=False, nullable=False, comment="システムロールフラグ（TRUE:削除不可）")
+    is_super_admin = Column(Boolean, default=False, nullable=False, comment="システム管理者（全権限）")
     data_scope = Column(String(20), default="department", comment="データ参照範囲（self/department/department_below/all/custom）")
     custom_departments = Column(JSON, nullable=True, comment="カスタム部門リスト（data_scope=customの場合）")
     is_active = Column(Boolean, default=True, nullable=False, comment="有効フラグ")

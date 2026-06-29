@@ -64,6 +64,9 @@ class OperationPermissionPayload(BaseModel):
 class UserResponse(UserBase):
     id: int
     full_name: Optional[str] = None
+    role_name: Optional[str] = None
+    is_super_admin: bool = False
+    data_scope: str = "department"
     is_active: bool = True
     permissions: list[str] = []
     menu_codes: list[str] = []
@@ -194,6 +197,40 @@ async def _resolve_department_name(db: AsyncSession, department_id: Optional[int
     return org.name if org else None
 
 
+async def _resolve_user_role_name(
+    db: AsyncSession, user_id: int, role_code: Optional[str] = None
+) -> Optional[str]:
+    """user_roles → roles.name。未割当時は roles.code または組み込み名でフォールバック。"""
+    from app.modules.auth.role_codes import LEGACY_ROLE_NAME_TO_CODE
+    from app.modules.system.models import Role, UserRole
+
+    result = await db.execute(
+        select(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == user_id, Role.is_active == True)
+        .order_by(Role.id)
+        .limit(1)
+    )
+    name = result.scalar_one_or_none()
+    if name:
+        return name
+
+    code = (role_code or "").strip()
+    if code:
+        by_code = await db.execute(
+            select(Role.name).where(Role.code == code, Role.is_active == True).limit(1)
+        )
+        resolved = by_code.scalar_one_or_none()
+        if resolved:
+            return resolved
+
+        code_to_builtin_name = {v: k for k, v in LEGACY_ROLE_NAME_TO_CODE.items()}
+        if code in code_to_builtin_name:
+            return code_to_builtin_name[code]
+
+    return None
+
+
 def get_user_permissions(role: str) -> list[str]:
     """ロールに基づいて権限を取得（admin: 全権限 / manager, worker, user: 読み書き / guest, viewer: 閲覧のみ）"""
     if role == "admin":
@@ -205,11 +242,10 @@ def get_user_permissions(role: str) -> list[str]:
 
 async def get_user_menu_codes(db: AsyncSession, user: User) -> list[str]:
     """ユーザーがアクセス可能なメニューコード一覧（user_roles → role_menu_permissions から集約）"""
+    from app.modules.auth.permission_service import user_is_super_admin
     from app.modules.system.models import Menu, RoleMenuPermission, UserRole
 
-    role = user.role if user.role else "user"
-
-    if role == "admin":
+    if await user_is_super_admin(db, user):
         result = await db.execute(
             select(Menu.code)
             .where(Menu.is_active == True)
@@ -272,12 +308,14 @@ def _fallback_operation_permissions(role: str) -> list[dict]:
 
 async def get_user_operation_permissions(db: AsyncSession, user: User) -> list[dict]:
     """user_roles → role_operation_permissions をモジュール単位で OR 集約"""
+    from app.modules.auth.permission_service import user_is_super_admin
     from app.modules.system.models import RoleOperationPermission, UserRole
     from app.core.operation_modules import OPERATION_MODULES
 
-    role = user.role if user.role else "user"
-    if role == "admin":
+    if await user_is_super_admin(db, user):
         return [_full_operation_permission(module) for module in OPERATION_MODULES]
+
+    role = user.role if user.role else "user"
 
     result = await db.execute(
         select(RoleOperationPermission)
@@ -308,16 +346,28 @@ async def get_user_operation_permissions(db: AsyncSession, user: User) -> list[d
 
 async def build_user_auth_payload(db: AsyncSession, user: User) -> dict:
     """ログイン /me 共通のユーザー情報ペイロード"""
+    from app.modules.auth.data_scope_service import resolve_user_data_scope
+    from app.modules.auth.permission_service import (
+        coarse_permissions_for_role_code,
+        user_is_super_admin,
+    )
+
     role = user.role if user.role is not None else "user"
+    is_super = await user_is_super_admin(db, user)
     dept_id = getattr(user, "department_id", None)
+    role_name = await _resolve_user_role_name(db, user.id, role)
+    scope = await resolve_user_data_scope(db, user)
     return {
         "id": user.id,
         "username": user.username or "",
         "email": user.email or "",
         "full_name": user.full_name,
         "role": role,
+        "role_name": role_name,
+        "is_super_admin": is_super,
+        "data_scope": scope.data_scope,
         "is_active": bool(user.is_active) if user.is_active is not None else True,
-        "permissions": get_user_permissions(role),
+        "permissions": ["all"] if is_super else coarse_permissions_for_role_code(role),
         "menu_codes": await get_user_menu_codes(db, user),
         "operation_permissions": await get_user_operation_permissions(db, user),
         "department_id": dept_id,
@@ -402,8 +452,7 @@ async def login(
         await db.rollback()
     
     user_payload = await build_user_auth_payload(db, user)
-    role = user.role if user.role else "user"
-    if role != "admin" and not user_payload.get("menu_codes"):
+    if not user_payload.get("is_super_admin") and not user_payload.get("menu_codes"):
         logger.warning(
             "[MENU_ACCESS] user=%s has no menu_codes — assign user_roles and role menu permissions",
             user.username,
