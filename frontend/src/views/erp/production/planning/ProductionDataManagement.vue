@@ -15,6 +15,11 @@
         </el-tag>
       </div>
       <div class="header-actions">
+        <router-link to="/erp/production/forming-daily-plan" class="forming-plan-link">
+          <el-button size="small" type="primary" plain class="modern-btn">
+            成型計画試算
+          </el-button>
+        </router-link>
         <!-- PC: ドロップダウン / スマホ・タブレット: ボタンで Drawer を開く -->
         <template v-if="!isSmallScreen">
           <el-dropdown
@@ -6824,6 +6829,9 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.46rem;
+}
+.forming-plan-link {
+  text-decoration: none;
 }
 .header-actions :deep(.el-button) {
   font-size: 0.75rem;
