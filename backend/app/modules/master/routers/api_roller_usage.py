@@ -9,6 +9,11 @@
   GET    /roller-usage-log                  登録履歴一覧
   POST   /roller-usage-log                  使用ログ新規登録
   DELETE /roller-usage-log/{id}             ログ削除
+  GET    /roller-usage-plan                 予定スケジュール一覧
+  POST   /roller-usage-plan                 予定1件登録
+  POST   /roller-usage-plan/batch-sync      対象月の予定を一括同期
+  PUT    /roller-usage-plan/{id}            予定更新
+  DELETE /roller-usage-plan/{id}            予定削除
 """
 
 from __future__ import annotations
@@ -27,13 +32,21 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_quality_operation
 from app.modules.auth.models import User
 from app.modules.database.models import ProductionSummary
-from app.modules.master.models import Machine, RollerBom, RollerMaster, RollerUsageLog, RollerUsageStatus
+from app.modules.master.models import (
+    Machine,
+    RollerBom,
+    RollerMaster,
+    RollerUsageLog,
+    RollerUsagePlan,
+    RollerUsageStatus,
+)
 
 # ---------------------------------------------------------------------------
 # Router はモジュール分割のため 2 本定義し、__init__.py で個別 include する
 # ---------------------------------------------------------------------------
 status_router = APIRouter()   # prefix=/roller-usage-status
 log_router    = APIRouter()   # prefix=/roller-usage-log
+plan_router   = APIRouter()   # prefix=/roller-usage-plan
 action_router = APIRouter()   # prefix=/roller-usage  (sync / recalculate)
 
 # 一覧の並び替え対象（ホワイトリスト）
@@ -137,6 +150,92 @@ def _parse_date(v: Any) -> Optional[date]:
         except ValueError:
             pass
     return None
+
+
+def _plan_month_from_date(d: date) -> str:
+    return d.strftime("%Y-%m")
+
+
+def _is_manual_schedule_mode(mode: Optional[str]) -> bool:
+    return str(mode or "auto").strip().lower() == "manual"
+
+
+async def _load_manual_roller_cd_set(db: AsyncSession) -> set[str]:
+    rows = (
+        await db.execute(
+            select(RollerMaster.roller_cd).where(RollerMaster.schedule_mode == "manual")
+        )
+    ).all()
+    return {str(r[0]).strip() for r in rows if r[0]}
+
+
+async def _sync_status_next_from_plans(
+    db: AsyncSession,
+    status_row: RollerUsageStatus,
+) -> None:
+    """manual ローラー: 未実施の最も近い予定日を next_exec_date に反映"""
+    roller_cd = (status_row.roller_cd or "").strip()
+    if not roller_cd:
+        return
+    today = date.today()
+    plans = (
+        await db.execute(
+            select(RollerUsagePlan)
+            .where(RollerUsagePlan.roller_cd == roller_cd)
+            .where(RollerUsagePlan.status == "planned")
+            .where(RollerUsagePlan.planned_exec_date >= today)
+            .order_by(
+                RollerUsagePlan.planned_exec_date.asc(),
+                RollerUsagePlan.sort_order.asc(),
+                RollerUsagePlan.id.asc(),
+            )
+        )
+    ).scalars().all()
+    if not plans:
+        status_row.next_exec_date = None
+        return
+    nearest = plans[0]
+    status_row.next_exec_date = nearest.planned_exec_date
+    if nearest.planned_product_cd:
+        status_row.planned_product_cd = nearest.planned_product_cd
+    if nearest.exec_type:
+        status_row.exec_type = nearest.exec_type
+
+
+async def _mark_plan_done_for_log(
+    db: AsyncSession,
+    roller_cd: str,
+    exec_date: date,
+) -> int:
+    """実施登録日と一致する予定を done にする"""
+    plans = (
+        await db.execute(
+            select(RollerUsagePlan)
+            .where(RollerUsagePlan.roller_cd == roller_cd)
+            .where(RollerUsagePlan.planned_exec_date == exec_date)
+            .where(RollerUsagePlan.status == "planned")
+        )
+    ).scalars().all()
+    for p in plans:
+        p.status = "done"
+    return len(plans)
+
+
+def _plan_to_dict(r: RollerUsagePlan) -> dict:
+    return {
+        "id": r.id,
+        "roller_cd": r.roller_cd,
+        "plan_month": r.plan_month,
+        "planned_exec_date": r.planned_exec_date.isoformat() if r.planned_exec_date else None,
+        "planned_product_cd": r.planned_product_cd,
+        "exec_type": r.exec_type,
+        "status": r.status,
+        "sort_order": r.sort_order,
+        "note": r.note,
+        "created_by": r.created_by,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +419,11 @@ async def update_roller_usage_status(
         else:
             setattr(row, field, str(v).strip() if v is not None and str(v).strip() else None)
 
-    _apply_prediction(row)
+    manual_cds = await _load_manual_roller_cd_set(db)
+    if (row.roller_cd or "") in manual_cds:
+        await _sync_status_next_from_plans(db, row)
+    else:
+        _apply_prediction(row)
     await db.commit()
     await db.refresh(row)
     return {"success": True, "data": _status_to_dict(row)}
@@ -406,7 +509,12 @@ async def create_roller_usage_log(
         if status_row.last_exec_date is None or exec_date >= status_row.last_exec_date:
             status_row.last_exec_date = exec_date
             status_row.exec_type = exec_type
-        _apply_prediction(status_row)
+        await _mark_plan_done_for_log(db, roller_cd, exec_date)
+        manual_cds = await _load_manual_roller_cd_set(db)
+        if roller_cd in manual_cds:
+            await _sync_status_next_from_plans(db, status_row)
+        else:
+            _apply_prediction(status_row)
 
     await db.commit()
     await db.refresh(log_row)
@@ -426,6 +534,275 @@ async def delete_roller_usage_log(
     if not row:
         raise HTTPException(status_code=404, detail="ログが見つかりません")
     await db.delete(row)
+    await db.commit()
+    return {"success": True, "message": "削除しました"}
+
+
+# ---------------------------------------------------------------------------
+# roller_usage_plan — 予定スケジュール（manual ローラー用）
+# ---------------------------------------------------------------------------
+
+
+@plan_router.get("")
+async def list_roller_usage_plan(
+    roller_cd: Optional[str] = Query(None),
+    plan_month: Optional[str] = Query(None, alias="planMonth"),
+    status: Optional[str] = Query(None),
+    from_date: Optional[str] = Query(None, alias="fromDate"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(500, ge=1, le=5000, alias="pageSize"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """予定スケジュール一覧"""
+    from sqlalchemy import func as sqlfunc
+
+    clauses = []
+    if roller_cd and roller_cd.strip():
+        clauses.append(RollerUsagePlan.roller_cd == roller_cd.strip())
+    if plan_month and plan_month.strip():
+        clauses.append(RollerUsagePlan.plan_month == plan_month.strip()[:7])
+    if status and status.strip():
+        clauses.append(RollerUsagePlan.status == status.strip())
+    if from_date and from_date.strip():
+        d = _parse_date(from_date)
+        if d:
+            clauses.append(RollerUsagePlan.planned_exec_date >= d)
+    where = and_(*clauses) if clauses else None
+
+    count_q = select(sqlfunc.count()).select_from(RollerUsagePlan)
+    if where is not None:
+        count_q = count_q.where(where)
+    total = (await db.execute(count_q)).scalar() or 0
+
+    list_q = (
+        select(RollerUsagePlan)
+        .order_by(
+            RollerUsagePlan.planned_exec_date.asc(),
+            RollerUsagePlan.sort_order.asc(),
+            RollerUsagePlan.id.asc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    if where is not None:
+        list_q = list_q.where(where)
+    rows = (await db.execute(list_q)).scalars().all()
+
+    return {
+        "success": True,
+        "data": {"list": [_plan_to_dict(r) for r in rows], "total": total},
+        "list": [_plan_to_dict(r) for r in rows],
+        "total": total,
+    }
+
+
+@plan_router.post("")
+async def create_roller_usage_plan(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_quality_operation("create")),
+):
+    """予定1件登録"""
+    roller_cd = (body.get("roller_cd") or "").strip()
+    if not roller_cd:
+        raise HTTPException(status_code=400, detail="roller_cd は必須です")
+    planned_exec_date = _parse_date(body.get("planned_exec_date"))
+    if not planned_exec_date:
+        raise HTTPException(status_code=400, detail="planned_exec_date は必須です（YYYY-MM-DD）")
+
+    master = (
+        await db.execute(select(RollerMaster).where(RollerMaster.roller_cd == roller_cd))
+    ).scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail="ローラーマスタが見つかりません")
+    if not _is_manual_schedule_mode(master.schedule_mode):
+        raise HTTPException(status_code=400, detail="このローラーは手動予定モードではありません")
+
+    plan_month = (body.get("plan_month") or "").strip() or _plan_month_from_date(planned_exec_date)
+    exec_type = (body.get("exec_type") or "ローラー交換").strip() or "ローラー交換"
+    sort_order = _to_opt_int(body.get("sort_order")) or 0
+
+    row = RollerUsagePlan(
+        roller_cd=roller_cd,
+        plan_month=plan_month[:7],
+        planned_exec_date=planned_exec_date,
+        planned_product_cd=(body.get("planned_product_cd") or None)
+        and str(body.get("planned_product_cd")).strip()
+        or None,
+        exec_type=exec_type,
+        status="planned",
+        sort_order=sort_order,
+        note=body.get("note"),
+        created_by=str(getattr(current_user, "username", "") or ""),
+    )
+    db.add(row)
+
+    status_row = (
+        await db.execute(select(RollerUsageStatus).where(RollerUsageStatus.roller_cd == roller_cd))
+    ).scalar_one_or_none()
+    if status_row is not None:
+        await _sync_status_next_from_plans(db, status_row)
+
+    await db.commit()
+    await db.refresh(row)
+    return {"success": True, "data": _plan_to_dict(row)}
+
+
+@plan_router.post("/batch-sync")
+async def batch_sync_roller_usage_plan(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_quality_operation("edit")),
+):
+    """対象月の予定を一括同期（既存 planned を置換）"""
+    roller_cd = (body.get("roller_cd") or "").strip()
+    plan_month = (body.get("plan_month") or "").strip()
+    if not roller_cd:
+        raise HTTPException(status_code=400, detail="roller_cd は必須です")
+    if not plan_month or len(plan_month) < 7:
+        raise HTTPException(status_code=400, detail="plan_month は YYYY-MM 形式で指定してください")
+
+    master = (
+        await db.execute(select(RollerMaster).where(RollerMaster.roller_cd == roller_cd))
+    ).scalar_one_or_none()
+    if master is None:
+        raise HTTPException(status_code=404, detail="ローラーマスタが見つかりません")
+    if not _is_manual_schedule_mode(master.schedule_mode):
+        raise HTTPException(status_code=400, detail="このローラーは手動予定モードではありません")
+
+    items = body.get("items") or []
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="items は配列で指定してください")
+
+    month_key = plan_month[:7]
+    existing = (
+        await db.execute(
+            select(RollerUsagePlan)
+            .where(RollerUsagePlan.roller_cd == roller_cd)
+            .where(RollerUsagePlan.plan_month == month_key)
+            .where(RollerUsagePlan.status == "planned")
+        )
+    ).scalars().all()
+    for old in existing:
+        await db.delete(old)
+
+    created = 0
+    username = str(getattr(current_user, "username", "") or "")
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        planned_exec_date = _parse_date(item.get("planned_exec_date"))
+        if not planned_exec_date:
+            continue
+        if _plan_month_from_date(planned_exec_date) != month_key:
+            raise HTTPException(
+                status_code=400,
+                detail=f"予定日 {planned_exec_date.isoformat()} は対象月 {month_key} と一致しません",
+            )
+        exec_type = (item.get("exec_type") or "ローラー交換").strip() or "ローラー交換"
+        sort_order = _to_opt_int(item.get("sort_order"))
+        if sort_order is None:
+            sort_order = idx
+        db.add(
+            RollerUsagePlan(
+                roller_cd=roller_cd,
+                plan_month=month_key,
+                planned_exec_date=planned_exec_date,
+                planned_product_cd=(item.get("planned_product_cd") or None)
+                and str(item.get("planned_product_cd")).strip()
+                or None,
+                exec_type=exec_type,
+                status="planned",
+                sort_order=sort_order,
+                note=item.get("note"),
+                created_by=username,
+            )
+        )
+        created += 1
+
+    status_row = (
+        await db.execute(select(RollerUsageStatus).where(RollerUsageStatus.roller_cd == roller_cd))
+    ).scalar_one_or_none()
+    if status_row is not None:
+        await _sync_status_next_from_plans(db, status_row)
+
+    await db.commit()
+    return {
+        "success": True,
+        "created": created,
+        "message": f"{month_key} の予定を {created} 件登録しました",
+    }
+
+
+@plan_router.put("/{item_id:int}")
+async def update_roller_usage_plan(
+    item_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_quality_operation("edit")),
+):
+    """予定更新"""
+    row = (
+        await db.execute(select(RollerUsagePlan).where(RollerUsagePlan.id == item_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="予定が見つかりません")
+
+    if "planned_exec_date" in body:
+        d = _parse_date(body.get("planned_exec_date"))
+        if not d:
+            raise HTTPException(status_code=400, detail="planned_exec_date が不正です")
+        row.planned_exec_date = d
+        row.plan_month = _plan_month_from_date(d)
+    if "planned_product_cd" in body:
+        v = body.get("planned_product_cd")
+        row.planned_product_cd = str(v).strip() if v is not None and str(v).strip() else None
+    if "exec_type" in body:
+        row.exec_type = (body.get("exec_type") or "ローラー交換").strip() or "ローラー交換"
+    if "status" in body:
+        st = (body.get("status") or "").strip()
+        if st in ("planned", "done", "cancelled"):
+            row.status = st
+    if "sort_order" in body:
+        row.sort_order = _to_opt_int(body.get("sort_order")) or 0
+    if "note" in body:
+        row.note = body.get("note")
+
+    status_row = (
+        await db.execute(
+            select(RollerUsageStatus).where(RollerUsageStatus.roller_cd == row.roller_cd)
+        )
+    ).scalar_one_or_none()
+    if status_row is not None:
+        await _sync_status_next_from_plans(db, status_row)
+
+    await db.commit()
+    await db.refresh(row)
+    return {"success": True, "data": _plan_to_dict(row)}
+
+
+@plan_router.delete("/{item_id:int}")
+async def delete_roller_usage_plan(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_quality_operation("delete")),
+):
+    """予定削除"""
+    row = (
+        await db.execute(select(RollerUsagePlan).where(RollerUsagePlan.id == item_id))
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="予定が見つかりません")
+    roller_cd = row.roller_cd
+    await db.delete(row)
+
+    status_row = (
+        await db.execute(select(RollerUsageStatus).where(RollerUsageStatus.roller_cd == roller_cd))
+    ).scalar_one_or_none()
+    if status_row is not None:
+        await _sync_status_next_from_plans(db, status_row)
+
     await db.commit()
     return {"success": True, "message": "削除しました"}
 
@@ -455,6 +832,7 @@ async def sync_from_roller_master(
         r.roller_cd: r
         for r in (await db.execute(select(RollerUsageStatus))).scalars().all()
     }
+    manual_cds = await _load_manual_roller_cd_set(db)
 
     inserted = 0
     updated = 0
@@ -471,7 +849,10 @@ async def sync_from_roller_master(
                 cleaning_freq_month=m.cleaning_freq_month,
                 source_roller_master_updated_at=m.updated_at,
             )
-            _apply_prediction(new_row)
+            if m.roller_cd in manual_cds:
+                await _sync_status_next_from_plans(db, new_row)
+            else:
+                _apply_prediction(new_row)
             db.add(new_row)
             inserted += 1
         else:
@@ -483,7 +864,10 @@ async def sync_from_roller_master(
             row.exchange_freq_month = m.exchange_freq_month
             row.cleaning_freq_month = m.cleaning_freq_month
             row.source_roller_master_updated_at = m.updated_at
-            _apply_prediction(row)
+            if m.roller_cd in manual_cds:
+                await _sync_status_next_from_plans(db, row)
+            else:
+                _apply_prediction(row)
             updated += 1
 
     await db.commit()
@@ -508,6 +892,7 @@ async def recalculate_predictions(
     if roller_cds:
         q = q.where(RollerUsageStatus.roller_cd.in_(roller_cds))
     rows = (await db.execute(q)).scalars().all()
+    manual_cds = await _load_manual_roller_cd_set(db)
 
     # 先にログ表から roller_cd ごとの最新実施日を取得して主表へ反映
     target_cds = [r.roller_cd for r in rows if (r.roller_cd or "").strip()]
@@ -660,6 +1045,7 @@ async def recalculate_predictions(
     updated_planned_when_negative_remaining = 0
     reached_exchange_threshold_count = 0
     for row in rows:
+        is_manual = (row.roller_cd or "") in manual_cds
         # 再計算前に生産数累計をクリアし、旧データの残留を除去する
         row.prod_cumulative_qty = 0
         row.prod_cumulative_qty_prev_month_end = 0
@@ -677,7 +1063,7 @@ async def recalculate_predictions(
         product_cds = bom_product_map.get((row.roller_cd or "").strip(), [])
         sum_qty = 0
         sum_qty_prev = 0
-        if not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty):
+        if not is_manual and not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty):
             if row.last_exec_date and product_cds:
                 sum_qty = await _sum_molding_actual_plan(
                     product_cds, row.last_exec_date, period_end, row.machine_name
@@ -698,12 +1084,16 @@ async def recalculate_predictions(
                 else:
                     row.prod_cumulative_qty_prev_month_end = sum_qty_prev
                 updated_prod_cumulative_qty_prev_month += 1
-        _apply_prediction(row)
+        if is_manual:
+            await _sync_status_next_from_plans(db, row)
+        else:
+            _apply_prediction(row)
 
         # 生産数累計を日別に段階加算し、交換本数に到達した日を実施日へ設定。
         # 予定段取品はその到達日に対応する production_summarys の製品名を設定。
         if (
-            not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty)
+            not is_manual
+            and not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty)
             and row.last_exec_date
             and product_cds
             and row.exchange_freq_qty is not None
@@ -732,7 +1122,7 @@ async def recalculate_predictions(
         # 交換残数表示も要件に合わせる:
         # - 生産数累計 < 交換本数: 生産数累計（正数）
         # - 生産数累計 >= 交換本数: 交換本数 - 生産数累計（0以下）
-        if row.exchange_freq_qty is not None and row.exchange_freq_qty > 0:
+        if not is_manual and row.exchange_freq_qty is not None and row.exchange_freq_qty > 0:
             if sum_qty >= row.exchange_freq_qty:
                 row.exchange_remaining_qty = row.exchange_freq_qty - sum_qty
             else:

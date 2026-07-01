@@ -170,7 +170,7 @@
         <el-table-column prop="next_exec_date" label="予定実施日" width="115" align="center" sortable="custom">
           <template #default="{ row }">
             <span :class="nextDateClass(row.next_exec_date)">
-              {{ row.next_exec_date ?? '—' }}
+              {{ formatNextExecDate(row) }}
             </span>
           </template>
         </el-table-column>
@@ -188,10 +188,20 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" min-width="220" align="center" fixed="right">
+        <el-table-column label="操作" min-width="280" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" :icon="Edit" @click="openEditDialog(row)">
               修正
+            </el-button>
+            <el-button
+              v-if="isManualRoller(row.roller_cd)"
+              type="warning"
+              link
+              size="small"
+              :icon="Calendar"
+              @click="openPlanDialog(row)"
+            >
+              予定管理
             </el-button>
             <el-button type="success" link size="small" :icon="DocumentAdd" @click="openLogDialog(row)">
               実施登録
@@ -301,6 +311,76 @@
         <div class="ea-dialog-footer">
           <el-button class="ea-btn-cancel" @click="logDialogVisible = false">キャンセル</el-button>
           <el-button type="success" class="ea-btn-save" :loading="logSubmitting" @click="submitLog">登録</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- ===== 予定管理ダイアログ（manual ローラー） ===== -->
+    <el-dialog
+      v-model="planDialogVisible"
+      :title="planDialogTitle"
+      width="720px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="ea-dialog"
+      @opened="loadPlanForMonth"
+    >
+      <div class="ea-plan-toolbar">
+        <span class="ea-plan-label">対象月</span>
+        <el-date-picker
+          v-model="planMonth"
+          type="month"
+          value-format="YYYY-MM"
+          format="YYYY年MM月"
+          size="small"
+          @change="loadPlanForMonth"
+        />
+        <el-button size="small" :icon="Plus" @click="addPlanItem">日付追加</el-button>
+      </div>
+      <el-table
+        :data="planItems"
+        v-loading="planLoading"
+        border
+        size="small"
+        class="ea-plan-table"
+        empty-text="予定日がありません。「日付追加」で登録してください"
+      >
+        <el-table-column label="予定実施日" width="180">
+          <template #default="{ row }">
+            <el-date-picker
+              v-model="row.planned_exec_date"
+              type="date"
+              value-format="YYYY-MM-DD"
+              size="small"
+              style="width: 100%"
+              placeholder="日付を選択"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="予定段取品" min-width="200">
+          <template #default="{ row }">
+            <el-input v-model="row.planned_product_cd" size="small" placeholder="製品CD・名称" clearable />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ $index }">
+            <el-button type="danger" link size="small" :icon="Delete" @click="removePlanItem($index)" />
+          </template>
+        </el-table-column>
+      </el-table>
+      <p class="ea-plan-hint">同一月に複数の予定日を登録できます。保存後、一覧印刷に反映されます。</p>
+      <template #footer>
+        <div class="ea-dialog-footer">
+          <el-button class="ea-btn-cancel" @click="planDialogVisible = false">閉じる</el-button>
+          <el-button
+            type="primary"
+            class="ea-btn-save"
+            :loading="planSubmitting"
+            :disabled="!canEdit"
+            @click="submitPlanBatch"
+          >
+            保存
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -466,7 +546,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Setting, Search, RefreshLeft, Refresh, Edit, Delete, List,
-  DocumentAdd, DataAnalysis, Histogram, Connection, Printer,
+  DocumentAdd, DataAnalysis, Histogram, Connection, Printer, Calendar, Plus,
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
@@ -485,6 +565,11 @@ import {
 } from '@/api/erp/quality/rollerUsageLog'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchRollerMasterList, type RollerMasterRow } from '@/api/master/rollerMaster'
+import {
+  fetchRollerUsagePlanList,
+  batchSyncRollerUsagePlan,
+  type RollerUsagePlanRow,
+} from '@/api/erp/quality/rollerUsagePlan'
 import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
 import { guardQualityOperation } from '@/utils/qualityOperationGuard'
 
@@ -521,6 +606,20 @@ const formingMachineOptions = computed(() =>
 )
 const rollerMasterOptions = ref<Array<{ label: string; value: string }>>([])
 const rollerCategoryMap = ref<Record<string, string>>({})
+const manualScheduleCdSet = ref<Set<string>>(new Set())
+const manualPlanCountMap = ref<Record<string, number>>({})
+
+type PlanFormItem = { planned_exec_date: string; planned_product_cd: string }
+
+const isManualRoller = (rollerCd?: string | null) => {
+  const cd = String(rollerCd ?? '').trim()
+  return cd !== '' && manualScheduleCdSet.value.has(cd)
+}
+
+const currentPlanMonth = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 // ---------------------------------------------------------------------------
 // Options
@@ -559,6 +658,12 @@ const loadRollerMasterOptions = async () => {
       acc[cd] = String(x.category ?? '').trim()
       return acc
     }, {})
+    manualScheduleCdSet.value = new Set(
+      list
+        .filter((x) => String(x.schedule_mode ?? 'auto').trim().toLowerCase() === 'manual')
+        .map((x) => String(x.roller_cd ?? '').trim())
+        .filter(Boolean),
+    )
     rollerMasterOptions.value = list
       .map((x) => {
         const cd = String(x.roller_cd ?? '').trim()
@@ -606,6 +711,7 @@ const loadData = async () => {
     const { list, total: tot } = extractListAndTotal(res)
     rows.value = list
     total.value = tot
+    await refreshManualPlanCounts()
   } catch (e) {
     console.error(e)
     ElMessage.error('ローラー使用状況の取得に失敗しました')
@@ -766,12 +872,148 @@ const submitLog = async () => {
     await createRollerUsageLog(logForm.value)
     ElMessage.success('登録しました')
     logDialogVisible.value = false
-    await loadData()
+    await Promise.all([loadData(), refreshManualPlanCounts()])
   } catch (e) {
     console.error(e)
     ElMessage.error('登録に失敗しました')
   } finally {
     logSubmitting.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan dialog (manual schedule)
+// ---------------------------------------------------------------------------
+const planDialogVisible = ref(false)
+const planLoading = ref(false)
+const planSubmitting = ref(false)
+const planDialogRollerCd = ref('')
+const planDialogRollerType = ref('')
+const planMonth = ref(currentPlanMonth())
+const planItems = ref<PlanFormItem[]>([])
+
+const planDialogTitle = computed(() => {
+  const cd = planDialogRollerCd.value
+  const tp = planDialogRollerType.value.trim()
+  if (!cd && !tp) return '予定実施日管理'
+  return tp ? `予定実施日管理 — ${cd}（${tp}）` : `予定実施日管理 — ${cd}`
+})
+
+const openPlanDialog = (row: RollerUsageStatusRow) => {
+  if (!guardQualityOperation(canEdit)) return
+  planDialogRollerCd.value = row.roller_cd ?? ''
+  planDialogRollerType.value = String(row.roller_type ?? '').trim()
+  planMonth.value = currentPlanMonth()
+  planItems.value = []
+  planDialogVisible.value = true
+}
+
+const loadPlanForMonth = async () => {
+  const cd = planDialogRollerCd.value.trim()
+  const month = planMonth.value.trim()
+  if (!cd || !month) return
+  planLoading.value = true
+  try {
+    const res = await fetchRollerUsagePlanList({
+      roller_cd: cd,
+      planMonth: month,
+      status: 'planned',
+      pageSize: 200,
+    })
+    const r = res as Record<string, unknown>
+    const data = r.data as { list?: RollerUsagePlanRow[] } | undefined
+    const list = data?.list ?? (r.list as RollerUsagePlanRow[]) ?? []
+    planItems.value = list.map((p) => ({
+      planned_exec_date: String(p.planned_exec_date ?? ''),
+      planned_product_cd: String(p.planned_product_cd ?? ''),
+    }))
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('予定の取得に失敗しました')
+  } finally {
+    planLoading.value = false
+  }
+}
+
+const addPlanItem = () => {
+  planItems.value.push({ planned_exec_date: '', planned_product_cd: '' })
+}
+
+const removePlanItem = (index: number) => {
+  planItems.value.splice(index, 1)
+}
+
+const refreshManualPlanCounts = async () => {
+  if (manualScheduleCdSet.value.size === 0) {
+    manualPlanCountMap.value = {}
+    return
+  }
+  try {
+    const res = await fetchRollerUsagePlanList({
+      status: 'planned',
+      fromDate: todayStr(),
+      pageSize: 5000,
+    })
+    const r = res as Record<string, unknown>
+    const data = r.data as { list?: RollerUsagePlanRow[] } | undefined
+    const list = data?.list ?? (r.list as RollerUsagePlanRow[]) ?? []
+    const counts: Record<string, number> = {}
+    for (const p of list) {
+      const cd = String(p.roller_cd ?? '').trim()
+      if (!cd || !manualScheduleCdSet.value.has(cd)) continue
+      counts[cd] = (counts[cd] ?? 0) + 1
+    }
+    manualPlanCountMap.value = counts
+  } catch {
+    manualPlanCountMap.value = {}
+  }
+}
+
+const submitPlanBatch = async () => {
+  if (!guardQualityOperation(canEdit)) return
+  const cd = planDialogRollerCd.value.trim()
+  const month = planMonth.value.trim()
+  if (!cd || !month) return
+
+  const items = planItems.value
+    .map((x) => ({
+      planned_exec_date: String(x.planned_exec_date ?? '').trim(),
+      planned_product_cd: String(x.planned_product_cd ?? '').trim() || null,
+    }))
+    .filter((x) => x.planned_exec_date)
+
+  for (const item of items) {
+    if (item.planned_exec_date.slice(0, 7) !== month) {
+      ElMessage.warning(`予定日 ${item.planned_exec_date} は対象月 ${month} と一致しません`)
+      return
+    }
+  }
+
+  const dates = items.map((x) => x.planned_exec_date)
+  if (new Set(dates).size !== dates.length) {
+    ElMessage.warning('同じ予定日が重複しています')
+    return
+  }
+
+  planSubmitting.value = true
+  try {
+    await batchSyncRollerUsagePlan({
+      roller_cd: cd,
+      plan_month: month,
+      items: items.map((x, idx) => ({
+        planned_exec_date: x.planned_exec_date,
+        planned_product_cd: x.planned_product_cd,
+        sort_order: idx,
+      })),
+    })
+    ElMessage.success('予定を保存しました')
+    planDialogVisible.value = false
+    await Promise.all([loadData(), refreshManualPlanCounts()])
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('予定の保存に失敗しました')
+  } finally {
+    planSubmitting.value = false
   }
 }
 
@@ -993,37 +1235,101 @@ const printHistory = () => {
 }
 
 /** 現在のフィルタで一覧を取得し、実施日（次回実施日）昇順で A4 縦印刷 */
+type PrintListRow = {
+  roller_cd: string
+  roller_type: string
+  machine_name: string
+  planned_product_cd: string | null
+  planned_exec_date: string
+  statusRow: RollerUsageStatusRow
+}
+
+const buildPrintListRows = (
+  statusList: RollerUsageStatusRow[],
+  planList: RollerUsagePlanRow[],
+): PrintListRow[] => {
+  const statusByCd = new Map(statusList.map((s) => [String(s.roller_cd ?? '').trim(), s]))
+  const out: PrintListRow[] = []
+
+  for (const s of statusList) {
+    const cd = String(s.roller_cd ?? '').trim()
+    if (!cd || isManualRoller(cd)) continue
+    const rawDate = String(s.next_exec_date ?? '').trim()
+    if (!rawDate) continue
+    out.push({
+      roller_cd: cd,
+      roller_type: String(s.roller_type ?? '').trim(),
+      machine_name: String(s.machine_name ?? '').trim(),
+      planned_product_cd: s.planned_product_cd ?? null,
+      planned_exec_date: rawDate,
+      statusRow: s,
+    })
+  }
+
+  for (const p of planList) {
+    const cd = String(p.roller_cd ?? '').trim()
+    if (!cd || !isManualRoller(cd)) continue
+    const rawDate = String(p.planned_exec_date ?? '').trim()
+    if (!rawDate) continue
+    const s = statusByCd.get(cd)
+    if (!s) continue
+
+    if (filters.value.keyword.trim()) {
+      const kw = filters.value.keyword.trim().toLowerCase()
+      const hay = `${cd} ${s.roller_type ?? ''} ${s.machine_name ?? ''}`.toLowerCase()
+      if (!hay.includes(kw)) continue
+    }
+    if (filters.value.machine_cd && String(s.machine_cd ?? '') !== filters.value.machine_cd) continue
+    if (filters.value.exec_type) {
+      const et = String(p.exec_type ?? s.exec_type ?? '').trim()
+      if (et !== filters.value.exec_type) continue
+    }
+
+    out.push({
+      roller_cd: cd,
+      roller_type: String(s.roller_type ?? '').trim(),
+      machine_name: String(s.machine_name ?? '').trim(),
+      planned_product_cd: p.planned_product_cd ?? s.planned_product_cd ?? null,
+      planned_exec_date: rawDate,
+      statusRow: s,
+    })
+  }
+
+  return out.sort((a, b) => {
+    const d = a.planned_exec_date.localeCompare(b.planned_exec_date)
+    if (d !== 0) return d
+    return a.roller_cd.localeCompare(b.roller_cd, 'ja')
+  })
+}
+
 const printMainListReport = async () => {
   if (!guardQualityOperation(canExport)) return
 
   printingList.value = true
   try {
-    const res = await fetchRollerUsageStatusList({
-      page: 1,
-      pageSize: 5000,
-      ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
-      ...(filters.value.machine_cd ? { machine_cd: filters.value.machine_cd } : {}),
-      ...(filters.value.exec_type ? { exec_type: filters.value.exec_type } : {}),
-    })
-    const { list, total } = extractListAndTotal(res)
-    const sorted = [...list].sort((a, b) => {
-      const sa = String(a.next_exec_date ?? '').trim()
-      const sb = String(b.next_exec_date ?? '').trim()
-      if (!sa && !sb) {
-        return String(a.roller_cd ?? '').localeCompare(String(b.roller_cd ?? ''), 'ja')
-      }
-      if (!sa) return 1
-      if (!sb) return -1
-      return sa.localeCompare(sb)
-    })
+    const [statusRes, planRes] = await Promise.all([
+      fetchRollerUsageStatusList({
+        page: 1,
+        pageSize: 5000,
+        ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
+        ...(filters.value.machine_cd ? { machine_cd: filters.value.machine_cd } : {}),
+        ...(filters.value.exec_type ? { exec_type: filters.value.exec_type } : {}),
+      }),
+      fetchRollerUsagePlanList({ status: 'planned', pageSize: 5000 }),
+    ])
+    const { list, total } = extractListAndTotal(statusRes)
+    const planRaw = planRes as Record<string, unknown>
+    const planData = planRaw.data as { list?: RollerUsagePlanRow[] } | undefined
+    const planList = planData?.list ?? (planRaw.list as RollerUsagePlanRow[]) ?? []
+    const sorted = buildPrintListRows(list, planList)
 
     const rowsHtml =
       sorted.length > 0
         ? (() => {
-            const buckets: Array<{ monthKey: string; monthLabel: string; rows: RollerUsageStatusRow[] }> = []
+            const buckets: Array<{ monthKey: string; monthLabel: string; rows: PrintListRow[] }> = []
             let currentMonthKey = ''
             for (const row of sorted) {
-              const rawDate = String(row.next_exec_date ?? '').trim()
+              const rawDate = String(row.planned_exec_date ?? '').trim()
               const monthKey = rawDate ? rawDate.slice(0, 7) : '未設定'
               const monthLabel = monthKey === '未設定' ? '実施日未設定' : `${monthKey} 月`
               if (monthKey !== currentMonthKey) {
@@ -1039,37 +1345,34 @@ const printMainListReport = async () => {
               { preferred: 'TTAFR_19(交換)', suppressed: 'TTAFR_19(点検・清掃)' },
             ]
 
-            const applyMonthFilter = (monthRows: RollerUsageStatusRow[]) => {
+            const applyMonthFilter = (monthRows: PrintListRow[]) => {
               let filtered = [...monthRows]
               for (const { preferred, suppressed } of preferredPairs) {
-                const hasPreferred = filtered.some(
-                  (r) => String(r.roller_type ?? '').trim() === preferred,
-                )
+                const hasPreferred = filtered.some((r) => r.roller_type === preferred)
                 if (hasPreferred) {
-                  filtered = filtered.filter((r) => String(r.roller_type ?? '').trim() !== suppressed)
+                  filtered = filtered.filter((r) => r.roller_type !== suppressed)
                 }
               }
               return filtered
             }
 
             return buckets
-              .map(({ monthKey, monthLabel, rows: monthRows }) => {
+              .map(({ monthLabel, rows: monthRows }) => {
                 const filteredRows = applyMonthFilter(monthRows)
                 const monthRow = `<tr class="month-group"><td colspan="9">${_escHtml(monthLabel)}</td></tr>`
                 const detailRows =
                   filteredRows.length > 0
                     ? filteredRows
                         .map((row) => {
-                          const rawDate = String(row.next_exec_date ?? '').trim()
                           const category = _escHtml(
-                            String(rollerCategoryMap.value[String(row.roller_cd ?? '').trim()] || '').trim() || '—',
+                            String(rollerCategoryMap.value[row.roller_cd] || '').trim() || '—',
                           )
-                          const rt = _escHtml(String(row.roller_type ?? '').trim() || '—')
-                          const mn = _escHtml(String(row.machine_name ?? '').trim() || '—')
-                          const pqNum = prevMonthRemaining(row)
+                          const rt = _escHtml(row.roller_type || '—')
+                          const mn = _escHtml(row.machine_name || '—')
+                          const pqNum = prevMonthRemaining(row.statusRow)
                           const pq =
                             pqNum == null ? '—' : _escHtml(Number(pqNum).toLocaleString('ja-JP'))
-                          const ld = _escHtml(rawDate || '—')
+                          const ld = _escHtml(row.planned_exec_date || '—')
                           const pp = _escHtml(String(row.planned_product_cd ?? '').trim() || '—')
 
                           return `<tr><td>${category}</td><td>${rt}</td><td>${mn}</td><td class="num">${pq}</td><td>${pp}</td><td>${ld}</td><td></td><td></td><td></td></tr>`
@@ -1077,7 +1380,6 @@ const printMainListReport = async () => {
                         .join('')
                     : ''
 
-                // monthKey が未設定等でも、月ヘッダーだけは出す
                 return `${monthRow}${detailRows}`
               })
               .join('')
@@ -1085,19 +1387,9 @@ const printMainListReport = async () => {
         : '<tr><td colspan="9" style="text-align:center">データなし</td></tr>'
 
     const printedAt = _escHtml(new Date().toLocaleString('ja-JP'))
-    const metaChunks: string[] = []
-    if (filters.value.keyword.trim()) {
-      metaChunks.push(`キーワード: ${_escHtml(filters.value.keyword.trim())}`)
-    }
-    if (filters.value.machine_cd) {
-      metaChunks.push(`設備: ${_escHtml(filters.value.machine_cd)}`)
-    }
-    if (filters.value.exec_type) {
-      metaChunks.push(`実施内容: ${_escHtml(filters.value.exec_type)}`)
-    }
     const countNote =
-      total > sorted.length
-        ? `${sorted.length}件表示（全${total}件中・上限5000件）`
+      total > list.length
+        ? `${sorted.length}件表示（状況${list.length}件・上限5000件）`
         : `${sorted.length}件`
 
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ローラー交換・点検管理表</title>
@@ -1186,6 +1478,15 @@ const rowClassName = ({ row }: { row: RollerUsageStatusRow }) => {
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
+
+const formatNextExecDate = (row: RollerUsageStatusRow) => {
+  const cd = String(row.roller_cd ?? '').trim()
+  const count = manualPlanCountMap.value[cd] ?? 0
+  const base = String(row.next_exec_date ?? '').trim()
+  if (!isManualRoller(cd)) return base || '—'
+  if (count <= 1) return base || '—'
+  return base ? `${base} 他${count - 1}件` : `予定${count}件`
+}
 
 const nextDateClass = (d?: string | null) => {
   if (!d) return ''
@@ -1496,6 +1797,30 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.ea-plan-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.ea-plan-label {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.ea-plan-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ea-plan-table {
+  width: 100%;
 }
 
 .ea-btn-cancel {

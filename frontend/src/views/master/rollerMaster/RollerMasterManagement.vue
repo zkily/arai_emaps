@@ -104,6 +104,12 @@
             {{ machineNameMap[row.machine_cd || ''] || '—' }}
           </template>
         </el-table-column>
+        <el-table-column prop="schedule_mode" label="予定方式" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.schedule_mode === 'manual'" type="warning" size="small" effect="light">手動</el-tag>
+            <el-tag v-else type="info" size="small" effect="plain">自動</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="note" label="備考" min-width="180" show-overflow-tooltip />
         <el-table-column label="更新日時" width="160" align="center" prop="updated_at">
           <template #default="{ row }">
@@ -190,6 +196,13 @@
                 :label="`${m.label} (${m.value})`"
                 :value="m.value"
               />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="予定方式" prop="schedule_mode">
+            <el-select v-model="form.schedule_mode" style="width: 100%">
+              <el-option label="自動予測" value="auto" />
+              <el-option label="手動予定日" value="manual" />
             </el-select>
           </el-form-item>
 
@@ -406,6 +419,7 @@ const resetForm = () => {
     category: '',
     note: '',
     machine_cd: null,
+    schedule_mode: 'auto',
   }
 }
 
@@ -423,6 +437,7 @@ const openDialog = async (row?: RollerMasterRow) => {
       category: row.category ?? '',
       note: row.note ?? '',
       machine_cd: row.machine_cd ?? null,
+      schedule_mode: row.schedule_mode === 'manual' ? 'manual' : 'auto',
     }
     dialogVisible.value = true
   } else {
@@ -461,6 +476,7 @@ const submitForm = async () => {
       category: (form.value.category ?? '')?.trim?.() ? String(form.value.category) : null,
       note: (form.value.note ?? '') ?? null,
       machine_cd: (form.value.machine_cd ?? null) ? String(form.value.machine_cd) : null,
+      schedule_mode: form.value.schedule_mode === 'manual' ? 'manual' : 'auto',
     }
 
     if (isEdit.value && editingId.value != null) {

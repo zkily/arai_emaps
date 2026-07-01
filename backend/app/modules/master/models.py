@@ -693,6 +693,13 @@ class RollerMaster(Base):
     category = Column(String(50), nullable=True, comment="区分")
     note = Column(Text, nullable=True, comment="備考")
     machine_cd = Column(String(50), nullable=True, index=True, comment="設備CD")
+    schedule_mode = Column(
+        String(10),
+        nullable=False,
+        default="auto",
+        server_default="auto",
+        comment="auto=自動予測, manual=手動予定日",
+    )
     created_at = Column(DateTime, default=func.now(), comment="作成日時")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
 
@@ -731,6 +738,26 @@ class RollerUsageStatus(Base):
     exchange_remaining_qty = Column(Integer, nullable=True, comment="交換残数")
     # 追跡
     source_roller_master_updated_at = Column(DateTime, nullable=True, comment="ローラーマスタ最終同期日時")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
+
+
+class RollerUsagePlan(Base):
+    """ローラー予定実施スケジュール（roller_usage_plan）— manual モードの予定日（月内複数可）"""
+
+    __tablename__ = "roller_usage_plan"
+    __table_args__ = ({"mysql_comment": "ローラー予定実施スケジュール"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主キー")
+    roller_cd = Column(String(50), nullable=False, index=True, comment="ローラーCD")
+    plan_month = Column(String(7), nullable=False, comment="対象月 YYYY-MM")
+    planned_exec_date = Column(Date, nullable=False, comment="予定実施日")
+    planned_product_cd = Column(String(50), nullable=True, comment="予定段取品")
+    exec_type = Column(String(50), nullable=False, default="ローラー交換", comment="実施内容")
+    status = Column(String(20), nullable=False, default="planned", comment="planned|done|cancelled")
+    sort_order = Column(Integer, nullable=False, default=0, comment="同日複数時の並び")
+    note = Column(Text, nullable=True, comment="備考")
+    created_by = Column(String(100), nullable=True, comment="登録者")
     created_at = Column(DateTime, default=func.now(), comment="作成日時")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
 

@@ -13,6 +13,7 @@ export interface RollerMasterRow {
   category?: string | null
   note?: string | null
   machine_cd?: string | null
+  schedule_mode?: 'auto' | 'manual' | string
   created_at?: string
   updated_at?: string
 }

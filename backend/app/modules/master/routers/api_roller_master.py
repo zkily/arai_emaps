@@ -37,6 +37,11 @@ def _to_optional_int(v: Any) -> Optional[int]:
         return None
 
 
+def _normalize_schedule_mode(v: Any) -> str:
+    s = str(v or "auto").strip().lower()
+    return "manual" if s == "manual" else "auto"
+
+
 def _keyword_clause(keyword: Optional[str]):
     if not keyword or not str(keyword).strip():
         return None
@@ -80,6 +85,7 @@ def _row_to_dict(row: RollerMaster) -> dict:
         "category": row.category,
         "note": row.note,
         "machine_cd": row.machine_cd,
+        "schedule_mode": row.schedule_mode or "auto",
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -188,6 +194,7 @@ async def create_roller_master(
         category=(body.get("category") or None) and str(body.get("category")).strip() or None,
         note=body.get("note"),
         machine_cd=(body.get("machine_cd") or None) and str(body.get("machine_cd")).strip() or None,
+        schedule_mode=_normalize_schedule_mode(body.get("schedule_mode")),
     )
     db.add(row)
     await db.commit()
@@ -237,6 +244,8 @@ async def update_roller_master(
     if "machine_cd" in body:
         v = body.get("machine_cd")
         row.machine_cd = (str(v).strip() if v is not None and str(v).strip() else None)  # type: ignore[assignment]
+    if "schedule_mode" in body:
+        row.schedule_mode = _normalize_schedule_mode(body.get("schedule_mode"))
 
     await db.commit()
     await db.refresh(row)
