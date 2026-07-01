@@ -368,7 +368,7 @@
           </div>
         </div>
       </template>
-      <div v-loading="productCountLoading || shipmentLoading" class="product-count-dialog__body">
+      <div v-loading="productCountLoading" class="product-count-dialog__body">
         <el-table
           v-if="displayProductCountRows.length"
           class="product-count-table"
@@ -407,7 +407,7 @@
           <span>仕掛+製品合計 <strong>{{ formatNumber(productCountGrandTotal, 0) }}</strong></span>
         </div>
         <el-empty
-          v-if="!displayProductCountRows.length && !productCountLoading && !shipmentLoading"
+          v-if="!displayProductCountRows.length && !productCountLoading"
           class="product-count-empty"
           description="表示対象の製品データがありません。"
           :image-size="72"
@@ -427,7 +427,7 @@
               type="success"
               size="small"
               plain
-              :disabled="productCountLoading || shipmentLoading || !displayProductCountRows.length"
+              :disabled="productCountLoading || !displayProductCountRows.length"
               @click="exportProductCountData"
             >
               エクスポート
@@ -435,7 +435,7 @@
             <el-button
               type="primary"
               size="small"
-              :disabled="productCountLoading || shipmentLoading || !displayProductCountRows.length"
+              :disabled="productCountLoading || !displayProductCountRows.length"
               @click="printProductCountData"
             >
               印刷
@@ -687,7 +687,7 @@
           </div>
         </div>
       </template>
-      <div v-loading="productAmountLoading || shipmentAmountLoading" class="product-count-dialog__body">
+      <div v-loading="productAmountLoading" class="product-count-dialog__body">
         <el-table
           v-if="displayProductAmountRows.length"
           class="product-count-table"
@@ -726,7 +726,7 @@
           <span>仕掛+製品合計 <strong>{{ formatNumber(productAmountGrandTotal, 0) }}</strong></span>
         </div>
         <el-empty
-          v-if="!displayProductAmountRows.length && !productAmountLoading && !shipmentAmountLoading"
+          v-if="!displayProductAmountRows.length && !productAmountLoading"
           class="product-count-empty"
           description="表示対象の製品データがありません。"
           :image-size="72"
@@ -746,7 +746,7 @@
               type="success"
               size="small"
               plain
-              :disabled="productAmountLoading || shipmentAmountLoading || !displayProductAmountRows.length"
+              :disabled="productAmountLoading || !displayProductAmountRows.length"
               @click="exportProductAmountData"
             >
               エクスポート
@@ -754,7 +754,7 @@
             <el-button
               type="primary"
               size="small"
-              :disabled="productAmountLoading || shipmentAmountLoading || !displayProductAmountRows.length"
+              :disabled="productAmountLoading || !displayProductAmountRows.length"
               @click="printProductAmountData"
             >
               印刷
@@ -883,8 +883,6 @@ const printIncludeKindAmount = ref(false)
 const shipmentAmountDate = ref('')
 const shipmentAmountDestCds = ref<string[]>([])
 const shipmentAmountMergeEnabled = ref(false)
-const shipmentAmountLoading = ref(false)
-const shipmentAmountByProductCd = ref<Record<string, number>>({})
 
 interface DestinationItem {
   destination_cd: string
@@ -920,8 +918,6 @@ const DEFAULT_SHIPMENT_DEST_CDS = [
 const shipmentDate = ref('')
 const shipmentDestCds = ref<string[]>([])
 const shipmentMergeEnabled = ref(false)
-const shipmentLoading = ref(false)
-const shipmentByProductCd = ref<Record<string, number>>({})
 
 /** 製品本数・金額・単価棚卸および統合報告書（製品側）の集計対象：製品CD 末尾が「1」のみ */
 function isStocktakeProductCdIncluded(productCd: unknown): boolean {
@@ -958,92 +954,81 @@ function dedupeProductStockPanelRows(rows: any[]): any[] {
 }
 
 /**
- * 製品本数棚卸（出荷並入時）と棚卸統合報告書の製品本数を揃える。
- * 報告書は production_summary が無くても order_daily の出荷本数を kind 集計に加算するが、
- * 旧実装は getStockPanel 由来の行だけを map していたため、その差分が欠落していた。
+ * production_summarys 在庫列 → 棚卸ダイアログの工程集計キー。
+ * 統合報告書（get_monthly_inventory_report）と同じ実在庫列をそのまま集計する（ルート存在チェックなし）。
  */
-function buildShipmentOnlyProductCountRows(shipMap: Record<string, number>, existingCds: Set<string>): ProductCountRow[] {
-  const procs = productCountProcesses.value
-  const extras: ProductCountRow[] = []
-  for (const [cdRaw, qtyRaw] of Object.entries(shipMap)) {
-    const cd = String(cdRaw ?? '').trim()
-    const shipQty = Number(qtyRaw) || 0
-    if (!cd || !isStocktakeProductCdIncluded(cd) || shipQty <= 0 || existingCds.has(cd)) continue
-    const row: ProductCountRow = {
-      product_cd: cd,
-      product_name: productDisplayNameFromFilter(cd),
-    }
-    for (const p of procs) {
-      row[`qty_${p.process_cd}`] = 0
-    }
-    row.qty_WIP_TOTAL = 0
-    row.qty_all = shipQty
-    row.qty_PRODUCT_TOTAL = shipQty
-    syncProductCountWipProductTotal(row)
-    extras.push(row)
-  }
-  extras.sort((a, b) =>
-    String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ja', { sensitivity: 'base' }),
-  )
-  return extras
+const STOCK_PANEL_INVENTORY_COLUMN_TO_PROCESS_CD: Record<string, string> = {
+  cutting_inventory: 'KT01',
+  chamfering_inventory: 'KT02',
+  molding_inventory: 'KT04',
+  plating_inventory: 'KT05',
+  outsourced_plating_inventory: 'KT06',
+  pre_outsourcing_inventory: 'KT06',
+  welding_inventory: 'KT07',
+  outsourced_welding_inventory: 'KT08',
+  pre_inspection_inventory: 'KT08',
+  pre_welding_inspection_inventory: 'KT11',
+  inspection_inventory: 'KT09',
+  warehouse_inventory: 'all',
+  outsourced_warehouse_inventory: 'KT10',
 }
 
-const displayProductCountRows = computed<ProductCountRow[]>(() => {
-  const base = baseProductCountRows.value
-  if (!shipmentMergeEnabled.value || !shipmentDate.value || !shipmentDestCds.value.length) {
-    return applyZeroFilter(base)
+/** 展開行の在庫列（または process_cd）から工程集計キーを解決 */
+function resolveStockPanelAggregateProcessCd(row: any): string | null {
+  const invCol = String(row?.inventory_column ?? '').trim()
+  if (invCol) return STOCK_PANEL_INVENTORY_COLUMN_TO_PROCESS_CD[invCol] ?? null
+  const procCd = String(row?.process_cd ?? '').trim()
+  if (!procCd) return null
+  const alias: Record<string, string> = {
+    KT13: 'all',
+    KT15: 'KT10',
+    KT16: 'KT08',
+    KT17: 'KT06',
   }
-  const shipMap = shipmentByProductCd.value
-  const merged = base.map((row) => {
-    const cd = String(row.product_cd ?? '').trim()
-    const shipQty = isStocktakeProductCdIncluded(cd) ? shipMap[cd] ?? 0 : 0
-    if (shipQty === 0) return row
-    const newRow = { ...row }
-    newRow.qty_all = (Number(row.qty_all) || 0) + shipQty
-    newRow.qty_PRODUCT_TOTAL =
-      (Number(newRow.qty_KT09) || 0) + (Number(newRow.qty_all) || 0) + (Number(newRow.qty_KT10) || 0)
-    syncProductCountWipProductTotal(newRow)
-    return newRow
-  })
-  const seenCds = new Set(merged.map((r) => String(r.product_cd ?? '').trim()).filter(Boolean))
-  const shipmentOnly = buildShipmentOnlyProductCountRows(shipMap, seenCds)
-  return applyZeroFilter([...merged, ...shipmentOnly])
-})
+  return alias[procCd] ?? procCd
+}
 
-const displayProductAmountRows = computed<ProductAmountRow[]>(() => {
-  const base = baseProductAmountRows.value
-  if (!shipmentAmountMergeEnabled.value || !shipmentAmountDate.value || !shipmentAmountDestCds.value.length) {
-    return applyZeroAmountFilter(base)
+function stockPanelRowAmount(row: any): number {
+  return Number(row.total_value) || ((Number(row.quantity) || 0) * (Number(row.unit_price) || 0))
+}
+
+/** 製品棚卸：全工程展開の stock-panel（ルート絞込なし＝統合報告書と同口径） */
+async function fetchExpandedProductStockPanelRows(asOf: string): Promise<any[]> {
+  const merged: any[] = []
+  let page = 1
+  const limit = 500
+  let total = 0
+  for (let guard = 0; guard < 500; guard += 1) {
+    const resp = await inventoryValueApi.getStockPanel({
+      tab: 'product',
+      as_of: asOf,
+      process_cd: undefined,
+      page,
+      limit,
+      sort_by: 'product_cd',
+      sort_order: 'asc',
+    })
+    const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
+    const list = inner.list ?? []
+    total = Number(inner.total ?? 0)
+    merged.push(...list)
+    if (!list.length || list.length < limit || merged.length >= total) break
+    page += 1
   }
-  const shipMap = shipmentAmountByProductCd.value
-  const merged = base.map((row) => {
-    const cd = String(row.product_cd ?? '').trim()
-    const shipQty = isStocktakeProductCdIncluded(cd) ? shipMap[cd] ?? 0 : 0
-    if (shipQty === 0) return row
-    const newRow = { ...row }
-    // 棚卸統合報告書と同口径：製品側単価 = 製品側合計金額 / 製品側合計本数
-    const baseProductQty = Number(row.qty_PRODUCT_TOTAL) || 0
-    const baseProductAmt = Number(row.amt_PRODUCT_TOTAL) || 0
-    const mergeUnitPrice = baseProductQty > 0 ? baseProductAmt / baseProductQty : 0
-    const extraAmt = shipQty * mergeUnitPrice
-    // 工程別一覧では倉庫列に並入表示しつつ、製品合計を同額増分
-    newRow.amt_all = (Number(row.amt_all) || 0) + extraAmt
-    newRow.amt_PRODUCT_TOTAL =
-      (Number(newRow.amt_KT09) || 0) + (Number(newRow.amt_all) || 0) + (Number(newRow.amt_KT10) || 0)
-    syncProductAmountWipProductTotal(newRow)
-    return newRow
-  })
-  return applyZeroAmountFilter(merged)
-})
+  return dedupeProductStockPanelRows(merged)
+}
+
+const displayProductCountRows = computed<ProductCountRow[]>(() => applyZeroFilter(baseProductCountRows.value))
+
+const displayProductAmountRows = computed<ProductAmountRow[]>(() => applyZeroAmountFilter(baseProductAmountRows.value))
 
 const displayProductUnitPriceRows = computed<ProductUnitPriceRow[]>(() => baseProductUnitPriceRows.value)
 
 function applyZeroFilter(rows: ProductCountRow[]): ProductCountRow[] {
   return rows.filter((row) => {
     const wip = Number(row.qty_WIP_TOTAL) || 0
-    const warehouse = Number(row.qty_all) || 0
-    const outsourcedWarehouse = Number(row.qty_KT10) || 0
-    return !(wip === 0 && warehouse === 0 && outsourcedWarehouse === 0)
+    const product = Number(row.qty_PRODUCT_TOTAL) || 0
+    return !(wip === 0 && product === 0)
   })
 }
 
@@ -1051,10 +1036,11 @@ function applyZeroAmountFilter(rows: ProductAmountRow[]): ProductAmountRow[] {
   return rows.filter((row) => {
     const cd = String(row.product_cd ?? '').trim()
     if (!isStocktakeProductCdIncluded(cd)) return false
-    const wip = Number(row.amt_WIP_TOTAL) || 0
-    const warehouse = Number(row.amt_all) || 0
-    const outsourcedWarehouse = Number(row.amt_KT10) || 0
-    return !(wip === 0 && warehouse === 0 && outsourcedWarehouse === 0)
+    const wipAmt = Number(row.amt_WIP_TOTAL) || 0
+    const productAmt = Number(row.amt_PRODUCT_TOTAL) || 0
+    const wipQty = Number(row.qty_WIP_TOTAL) || 0
+    const productQty = Number(row.qty_PRODUCT_TOTAL) || 0
+    return !(wipAmt === 0 && productAmt === 0 && wipQty === 0 && productQty === 0)
   })
 }
 
@@ -1601,6 +1587,72 @@ function openPartStockPrint() {
   }
 }
 
+async function fetchProductStocktakeRowsFromApi(
+  asOf: string,
+  merge: boolean,
+  shipDate: string,
+  destCds: string[],
+): Promise<Record<string, unknown>[]> {
+  const res = await inventoryValueApi.getProductStocktakeRows({
+    as_of: asOf,
+    shipment_merge: merge,
+    shipment_date: merge ? shipDate : undefined,
+    destination_cds: merge ? destCds : undefined,
+  })
+  if (!res.success) {
+    throw new Error('product stocktake rows fetch failed')
+  }
+  return res.data?.list ?? []
+}
+
+async function reloadProductCountRowsFromApi() {
+  if (!productCountAsOf.value) return
+  const merge =
+    shipmentMergeEnabled.value && Boolean(shipmentDate.value) && shipmentDestCds.value.length > 0
+  productCountLoading.value = true
+  try {
+    productCountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
+    const list = await fetchProductStocktakeRowsFromApi(
+      productCountAsOf.value,
+      merge,
+      shipmentDate.value,
+      shipmentDestCds.value,
+    )
+    baseProductCountRows.value = list as ProductCountRow[]
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('製品本数棚卸データの取得に失敗しました')
+    baseProductCountRows.value = []
+  } finally {
+    productCountLoading.value = false
+  }
+}
+
+async function reloadProductAmountRowsFromApi() {
+  if (!productAmountAsOf.value) return
+  const merge =
+    shipmentAmountMergeEnabled.value
+    && Boolean(shipmentAmountDate.value)
+    && shipmentAmountDestCds.value.length > 0
+  productAmountLoading.value = true
+  try {
+    productAmountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
+    const list = await fetchProductStocktakeRowsFromApi(
+      productAmountAsOf.value,
+      merge,
+      shipmentAmountDate.value,
+      shipmentAmountDestCds.value,
+    )
+    baseProductAmountRows.value = list as ProductAmountRow[]
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('製品金額棚卸データの取得に失敗しました')
+    baseProductAmountRows.value = []
+  } finally {
+    productAmountLoading.value = false
+  }
+}
+
 async function loadDestinations() {
   if (destinationList.value.length) return
   try {
@@ -1611,68 +1663,15 @@ async function loadDestinations() {
   }
 }
 
-async function fetchShipmentUnits() {
-  if (!shipmentDate.value || !shipmentDestCds.value.length) {
-    shipmentByProductCd.value = {}
-    return
-  }
-  shipmentLoading.value = true
-  try {
-    const res = await inventoryValueApi.getShipmentUnits({
-      date: shipmentDate.value,
-      destination_cds: shipmentDestCds.value,
-    })
-    const map: Record<string, number> = {}
-    for (const item of res.data.list) {
-      const cd = String(item.product_cd ?? '').trim()
-      if (cd && isStocktakeProductCdIncluded(cd)) {
-        map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
-      }
-    }
-    shipmentByProductCd.value = map
-  } catch {
-    shipmentByProductCd.value = {}
-  } finally {
-    shipmentLoading.value = false
-  }
-}
-
 async function onShipmentControlChange() {
   if (!shipmentDate.value || !shipmentDestCds.value.length) {
     if (shipmentMergeEnabled.value) {
       shipmentMergeEnabled.value = false
       ElMessage.warning('出荷日と納入先を選択してからスイッチをONにしてください')
     }
-    shipmentByProductCd.value = {}
-    return
   }
-  if (!shipmentMergeEnabled.value) return
-  await fetchShipmentUnits()
-}
-
-async function fetchShipmentAmountUnits() {
-  if (!shipmentAmountDate.value || !shipmentAmountDestCds.value.length) {
-    shipmentAmountByProductCd.value = {}
-    return
-  }
-  shipmentAmountLoading.value = true
-  try {
-    const res = await inventoryValueApi.getShipmentUnits({
-      date: shipmentAmountDate.value,
-      destination_cds: shipmentAmountDestCds.value,
-    })
-    const map: Record<string, number> = {}
-    for (const item of res.data.list) {
-      const cd = String(item.product_cd ?? '').trim()
-      if (cd && isStocktakeProductCdIncluded(cd)) {
-        map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
-      }
-    }
-    shipmentAmountByProductCd.value = map
-  } catch {
-    shipmentAmountByProductCd.value = {}
-  } finally {
-    shipmentAmountLoading.value = false
+  if (showProductCountDialog.value) {
+    await reloadProductCountRowsFromApi()
   }
 }
 
@@ -1682,11 +1681,10 @@ async function onShipmentAmountControlChange() {
       shipmentAmountMergeEnabled.value = false
       ElMessage.warning('出荷日と納入先を選択してからスイッチをONにしてください')
     }
-    shipmentAmountByProductCd.value = {}
-    return
   }
-  if (!shipmentAmountMergeEnabled.value) return
-  await fetchShipmentAmountUnits()
+  if (showProductAmountDialog.value) {
+    await reloadProductAmountRowsFromApi()
+  }
 }
 
 async function openProductCountDialog() {
@@ -1696,97 +1694,14 @@ async function openProductCountDialog() {
     return
   }
   showProductCountDialog.value = true
-  productCountLoading.value = true
   baseProductCountRows.value = []
-  shipmentByProductCd.value = {}
   shipmentMergeEnabled.value = false
   shipmentDate.value = String(endDate).slice(0, 10)
   productCountAsOf.value = String(endDate).slice(0, 10)
   await loadDestinations()
   shipmentDestCds.value = [...DEFAULT_SHIPMENT_DEST_CDS]
-  try {
-    productCountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
-
-    const results = await Promise.all(
-      productCountProcesses.value.map(async (proc) => {
-        const merged: any[] = []
-        if (!proc.source_codes.length) return { proc, list: merged }
-        for (const sourceCode of proc.source_codes) {
-          let page = 1
-          const limit = 500
-          let total = 0
-          for (let guard = 0; guard < 500; guard += 1) {
-            const resp = await inventoryValueApi.getStockPanel({
-              tab: 'product',
-              as_of: productCountAsOf.value,
-              process_cd: sourceCode === 'all' ? undefined : sourceCode,
-              page,
-              limit,
-              sort_by: 'product_cd',
-              sort_order: 'asc',
-            })
-            const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
-            let list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
-            // 倉庫列は production_summarys.warehouse_inventory のみを対象とする
-            if (sourceCode === 'all') {
-              list = list.filter((r: any) => String(r.inventory_column ?? '') === 'warehouse_inventory')
-            }
-            total = Number(inner.total ?? 0)
-            merged.push(...list)
-            if (!(inner.list ?? []).length || (inner.list ?? []).length < limit || merged.length >= total) break
-            page += 1
-          }
-        }
-        return { proc, list: dedupeProductStockPanelRows(merged) }
-      }),
-    )
-
-    const byProduct = new Map<string, ProductCountRow>()
-    for (const { proc, list } of results) {
-      for (const r of list) {
-        const cd = String(r.product_cd ?? '').trim()
-        if (!cd || !isStocktakeProductCdIncluded(cd)) continue
-        const name = String(r.product_name ?? '').trim() || cd
-        const kind = String(r.kind ?? '').trim() || undefined
-        if (!byProduct.has(cd)) {
-          byProduct.set(cd, { product_cd: cd, product_name: name, kind })
-        }
-        const row = byProduct.get(cd)!
-        if (!row.kind && kind) row.kind = kind
-        const qtyKey = `qty_${proc.process_cd}`
-        row[qtyKey] = (Number(row[qtyKey] ?? 0) || 0) + (Number(r.quantity) || 0)
-      }
-    }
-
-    const rows = [...byProduct.values()].sort((a, b) => {
-      const na = String(a.product_name ?? '').trim()
-      const nb = String(b.product_name ?? '').trim()
-      const byName = na.localeCompare(nb, 'ja', { sensitivity: 'base' })
-      if (byName !== 0) return byName
-      return String(a.product_cd).localeCompare(String(b.product_cd), 'ja', { sensitivity: 'base' })
-    })
-    for (const row of rows) {
-      for (const proc of productCountProcesses.value) {
-        const qtyKey = `qty_${proc.process_cd}`
-        row[qtyKey] = Number(row[qtyKey] ?? 0)
-      }
-      row.qty_WIP_TOTAL = PRODUCT_COUNT_WIP_SOURCE_CODES.reduce(
-        (sum, code) => sum + (Number(row[`qty_${code}`]) || 0),
-        0,
-      )
-      row.qty_PRODUCT_TOTAL =
-        (Number(row.qty_KT09) || 0) + (Number(row.qty_all) || 0) + (Number(row.qty_KT10) || 0)
-      syncProductCountWipProductTotal(row)
-    }
-    baseProductCountRows.value = rows
-    if (!displayProductCountRows.value.length) ElMessage.info('この条件ではデータがありません')
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('製品本数棚卸データの取得に失敗しました')
-    showProductCountDialog.value = false
-  } finally {
-    productCountLoading.value = false
-  }
+  await reloadProductCountRowsFromApi()
+  if (!displayProductCountRows.value.length) ElMessage.info('この条件ではデータがありません')
 }
 
 async function openProductAmountDialog() {
@@ -1796,104 +1711,15 @@ async function openProductAmountDialog() {
     return
   }
   showProductAmountDialog.value = true
-  productAmountLoading.value = true
   baseProductAmountRows.value = []
-  shipmentAmountByProductCd.value = {}
   shipmentAmountMergeEnabled.value = false
   shipmentAmountDate.value = String(endDate).slice(0, 10)
   productAmountAsOf.value = String(endDate).slice(0, 10)
   await loadDestinations()
   shipmentAmountDestCds.value = [...DEFAULT_SHIPMENT_DEST_CDS]
-  try {
-    productAmountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
-    const results = await Promise.all(
-      productAmountProcesses.value.map(async (proc) => {
-        const merged: any[] = []
-        if (!proc.source_codes.length) return { proc, list: merged }
-        for (const sourceCode of proc.source_codes) {
-          let page = 1
-          const limit = 500
-          let total = 0
-          for (let guard = 0; guard < 500; guard += 1) {
-            const resp = await inventoryValueApi.getStockPanel({
-              tab: 'product',
-              as_of: productAmountAsOf.value,
-              process_cd: sourceCode === 'all' ? undefined : sourceCode,
-              page,
-              limit,
-              sort_by: 'product_cd',
-              sort_order: 'asc',
-            })
-            const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
-            let list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
-            // 倉庫列は production_summarys.warehouse_inventory のみを対象とする
-            if (sourceCode === 'all') {
-              list = list.filter((r: any) => String(r.inventory_column ?? '') === 'warehouse_inventory')
-            }
-            total = Number(inner.total ?? 0)
-            merged.push(...list)
-            if (!(inner.list ?? []).length || (inner.list ?? []).length < limit || merged.length >= total) break
-            page += 1
-          }
-        }
-        return { proc, list: dedupeProductStockPanelRows(merged) }
-      }),
-    )
-
-    const byProduct = new Map<string, ProductAmountRow>()
-    for (const { proc, list } of results) {
-      for (const r of list) {
-        const cd = String(r.product_cd ?? '').trim()
-        if (!cd || !isStocktakeProductCdIncluded(cd)) continue
-        const name = String(r.product_name ?? '').trim() || cd
-        const kind = String(r.kind ?? '').trim() || undefined
-        if (!byProduct.has(cd)) byProduct.set(cd, { product_cd: cd, product_name: name, kind })
-        const row = byProduct.get(cd)!
-        if (!row.kind && kind) row.kind = kind
-        const amtKey = `amt_${proc.process_cd}`
-        const qtyKey = `qty_${proc.process_cd}`
-        const amount =
-          Number(r.total_value) || ((Number(r.quantity) || 0) * (Number(r.unit_price) || 0))
-        row[amtKey] = (Number(row[amtKey] ?? 0) || 0) + amount
-        row[qtyKey] = (Number(row[qtyKey] ?? 0) || 0) + (Number(r.quantity) || 0)
-        if (proc.process_cd === 'all') {
-          row.up_all = Number(r.unit_price) || Number(row.up_all) || 0
-        }
-      }
-    }
-
-    const rows = [...byProduct.values()].sort((a, b) => {
-      const na = String(a.product_name ?? '').trim()
-      const nb = String(b.product_name ?? '').trim()
-      const byName = na.localeCompare(nb, 'ja', { sensitivity: 'base' })
-      if (byName !== 0) return byName
-      return String(a.product_cd).localeCompare(String(b.product_cd), 'ja', { sensitivity: 'base' })
-    })
-    for (const row of rows) {
-      for (const proc of productAmountProcesses.value) {
-        const amtKey = `amt_${proc.process_cd}`
-        const qtyKey = `qty_${proc.process_cd}`
-        row[amtKey] = Number(row[amtKey] ?? 0)
-        row[qtyKey] = Number(row[qtyKey] ?? 0)
-      }
-      row.amt_WIP_TOTAL = PRODUCT_COUNT_WIP_SOURCE_CODES.reduce(
-        (sum, code) => sum + (Number(row[`amt_${code}`]) || 0),
-        0,
-      )
-      row.amt_PRODUCT_TOTAL =
-        (Number(row.amt_KT09) || 0) + (Number(row.amt_all) || 0) + (Number(row.amt_KT10) || 0)
-      row.qty_PRODUCT_TOTAL =
-        (Number(row.qty_KT09) || 0) + (Number(row.qty_all) || 0) + (Number(row.qty_KT10) || 0)
-      syncProductAmountWipProductTotal(row)
-    }
-    baseProductAmountRows.value = rows
-    if (!displayProductAmountRows.value.length) ElMessage.info('この条件ではデータがありません')
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('製品金額棚卸データの取得に失敗しました')
-    showProductAmountDialog.value = false
-  } finally {
-    productAmountLoading.value = false
+  await reloadProductAmountRowsFromApi()
+  if (!displayProductAmountRows.value.length) {
+    ElMessage.info('この条件ではデータがありません')
   }
 }
 

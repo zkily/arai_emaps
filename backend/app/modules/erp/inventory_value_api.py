@@ -90,6 +90,32 @@ def _deduped_process_inventory_specs() -> List[Tuple[str, str]]:
     return out
 
 
+def _inventory_column_to_snapshot_process_cd(inv_col: str) -> Optional[str]:
+    """在庫列 → 累計単価参照用 process_cd（展開 stock-panel と同じ先勝ち）。"""
+    col = (inv_col or "").strip()
+    if not col:
+        return None
+    for proc_cd, mapped_col in _PROCESS_CD_TO_INVENTORY_COL.items():
+        if mapped_col == col:
+            return str(proc_cd).strip()
+    return None
+
+
+def _inventory_col_qty_amount(
+    summary_row: ProductionSummary,
+    snap_rows: List[ProductCostCumulativeSnapshot],
+    inv_col: str,
+) -> Tuple[int, float]:
+    """在庫列の本数・金額（列ごとに丸め、単価未設定時は 0＝stock-panel 展開と同一）。"""
+    qty = int(getattr(summary_row, inv_col, None) or 0)
+    if qty <= 0:
+        return 0, 0.0
+    proc_cd = _inventory_column_to_snapshot_process_cd(inv_col)
+    unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, proc_cd, 0)
+    up = _fnum(unit_dec) if unit_dec is not None else 0.0
+    return qty, round(float(qty) * up, 2)
+
+
 def _sort_product_panel_expanded_rows(rows: List[dict], sort_by: str, desc_order: bool) -> None:
     """製品タブ「全部」展開行の並べ替え。"""
     sb = (sort_by or "").strip()
@@ -1128,14 +1154,12 @@ async def get_stock_panel(
             snap_rows = snap_by_pair.get(key, [])
             rid = int(r.id or 0)
             for spec_idx, (proc_cd_key, inv_col_attr) in enumerate(proc_inv_specs):
-                qty = int(getattr(r, inv_col_attr, None) or 0)
-                unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, proc_cd_key, 0)
+                qty, total_v_calc = _inventory_col_qty_amount(r, snap_rows, inv_col_attr)
+                unit_dec = _pick_cumulative_from_snapshot_rows(
+                    snap_rows, _inventory_column_to_snapshot_process_cd(inv_col_attr), 0
+                )
                 up = _fnum(unit_dec) if unit_dec is not None else None
-                total_v: Optional[float]
-                if up is not None:
-                    total_v = round(float(qty) * up, 2)
-                else:
-                    total_v = None
+                total_v: Optional[float] = total_v_calc if up is not None else None
                 expanded.append(
                     {
                         "id": rid * stride + spec_idx,
@@ -1613,6 +1637,307 @@ def _stocktake_product_cd_included(pcd: Optional[str]) -> bool:
     return bool(s) and s.endswith("1")
 
 
+# 製品棚卸ダイアログの工程集計キー（フロント PRODUCT_COUNT_PROCESS_SPECS と同定義）
+_INV_COL_TO_AGG_PROCESS_CD: Dict[str, str] = {
+    "cutting_inventory": "KT01",
+    "chamfering_inventory": "KT02",
+    "molding_inventory": "KT04",
+    "plating_inventory": "KT05",
+    "outsourced_plating_inventory": "KT06",
+    "pre_outsourcing_inventory": "KT06",
+    "welding_inventory": "KT07",
+    "outsourced_welding_inventory": "KT08",
+    "pre_inspection_inventory": "KT08",
+    "pre_welding_inspection_inventory": "KT11",
+    "inspection_inventory": "KT09",
+    "warehouse_inventory": "all",
+    "outsourced_warehouse_inventory": "KT10",
+}
+_WIP_AGG_PROCESS_CDS = ("KT01", "KT02", "KT04", "KT05", "KT06", "KT07", "KT08", "KT11")
+_PRODUCT_AGG_PROCESS_CDS = ("KT09", "all", "KT10")
+_ALL_STOCKTAKE_INV_COLS = _WIP_INVENTORY_COLS + _PRODUCT_INVENTORY_COLS
+
+
+def _new_stocktake_product_row(
+    product_cd: str,
+    product_name: str,
+    kind: str,
+    category: str,
+) -> dict:
+    row: dict = {
+        "product_cd": product_cd,
+        "product_name": product_name,
+        "kind": kind,
+        "category": category,
+    }
+    for proc_cd in _WIP_AGG_PROCESS_CDS + _PRODUCT_AGG_PROCESS_CDS:
+        row[f"qty_{proc_cd}"] = 0
+        row[f"amt_{proc_cd}"] = 0.0
+    return row
+
+
+def _finalize_stocktake_product_row(row: dict) -> None:
+    wip_qty = sum(int(row.get(f"qty_{c}") or 0) for c in _WIP_AGG_PROCESS_CDS)
+    wip_amt = sum(float(row.get(f"amt_{c}") or 0) for c in _WIP_AGG_PROCESS_CDS)
+    prod_qty = sum(int(row.get(f"qty_{c}") or 0) for c in _PRODUCT_AGG_PROCESS_CDS)
+    prod_amt = sum(float(row.get(f"amt_{c}") or 0) for c in _PRODUCT_AGG_PROCESS_CDS)
+    row["qty_WIP_TOTAL"] = wip_qty
+    row["amt_WIP_TOTAL"] = round(wip_amt, 2)
+    row["qty_PRODUCT_TOTAL"] = prod_qty
+    row["amt_PRODUCT_TOTAL"] = round(prod_amt, 2)
+    row["qty_WIP_PRODUCT_TOTAL"] = wip_qty + prod_qty
+    row["amt_WIP_PRODUCT_TOTAL"] = round(wip_amt + prod_amt, 2)
+
+
+def _rollup_stocktake_wip_product(
+    by_product: Dict[str, dict],
+) -> Tuple[Dict[str, dict], Dict[str, dict], Dict[str, dict], Dict[str, dict]]:
+    kind_wip: Dict[str, dict] = {}
+    kind_product: Dict[str, dict] = {}
+    cat_wip: Dict[str, dict] = {}
+    cat_product: Dict[str, dict] = {}
+    for bp in by_product.values():
+        kind = str(bp.get("kind") or "—")
+        category = str(bp.get("category") or "一般溶接")
+        wip_qty = int(bp.get("qty_WIP_TOTAL") or 0)
+        wip_amt = float(bp.get("amt_WIP_TOTAL") or 0)
+        prod_qty = int(bp.get("qty_PRODUCT_TOTAL") or 0)
+        prod_amt = float(bp.get("amt_PRODUCT_TOTAL") or 0)
+        for grp_w, grp_p, key in (
+            (kind_wip, kind_product, kind),
+            (cat_wip, cat_product, category),
+        ):
+            if key not in grp_w:
+                grp_w[key] = {"qty": 0, "amount": 0.0}
+            grp_w[key]["qty"] += wip_qty
+            grp_w[key]["amount"] += wip_amt
+            if key not in grp_p:
+                grp_p[key] = {"qty": 0, "amount": 0.0}
+            grp_p[key]["qty"] += prod_qty
+            grp_p[key]["amount"] += prod_amt
+    for gd in (kind_wip, kind_product, cat_wip, cat_product):
+        for k in gd:
+            gd[k]["amount"] = round(float(gd[k]["amount"]), 2)
+    return kind_wip, kind_product, cat_wip, cat_product
+
+
+def _build_stocktake_overview(
+    wip_dict: dict, prod_dict: dict, order_keys: Optional[List[str]] = None
+) -> dict:
+    all_keys = sorted(
+        set(list(wip_dict.keys()) + list(prod_dict.keys())),
+        key=lambda k: _KIND_ORDER.get(k, 99),
+    )
+    if order_keys:
+        present = set(list(wip_dict.keys()) + list(prod_dict.keys()))
+        all_keys = [k for k in order_keys if k in present]
+        extras = sorted(k for k in present if k not in order_keys)
+        all_keys.extend(extras)
+    rows_out = []
+    tot_wip_qty = tot_wip_amt = tot_prod_qty = tot_prod_amt = 0
+    for k in all_keys:
+        w = wip_dict.get(k, {"qty": 0, "amount": 0.0})
+        p = prod_dict.get(k, {"qty": 0, "amount": 0.0})
+        total_qty = w["qty"] + p["qty"]
+        total_amt = round(w["amount"] + p["amount"], 2)
+        rows_out.append(
+            {
+                "label": k,
+                "wip_qty": w["qty"],
+                "wip_amount": round(w["amount"], 2),
+                "product_qty": p["qty"],
+                "product_amount": round(p["amount"], 2),
+                "total_qty": total_qty,
+                "total_amount": total_amt,
+            }
+        )
+        tot_wip_qty += w["qty"]
+        tot_wip_amt += w["amount"]
+        tot_prod_qty += p["qty"]
+        tot_prod_amt += p["amount"]
+    return {
+        "rows": rows_out,
+        "totals": {
+            "wip_qty": tot_wip_qty,
+            "wip_amount": round(tot_wip_amt, 2),
+            "product_qty": tot_prod_qty,
+            "product_amount": round(tot_prod_amt, 2),
+            "total_qty": tot_wip_qty + tot_prod_qty,
+            "total_amount": round(tot_wip_amt + tot_prod_amt, 2),
+        },
+    }
+
+
+async def _aggregate_product_stocktake_data(
+    db: AsyncSession,
+    as_of_d: date,
+    shipment_merge: bool = False,
+    shipment_date: Optional[str] = None,
+    destination_cds: Optional[str] = None,
+) -> dict:
+    """
+    製品本数・金額棚卸ダイアログと統合報告書で共有する集計。
+    製品CD×ルートの実在庫列を工程キーへ集約し、製品CD単位にまとめてから種別へロールアップする。
+    """
+    prod_base = select(ProductionSummary).where(ProductionSummary.date == as_of_d)
+    prod_rows = list((await db.execute(prod_base)).scalars().all())
+    prod_rows = [r for r in prod_rows if _stocktake_product_cd_included(str(r.product_cd or ""))]
+
+    prod_codes = sorted({str(r.product_cd).strip() for r in prod_rows if r.product_cd})
+    prod_kind_by_cd: Dict[str, str] = {}
+    prod_category_by_cd: Dict[str, str] = {}
+    prod_name_by_cd: Dict[str, str] = {}
+    if prod_codes:
+        pq = select(Product.product_cd, Product.product_name, Product.kind, Product.category).where(
+            Product.product_cd.in_(prod_codes)
+        )
+        for pcd, pname, pk, pcat in (await db.execute(pq)).all():
+            cd = str(pcd or "").strip()
+            if not cd:
+                continue
+            prod_kind_by_cd[cd] = (str(pk or "").strip() or "—")
+            prod_category_by_cd[cd] = _monthly_report_product_category(pcat)
+            prod_name_by_cd[cd] = str(pname or "").strip()
+
+    pair_keys: List[Tuple[str, str]] = []
+    seen_pairs: set = set()
+    for r in prod_rows:
+        if not r.product_cd or not r.route_cd:
+            continue
+        kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
+        if kk not in seen_pairs:
+            seen_pairs.add(kk)
+            pair_keys.append(kk)
+    snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys)
+
+    by_product: Dict[str, dict] = {}
+    for r in prod_rows:
+        pcd = str(r.product_cd or "").strip()
+        if not pcd:
+            continue
+        kind = prod_kind_by_cd.get(pcd, "—")
+        category = prod_category_by_cd.get(pcd, _monthly_report_product_category(None))
+        name = str(r.product_name or prod_name_by_cd.get(pcd) or pcd).strip()
+        if pcd not in by_product:
+            by_product[pcd] = _new_stocktake_product_row(pcd, name, kind, category)
+        bp = by_product[pcd]
+        if not str(bp.get("product_name") or "").strip():
+            bp["product_name"] = name
+        if bp.get("kind") in (None, "", "—") and kind not in (None, "", "—"):
+            bp["kind"] = kind
+
+        key = (pcd, str(r.route_cd or "").strip())
+        snaps = snap_by_pair.get(key, [])
+        for col in _ALL_STOCKTAKE_INV_COLS:
+            agg_key = _INV_COL_TO_AGG_PROCESS_CD.get(col)
+            if not agg_key:
+                continue
+            q, a = _inventory_col_qty_amount(r, snaps, col)
+            bp[f"qty_{agg_key}"] = int(bp.get(f"qty_{agg_key}") or 0) + q
+            bp[f"amt_{agg_key}"] = round(float(bp.get(f"amt_{agg_key}") or 0) + a, 2)
+
+    for bp in by_product.values():
+        _finalize_stocktake_product_row(bp)
+
+    merge_applied = False
+    if shipment_merge and shipment_date and destination_cds:
+        dest_list = [d.strip() for d in str(destination_cds).split(",") if d.strip()]
+        ship_d: Optional[date] = None
+        if dest_list:
+            try:
+                ship_d = datetime.strptime(str(shipment_date).strip()[:10], "%Y-%m-%d").date()
+            except ValueError:
+                ship_d = None
+        if ship_d and dest_list:
+            ship_q = (
+                select(
+                    OrderDaily.product_cd,
+                    func.sum(OrderDaily.confirmed_units).label("confirmed_units_sum"),
+                )
+                .where(OrderDaily.date == ship_d, OrderDaily.destination_cd.in_(dest_list))
+                .group_by(OrderDaily.product_cd)
+            )
+            ship_rows = list((await db.execute(ship_q)).all())
+            ship_map: Dict[str, int] = {}
+            for sr in ship_rows:
+                pcd_s = str(sr.product_cd or "").strip()
+                if not pcd_s or not _stocktake_product_cd_included(pcd_s):
+                    continue
+                ship_map[pcd_s] = ship_map.get(pcd_s, 0) + int(sr.confirmed_units_sum or 0)
+
+            extra_pcds = set(ship_map.keys()) - set(by_product.keys())
+            if extra_pcds:
+                pq2 = select(Product.product_cd, Product.product_name, Product.kind, Product.category).where(
+                    Product.product_cd.in_(sorted(extra_pcds))
+                )
+                for pcd2, pname2, pk2, pcat2 in (await db.execute(pq2)).all():
+                    cd2 = str(pcd2 or "").strip()
+                    if not cd2 or cd2 in by_product:
+                        continue
+                    by_product[cd2] = _new_stocktake_product_row(
+                        cd2,
+                        str(pname2 or cd2).strip(),
+                        (str(pk2 or "").strip() or "—"),
+                        _monthly_report_product_category(pcat2),
+                    )
+
+            merge_applied = True
+            for pcd_ship, sq in ship_map.items():
+                if sq <= 0:
+                    continue
+                bp = by_product.get(pcd_ship)
+                if not bp:
+                    continue
+                pq_base = int(bp.get("qty_PRODUCT_TOTAL") or 0)
+                pamt_base = float(bp.get("amt_PRODUCT_TOTAL") or 0.0)
+                up_m = (pamt_base / pq_base) if pq_base > 0 else 0.0
+                extra_amt = round(float(sq) * float(up_m), 2)
+                bp["qty_all"] = int(bp.get("qty_all") or 0) + sq
+                bp["amt_all"] = round(float(bp.get("amt_all") or 0) + extra_amt, 2)
+                _finalize_stocktake_product_row(bp)
+
+    kind_wip, kind_product, cat_wip, cat_product = _rollup_stocktake_wip_product(by_product)
+    rows_out = sorted(
+        by_product.values(),
+        key=lambda x: (
+            str(x.get("product_name") or "").casefold(),
+            str(x.get("product_cd") or "").casefold(),
+        ),
+    )
+    return {
+        "rows": rows_out,
+        "kind_wip": kind_wip,
+        "kind_product": kind_product,
+        "cat_wip": cat_wip,
+        "cat_product": cat_product,
+        "merge_applied": merge_applied,
+    }
+
+
+@router.get("/product-stocktake-rows")
+async def get_product_stocktake_rows(
+    as_of: str = Query(..., description="対象日 YYYY-MM-DD"),
+    shipment_merge: bool = Query(False, description="出荷確定本数を製品側へ並入"),
+    shipment_date: Optional[str] = Query(None, description="出荷日 YYYY-MM-DD"),
+    destination_cds: Optional[str] = Query(None, description="納入先コード（カンマ区切り）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("edit")),
+):
+    """製品本数・金額棚卸ダイアログ用の工程別集計（統合報告書と同一ロジック）。"""
+    as_of_d = _parse_as_of_date(as_of)
+    try:
+        data = await _aggregate_product_stocktake_data(
+            db,
+            as_of_d,
+            shipment_merge=shipment_merge,
+            shipment_date=shipment_date,
+            destination_cds=destination_cds,
+        )
+        return {"success": True, "data": {"list": data["rows"], "as_of": str(as_of_d)}}
+    except ProgrammingError as e:
+        raise HTTPException(status_code=503, detail="製品棚卸データの取得に失敗しました") from e
+
+
 @router.get("/report/monthly")
 async def get_monthly_inventory_report(
     as_of: str = Query(..., description="対象月末日 YYYY-MM-DD"),
@@ -1637,207 +1962,24 @@ async def get_monthly_inventory_report(
     month_label = f"{as_of_d.month}月"
 
     try:
-        # ====== 1. 製品データ（production_summarys + snapshot 単価） ======
-        prod_base = select(ProductionSummary).where(ProductionSummary.date == as_of_d)
-        prod_rows = list((await db.execute(prod_base)).scalars().all())
-        prod_rows = [r for r in prod_rows if _stocktake_product_cd_included(str(r.product_cd or ""))]
-
-        prod_codes = sorted({str(r.product_cd).strip() for r in prod_rows if r.product_cd})
-        prod_kind_by_cd: Dict[str, str] = {}
-        prod_category_by_cd: Dict[str, str] = {}
-        if prod_codes:
-            pq = select(Product.product_cd, Product.kind, Product.category).where(
-                Product.product_cd.in_(prod_codes)
-            )
-            for pcd, pk, pcat in (await db.execute(pq)).all():
-                cd = str(pcd or "").strip()
-                if cd:
-                    prod_kind_by_cd[cd] = (str(pk or "").strip() or "—")
-                    prod_category_by_cd[cd] = _monthly_report_product_category(pcat)
-
-        pair_keys: List[Tuple[str, str]] = []
-        seen_pairs: set = set()
-        for r in prod_rows:
-            if not r.product_cd or not r.route_cd:
-                continue
-            kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
-            if kk not in seen_pairs:
-                seen_pairs.add(kk)
-                pair_keys.append(kk)
-        snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys)
-
-        # kind 汇总
-        kind_wip: Dict[str, dict] = {}
-        kind_product: Dict[str, dict] = {}
-        # category 汇总
-        cat_wip: Dict[str, dict] = {}
-        cat_product: Dict[str, dict] = {}
-        # 製品CD ごとの製品側本数・金額（出荷並入の単価按分用）
-        by_pcd_product: Dict[str, dict] = {}
-
-        for r in prod_rows:
-            pcd = str(r.product_cd or "").strip()
-            kind = prod_kind_by_cd.get(pcd, "—")
-            category = prod_category_by_cd.get(pcd, _monthly_report_product_category(None))
-
-            key = (pcd, str(r.route_cd or "").strip())
-            snaps = snap_by_pair.get(key, [])
-
-            wip_qty = 0
-            for col in _WIP_INVENTORY_COLS:
-                wip_qty += int(getattr(r, col, None) or 0)
-            prod_qty = 0
-            for col in _PRODUCT_INVENTORY_COLS:
-                prod_qty += int(getattr(r, col, None) or 0)
-
-            def _sum_amount_for_cols(inv_cols: List[str]) -> float:
-                amt = 0.0
-                for inv_col in inv_cols:
-                    qty_col = int(getattr(r, inv_col, None) or 0)
-                    if qty_col <= 0:
-                        continue
-                    proc_cd_col = _INVENTORY_COL_TO_PROCESS_CD.get(inv_col)
-                    unit_dec_col = _pick_cumulative_from_snapshot_rows(snaps, proc_cd_col, 9999)
-                    up_col = _fnum(unit_dec_col) if unit_dec_col is not None else 0.0
-                    amt += float(qty_col) * float(up_col)
-                return round(amt, 2)
-
-            wip_amt = _sum_amount_for_cols(_WIP_INVENTORY_COLS)
-            prod_amt = _sum_amount_for_cols(_PRODUCT_INVENTORY_COLS)
-
-            for grp_dict_w, grp_dict_p, grp_key in [
-                (kind_wip, kind_product, kind),
-                (cat_wip, cat_product, category),
-            ]:
-                if grp_key not in grp_dict_w:
-                    grp_dict_w[grp_key] = {"qty": 0, "amount": 0.0}
-                grp_dict_w[grp_key]["qty"] += wip_qty
-                grp_dict_w[grp_key]["amount"] += wip_amt
-                if grp_key not in grp_dict_p:
-                    grp_dict_p[grp_key] = {"qty": 0, "amount": 0.0}
-                grp_dict_p[grp_key]["qty"] += prod_qty
-                grp_dict_p[grp_key]["amount"] += prod_amt
-
-            if pcd:
-                if pcd not in by_pcd_product:
-                    by_pcd_product[pcd] = {
-                        "kind": kind,
-                        "category": category,
-                        "prod_qty": 0,
-                        "prod_amt": 0.0,
-                    }
-                by_pcd_product[pcd]["prod_qty"] += prod_qty
-                by_pcd_product[pcd]["prod_amt"] += prod_amt
-
-        merge_applied = False
-        if shipment_merge and shipment_date and destination_cds:
-            dest_list = [d.strip() for d in str(destination_cds).split(",") if d.strip()]
-            ship_d: Optional[date] = None
-            if dest_list:
-                try:
-                    ship_d = datetime.strptime(str(shipment_date).strip()[:10], "%Y-%m-%d").date()
-                except ValueError:
-                    ship_d = None
-            if ship_d and dest_list:
-                ship_q = (
-                    select(
-                        OrderDaily.product_cd,
-                        func.sum(OrderDaily.confirmed_units).label("confirmed_units_sum"),
-                    )
-                    .where(OrderDaily.date == ship_d, OrderDaily.destination_cd.in_(dest_list))
-                    .group_by(OrderDaily.product_cd)
-                )
-                ship_rows = list((await db.execute(ship_q)).all())
-                ship_map: Dict[str, int] = {}
-                for r in ship_rows:
-                    pcd_s = str(r.product_cd or "").strip()
-                    if not pcd_s or not _stocktake_product_cd_included(pcd_s):
-                        continue
-                    ship_map[pcd_s] = ship_map.get(pcd_s, 0) + int(r.confirmed_units_sum or 0)
-                extra_pcds = set(ship_map.keys()) - set(by_pcd_product.keys())
-                if extra_pcds:
-                    pq2 = select(Product.product_cd, Product.kind, Product.category).where(
-                        Product.product_cd.in_(sorted(extra_pcds))
-                    )
-                    for pcd2, pk2, pcat2 in (await db.execute(pq2)).all():
-                        cd2 = str(pcd2 or "").strip()
-                        if not cd2 or cd2 in by_pcd_product:
-                            continue
-                        cat2 = _monthly_report_product_category(pcat2)
-                        by_pcd_product[cd2] = {
-                            "kind": (str(pk2 or "").strip() or "—"),
-                            "category": cat2,
-                            "prod_qty": 0,
-                            "prod_amt": 0.0,
-                        }
-
-                merge_applied = True
-
-                for pcd_ship, sq in ship_map.items():
-                    if sq <= 0:
-                        continue
-                    det = by_pcd_product.get(pcd_ship)
-                    if not det:
-                        continue
-                    pq_base = int(det["prod_qty"] or 0)
-                    pamt_base = float(det["prod_amt"] or 0.0)
-                    up_m = (pamt_base / pq_base) if pq_base > 0 else 0.0
-                    extra_amt = round(float(sq) * float(up_m), 2)
-                    kind_k = det["kind"]
-                    cat_k = det["category"]
-                    for grp_dict_p, grp_key in ((kind_product, kind_k), (cat_product, cat_k)):
-                        if grp_key not in grp_dict_p:
-                            grp_dict_p[grp_key] = {"qty": 0, "amount": 0.0}
-                        grp_dict_p[grp_key]["qty"] += sq
-                        grp_dict_p[grp_key]["amount"] += extra_amt
-                for gd in (kind_product, cat_product):
-                    for _k in gd:
-                        gd[_k]["amount"] = round(float(gd[_k]["amount"]), 2)
-
-        def _build_overview(wip_dict: dict, prod_dict: dict, order_keys: Optional[List[str]] = None):
-            all_keys = sorted(
-                set(list(wip_dict.keys()) + list(prod_dict.keys())),
-                key=lambda k: _KIND_ORDER.get(k, 99),
-            )
-            if order_keys:
-                all_keys = [k for k in order_keys if k in set(list(wip_dict.keys()) + list(prod_dict.keys()))]
-                extras = [k for k in set(list(wip_dict.keys()) + list(prod_dict.keys())) if k not in order_keys]
-                all_keys.extend(sorted(extras))
-            rows_out = []
-            tot_wip_qty = tot_wip_amt = tot_prod_qty = tot_prod_amt = 0
-            for k in all_keys:
-                w = wip_dict.get(k, {"qty": 0, "amount": 0.0})
-                p = prod_dict.get(k, {"qty": 0, "amount": 0.0})
-                total_qty = w["qty"] + p["qty"]
-                total_amt = round(w["amount"] + p["amount"], 2)
-                rows_out.append({
-                    "label": k,
-                    "wip_qty": w["qty"],
-                    "wip_amount": round(w["amount"], 2),
-                    "product_qty": p["qty"],
-                    "product_amount": round(p["amount"], 2),
-                    "total_qty": total_qty,
-                    "total_amount": total_amt,
-                })
-                tot_wip_qty += w["qty"]
-                tot_wip_amt += w["amount"]
-                tot_prod_qty += p["qty"]
-                tot_prod_amt += p["amount"]
-            return {
-                "rows": rows_out,
-                "totals": {
-                    "wip_qty": tot_wip_qty,
-                    "wip_amount": round(tot_wip_amt, 2),
-                    "product_qty": tot_prod_qty,
-                    "product_amount": round(tot_prod_amt, 2),
-                    "total_qty": tot_wip_qty + tot_prod_qty,
-                    "total_amount": round(tot_wip_amt + tot_prod_amt, 2),
-                },
-            }
-
-        overview_by_kind = _build_overview(kind_wip, kind_product, ["T", "N", "F"])
-        overview_by_category = _build_overview(
-            cat_wip, cat_product, ["一般", "一般溶接", "メカ溶接"]
+        # ====== 1. 製品データ（本数・金額棚卸ダイアログと共有ロジック） ======
+        stocktake = await _aggregate_product_stocktake_data(
+            db,
+            as_of_d,
+            shipment_merge=shipment_merge,
+            shipment_date=shipment_date,
+            destination_cds=destination_cds,
+        )
+        merge_applied = bool(stocktake.get("merge_applied"))
+        overview_by_kind = _build_stocktake_overview(
+            stocktake["kind_wip"],
+            stocktake["kind_product"],
+            ["T", "N", "F"],
+        )
+        overview_by_category = _build_stocktake_overview(
+            stocktake["cat_wip"],
+            stocktake["cat_product"],
+            ["一般", "一般溶接", "メカ溶接"],
         )
 
         # ====== 2. 部品データ ======

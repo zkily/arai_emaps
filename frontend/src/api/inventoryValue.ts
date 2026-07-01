@@ -303,6 +303,32 @@ export const inventoryValueApi = {
       return { success: false, data: null }
     }
   },
+
+  async getProductStocktakeRows(params: {
+    as_of: string
+    shipment_merge?: boolean
+    shipment_date?: string
+    destination_cds?: string[]
+  }) {
+    try {
+      const res = (await request.get('/api/erp/inventory-value/product-stocktake-rows', {
+        params: {
+          as_of: params.as_of,
+          ...(params.shipment_merge ? { shipment_merge: true } : {}),
+          ...(params.shipment_date ? { shipment_date: params.shipment_date } : {}),
+          ...(params.destination_cds?.length
+            ? { destination_cds: params.destination_cds.join(',') }
+            : {}),
+        },
+      })) as { success?: boolean; data?: { list?: Record<string, unknown>[]; as_of?: string } }
+      return {
+        success: res?.success ?? false,
+        data: res?.data ?? { list: [], as_of: params.as_of },
+      }
+    } catch {
+      return { success: false, data: { list: [], as_of: params.as_of } }
+    }
+  },
 }
 
 export interface MonthlyReportOverviewRow {
