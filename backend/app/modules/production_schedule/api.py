@@ -10833,5 +10833,7 @@ async def get_welding_utilization_analysis(
 
 
 from app.modules.production_schedule.cutting_productivity_api import register_routes as _register_cutting_productivity_routes
+from app.modules.production_schedule.forming_productivity_api import register_routes as _register_forming_productivity_routes
 
 _register_cutting_productivity_routes(router)
+_register_forming_productivity_routes(router)

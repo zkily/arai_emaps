@@ -15,7 +15,7 @@
         <div class="ipa-hero__text">
           <div class="ipa-hero__eyebrow">MES · 実績分析</div>
           <h1 class="ipa-hero__title">切断工程 — 生産性分析</h1>
-          <p class="ipa-hero__meta">実績 · 能率 · 不良率 · 稼働</p>
+          <p class="ipa-hero__meta">実績 · 能率 · 差異率 · 稼働</p>
         </div>
       </div>
       <div class="ipa-hero__actions">
@@ -165,7 +165,7 @@
                 <div class="ipa-panel__badges">
                   <span class="ipa-panel__badge ipa-panel__badge--soft">{{ operatorDisplayRows.length }} 名</span>
                   <span v-if="operatorSectionAvgEfficiency != null" class="ipa-panel__badge ipa-panel__badge--inspector">
-                    平均能率 {{ fmtEfficiency(operatorSectionAvgEfficiency) }} 本/時
+                    平均能率 {{ fmtEfficiency(operatorSectionAvgEfficiency) }} 個/時
                   </span>
                 </div>
               </div>
@@ -189,7 +189,7 @@
                 <el-table-column label="生産" width="68" align="right">
                   <template #default="{ row }">{{ fmtInt(row.sum_actual_qty) }}</template>
                 </el-table-column>
-                <el-table-column label="不良率" width="64" align="right">
+                <el-table-column label="差異率" width="64" align="right">
                   <template #default="{ row }"><span class="ipa-num ipa-num--warn">{{ fmtPct(row.defect_rate_percent) }}</span></template>
                 </el-table-column>
                 <el-table-column label="平均能率" width="68" align="right">
@@ -236,7 +236,7 @@
                   </template>
                 </el-table-column>
                 <el-table-column
-                  label="不良率"
+                  label="差異率"
                   width="75"
                   align="right"
                   sortable
@@ -318,11 +318,11 @@
                     </div>
                     <div class="ipa-rank-hero__stat ipa-rank-hero__stat--accent">
                       <span class="ipa-rank-hero__stat-label">TOP能率</span>
-                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.topEfficiency) }}<small>本/時</small></span>
+                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.topEfficiency) }}<small>個/時</small></span>
                     </div>
                     <div class="ipa-rank-hero__stat">
                       <span class="ipa-rank-hero__stat-label">平均能率</span>
-                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.avgEfficiency) }}<small>本/時</small></span>
+                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.avgEfficiency) }}<small>個/時</small></span>
                     </div>
                   </div>
                 </div>
@@ -342,7 +342,7 @@
                       </div>
                       <div class="ipa-podium__name" :title="item.operator_name">{{ item.operator_name }}</div>
                       <div class="ipa-podium__eff">{{ fmtEfficiency(item.efficiency_per_hour) }}</div>
-                      <div class="ipa-podium__sub">本/時</div>
+                      <div class="ipa-podium__sub">個/時</div>
                     </div>
                     <div class="ipa-podium__pedestal" :style="{ height: podiumPedestalHeight(item.rank) }">
                       <span class="ipa-podium__pedestal-rank">{{ item.rank }}</span>
@@ -385,7 +385,7 @@
                       <span class="ipa-eff-pill ipa-eff-pill--rank">{{ fmtEfficiency(row.efficiency_per_hour) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="不良率" width="76" align="right" sortable :sort-method="sortByOperatorDefectRate">
+                  <el-table-column label="差異率" width="76" align="right" sortable :sort-method="sortByOperatorDefectRate">
                     <template #default="{ row }">
                       <span class="ipa-eff-pill ipa-eff-pill--warn">{{ fmtPct(row.defect_rate_percent) }}</span>
                     </template>
@@ -453,7 +453,7 @@
             <div class="ipa-panel__head">
               <div class="ipa-panel__title-wrap">
                 <el-icon class="ipa-panel__ico"><WarningFilled /></el-icon>
-                <span class="ipa-panel__title">差異内訳</span>
+                <span class="ipa-panel__title">不良内訳（KT07）</span>
               </div>
             </div>
             <div class="ipa-defect-grid">
@@ -477,15 +477,16 @@
             <el-table :data="analysisData.sessions" size="small" class="ipa-table ipa-table--detail" max-height="380">
               <el-table-column prop="production_day" label="生産日" width="102" fixed />
               <el-table-column prop="operator_display_name" label="ライン" width="100" show-overflow-tooltip />
+              <el-table-column prop="welding_machine" label="設備" width="88" show-overflow-tooltip />
               <el-table-column prop="product_cd" label="CD" width="88" />
               <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
               <el-table-column label="生産" width="64" align="right">
                 <template #default="{ row }">{{ fmtInt(row.actual_production_quantity) }}</template>
               </el-table-column>
-              <el-table-column label="差異" width="52" align="right">
+              <el-table-column label="不良" width="52" align="right">
                 <template #default="{ row }">{{ fmtInt(row.defect_qty) }}</template>
               </el-table-column>
-              <el-table-column label="不良率" width="68" align="right">
+              <el-table-column label="差異率" width="68" align="right">
                 <template #default="{ row }">{{ fmtPct(row.defect_rate_percent) }}</template>
               </el-table-column>
               <el-table-column label="能率" width="56" align="right">
@@ -519,6 +520,7 @@
 
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import type { ECharts } from 'echarts'
 import {
@@ -552,8 +554,12 @@ import type { CuttingProductionIndicatorLineOption as CuttingLineOption } from '
 import { getProductList } from '@/api/master/productMaster'
 import type { Product } from '@/types/master'
 import { getJSTToday, parseDateAsJST } from '@/utils/dateFormat'
-import { lineLabel, loadCuttingLineOptions } from '@/views/mes/shared/cuttingLineFilter'
+import { loadCuttingLineOptions } from '@/views/mes/shared/cuttingLineFilter'
 import { filterCuttingSelectableProducts } from '@/views/mes/shared/cuttingProductFilter'
+import {
+  loadMesDefectItemsForProcess,
+  resolveCuttingMetricsLabel,
+} from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 import {
   CHART_INIT_OPTS,
   chartTheme,
@@ -639,6 +645,8 @@ const reportMenuItems: Array<{
   },
 ]
 
+const { t, te } = useI18n()
+
 const loading = ref(false)
 const exportBusy = ref(false)
 const contentVisible = ref(false)
@@ -660,7 +668,7 @@ let operatorChart: ECharts | null = null
 let productChart: ECharts | null = null
 let productRankChart: ECharts | null = null
 
-const EFFICIENCY_UNIT = '本/時'
+const EFFICIENCY_UNIT = '個/時'
 
 function shiftJstDate(isoDay: string, deltaDays: number): string {
   const base = parseDateAsJST(isoDay)
@@ -723,11 +731,12 @@ function buildProductOperatorRankingFromSessions(
     prod.sum_actual_qty += Number(s.actual_production_quantity ?? 0)
     prod.session_count += 1
 
+    const operatorId = s.mes_operator_user_id
+    const operatorKey = operatorId != null ? String(operatorId) : 'none'
     const operatorName = (s.operator_display_name ?? s.mes_operator_name ?? '—').trim() || '—'
-    const operatorKey = operatorName
     if (!prod.operators.has(operatorKey)) {
       prod.operators.set(operatorKey, {
-        operator_user_id: null,
+        operator_user_id: operatorId ?? null,
         operator_name: operatorName,
         session_count: 0,
         sum_actual_qty: 0,
@@ -849,9 +858,9 @@ const kpiCards = computed(() => {
     },
     {
       key: 'defect',
-      label: '不良数',
+      label: '差異数',
       value: fmtInt(s.sum_defect_qty),
-      hint: `不良率 ${fmtPct(s.defect_rate_percent)}`,
+      hint: `差異率 ${fmtPct(s.defect_rate_percent)}`,
       icon: markRaw(WarningFilled),
       tone: 'amber',
     },
@@ -859,7 +868,7 @@ const kpiCards = computed(() => {
       key: 'efficiency',
       label: '総合能率',
       value: fmtEfficiency(s.efficiency_per_hour),
-      hint: '本 / 時間',
+      hint: '個 / 時間',
       icon: markRaw(TrendCharts),
       tone: 'emerald',
     },
@@ -912,7 +921,7 @@ type ProductDisplayRow = CuttingProductivityProductRow & {
   avg_efficiency_per_hour: number | null
 }
 
-/** 期間内：生産合計 ÷ 正味稼働時間（本/時） */
+/** 期間内：生産合計 ÷ 正味稼働時間（個/時） */
 function periodAvgEfficiencyFromBucket(row: CuttingProductivityBucket): number | null {
   if (row.efficiency_per_hour != null && Number.isFinite(row.efficiency_per_hour)) {
     return row.efficiency_per_hour
@@ -1008,6 +1017,13 @@ const selectedProductRankStats = computed(() => {
   }
 })
 
+function lineLabel(u: UserListItem): string {
+  const name = (u.full_name ?? '').trim()
+  const username = (u.username ?? '').trim()
+  if (name && username) return `${name}（${username}）`
+  return name || username || `#${u.id}`
+}
+
 function buildOperatorProductRows(
   sessions: CuttingProductivitySessionRow[],
   operatorKey: string,
@@ -1018,7 +1034,7 @@ function buildOperatorProductRows(
     const productCd = (s.product_cd ?? '').trim()
     if (!productCd || !includeProduct(productCd)) continue
 
-    const opKey = (s.operator_display_name ?? s.mes_operator_name ?? '—').trim() || '—'
+    const opKey = s.mes_operator_user_id != null ? String(s.mes_operator_user_id) : 'none'
     if (opKey !== operatorKey) continue
 
     if (!map.has(productCd)) {
@@ -1036,7 +1052,7 @@ function buildOperatorProductRows(
     prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
     prod.sum_defect_qty = (prod.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     prod.sum_net_production_sec =
-      (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
+      (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? s.mes_net_production_sec ?? 0)
   }
 
   return [...map.values()]
@@ -1059,7 +1075,7 @@ function buildReportFilters(): CuttingProductivityReportFilters | null {
   let operatorFilterLabel = '（すべて）'
   if (filterLineName.value !== '') {
     const found = lineOptions.value.find((u) => u.line_name === filterLineName.value)
-    operatorFilterLabel = found ? lineLabel(found) : filterLineName.value
+    operatorFilterLabel = found ? operatorLabel(found) : `#${filterLineName.value}`
   }
 
   let productFilterLabel = '（すべて）'
@@ -1073,7 +1089,7 @@ function buildReportFilters(): CuttingProductivityReportFilters | null {
   return {
     startDate: start,
     endDate: end,
-    lineLabel: operatorFilterLabel,
+    operatorLabel: operatorFilterLabel,
     productLabel: productFilterLabel,
     includeIncomplete: includeIncomplete.value,
   }
@@ -1097,9 +1113,9 @@ function buildReportContext(): CuttingProductivityReportContext | null {
       product: captureChartDataUrl(productChart),
       productRank: captureChartDataUrl(productRankChart),
     },
-    lineRows: operatorDisplayRows.value,
+    operatorRows: operatorDisplayRows.value,
     productRows: productDisplayRows.value,
-    lineSectionAvgEfficiency: operatorSectionAvgEfficiency.value,
+    operatorSectionAvgEfficiency: operatorSectionAvgEfficiency.value,
     productSectionTotalQty: productSectionTotalQty.value,
     productRank: {
       selected: selectedProductRanking.value,
@@ -1239,7 +1255,7 @@ async function handleBatchDailyByOperatorPrint() {
     const res = await fetchCuttingProductivityAnalysis({
       start_date: start,
       end_date: end,
-      production_line: op.line_name,
+      mes_operator_user_id: op.id,
       product_cd: filterProductCd.value || null,
       include_incomplete: includeIncomplete.value,
     })
@@ -1250,8 +1266,8 @@ async function handleBatchDailyByOperatorPrint() {
     if (!chartSrc) continue
     const summary = res.data.summary
     items.push({
-      operatorUserId: 0,
-      lineLabel: lineLabel(op),
+      operatorUserId: op.id,
+      operatorLabel: operatorLabel(op),
       chartSrc,
       dayCount: daily.length,
       sumActualQty: summary?.sum_actual_qty ?? 0,
@@ -1295,7 +1311,7 @@ async function handleBatchOperatorProductPrint() {
   const items: CuttingProductivityOperatorProductBatchItem[] = []
 
   for (const op of operators) {
-    const rows = buildOperatorProductRows(sessions, op.line_name, () => true)
+    const rows = buildOperatorProductRows(sessions, String(op.id), () => true)
     if (!rows.length) continue
 
     const sessionCount = rows.reduce((sum, row) => sum + Number(row.session_count ?? 0), 0)
@@ -1305,7 +1321,7 @@ async function handleBatchOperatorProductPrint() {
       sumActualQty > 0 && totalSec > 0 ? Math.round(sumActualQty / (totalSec / 3600)) : null
 
     items.push({
-      lineLabel: lineLabel(op),
+      operatorLabel: operatorLabel(op),
       productCount: rows.length,
       sessionCount,
       sumActualQty,
@@ -1343,18 +1359,13 @@ async function loadProductOptions() {
 
 function defectLabel(defectCd: string): string {
   const cd = (defectCd ?? '').trim()
-  return cd || '—'
+  return defectLabelMap.value.get(cd) ?? resolveCuttingMetricsLabel(cd, cd, t, te)
 }
 
 async function loadLines() {
-  const [start, end] = dateRange.value ?? []
-  if (!start || !end) {
-    lineOptions.value = []
-    return
-  }
   try {
-    lineOptions.value = await loadCuttingLineOptions({ start_date: start, end_date: end })
-    const allowed = new Set(lineOptions.value.map((u) => u.line_name))
+    lineOptions.value = await loadCuttingLineOptions()
+    const allowed = new Set(lineOptions.value.map((u) => u.id))
     if (filterLineName.value !== '' && !allowed.has(filterLineName.value)) {
       filterLineName.value = ''
     }
@@ -1364,7 +1375,14 @@ async function loadLines() {
 }
 
 async function loadDefectLabels() {
-  defectLabelMap.value = new Map()
+  try {
+    const items = await /* cutting: no defect master */ Promise.resolve([])
+    const map = new Map<string, string>()
+    for (const item of items) map.set(item.id, item.label)
+    defectLabelMap.value = map
+  } catch {
+    defectLabelMap.value = new Map()
+  }
 }
 
 let analysisRequestSeq = 0
@@ -1383,7 +1401,7 @@ async function loadAnalysis(options?: { silent?: boolean }) {
     const res = await fetchCuttingProductivityAnalysis({
       start_date: start,
       end_date: end,
-      production_line: filterLineName.value || null,
+      mes_operator_user_id: filterLineName.value,
       product_cd: filterProductCd.value || null,
       include_incomplete: includeIncomplete.value,
     })
@@ -1528,7 +1546,6 @@ watch(
 )
 
 watch(dateRange, () => {
-  void loadLines()
   scheduleLoadAnalysis()
 }, { deep: true })
 watch(filterLineName, scheduleLoadAnalysis)

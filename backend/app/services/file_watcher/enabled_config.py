@@ -101,3 +101,15 @@ def is_cutting_indicator_sync_enabled() -> bool:
     """切断管理指標 Excel → cutting_production_indicator 同期が有効か（未設定は True）。"""
     raw = _read_raw()
     return raw.get("cutting_indicator_sync_enabled", True)
+
+
+def is_forming_excel_watcher_enabled() -> bool:
+    """成形管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
+    raw = _read_raw()
+    return raw.get("forming_excel_watcher_enabled", True)
+
+
+def is_forming_indicator_sync_enabled() -> bool:
+    """成形管理指標 Excel → forming_production_indicator 同期が有効か（未設定は True）。"""
+    raw = _read_raw()
+    return raw.get("forming_indicator_sync_enabled", True)

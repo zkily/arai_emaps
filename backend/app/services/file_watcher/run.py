@@ -38,6 +38,10 @@ from app.services.file_watcher.cutting_excel_processor import (
     is_cutting_excel_file,
 )
 from app.services.file_watcher.cutting_production_indicator_sync import sync_cutting_excel_to_indicator
+from app.services.file_watcher.forming_excel_processor import (
+    is_forming_excel_file,
+)
+from app.services.file_watcher.forming_production_indicator_sync import sync_forming_excel_to_indicator
 from app.services.file_watcher.utils import wait_for_file_stable
 from app.services.file_watcher.enabled_config import (
     is_file_enabled,
@@ -48,6 +52,8 @@ from app.services.file_watcher.enabled_config import (
     is_welding_management_sync_enabled,
     is_cutting_excel_watcher_enabled,
     is_cutting_indicator_sync_enabled,
+    is_forming_excel_watcher_enabled,
+    is_forming_indicator_sync_enabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,6 +90,15 @@ def _cutting_indicator_sync_enabled() -> bool:
     if env in ("1", "true", "yes", "on"):
         return True
     return bool(getattr(settings, "FILE_WATCH_CUTTING_INDICATOR_SYNC_ENABLED", True)) and is_cutting_indicator_sync_enabled()
+
+
+def _forming_indicator_sync_enabled() -> bool:
+    env = os.environ.get("FILE_WATCH_FORMING_INDICATOR_SYNC_ENABLED", "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
+        return True
+    return bool(getattr(settings, "FILE_WATCH_FORMING_INDICATOR_SYNC_ENABLED", True)) and is_forming_indicator_sync_enabled()
 
 
 def _norm_path(value):
@@ -365,6 +380,75 @@ def _cutting_excel_polling_loop(file_path, task_queue, poll_interval, stop_event
             logger.debug("切断管理指標ポーリング異常: %s", e)
 
 
+def _get_forming_excel_path():
+    """成形管理指標 Excel のフルパス（.env / settings）"""
+    raw = (
+        os.environ.get("FILE_WATCH_FORMING_EXCEL_PATH")
+        or getattr(settings, "FILE_WATCH_FORMING_EXCEL_PATH", "")
+        or ""
+    )
+    return _norm_path(raw)
+
+
+def _enqueue_forming_excel(file_path, task_queue, in_queue_filenames, reason: str = "") -> bool:
+    """成形管理指標 Excel を Excel キューへ投入（起動時・手動トリガー用）"""
+    if not file_path:
+        return False
+    filename = os.path.basename(file_path)
+    if not is_forming_excel_file(filename):
+        logger.warning(
+            "成形管理指標: ファイル名がパターンと一致しません（生産管理指標(YYYY年度-成形).xlsx）: %s",
+            filename,
+        )
+        return False
+    if not os.path.isfile(file_path):
+        logger.debug("成形管理指標 Excel は未存在のためキュー投入をスキップ: %s", file_path)
+        return False
+    if filename in in_queue_filenames:
+        return False
+    in_queue_filenames.add(filename)
+    try:
+        task_queue.put((file_path, filename))
+        suffix = f" ({reason})" if reason else ""
+        logger.info("成形管理指標 Excel をキュー投入%s: %s", suffix, filename)
+        return True
+    except Exception:
+        in_queue_filenames.discard(filename)
+        return False
+
+
+def _forming_excel_polling_loop(file_path, task_queue, poll_interval, stop_event, in_queue_filenames):
+    """成形管理指標 Excel の mtime ポーリング（ネットワークドライブ対応）"""
+    last_mtime = None
+    filename = os.path.basename(file_path)
+    missing_logged = False
+    while not stop_event.is_set():
+        try:
+            stop_event.wait(timeout=poll_interval)
+            if stop_event.is_set():
+                break
+            if not os.path.isfile(file_path):
+                if not missing_logged:
+                    logger.warning("成形管理指標 Excel が見つかりません（到達可能になるまで待機）: %s", file_path)
+                    missing_logged = True
+                continue
+            if missing_logged:
+                logger.info("成形管理指標 Excel を検出しました: %s", file_path)
+                missing_logged = False
+            if filename in in_queue_filenames:
+                continue
+            try:
+                mtime = os.path.getmtime(file_path)
+            except OSError:
+                continue
+            if last_mtime is not None and mtime > last_mtime:
+                logger.info("成形管理指標 Excel 変更検知: %s", filename)
+                _enqueue_forming_excel(file_path, task_queue, in_queue_filenames, reason="mtime変更")
+            last_mtime = mtime
+        except Exception as e:
+            logger.debug("成形管理指標ポーリング異常: %s", e)
+
+
 def _material_csv_polling_loop(task_queue, poll_interval, stop_event):
     """材料受入 CSV の実パス（.env 解決済み）を mtime ポーリングし、変更時にキュー投入"""
     last_mtime = {}
@@ -570,6 +654,16 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
                         mgmt_result.parsed,
                         filename,
                     )
+            elif is_forming_excel_file(filename):
+                if _forming_indicator_sync_enabled():
+                    mgmt_result = sync_forming_excel_to_indicator(filepath)
+                    logger.info(
+                        "[Excel] forming_production_indicator 同期: inserted=%s deleted=%s parsed=%s (%s)",
+                        mgmt_result.inserted,
+                        mgmt_result.deleted,
+                        mgmt_result.parsed,
+                        filename,
+                    )
             elif is_excel_target_file(filename):
                 excel_processor.process_file(filepath)
             else:
@@ -577,7 +671,7 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
         except Exception as e:
             logger.error("[Excel] 処理失敗 %s: %s", filename, e, exc_info=True)
         finally:
-            if is_excel_target_file(filename) or is_inspection_excel_file(filename) or is_welding_excel_file(filename) or is_cutting_excel_file(filename):
+            if is_excel_target_file(filename) or is_inspection_excel_file(filename) or is_welding_excel_file(filename) or is_cutting_excel_file(filename) or is_forming_excel_file(filename):
                 processing_excel.discard(filename)
             try:
                 excel_task_queue.task_done()
@@ -612,6 +706,7 @@ def run_watcher():
     inspection_excel_path = _get_inspection_excel_path()
     welding_excel_path = _get_welding_excel_path()
     cutting_excel_path = _get_cutting_excel_path()
+    forming_excel_path = _get_forming_excel_path()
     excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     inspection_watcher_enabled = (
         os.environ.get("DISABLE_INSPECTION_EXCEL_WATCHER", "").strip().lower() != "true"
@@ -622,11 +717,14 @@ def run_watcher():
     cutting_watcher_enabled = (
         os.environ.get("DISABLE_CUTTING_EXCEL_WATCHER", "").strip().lower() != "true"
     ) and is_cutting_excel_watcher_enabled()
+    forming_watcher_enabled = (
+        os.environ.get("DISABLE_FORMING_EXCEL_WATCHER", "").strip().lower() != "true"
+    ) and is_forming_excel_watcher_enabled()
     excel_queue_needed = excel_watcher_enabled or (
         inspection_watcher_enabled and bool(inspection_excel_path)
     ) or (welding_watcher_enabled and bool(welding_excel_path)) or (
         cutting_watcher_enabled and bool(cutting_excel_path)
-    )
+    ) or (forming_watcher_enabled and bool(forming_excel_path))
     logger.info("🚀 ファイル監視サービスを起動しています...")
     logger.info("📂 CSV 受信監視パス: %s", csv_path)
     if excel_path and excel_path != csv_path:
@@ -651,6 +749,12 @@ def run_watcher():
             logger.info("📋 切断管理指標 → cutting_production_indicator 全件同期: 有効")
         else:
             logger.info("📋 切断管理指標 → cutting_production_indicator 全件同期: 無効")
+    if forming_excel_path:
+        logger.info("📂 成形管理指標 Excel パス: %s", forming_excel_path)
+        if _forming_indicator_sync_enabled():
+            logger.info("📋 成形管理指標 → forming_production_indicator 全件同期: 有効")
+        else:
+            logger.info("📋 成形管理指標 → forming_production_indicator 全件同期: 無効")
     logger.info(
         "📊 ポーリング間隔: %.1f 秒、CSV ワーカー: %s、Excel ワーカー: %s",
         POLL_INTERVAL,
@@ -659,7 +763,7 @@ def run_watcher():
     )
     cutting_csv_display = os.path.basename(settings.get_material_cutting_csv_path()) or MATERIAL_CUTTING_CSV_BASENAME
     logger.info(
-        "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s、溶接管理指標 %s、切断管理指標 %s",
+        "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s、溶接管理指標 %s、切断管理指標 %s、成形管理指標 %s",
         len(STOCK_FILES),
         len(MATERIAL_FILES),
         cutting_csv_display,
@@ -668,6 +772,7 @@ def run_watcher():
         "有効" if (inspection_watcher_enabled and inspection_excel_path) else "未設定/無効",
         "有効" if (welding_watcher_enabled and welding_excel_path) else "未設定/無効",
         "有効" if (cutting_watcher_enabled and cutting_excel_path) else "未設定/無効",
+        "有効" if (forming_watcher_enabled and forming_excel_path) else "未設定/無効",
     )
     if not excel_watcher_enabled:
         logger.info("📌 Excel 計画監視は無効です（環境変数またはシステム設定）")
@@ -677,6 +782,8 @@ def run_watcher():
         logger.info("📌 溶接管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
     if cutting_excel_path and not cutting_watcher_enabled:
         logger.info("📌 切断管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
+    if forming_excel_path and not forming_watcher_enabled:
+        logger.info("📌 成形管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
     if excel_watcher_enabled and excel_path:
         _scan_excel_files_at_startup(excel_path, None)
 
@@ -718,6 +825,8 @@ def run_watcher():
         welding_excel_path=welding_excel_path,
         cutting_watcher_enabled=cutting_watcher_enabled,
         cutting_excel_path=cutting_excel_path,
+        forming_watcher_enabled=forming_watcher_enabled,
+        forming_excel_path=forming_excel_path,
         in_queue_excel_filenames=in_queue_excel_filenames,
         in_queue_csv_paths=in_queue_csv_paths,
     )
@@ -746,6 +855,13 @@ def run_watcher():
                 observer.schedule(handler, cutting_dir, recursive=False)
             except Exception as e:
                 logger.warning("切断管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
+    if forming_excel_path:
+        forming_dir = os.path.dirname(forming_excel_path)
+        if forming_dir and forming_dir not in (csv_path, excel_path):
+            try:
+                observer.schedule(handler, forming_dir, recursive=False)
+            except Exception as e:
+                logger.warning("成形管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     watched_roots = {os.path.normpath(csv_path)}
     if excel_path:
         watched_roots.add(os.path.normpath(excel_path))
@@ -761,6 +877,10 @@ def run_watcher():
         cdir = os.path.dirname(cutting_excel_path)
         if cdir:
             watched_roots.add(os.path.normpath(cdir))
+    if forming_excel_path:
+        fdir = os.path.dirname(forming_excel_path)
+        if fdir:
+            watched_roots.add(os.path.normpath(fdir))
     for fullpath, _bn in settings.get_material_receiving_csv_entries():
         parent = os.path.normpath(os.path.dirname(fullpath))
         if not parent or parent in watched_roots:
@@ -906,6 +1026,33 @@ def run_watcher():
             logger.warning(
                 "⚠️ 切断管理指標 Excel は起動時に未検出（ネットワーク復旧後に自動監視）: %s",
                 cutting_excel_path,
+            )
+    if forming_watcher_enabled and forming_excel_path:
+        forming_poll_thread = threading.Thread(
+            target=_forming_excel_polling_loop,
+            args=(
+                forming_excel_path,
+                excel_task_queue,
+                POLL_INTERVAL,
+                stop_polling,
+                in_queue_excel_filenames,
+            ),
+            daemon=True,
+            name="FormingExcelMtimePoll",
+        )
+        forming_poll_thread.start()
+        logger.info("✅ 成形管理指標 Excel ポーリング開始: %s", os.path.basename(forming_excel_path))
+        if os.path.isfile(forming_excel_path):
+            _enqueue_forming_excel(
+                forming_excel_path,
+                excel_task_queue,
+                in_queue_excel_filenames,
+                reason="起動時",
+            )
+        else:
+            logger.warning(
+                "⚠️ 成形管理指標 Excel は起動時に未検出（ネットワーク復旧後に自動監視）: %s",
+                forming_excel_path,
             )
     if excel_watcher_enabled and excel_path:
         logger.info("✅ ポーリング開始（Watchdog + Excel mtime）、ファイル変更を待機中...")

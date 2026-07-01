@@ -1,12 +1,12 @@
 import type {
-  CuttingProductivityAnalysisData,
-  CuttingProductivityOperatorRow,
-  CuttingProductivityProductOperatorRanking,
-  CuttingProductivityProductRow,
-  CuttingProductivitySessionRow,
-} from '@/api/cuttingProductionIndicator'
+  FormingProductivityAnalysisData,
+  FormingProductivityOperatorRow,
+  FormingProductivityProductOperatorRanking,
+  FormingProductivityProductRow,
+  FormingProductivitySessionRow,
+} from '@/api/formingProductionIndicator'
 
-export interface CuttingProductivityReportFilters {
+export interface FormingProductivityReportFilters {
   startDate: string
   endDate: string
   lineLabel: string
@@ -14,28 +14,28 @@ export interface CuttingProductivityReportFilters {
   includeIncomplete: boolean
 }
 
-export type CuttingProductivityKpiTone = 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet'
+export type FormingProductivityKpiTone = 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet'
 
-export interface CuttingProductivityKpiCardPrint {
+export interface FormingProductivityKpiCardPrint {
   label: string
   value: string
   hint: string
-  tone: CuttingProductivityKpiTone
+  tone: FormingProductivityKpiTone
 }
 
-export interface CuttingProductivityPrintCharts {
+export interface FormingProductivityPrintCharts {
   daily: string | null
   operator: string | null
   product: string | null
 }
 
-export interface CuttingProductivityPrintChartsExtended extends CuttingProductivityPrintCharts {
+export interface FormingProductivityPrintChartsExtended extends FormingProductivityPrintCharts {
   productRank?: string | null
 }
 
-export interface CuttingProductivityProductRankPrintContext {
-  selected: CuttingProductivityProductOperatorRanking | null
-  topOverview: CuttingProductivityProductOperatorRanking[]
+export interface FormingProductivityProductRankPrintContext {
+  selected: FormingProductivityProductOperatorRanking | null
+  topOverview: FormingProductivityProductOperatorRanking[]
   stats: {
     topEfficiency: number | null
     avgEfficiency: number | null
@@ -43,26 +43,26 @@ export interface CuttingProductivityProductRankPrintContext {
   } | null
 }
 
-export interface CuttingProductivityReportContext {
-  filters: CuttingProductivityReportFilters
-  kpiCards: CuttingProductivityKpiCardPrint[]
-  charts: CuttingProductivityPrintChartsExtended
-  lineRows: Array<CuttingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>
-  productRows: Array<CuttingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
+export interface FormingProductivityReportContext {
+  filters: FormingProductivityReportFilters
+  kpiCards: FormingProductivityKpiCardPrint[]
+  charts: FormingProductivityPrintChartsExtended
+  lineRows: Array<FormingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>
+  productRows: Array<FormingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
   lineSectionAvgEfficiency: number | null
   productSectionTotalQty: number
-  productRank: CuttingProductivityProductRankPrintContext
+  productRank: FormingProductivityProductRankPrintContext
 }
 
-export type CuttingProductivityPrintSection =
+export type FormingProductivityPrintSection =
   | 'full'
   | 'daily'
   | 'operator'
   | 'product'
   | 'product-rank'
 
-/** @deprecated use CuttingProductivityReportContext */
-export type CuttingProductivityPrintPayload = CuttingProductivityReportContext
+/** @deprecated use FormingProductivityReportContext */
+export type FormingProductivityPrintPayload = FormingProductivityReportContext
 
 const UTF8_BOM = '\uFEFF'
 
@@ -118,11 +118,11 @@ function printedAtJa(): string {
   })
 }
 
-function reportFileBase(filters: CuttingProductivityReportFilters): string {
+function reportFileBase(filters: FormingProductivityReportFilters): string {
   return `溶接生産性分析_${filters.startDate}_${filters.endDate}`
 }
 
-function metaCsvLines(filters: CuttingProductivityReportFilters): string[] {
+function metaCsvLines(filters: FormingProductivityReportFilters): string[] {
   return [
     csvLine(['# 溶接工程 — 生産性分析']),
     csvLine(['# 集計期間', `${filters.startDate} ～ ${filters.endDate}`]),
@@ -148,8 +148,8 @@ export function downloadCsvFile(filename: string, content: string) {
 }
 
 export function buildSessionsCsv(
-  data: CuttingProductivityAnalysisData,
-  filters: CuttingProductivityReportFilters,
+  data: FormingProductivityAnalysisData,
+  filters: FormingProductivityReportFilters,
 ): string {
   const lines = [
     ...metaCsvLines(filters),
@@ -161,7 +161,7 @@ export function buildSessionsCsv(
       '製品名',
       '生産数',
       '不良数',
-      '差異率',
+      '不良率',
       '能率(個/時)',
       '正味稼働(分)',
       '停止(分)',
@@ -190,12 +190,12 @@ export function buildSessionsCsv(
 }
 
 export function buildSummaryCsv(
-  data: CuttingProductivityAnalysisData,
-  filters: CuttingProductivityReportFilters,
+  data: FormingProductivityAnalysisData,
+  filters: FormingProductivityReportFilters,
   extras: {
-    lineRows: Array<CuttingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>
-    productRows: Array<CuttingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
-    productRankTop: CuttingProductivityProductOperatorRanking[]
+    lineRows: Array<FormingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>
+    productRows: Array<FormingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
+    productRankTop: FormingProductivityProductOperatorRanking[]
     defectLabel: (defectCd: string) => string
   },
 ): string {
@@ -209,7 +209,7 @@ export function buildSummaryCsv(
       '全セッション',
       '生産数合計',
       '不良数',
-      '差異率',
+      '不良率',
       '総合能率(個/時)',
       '正味稼働(分)',
       '停止(分)',
@@ -230,7 +230,7 @@ export function buildSummaryCsv(
   lines.push('')
 
   lines.push(csvLine(['【日別推移】']))
-  lines.push(csvLine(['日付', '件数', '確定件数', '生産数', '不良数', '差異率', '能率(個/時)', '正味稼働(分)']))
+  lines.push(csvLine(['日付', '件数', '確定件数', '生産数', '不良数', '不良率', '能率(個/時)', '正味稼働(分)']))
   for (const row of data.daily) {
     lines.push(
       csvLine([
@@ -248,7 +248,7 @@ export function buildSummaryCsv(
   lines.push('')
 
   lines.push(csvLine(['【ライン別】']))
-  lines.push(csvLine(['ライン', '件数', '生産数', '差異率', '平均能率(個/時)', '正味稼働(分)']))
+  lines.push(csvLine(['ライン', '件数', '生産数', '不良率', '平均能率(個/時)', '正味稼働(分)']))
   for (const row of extras.lineRows) {
     lines.push(
       csvLine([
@@ -264,7 +264,7 @@ export function buildSummaryCsv(
   lines.push('')
 
   lines.push(csvLine(['【製品別】']))
-  lines.push(csvLine(['CD', '製品名', '件数', '生産数', '差異率', '平均能率(個/時)']))
+  lines.push(csvLine(['CD', '製品名', '件数', '生産数', '不良率', '平均能率(個/時)']))
   for (const row of extras.productRows) {
     lines.push(
       csvLine([
@@ -304,7 +304,7 @@ export function buildSummaryCsv(
   return lines.join('\r\n')
 }
 
-function kpiCardHtml(card: CuttingProductivityKpiCardPrint): string {
+function kpiCardHtml(card: FormingProductivityKpiCardPrint): string {
   return `<div class="kpi-card kpi-card--${card.tone}">
     <div class="kpi-card__accent"></div>
     <div class="kpi-card__body">
@@ -385,7 +385,7 @@ function tableHead(cells: string[]): string {
 
 const PRINT_OPERATOR_TABLE_MAX = 5
 function buildOperatorPrintTable(
-  rows: Array<CuttingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>,
+  rows: Array<FormingProductivityOperatorRow & { avg_efficiency_per_hour?: number | null }>,
   maxRows = 0,
 ): string {
   if (!rows.length) return '<p class="empty">データなし</p>'
@@ -407,13 +407,13 @@ function buildOperatorPrintTable(
       ? `<p class="table-more">… 他 ${rows.length - maxRows} 名</p>`
       : ''
   return `<table class="data data--operator data--compact">
-    <thead>${tableHead(['#', 'ライン', '件', '生産', '差異率', '平均能率'])}</thead>
+    <thead>${tableHead(['#', 'ライン', '件', '生産', '不良率', '平均能率'])}</thead>
     <tbody>${body}</tbody>
   </table>${more}`
 }
 
 function buildProductPrintTable(
-  rows: Array<CuttingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>,
+  rows: Array<FormingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>,
 ): string {
   if (!rows.length) return '<p class="empty">データなし</p>'
   const body = rows
@@ -429,12 +429,12 @@ function buildProductPrintTable(
     )
     .join('')
   return `<table class="data data--product">
-    <thead>${tableHead(['CD', '製品名', '件', '生産', '差異率', '能率'])}</thead>
+    <thead>${tableHead(['CD', '製品名', '件', '生産', '不良率', '能率'])}</thead>
     <tbody>${body}</tbody>
   </table>`
 }
 
-function buildProductRankOperatorTable(rows: CuttingProductivityOperatorRow[]): string {
+function buildProductRankOperatorTable(rows: FormingProductivityOperatorRow[]): string {
   if (!rows.length) return '<p class="empty">データなし</p>'
   const body = rows
     .map(
@@ -449,12 +449,12 @@ function buildProductRankOperatorTable(rows: CuttingProductivityOperatorRow[]): 
     )
     .join('')
   return `<table class="data data--rank">
-    <thead>${tableHead(['順位', 'ライン', '件', '生産', '能率', '差異率'])}</thead>
+    <thead>${tableHead(['順位', 'ライン', '件', '生産', '能率', '不良率'])}</thead>
     <tbody>${body}</tbody>
   </table>`
 }
 
-function buildProductRankOverviewTable(rows: CuttingProductivityProductOperatorRanking[]): string {
+function buildProductRankOverviewTable(rows: FormingProductivityProductOperatorRanking[]): string {
   if (!rows.length) return '<p class="empty">データなし</p>'
   const body = rows
     .map(
@@ -475,8 +475,8 @@ function buildProductRankOverviewTable(rows: CuttingProductivityProductOperatorR
 }
 
 function buildProductRankHeroHtml(
-  ranking: CuttingProductivityProductOperatorRanking,
-  stats: CuttingProductivityProductRankPrintContext['stats'],
+  ranking: FormingProductivityProductOperatorRanking,
+  stats: FormingProductivityProductRankPrintContext['stats'],
 ): string {
   return `<div class="rank-hero">
     <div class="rank-hero__main">
@@ -493,7 +493,7 @@ function buildProductRankHeroHtml(
 }
 
 function buildMetaLineHtml(
-  filters: CuttingProductivityReportFilters,
+  filters: FormingProductivityReportFilters,
   printedAt: string,
   options?: { compact?: boolean },
 ): string {
@@ -717,7 +717,7 @@ function getPrintStyles(mode: 'full' | 'section', orientation: PrintOrientation 
 }
 
 function buildPrintDocumentShell(
-  filters: CuttingProductivityReportFilters,
+  filters: FormingProductivityReportFilters,
   options: {
     sectionTitle?: string
     sectionMetaInline?: boolean
@@ -725,7 +725,7 @@ function buildPrintDocumentShell(
     orientation?: PrintOrientation
     body: string
     includeKpi?: boolean
-    kpiCards?: CuttingProductivityKpiCardPrint[]
+    kpiCards?: FormingProductivityKpiCardPrint[]
   },
 ): string {
   const printedAt = printedAtJa()
@@ -765,7 +765,7 @@ function buildPrintDocumentShell(
 </html>`
 }
 
-function buildFullPrintBody(ctx: CuttingProductivityReportContext): string {
+function buildFullPrintBody(ctx: FormingProductivityReportContext): string {
   const {
     charts,
     lineRows,
@@ -793,7 +793,7 @@ function buildFullPrintBody(ctx: CuttingProductivityReportContext): string {
   `
 }
 
-export function buildCuttingProductivityPrintHtml(ctx: CuttingProductivityReportContext): string {
+export function buildFormingProductivityPrintHtml(ctx: FormingProductivityReportContext): string {
   return buildPrintDocumentShell(ctx.filters, {
     mode: 'full',
     includeKpi: true,
@@ -802,9 +802,9 @@ export function buildCuttingProductivityPrintHtml(ctx: CuttingProductivityReport
   })
 }
 
-export function buildCuttingProductivitySectionPrintHtml(
-  section: CuttingProductivityPrintSection,
-  ctx: CuttingProductivityReportContext,
+export function buildFormingProductivitySectionPrintHtml(
+  section: FormingProductivityPrintSection,
+  ctx: FormingProductivityReportContext,
 ): string {
   const {
     charts,
@@ -816,7 +816,7 @@ export function buildCuttingProductivitySectionPrintHtml(
   } = ctx
 
   if (section === 'full') {
-    return buildCuttingProductivityPrintHtml(ctx)
+    return buildFormingProductivityPrintHtml(ctx)
   }
 
   if (section === 'daily') {
@@ -893,10 +893,10 @@ export function buildCuttingProductivitySectionPrintHtml(
     })
   }
 
-  return buildCuttingProductivityPrintHtml(ctx)
+  return buildFormingProductivityPrintHtml(ctx)
 }
 
-export interface CuttingProductivityDailyBatchItem {
+export interface FormingProductivityDailyBatchItem {
   operatorUserId: number
   lineLabel: string
   chartSrc: string | null
@@ -906,7 +906,7 @@ export interface CuttingProductivityDailyBatchItem {
 }
 
 function buildDailyBatchPrintPageHeader(
-  filters: CuttingProductivityReportFilters,
+  filters: FormingProductivityReportFilters,
   printedAt: string,
 ): string {
   return `<header class="hd">
@@ -916,9 +916,9 @@ function buildDailyBatchPrintPageHeader(
   </header>`
 }
 
-export function buildCuttingProductivityDailyBatchPrintHtml(
-  filters: CuttingProductivityReportFilters,
-  items: CuttingProductivityDailyBatchItem[],
+export function buildFormingProductivityDailyBatchPrintHtml(
+  filters: FormingProductivityReportFilters,
+  items: FormingProductivityDailyBatchItem[],
 ): string {
   const printedAt = printedAtJa()
   const body = items
@@ -961,24 +961,24 @@ export function buildCuttingProductivityDailyBatchPrintHtml(
 </html>`
 }
 
-export function printCuttingProductivityDailyBatch(
-  filters: CuttingProductivityReportFilters,
-  items: CuttingProductivityDailyBatchItem[],
+export function printFormingProductivityDailyBatch(
+  filters: FormingProductivityReportFilters,
+  items: FormingProductivityDailyBatchItem[],
 ) {
-  openPrintDocument(buildCuttingProductivityDailyBatchPrintHtml(filters, items))
+  openPrintDocument(buildFormingProductivityDailyBatchPrintHtml(filters, items))
 }
 
-export interface CuttingProductivityOperatorProductBatchItem {
+export interface FormingProductivityOperatorProductBatchItem {
   lineLabel: string
   productCount: number
   sessionCount: number
   sumActualQty: number
   avgEfficiencyPerHour: number | null
-  productRows: Array<CuttingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
+  productRows: Array<FormingProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
 }
 
 function buildOperatorProductBatchPageHeader(
-  filters: CuttingProductivityReportFilters,
+  filters: FormingProductivityReportFilters,
   printedAt: string,
 ): string {
   return `<header class="hd">
@@ -988,9 +988,9 @@ function buildOperatorProductBatchPageHeader(
   </header>`
 }
 
-export function buildCuttingProductivityOperatorProductBatchPrintHtml(
-  filters: CuttingProductivityReportFilters,
-  items: CuttingProductivityOperatorProductBatchItem[],
+export function buildFormingProductivityOperatorProductBatchPrintHtml(
+  filters: FormingProductivityReportFilters,
+  items: FormingProductivityOperatorProductBatchItem[],
 ): string {
   const printedAt = printedAtJa()
   const body = items
@@ -1032,22 +1032,22 @@ export function buildCuttingProductivityOperatorProductBatchPrintHtml(
 </html>`
 }
 
-export function printCuttingProductivityOperatorProductBatch(
-  filters: CuttingProductivityReportFilters,
-  items: CuttingProductivityOperatorProductBatchItem[],
+export function printFormingProductivityOperatorProductBatch(
+  filters: FormingProductivityReportFilters,
+  items: FormingProductivityOperatorProductBatchItem[],
 ) {
-  openPrintDocument(buildCuttingProductivityOperatorProductBatchPrintHtml(filters, items))
+  openPrintDocument(buildFormingProductivityOperatorProductBatchPrintHtml(filters, items))
 }
 
-export function printCuttingProductivityReport(payload: CuttingProductivityPrintPayload) {
-  openPrintDocument(buildCuttingProductivityPrintHtml(payload))
+export function printFormingProductivityReport(payload: FormingProductivityPrintPayload) {
+  openPrintDocument(buildFormingProductivityPrintHtml(payload))
 }
 
-export function printCuttingProductivitySection(
-  section: CuttingProductivityPrintSection,
-  ctx: CuttingProductivityReportContext,
+export function printFormingProductivitySection(
+  section: FormingProductivityPrintSection,
+  ctx: FormingProductivityReportContext,
 ) {
-  openPrintDocument(buildCuttingProductivitySectionPrintHtml(section, ctx))
+  openPrintDocument(buildFormingProductivitySectionPrintHtml(section, ctx))
 }
 
 export function openPrintDocument(html: string) {
@@ -1091,16 +1091,16 @@ export function openPrintDocument(html: string) {
 }
 
 export function exportWeldingSessionsCsv(
-  data: CuttingProductivityAnalysisData,
-  filters: CuttingProductivityReportFilters,
+  data: FormingProductivityAnalysisData,
+  filters: FormingProductivityReportFilters,
 ) {
   const content = buildSessionsCsv(data, filters)
   downloadCsvFile(`${reportFileBase(filters)}_セッション.csv`, content)
 }
 
 export function exportWeldingSummaryCsv(
-  data: CuttingProductivityAnalysisData,
-  filters: CuttingProductivityReportFilters,
+  data: FormingProductivityAnalysisData,
+  filters: FormingProductivityReportFilters,
   extras: Parameters<typeof buildSummaryCsv>[2],
 ) {
   const content = buildSummaryCsv(data, filters, extras)
