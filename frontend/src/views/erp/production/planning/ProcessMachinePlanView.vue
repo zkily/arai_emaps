@@ -77,6 +77,34 @@
           </el-radio-group>
         </div>
 
+        <div class="pmp-toolbar__strip pmp-toolbar__strip--plan-adj">
+          <span class="pmp-toolbar__strip-label">計画</span>
+          <el-radio-group
+            v-model="planDisplayMode"
+            size="small"
+            class="pmp-toolbar__plan-mode"
+            :disabled="!simulationResult"
+          >
+            <el-radio-button value="base">原計画</el-radio-button>
+            <el-radio-button value="adjusted">調整後</el-radio-button>
+            <el-radio-button value="diff">差異</el-radio-button>
+          </el-radio-group>
+          <el-select
+            v-model="currentScenarioId"
+            clearable
+            placeholder="保存方案"
+            size="small"
+            class="pmp-toolbar__scenario"
+            :loading="scenariosLoading"
+            @change="onScenarioSelect"
+          >
+            <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+          <el-button size="small" class="pmp-toolbar__btn" @click="adjustDrawerVisible = true">
+            計画調整
+          </el-button>
+        </div>
+
         <div class="pmp-toolbar__strip pmp-toolbar__strip--actions">
           <el-button
             type="primary"
@@ -588,6 +616,93 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 計画調整（シミュレーション・保存のみ、DB へは書き込まない） -->
+    <el-drawer
+      v-model="adjustDrawerVisible"
+      title="計画調整（試算）"
+      size="480px"
+      :close-on-click-modal="false"
+    >
+      <div class="pmp-adj-drawer">
+        <p class="pmp-adj-hint">
+          設備合計の計画に対して % または固定数量で加減します。設備未設定分は人工重みで指定設備へ配分します。調整結果は試算のみで、生産データ本体は変更しません。
+        </p>
+
+        <el-form label-width="88px" size="small" class="pmp-adj-form">
+          <el-form-item label="ルール種別">
+            <el-radio-group v-model="ruleDraftType">
+              <el-radio-button value="adjust">設備加減</el-radio-button>
+              <el-radio-button value="allocate_unset">未設定配分</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="工程">
+            <el-select v-model="ruleDraftProcess" style="width: 100%">
+              <el-option v-for="p in allProcessOptions" :key="p.key" :label="p.label" :value="p.key" />
+            </el-select>
+          </el-form-item>
+
+          <template v-if="ruleDraftType === 'adjust'">
+            <el-form-item label="設備">
+              <el-select v-model="ruleDraftMachine" filterable placeholder="設備を選択" style="width: 100%">
+                <el-option
+                  v-for="m in machinesForProcess(ruleDraftProcess)"
+                  :key="m"
+                  :label="m"
+                  :value="m"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="調整方式">
+              <el-radio-group v-model="ruleDraftMode">
+                <el-radio-button value="percent">%</el-radio-button>
+                <el-radio-button value="delta">数量</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item :label="ruleDraftMode === 'percent' ? '増減(%)' : '増減数量'">
+              <el-input-number v-model="ruleDraftValue" :step="ruleDraftMode === 'percent' ? 1 : 100" style="width: 100%" />
+            </el-form-item>
+          </template>
+
+          <template v-else>
+            <div class="pmp-adj-targets">
+              <div v-for="(t, idx) in ruleDraftTargets" :key="idx" class="pmp-adj-target-row">
+                <el-select v-model="t.machine" filterable placeholder="設備" style="flex: 1">
+                  <el-option
+                    v-for="m in machinesForProcess(ruleDraftProcess, true)"
+                    :key="m"
+                    :label="m"
+                    :value="m"
+                  />
+                </el-select>
+                <el-input-number v-model="t.weight" :min="0" :step="1" controls-position="right" style="width: 110px" />
+                <el-button text type="danger" @click="removeDraftTarget(idx)">削除</el-button>
+              </div>
+              <el-button size="small" @click="addDraftTarget">設備を追加</el-button>
+            </div>
+          </template>
+
+          <el-form-item>
+            <el-button type="primary" size="small" @click="addAdjustRule">ルールを追加</el-button>
+            <el-button size="small" :loading="simulating" @click="runSimulate">プレビュー</el-button>
+          </el-form-item>
+        </el-form>
+
+        <div v-if="adjustRules.length" class="pmp-adj-rules">
+          <div class="pmp-adj-rules__title">適用ルール（上から順）</div>
+          <div v-for="(rule, idx) in adjustRules" :key="rule.id" class="pmp-adj-rule-item">
+            <el-switch v-model="rule.enabled" size="small" />
+            <span class="pmp-adj-rule-item__text">{{ formatAdjustRule(rule) }}</span>
+            <el-button text type="danger" size="small" @click="removeAdjustRule(idx)">削除</el-button>
+          </div>
+        </div>
+
+        <div class="pmp-adj-footer">
+          <el-input v-model="scenarioNameDraft" placeholder="方案名" size="small" class="pmp-adj-footer__name" />
+          <el-button type="primary" size="small" :loading="scenarioSaving" @click="saveScenario">方案を保存</el-button>
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -611,11 +726,19 @@ import type { EChartsOption } from 'echarts'
 import {
   getProcessMachinePlan,
   getProcessMachinePlanProducts,
+  simulateProcessMachinePlan,
+  listProcessMachinePlanScenarios,
+  createProcessMachinePlanScenario,
+  getProcessMachinePlanScenario,
   type ProcessMachineMetrics,
   type ProcessMachinePlanData,
   type ProcessMachinePlanKey,
   type ProcessMachinePlanRow,
   type ProcessMachineProductsData,
+  type PmpAdjustRule,
+  type PmpAdjustRuleTarget,
+  type PmpPlanScenarioMeta,
+  type PmpPlanSimulationResult,
 } from '@/api/database'
 import { downloadExcelFromAoa } from '@/utils/excelExport'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
@@ -627,6 +750,8 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperation
 type ViewMode = 'summary' | 'daily' | 'trend'
 type DailyMetric = 'plan' | 'actual' | 'diff'
 type TrendGroup = 'all' | 'process'
+type PlanDisplayMode = 'base' | 'adjusted' | 'diff'
+type RuleDraftType = 'adjust' | 'allocate_unset'
 
 interface TableRow extends Partial<ProcessMachinePlanRow> {
   __type: 'machine' | 'subtotal' | 'grand'
@@ -693,6 +818,24 @@ const dailyMetric = ref<DailyMetric>('actual')
 const trendGroup = ref<TrendGroup>('all')
 const loading = ref(false)
 
+const planDisplayMode = ref<PlanDisplayMode>('base')
+const simulationResult = ref<PmpPlanSimulationResult | null>(null)
+const adjustDrawerVisible = ref(false)
+const adjustRules = ref<PmpAdjustRule[]>([])
+const simulating = ref(false)
+const scenarios = ref<PmpPlanScenarioMeta[]>([])
+const scenariosLoading = ref(false)
+const currentScenarioId = ref<number | null>(null)
+const scenarioNameDraft = ref('')
+const scenarioSaving = ref(false)
+
+const ruleDraftType = ref<RuleDraftType>('adjust')
+const ruleDraftProcess = ref<ProcessMachinePlanKey>('molding')
+const ruleDraftMachine = ref('')
+const ruleDraftMode = ref<'percent' | 'delta'>('percent')
+const ruleDraftValue = ref(10)
+const ruleDraftTargets = ref<PmpAdjustRuleTarget[]>([{ machine: '', weight: 1 }])
+
 // ドリルダウン（製品別明細）
 const drillVisible = ref(false)
 const drillLoading = ref(false)
@@ -704,7 +847,18 @@ const trendChartRef = ref<HTMLElement | null>(null)
 let trendChart: echarts.ECharts | null = null
 
 const planData = ref<ProcessMachinePlanData | null>(null)
-const dates = computed(() => planData.value?.dates ?? [])
+const dates = computed(() => displayPlanData.value?.dates ?? planData.value?.dates ?? [])
+
+/** 画面表示用（原計画 / 調整後 / 差異） */
+const displayPlanData = computed<ProcessMachinePlanData | null>(() => {
+  if (planDisplayMode.value === 'base' || !simulationResult.value) {
+    return planData.value
+  }
+  if (planDisplayMode.value === 'adjusted') {
+    return simulationResult.value.adjusted ?? planData.value
+  }
+  return simulationResult.value.diff ?? planData.value
+})
 
 /** 表スクロール領域（対比集計・日別明細） */
 const summaryTableHostRef = ref<HTMLElement | null>(null)
@@ -786,7 +940,7 @@ const emptyMetrics: ProcessMachineMetrics = {
   defect_rate: null,
   days: 0,
 }
-const grandTotal = computed<ProcessMachineMetrics>(() => planData.value?.grandTotal ?? emptyMetrics)
+const grandTotal = computed<ProcessMachineMetrics>(() => displayPlanData.value?.grandTotal ?? emptyMetrics)
 
 const periodRangeShortcuts = [
   {
@@ -846,7 +1000,7 @@ const machineOptionGroups = computed<{ key: string; label: string; machines: str
 
 /** 設備選択で絞り込んだ summary 行 */
 const filteredSummary = computed<ProcessMachinePlanRow[]>(() => {
-  const rows = planData.value?.summary ?? []
+  const rows = displayPlanData.value?.summary ?? []
   const sel = selectedMachines.value
   if (!sel.length) return rows
   const set = new Set(sel)
@@ -951,7 +1105,7 @@ function buildTrendDayAggs(dates: string[], rows: ProcessMachinePlanRow[]): Tren
 }
 
 const trendDayAggs = computed<TrendDayAgg[]>(() => {
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data?.dates?.length) return []
   return buildTrendDayAggs(data.dates, filteredSummary.value)
 })
@@ -984,7 +1138,7 @@ const trendStats = computed(() => {
 const trendDailyRows = computed(() => trendDayAggs.value)
 
 const trendProcessColumns = computed(() => {
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data) return []
   return data.processes
     .filter((p) => filteredSummary.value.some((r) => r.process_key === p.key))
@@ -992,7 +1146,7 @@ const trendProcessColumns = computed(() => {
 })
 
 const trendProcessDayRows = computed<TrendProcessDayRow[]>(() => {
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data?.dates?.length) return []
   const cols = trendProcessColumns.value
   return data.dates.map((date) => {
@@ -1073,7 +1227,7 @@ function summarySpanMethod({
 
 /** 工程ごとに 設備行 → 小計行、最後に総合計行を積む（対比集計用） */
 const summaryTableData = computed<TableRow[]>(() => {
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data) return []
   const rows: TableRow[] = []
   for (const proc of data.processes) {
@@ -1159,7 +1313,7 @@ function dailyValue(r: ProcessMachinePlanRow, d: string): number {
 }
 
 const dailyTableData = computed<TableRow[]>(() => {
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data) return []
   const ds = data.dates
   const rows: TableRow[] = []
@@ -1325,7 +1479,7 @@ function trendRateAxisMax(rates: (number | null)[]): number {
 }
 
 function buildTrendOption(): EChartsOption {
-  const data = planData.value
+  const data = displayPlanData.value
   const ds = data?.dates ?? []
   const axisLabels = trendXAxisLabels(ds)
   const rotate = ds.length > 14 ? 35 : 0
@@ -1933,6 +2087,200 @@ function handlePrint() {
   run()
 }
 
+/* ============ 計画調整（試算） ============ */
+const UNSET_MACHINE_LABEL = '(設備未設定)'
+
+function newRuleId(): string {
+  return `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function machinesForProcess(processKey: ProcessMachinePlanKey, excludeUnset = false): string[] {
+  const grp = machineOptionGroups.value.find((g) => g.key === processKey)
+  let list = [...(grp?.machines ?? [])]
+  if (excludeUnset) {
+    list = list.filter((m) => m !== UNSET_MACHINE_LABEL)
+  }
+  return list
+}
+
+function addDraftTarget() {
+  ruleDraftTargets.value.push({ machine: '', weight: 1 })
+}
+
+function removeDraftTarget(idx: number) {
+  ruleDraftTargets.value.splice(idx, 1)
+  if (ruleDraftTargets.value.length === 0) {
+    ruleDraftTargets.value.push({ machine: '', weight: 1 })
+  }
+}
+
+function addAdjustRule() {
+  if (!guardApsOperation(canEdit)) return
+
+  const pk = ruleDraftProcess.value
+  if (ruleDraftType.value === 'adjust') {
+    const machine = ruleDraftMachine.value.trim()
+    if (!machine) {
+      ElMessage.warning('設備を選択してください')
+      return
+    }
+    adjustRules.value.push({
+      id: newRuleId(),
+      type: 'adjust',
+      process_key: pk,
+      enabled: true,
+      machine,
+      mode: ruleDraftMode.value,
+      value: Number(ruleDraftValue.value) || 0,
+    })
+  } else {
+    const targets = ruleDraftTargets.value
+      .filter((t) => (t.machine || '').trim())
+      .map((t) => ({ machine: t.machine.trim(), weight: Number(t.weight) || 0 }))
+    if (!targets.length) {
+      ElMessage.warning('配分先設備を1つ以上指定してください')
+      return
+    }
+    adjustRules.value.push({
+      id: newRuleId(),
+      type: 'allocate_unset',
+      process_key: pk,
+      enabled: true,
+      targets,
+    })
+  }
+  void runSimulate()
+}
+
+function removeAdjustRule(idx: number) {
+  adjustRules.value.splice(idx, 1)
+  void runSimulate()
+}
+
+function formatAdjustRule(rule: PmpAdjustRule): string {
+  const proc = allProcessOptions.find((p) => p.key === rule.process_key)?.label ?? rule.process_key
+  if (rule.type === 'adjust') {
+    const v =
+      rule.mode === 'percent'
+        ? `${rule.value >= 0 ? '+' : ''}${rule.value}%`
+        : `${rule.value >= 0 ? '+' : ''}${rule.value}`
+    return `${proc} / ${rule.machine}：${v}`
+  }
+  const parts = (rule.targets || [])
+    .map((t) => `${t.machine}(${t.weight})`)
+    .join('、')
+  return `${proc} / 未設定→ ${parts}`
+}
+
+async function runSimulate() {
+  const [startDate, endDate] = periodRange.value ?? []
+  if (!startDate || !endDate || !planData.value) return
+  if (!adjustRules.value.length) {
+    simulationResult.value = null
+    planDisplayMode.value = 'base'
+    return
+  }
+  simulating.value = true
+  try {
+    const res = await simulateProcessMachinePlan({
+      startDate,
+      endDate,
+      processes: selectedProcesses.value.length ? selectedProcesses.value.join(',') : undefined,
+      rules: adjustRules.value,
+    })
+    const raw = (res as any)?.data
+    simulationResult.value = (raw?.base ? raw : raw?.data) ?? null
+    if (simulationResult.value) {
+      planDisplayMode.value = 'adjusted'
+    }
+  } catch (e) {
+    console.error('計画調整シミュレーションに失敗しました', e)
+    ElMessage.error('試算に失敗しました')
+  } finally {
+    simulating.value = false
+    nextTick(() => syncTableHostSize())
+  }
+}
+
+async function loadScenarios() {
+  scenariosLoading.value = true
+  try {
+    const res = await listProcessMachinePlanScenarios()
+    scenarios.value = (res as { data?: { items?: PmpPlanScenarioMeta[] } })?.data?.items ?? []
+  } catch {
+    scenarios.value = []
+  } finally {
+    scenariosLoading.value = false
+  }
+}
+
+async function onScenarioSelect(id: number | null) {
+  if (!id) {
+    adjustRules.value = []
+    simulationResult.value = null
+    planDisplayMode.value = 'base'
+    return
+  }
+  try {
+    const res = await getProcessMachinePlanScenario(id)
+    const data = (res as { data?: { rules?: PmpAdjustRule[]; startDate?: string; endDate?: string; name?: string } })
+      ?.data
+    if (data?.startDate && data?.endDate) {
+      periodRange.value = [data.startDate, data.endDate]
+      await loadData()
+    }
+    adjustRules.value = [...(data?.rules ?? [])]
+    scenarioNameDraft.value = data?.name ?? ''
+    await runSimulate()
+    adjustDrawerVisible.value = true
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('方案の読み込みに失敗しました')
+  }
+}
+
+async function saveScenario() {
+  if (!guardApsOperation(canEdit)) return
+
+  const name = scenarioNameDraft.value.trim()
+  if (!name) {
+    ElMessage.warning('方案名を入力してください')
+    return
+  }
+  const [startDate, endDate] = periodRange.value ?? []
+  if (!startDate || !endDate) return
+  if (!adjustRules.value.length) {
+    ElMessage.warning('ルールを1つ以上追加してください')
+    return
+  }
+  scenarioSaving.value = true
+  try {
+    await runSimulate()
+    const res = await createProcessMachinePlanScenario({
+      name,
+      startDate,
+      endDate,
+      processes: selectedProcesses.value.length ? selectedProcesses.value.join(',') : undefined,
+      rules: adjustRules.value,
+    })
+    const newId = (res as { data?: { id?: number } })?.data?.id
+    ElMessage.success('方案を保存しました')
+    await loadScenarios()
+    if (newId) currentScenarioId.value = newId
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('方案の保存に失敗しました')
+  } finally {
+    scenarioSaving.value = false
+  }
+}
+
+function exportModeSuffix(): string {
+  if (planDisplayMode.value === 'adjusted') return '_調整後'
+  if (planDisplayMode.value === 'diff') return '_差異'
+  return ''
+}
+
 /* ============ データ取得 ============ */
 async function loadData() {
   if (!guardApsOperation(canCreate)) return
@@ -1950,6 +2298,12 @@ async function loadData() {
       processes: selectedProcesses.value.length ? selectedProcesses.value.join(',') : undefined,
     })
     planData.value = (res as any)?.data ?? null
+    if (adjustRules.value.length) {
+      await runSimulate()
+    } else {
+      simulationResult.value = null
+      planDisplayMode.value = 'base'
+    }
   } catch (e) {
     console.error('工程別設備別計画の読み込みに失敗しました', e)
     ElMessage.error('読み込みに失敗しました')
@@ -1964,9 +2318,10 @@ async function loadData() {
 async function exportExcel() {
   if (!guardApsOperation(canExport)) return
 
-  const data = planData.value
+  const data = displayPlanData.value
   if (!data) return
   const [s, e] = periodRange.value ?? []
+  const modeSuffix = exportModeSuffix()
   try {
     if (viewMode.value === 'summary') {
       const header = ['工程', '設備', '計画', '実績', '差異', '達成率(%)', '実計', '不良', '廃棄', '不良率(%)']
@@ -1985,7 +2340,7 @@ async function exportExcel() {
           row.defect_rate ?? '',
         ])
       }
-      await downloadExcelFromAoa(aoa, '対比集計', `工程別設備別計画_対比_${s}_${e}.xlsx`)
+      await downloadExcelFromAoa(aoa, '対比集計', `工程別設備別計画_対比${modeSuffix}_${s}_${e}.xlsx`)
     } else {
       const metricLabel = dailyMetric.value === 'plan' ? '計画' : dailyMetric.value === 'actual' ? '実績' : '差異'
       const header = ['工程', '設備', ...data.dates.map((d) => formatDateLabel(d)), '合計']
@@ -1998,7 +2353,11 @@ async function exportExcel() {
           Number(row.__rowTotal ?? 0),
         ])
       }
-      await downloadExcelFromAoa(aoa, `日別_${metricLabel}`, `工程別設備別計画_日別${metricLabel}_${s}_${e}.xlsx`)
+      await downloadExcelFromAoa(
+        aoa,
+        `日別_${metricLabel}`,
+        `工程別設備別計画_日別${metricLabel}${modeSuffix}_${s}_${e}.xlsx`,
+      )
     }
     ElMessage.success('Excel を出力しました')
   } catch (err) {
@@ -2029,6 +2388,7 @@ onMounted(() => {
     syncTableHostSize()
   })
   void loadData()
+  void loadScenarios()
 })
 
 onBeforeUnmount(() => {
@@ -2167,6 +2527,73 @@ onBeforeUnmount(() => {
   padding: 2px 4px;
   background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
   border-color: #c7d2fe;
+}
+.pmp-toolbar__strip--plan-adj {
+  padding: 2px 6px;
+  gap: 6px;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fed7aa;
+}
+.pmp-toolbar__plan-mode {
+  flex-shrink: 0;
+}
+.pmp-toolbar__scenario {
+  width: 140px;
+}
+.pmp-adj-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 4px 16px;
+}
+.pmp-adj-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--pmp-sub);
+}
+.pmp-adj-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.pmp-adj-target-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pmp-adj-rules {
+  border-top: 1px solid var(--pmp-line);
+  padding-top: 10px;
+}
+.pmp-adj-rules__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pmp-ink);
+  margin-bottom: 8px;
+}
+.pmp-adj-rule-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed #e2e8f0;
+  font-size: 12px;
+}
+.pmp-adj-rule-item__text {
+  flex: 1;
+  color: var(--pmp-ink);
+}
+.pmp-adj-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--pmp-line);
+}
+.pmp-adj-footer__name {
+  flex: 1;
 }
 .pmp-toolbar__strip--actions {
   gap: 5px;

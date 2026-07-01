@@ -489,7 +489,7 @@ export function clearProductionSummarysWeldingPlan(startDate: string) {
   )
 }
 
-/** 計画データ更新：schedule_details.planned_qty を集計（× production_schedules × machines × processes）して各工程 *_plan（溶接は welding_plan）等と actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象 */
+/** 計画データ更新：schedule_details 等から各工程 *_plan と actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象（過去月は変更しない・事前クリアなし） */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
@@ -758,4 +758,92 @@ export function getProcessMachinePlanProducts(params: {
     `${BASE}/process-machine-plan/products`,
     { params },
   )
+}
+
+/** 計画調整ルール：設備合計への % / +数量 */
+export interface PmpAdjustRuleTarget {
+  machine: string
+  weight: number
+}
+
+export type PmpAdjustRule =
+  | {
+      id: string
+      type: 'adjust'
+      process_key: ProcessMachinePlanKey
+      enabled: boolean
+      machine: string
+      mode: 'percent' | 'delta'
+      value: number
+    }
+  | {
+      id: string
+      type: 'allocate_unset'
+      process_key: ProcessMachinePlanKey
+      enabled: boolean
+      targets: PmpAdjustRuleTarget[]
+    }
+
+export interface PmpPlanSimulationResult {
+  base: ProcessMachinePlanData
+  adjusted: ProcessMachinePlanData
+  diff: ProcessMachinePlanData
+  rules: PmpAdjustRule[]
+}
+
+export interface PmpPlanScenarioMeta {
+  id: number
+  name: string
+  startDate: string
+  endDate: string
+  status: string
+  createdBy?: string | null
+  updatedAt?: string | null
+}
+
+export function simulateProcessMachinePlan(body: {
+  startDate: string
+  endDate: string
+  processes?: string
+  rules: PmpAdjustRule[]
+}) {
+  return request.post<{ data: PmpPlanSimulationResult }>(`${BASE}/process-machine-plan/simulate`, body)
+}
+
+export function listProcessMachinePlanScenarios() {
+  return request.get<{ code?: number; data?: { items?: PmpPlanScenarioMeta[] } }>(
+    `${BASE}/process-machine-plan/scenarios`,
+  )
+}
+
+export function createProcessMachinePlanScenario(body: {
+  name: string
+  startDate: string
+  endDate: string
+  processes?: string
+  rules: PmpAdjustRule[]
+}) {
+  return request.post<{ code?: number; data?: { id?: number } }>(
+    `${BASE}/process-machine-plan/scenarios`,
+    body,
+  )
+}
+
+export function getProcessMachinePlanScenario(id: number) {
+  return request.get<{
+    code?: number
+    data?: PmpPlanScenarioMeta & {
+      processes?: string
+      rules?: PmpAdjustRule[]
+      lastSimulation?: PmpPlanSimulationResult
+    }
+  }>(`${BASE}/process-machine-plan/scenarios/${id}`)
+}
+
+export function updateProcessMachinePlanScenario(id: number, body: { name?: string; rules?: PmpAdjustRule[] }) {
+  return request.put(`${BASE}/process-machine-plan/scenarios/${id}`, body)
+}
+
+export function deleteProcessMachinePlanScenario(id: number) {
+  return request.delete(`${BASE}/process-machine-plan/scenarios/${id}`)
 }

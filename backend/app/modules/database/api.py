@@ -205,15 +205,14 @@ INVENTORY_COLUMNS = [
 # 推移・実計推移の対象 6 工程（cutting, chamfering, molding, plating, welding, inspection）
 TREND_PREFIXES = ["cutting", "chamfering", "molding", "plating", "welding", "inspection"]
 
-# 計画データ更新：schedule_details.planned_qty を集計し、設備 machine_type → processes と突合した工程名ごとに _plan 列へ反映（5工程＋溶接KT07別途。メッキはAPSボード）
+# 計画データ更新：schedule_details.planned_qty を集計し、設備 machine_type → processes と突合した工程名ごとに _plan 列へ反映（溶接KT07別途）
+# plating_plan・inspection_plan は schedule 集計ではなく、成型実計計画 molding_actual_plan をルート工程（KT05/KT09）で振り分け（切断・面取と同様）
 # ※ welding_plan は KT07（溶接工程）として集計した日別 planned_qty を使用（WeldingPlanning と同じ工程粒度）。
 PLAN_PROCESS_MAPPING = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
-    # plating_plan は schedule 集計ではなく APS メッキ投入ボード（update-plan 内で反映）
     "切断": "cutting_plan",
     "面取": "chamfering_plan",
-    "検査": "inspection_plan",
 }
 # 計画データ更新前クリア用（_plan + _actual_plan）
 PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + [
@@ -3131,24 +3130,25 @@ async def update_production_summarys_plan(
 ):
     """
     schedule_details.planned_qty（当日計画数量）のみを集計源とする。production_schedules（product_cd）× 設備
-    machines.machine_type が processes と一致する工程名（成型/溶接/切断/面取/検査）に振り分け、
+    machines.machine_type が processes と一致する工程名（成型/溶接/切断/面取）に振り分け、
     production_summarys と同日・同製品で INNER JOIN した行のみ日別に SUM して各 *_plan 列へ反映する。
     社内溶接 welding_plan も KT07 の schedule_details.planned_qty 合計のみ。
-    社内メッキ plating_plan は APS メッキ投入ボード（qty×掛け、最新草稿）のみ。ボード無しは 0（molding 兜底なし）。
-    続けて actual/plan から actual_plan を更新する。
-    startDate を指定した場合はその日～+5ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
+    続けて actual/plan から actual_plan を更新した後、ルート工程に応じて molding_actual_plan を
+    cutting/chamfering/plating/inspection 等の所属工程 plan 列へ反映する（KT01/KT02/KT05/KT09）。
+    startDate（未指定時は当月月初 JST）～+5ヶ月のみ対象。それより前の月の計画列は変更しない。
     """
     start_time = time.perf_counter()
-    start_d = None
-    end_d = None
-    plating_board_updated = 0
-    plating_board_skipped = 0
     if body and body.startDate and body.startDate.strip():
         try:
             start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
-            end_d = _parse_end_date(start_d, PLAN_PERIOD_MONTHS)
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+    else:
+        start_d = _first_day_of_current_month_jst()
+    end_d = _parse_end_date(start_d, PLAN_PERIOD_MONTHS)
+    date_filter = " AND date >= :range_start AND date <= :range_end"
+    ps_date_filter = " AND ps.date >= :range_start AND ps.date <= :range_end"
+    range_params = {"range_start": start_d, "range_end": end_d}
     # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング
     agg_sql_sd = text("""
         SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt, pr.process_name AS process_name,
@@ -3160,149 +3160,161 @@ async def update_production_summarys_plan(
           AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
         INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
         WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
-          AND pr.process_name IN ('成型','溶接','メッキ','切断','面取','検査')
-          AND (:start_date IS NULL OR (sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date))
+          AND pr.process_name IN ('成型','溶接','切断','面取')
+          AND sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date
         GROUP BY sch.product_cd, sd.schedule_date, pr.process_name
     """)
     params = {"start_date": start_d, "end_date": end_d}
     result_sd = await db.execute(agg_sql_sd, params)
     plan_rows = result_sd.fetchall()
-    if not plan_rows:
-        return {
-            "code": 200,
-            "data": {"updated": 0, "skipped": 0, "total": 0, "elapsedTime": round(time.perf_counter() - start_time, 2)},
-            "message": "更新する計画データがありません",
-        }
 
-    # 按 process_name 归入各 plan 列
-    by_field = {col: [] for col in PLAN_PROCESS_MAPPING.values()}
-    for row in plan_rows:
-        product_cd = (row[0] or "").strip() if row[0] is not None else ""
-        dt = row[1]
-        process_name = (row[2] or "").strip() if row[2] is not None else ""
-        quantity = row[3]
-        if not product_cd or dt is None or process_name not in PLAN_PROCESS_MAPPING:
-            continue
-        try:
-            qty = int(float(quantity)) if quantity is not None else 0
-        except (TypeError, ValueError):
-            qty = 0
-        field = PLAN_PROCESS_MAPPING[process_name]
-        by_field[field].append((product_cd, dt, qty))
-
-    # 溶接（社内）は WeldingPlanning（KT07）と同じ工程粒度で上書き集計
-    # machine_type と processes を突合し、process_cd='KT07' に一致する日別 planned_qty のみを welding_plan に反映。
-    welding_sql_sd = text("""
-        SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt,
-               SUM(COALESCE(sd.planned_qty, 0)) AS quantity
-        FROM schedule_details sd
-        INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
-        INNER JOIN machines m ON m.id = sch.line_id
-        INNER JOIN processes pr ON m.machine_type IS NOT NULL
-          AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
-        INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
-        WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
-          AND pr.process_cd = 'KT07'
-          AND (:start_date IS NULL OR (sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date))
-        GROUP BY sch.product_cd, sd.schedule_date
-    """)
-    result_welding = await db.execute(welding_sql_sd, params)
-    welding_rows = result_welding.fetchall()
-    welding_plan_rows = []
-    for row in welding_rows:
-        product_cd = (row[0] or "").strip() if row[0] is not None else ""
-        dt = row[1]
-        quantity = row[2]
-        if not product_cd or dt is None:
-            continue
-        try:
-            qty = int(float(quantity)) if quantity is not None else 0
-        except (TypeError, ValueError):
-            qty = 0
-        welding_plan_rows.append((product_cd, dt, qty))
-    by_field["welding_plan"] = welding_plan_rows
-
-    total_plan_rows = sum(len(v) for v in by_field.values())
     updated_count = 0
     skipped_count = 0
-    BATCH = 500
+    total_plan_rows = 0
 
-    for field_name, rows in by_field.items():
-        for i in range(0, len(rows), BATCH):
-            batch = rows[i : i + BATCH]
-            case_parts = " ".join(["WHEN product_cd = :pc{:d} AND date = :dt{:d} THEN :q{:d}".format(j, j, j) for j in range(len(batch))])
-            in_parts = ", ".join(["(:pc{:d}, :dt{:d})".format(j, j) for j in range(len(batch))])
-            sql_str = "UPDATE production_summarys SET {} = CASE {} ELSE {} END WHERE (product_cd, date) IN ({})".format(
-                field_name, case_parts, field_name, in_parts
-            )
-            params = {}
-            for j, (pc, d, q) in enumerate(batch):
-                params["pc{:d}".format(j)] = pc
-                params["dt{:d}".format(j)] = d
-                params["q{:d}".format(j)] = q
+    if plan_rows:
+        # 按 process_name 归入各 plan 列
+        by_field = {col: [] for col in PLAN_PROCESS_MAPPING.values()}
+        for row in plan_rows:
+            product_cd = (row[0] or "").strip() if row[0] is not None else ""
+            dt = row[1]
+            process_name = (row[2] or "").strip() if row[2] is not None else ""
+            quantity = row[3]
+            if not product_cd or dt is None or process_name not in PLAN_PROCESS_MAPPING:
+                continue
             try:
-                res = await db.execute(text(sql_str), params)
-                updated_count += res.rowcount
-            except Exception:
-                for (pc, d, q) in batch:
-                    try:
-                        stmt = (
-                            update(ProductionSummary)
-                            .where(ProductionSummary.product_cd == pc, ProductionSummary.date == d)
-                            .values(**{field_name: q})
-                        )
-                        res = await db.execute(stmt)
-                        if res.rowcount > 0:
-                            updated_count += 1
-                        else:
-                            skipped_count += 1
-                    except Exception:
-                        skipped_count += 1
+                qty = int(float(quantity)) if quantity is not None else 0
+            except (TypeError, ValueError):
+                qty = 0
+            field = PLAN_PROCESS_MAPPING[process_name]
+            by_field[field].append((product_cd, dt, qty))
 
-    # 2) actual_plan: 先用 actual 填，再用 plan 补空/零（startDate 指定時は対象範囲のみ）
-    date_filter = " AND date >= :range_start AND date <= :range_end" if (start_d is not None and end_d is not None) else ""
-    range_params = {"range_start": start_d, "range_end": end_d} if (start_d is not None and end_d is not None) else {}
+        # 溶接（社内）は WeldingPlanning（KT07）と同じ工程粒度で上書き集計
+        # machine_type と processes を突合し、process_cd='KT07' に一致する日別 planned_qty のみを welding_plan に反映。
+        welding_sql_sd = text("""
+            SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt,
+                   SUM(COALESCE(sd.planned_qty, 0)) AS quantity
+            FROM schedule_details sd
+            INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
+            INNER JOIN machines m ON m.id = sch.line_id
+            INNER JOIN processes pr ON m.machine_type IS NOT NULL
+              AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
+            INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
+            WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
+              AND pr.process_cd = 'KT07'
+              AND sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date
+            GROUP BY sch.product_cd, sd.schedule_date
+        """)
+        result_welding = await db.execute(welding_sql_sd, params)
+        welding_rows = result_welding.fetchall()
+        welding_plan_rows = []
+        for row in welding_rows:
+            product_cd = (row[0] or "").strip() if row[0] is not None else ""
+            dt = row[1]
+            quantity = row[2]
+            if not product_cd or dt is None:
+                continue
+            try:
+                qty = int(float(quantity)) if quantity is not None else 0
+            except (TypeError, ValueError):
+                qty = 0
+            welding_plan_rows.append((product_cd, dt, qty))
+        by_field["welding_plan"] = welding_plan_rows
+
+        total_plan_rows = sum(len(v) for v in by_field.values())
+        BATCH = 500
+
+        for field_name, rows in by_field.items():
+            for i in range(0, len(rows), BATCH):
+                batch = rows[i : i + BATCH]
+                case_parts = " ".join(["WHEN product_cd = :pc{:d} AND date = :dt{:d} THEN :q{:d}".format(j, j, j) for j in range(len(batch))])
+                in_parts = ", ".join(["(:pc{:d}, :dt{:d})".format(j, j) for j in range(len(batch))])
+                sql_str = "UPDATE production_summarys SET {} = CASE {} ELSE {} END WHERE (product_cd, date) IN ({})".format(
+                    field_name, case_parts, field_name, in_parts
+                )
+                batch_params = {}
+                for j, (pc, d, q) in enumerate(batch):
+                    batch_params["pc{:d}".format(j)] = pc
+                    batch_params["dt{:d}".format(j)] = d
+                    batch_params["q{:d}".format(j)] = q
+                try:
+                    res = await db.execute(text(sql_str), batch_params)
+                    updated_count += res.rowcount
+                except Exception:
+                    for (pc, d, q) in batch:
+                        try:
+                            stmt = (
+                                update(ProductionSummary)
+                                .where(ProductionSummary.product_cd == pc, ProductionSummary.date == d)
+                                .values(**{field_name: q})
+                            )
+                            res = await db.execute(stmt)
+                            if res.rowcount > 0:
+                                updated_count += 1
+                            else:
+                                skipped_count += 1
+                        except Exception:
+                            skipped_count += 1
+
+    # 2) actual_plan: 先用 actual 填，再用 plan 补空/零（対象範囲のみ）
     for actual_col, plan_col, target_col in ACTUAL_PLAN_COLUMNS:
         await db.execute(
             text(f"UPDATE production_summarys SET {target_col} = {actual_col} WHERE {actual_col} IS NOT NULL" + date_filter),
-            range_params if range_params else {}
+            range_params,
         )
         await db.execute(
-            text(f"UPDATE production_summarys SET {target_col} = {plan_col} WHERE ({target_col} IS NULL OR {target_col} = 0) AND {plan_col} IS NOT NULL" + date_filter),
-            range_params if range_params else {}
+            text(
+                f"UPDATE production_summarys SET {target_col} = {plan_col} "
+                f"WHERE ({target_col} IS NULL OR {target_col} = 0) AND {plan_col} IS NOT NULL" + date_filter
+            ),
+            range_params,
         )
 
-    # 3) molding_actual_plan 更新後、sw_plan / chamfering_plan / cutting_plan を molding_actual_plan で上書き
-    #    plating_plan は APS ボードのみ（KT05）。外注系は molding_plan を工程有無で振り分け。
-    #    外注倉庫（KT15・KT10 マスタ差異）は molding_plan（成型スケジュール集計）を outsourced_warehouse_plan へ反映する。
-    #    更新前に該当範囲で対象列をいったんクリアし、該当工程を持つ製品の行のみ更新する。
-    await db.execute(
-        text(
-            "UPDATE production_summarys "
-            "SET sw_plan = 0, chamfering_plan = 0, cutting_plan = 0, plating_plan = 0, outsourced_plating_plan = 0, outsourced_welding_plan = 0, outsourced_warehouse_plan = 0"
-            + date_filter
-        ),
-        range_params if range_params else {}
-    )
+    # 3) molding_actual_plan 更新後、該当工程を持つ行のみ各所属工程 plan を molding_actual_plan で更新（範囲外・過去月は触らない）
     # 切断工程を持つルートの行のみ cutting_plan を molding_actual_plan で更新
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT01'
             SET ps.cutting_plan = ps.molding_actual_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
     )
-    # 社内メッキ（KT05）: APS メッキ投入ボード → plating_plan（molding_plan 兜底なし）
-    plating_board_updated, plating_board_skipped = await _sync_plating_plan_from_aps_board(db, start_d, end_d)
+    # 面取工程を持つルートの行のみ chamfering_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT02'
+            SET ps.chamfering_plan = ps.molding_actual_plan
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
+    )
+    # 社内メッキ工程（KT05）を持つルートのみ plating_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT05'
+            SET ps.plating_plan = ps.molding_actual_plan
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
+    )
+    # 検査工程（KT09）を持つルートのみ inspection_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT09'
+            SET ps.inspection_plan = ps.molding_actual_plan
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
+    )
     # 外注メッキ工程（KT06）を持つルートのみ outsourced_plating_plan を molding_plan で更新
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT06'
             SET ps.outsourced_plating_plan = ps.molding_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
     )
     # 外注溶接工程（KT08）を持つルートのみ outsourced_welding_plan を molding_plan で更新
     await db.execute(
@@ -3310,8 +3322,8 @@ async def update_production_summarys_plan(
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT08'
             SET ps.outsourced_welding_plan = ps.molding_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
     )
     # 外注倉庫工程（KT15／KT10 は繰越・在庫と同様のマスタ差異）を持つルートのみ outsourced_warehouse_plan を molding_plan で更新
     await db.execute(
@@ -3320,17 +3332,8 @@ async def update_production_summarys_plan(
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd
               AND prs.process_cd IN ('KT15', 'KT10')
             SET ps.outsourced_warehouse_plan = ps.molding_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
-    )
-    # 面取工程を持つルートの行のみ chamfering_plan を molding_actual_plan で更新
-    await db.execute(
-        text("""
-            UPDATE production_summarys ps
-            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT02'
-            SET ps.chamfering_plan = ps.molding_actual_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
     )
     # sw_machine が設定されている製品の行のみ sw_plan を molding_actual_plan で更新
     await db.execute(
@@ -3339,25 +3342,22 @@ async def update_production_summarys_plan(
             INNER JOIN product_machine_config pmc ON pmc.product_cd = ps.product_cd
               AND pmc.sw_machine IS NOT NULL AND TRIM(COALESCE(pmc.sw_machine, '')) <> ''
             SET ps.sw_plan = ps.molding_actual_plan
-            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
-        range_params if range_params else {}
+            WHERE 1=1""" + ps_date_filter),
+        range_params,
     )
 
     await db.commit()
     elapsed = round(time.perf_counter() - start_time, 2)
     message = f"{updated_count}件の計画データを更新しました（{skipped_count}件スキップ）"
-    if start_d is not None and end_d is not None:
-        message += f"。メッキ計画（ボード）: {plating_board_updated}件"
-        if plating_board_skipped:
-            message += f"（ボード反映スキップ {plating_board_skipped}件）"
+    message += f"。対象期間: {start_d.isoformat()} ～ {end_d.isoformat()}"
     return {
         "code": 200,
         "data": {
             "updated": updated_count,
             "skipped": skipped_count,
             "total": total_plan_rows,
-            "platingPlanFromBoard": plating_board_updated,
-            "platingPlanFromBoardSkipped": plating_board_skipped,
+            "startDate": start_d.isoformat(),
+            "endDate": end_d.isoformat(),
             "elapsedTime": elapsed,
         },
         "message": message,

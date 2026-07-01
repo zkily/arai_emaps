@@ -735,7 +735,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初～+5ヶ月の plan 列をいったんクリアしたうえで、schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。社内メッキ（KT05）の plating_plan は APS メッキ投入ボードの作業日・品番ごとの生産数量（qty×掛け）合計のみ反映し、ボードに無い日・品番は 0 のままです（成型計画での兜底はしません）。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初（JST）～+5ヶ月の plan 列のみを更新します。それより前の月の計画データは変更しません（事前クリアは行いません）。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan、検査(KT09)→inspection_plan。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>
@@ -2131,7 +2131,6 @@ import {
   updateProductionSummarysOnHold,
   updateProductionSummarysProductionDates,
   clearProductionSummarysCalculatedFields,
-  clearProductionSummarysPlanFields,
   clearProductionSummarysMoldingPlan,
   clearProductionSummarysWeldingPlan,
   updateProductionSummarysPlan,
@@ -3312,12 +3311,10 @@ const handleUpdateProductionDates = async () => {
  * - 允许 trend 为负数
  */
 
-/** 当月月初（当月1日）YYYY-MM-DD（ブラウザローカル日付）。在庫・推移の API 失敗時フォールバックおよび計画更新などで使用。 */
+/** 当月月初（当月1日）YYYY-MM-DD（日本時区）。在庫・推移の API 失敗時フォールバックおよび計画更新などで使用。 */
 function getFirstDayOfCurrentMonth(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  return `${y}-${m}-01`
+  const { year, month } = getCurrentJSTInfo()
+  return getJSTDateString(year, month, 1)
 }
 
 /** 在庫・推移・安全在庫の計算開始日：stock_transaction_logs の初期かつ数量>0 の最新 transaction_time の日付（API）。失敗時は当月月初（ローカル）。 */
@@ -3399,16 +3396,6 @@ const confirmUpdatePlan = async () => {
   showPlanConfirmDialog.value = false
   updatingPlan.value = true
   const startDate = getFirstDayOfCurrentMonth()
-  try {
-    await clearProductionSummarysCalculatedFields(startDate)
-  } catch (_e) {
-    console.warn('計算フィールドのクリアに失敗しました', _e)
-  }
-  try {
-    await clearProductionSummarysPlanFields(startDate)
-  } catch (_e) {
-    console.warn('計画列のクリアに失敗しました', _e)
-  }
   showProgressDialog.value = true
   progressPercentage.value = 0
   progressStatus.value = ''
@@ -3766,15 +3753,7 @@ const confirmAllUpdate = async () => {
     () => updateProductionSummarysDefect(),
     () => updateProductionSummarysScrap(),
     () => updateProductionSummarysOnHold(),
-    async () => {
-      const startDate = getFirstDayOfCurrentMonth()
-      try {
-        await clearProductionSummarysPlanFields(startDate)
-      } catch (_e) {
-        // クリア失敗時も更新を継続
-      }
-      await updateProductionSummarysPlan(startDate)
-    },
+    () => updateProductionSummarysPlan(getFirstDayOfCurrentMonth()),
   ]
   try {
     for (let i = 0; i < steps.length; i++) {
