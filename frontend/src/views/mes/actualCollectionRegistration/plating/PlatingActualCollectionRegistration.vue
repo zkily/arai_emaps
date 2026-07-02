@@ -2018,20 +2018,6 @@ onMounted(() => {
   color: #94a3b8;
 }
 
-<
-.iar-qty__panel--quad {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.iar-defects-simple {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-<
 .iar-qty__panel--grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -2030,7 +2030,6 @@ onMounted(() => {
   color: #94a3b8;
 }
 
-<
 .iar-qty__panel--quad {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
