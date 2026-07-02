@@ -516,7 +516,7 @@ export function usePlatingManualRegistration() {
     }
   }
 
-  async function deleteRow  async function deleteRow(row: PlatingIndicatorRow): Promise<void> {
+  async function deleteRow(row: PlatingIndicatorRow): Promise<void> {
     if (!guardMesOperation(canDelete)) return
     if (!canDeleteRow(row)) {
       ElMessage.warning('Excel/CSV 取込データは削除できません')
