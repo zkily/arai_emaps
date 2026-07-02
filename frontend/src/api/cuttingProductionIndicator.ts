@@ -128,3 +128,95 @@ export function fetchCuttingProductivityAnalysis(params: {
     },
   }) as Promise<CuttingProductivityAnalysisResponse>
 }
+
+export interface CuttingProductionIndicatorRow {
+  id: number
+  fiscal_year?: number | null
+  production_month?: string | null
+  production_day?: string | null
+  source_line?: number | null
+  source_file?: string | null
+  product_cd?: string | null
+  production_line?: string | null
+  product_name?: string | null
+  planned_quantity?: number | null
+  actual_quantity?: number | null
+  quantity_variance?: number | null
+  shift_hours?: number | null
+  break_hours?: number | null
+  setup_hours?: number | null
+  repair_hours?: number | null
+  work_hours?: number | null
+  efficiency_rate?: number | null
+  utilization_rate?: number | null
+  work_rate?: number | null
+  data_source?: 'manual' | 'excel' | 'csv' | string | null
+  external_sync_key?: string | null
+  remarks?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface CuttingProductionIndicatorListResponse {
+  success?: boolean
+  data?: CuttingProductionIndicatorRow[]
+  message?: string
+}
+
+export interface CuttingProductionIndicatorRowResponse {
+  success?: boolean
+  data?: CuttingProductionIndicatorRow
+  message?: string
+}
+
+export interface CuttingProductionIndicatorManualBody {
+  production_day: string
+  production_line: string
+  product_cd: string
+  product_name?: string | null
+  planned_quantity?: number | null
+  actual_quantity: number
+  quantity_variance?: number | null
+  shift_hours?: number | null
+  break_hours?: number | null
+  setup_hours?: number | null
+  remarks?: string | null
+}
+
+export function fetchCuttingProductionIndicatorList(params: {
+  production_day: string
+  production_line?: string | null
+  limit?: number
+}): Promise<CuttingProductionIndicatorListResponse> {
+  return request.get('/api/plan/cutting-production-indicator/list', {
+    params: {
+      production_day: params.production_day,
+      production_line: params.production_line?.trim() || undefined,
+      limit: params.limit,
+    },
+  }) as Promise<CuttingProductionIndicatorListResponse>
+}
+
+export function createCuttingProductionIndicatorManual(
+  body: CuttingProductionIndicatorManualBody,
+): Promise<CuttingProductionIndicatorRowResponse> {
+  return request.post('/api/plan/cutting-production-indicator/manual', body) as Promise<
+    CuttingProductionIndicatorRowResponse
+  >
+}
+
+export function patchCuttingProductionIndicator(
+  id: number,
+  body: Partial<CuttingProductionIndicatorManualBody>,
+): Promise<CuttingProductionIndicatorRowResponse> {
+  return request.patch(`/api/plan/cutting-production-indicator/${id}`, body) as Promise<
+    CuttingProductionIndicatorRowResponse
+  >
+}
+
+export function deleteCuttingProductionIndicator(id: number): Promise<{ success?: boolean; message?: string }> {
+  return request.delete(`/api/plan/cutting-production-indicator/${id}`) as Promise<{
+    success?: boolean
+    message?: string
+  }>
+}

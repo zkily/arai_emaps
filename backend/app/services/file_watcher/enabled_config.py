@@ -113,3 +113,27 @@ def is_forming_indicator_sync_enabled() -> bool:
     """成形管理指標 Excel → forming_production_indicator 同期が有効か（未設定は True）。"""
     raw = _read_raw()
     return raw.get("forming_indicator_sync_enabled", True)
+
+
+def is_chamfering_excel_watcher_enabled() -> bool:
+    """面取管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
+    raw = _read_raw()
+    return raw.get("chamfering_excel_watcher_enabled", True)
+
+
+def is_chamfering_indicator_sync_enabled() -> bool:
+    """面取管理指標 Excel → chamfering_production_indicator 同期が有効か（未設定は True）。"""
+    raw = _read_raw()
+    return raw.get("chamfering_indicator_sync_enabled", True)
+
+
+def is_plating_excel_watcher_enabled() -> bool:
+    """メッキ管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
+    raw = _read_raw()
+    return raw.get("plating_excel_watcher_enabled", True)
+
+
+def is_plating_indicator_sync_enabled() -> bool:
+    """メッキ管理指標 Excel → plating_production_indicator 同期が有効か（未設定は True）。"""
+    raw = _read_raw()
+    return raw.get("plating_indicator_sync_enabled", True)

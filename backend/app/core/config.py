@@ -140,6 +140,14 @@ class Settings(BaseSettings):
     # 例: \\192.168.1.200\製造部\11各工程生産管理指標\3.成形工程\2026年度\生産管理指標(2026年度-成形).xlsx
     # 変更検知時: forming_production_indicator（全件置換同期）
     FILE_WATCH_FORMING_INDICATOR_SYNC_ENABLED: bool = True
+    FILE_WATCH_CHAMFERING_EXCEL_PATH: str = ""
+    # 例: \\192.168.1.200\製造部\11各工程生産管理指標\2.面取工程\2026年度\生産管理指標(2026年度-面取).xlsx
+    # 変更検知時: chamfering_production_indicator（全件置換同期）
+    FILE_WATCH_CHAMFERING_INDICATOR_SYNC_ENABLED: bool = True
+    FILE_WATCH_PLATING_EXCEL_PATH: str = ""
+    # 例: \\192.168.1.200\製造部\11各工程生産管理指標\6.メッキ工程\生産管理指標(2026年度-メッキ).xlsx
+    # 変更検知時: plating_production_indicator（全件置換同期）
+    FILE_WATCH_PLATING_INDICATOR_SYNC_ENABLED: bool = True
     # 材料切断ログ CSV（material_cutting_logs 取込・監視）。空なら FILE_WATCH_BASE_PATH/materialCutting.csv
     MATERIAL_CUTTING_CSV_PATH: str = ""
     # 材料受入ログ：フルパスをカンマ区切りで指定（最優先。位置変更時はここだけ直せばよい）

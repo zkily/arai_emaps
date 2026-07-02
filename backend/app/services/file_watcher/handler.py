@@ -16,6 +16,8 @@ from app.services.file_watcher.inspection_excel_processor import is_inspection_e
 from app.services.file_watcher.welding_excel_processor import is_welding_excel_file
 from app.services.file_watcher.cutting_excel_processor import is_cutting_excel_file
 from app.services.file_watcher.forming_excel_processor import is_forming_excel_file
+from app.services.file_watcher.chamfering_excel_processor import is_chamfering_excel_file
+from app.services.file_watcher.plating_excel_processor import is_plating_excel_file
 from app.services.file_watcher.enabled_config import is_file_enabled
 
 logger = logging.getLogger(__name__)
@@ -73,6 +75,32 @@ def is_forming_watch_task(filepath: str, filename: str, configured_path: str = "
         return False
 
 
+def is_chamfering_watch_task(filepath: str, filename: str, configured_path: str = "") -> bool:
+    """設定パスと一致する面取管理指標 Excel か（同一フォルダ内の他年度ファイルを除外）"""
+    if not is_chamfering_excel_file(filename):
+        return False
+    cfg = (configured_path or "").strip()
+    if not cfg:
+        return True
+    try:
+        return _normalize_path(filepath) == _normalize_path(cfg)
+    except Exception:
+        return False
+
+
+def is_plating_watch_task(filepath: str, filename: str, configured_path: str = "") -> bool:
+    """設定パスと一致するメッキ管理指標 Excel か（同一フォルダ内の他年度ファイルを除外）"""
+    if not is_plating_excel_file(filename):
+        return False
+    cfg = (configured_path or "").strip()
+    if not cfg:
+        return True
+    try:
+        return _normalize_path(filepath) == _normalize_path(cfg)
+    except Exception:
+        return False
+
+
 def _normalize_path(path):
     """パスを正規化し、同一ファイルの重複処理を防ぐ"""
     if not path:
@@ -116,6 +144,10 @@ class UnifiedHandler(FileSystemEventHandler):
         cutting_excel_path: str = "",
         forming_watcher_enabled=True,
         forming_excel_path: str = "",
+        chamfering_watcher_enabled=True,
+        chamfering_excel_path: str = "",
+        plating_watcher_enabled=True,
+        plating_excel_path: str = "",
         in_queue_excel_filenames=None,
         in_queue_csv_paths=None,
         # 後方互換（単一キュー）。指定時は CSV/Excel ともにこのキューへ（非推奨）
@@ -135,6 +167,10 @@ class UnifiedHandler(FileSystemEventHandler):
         self.cutting_excel_path = (cutting_excel_path or "").strip()
         self.forming_watcher_enabled = forming_watcher_enabled
         self.forming_excel_path = (forming_excel_path or "").strip()
+        self.chamfering_watcher_enabled = chamfering_watcher_enabled
+        self.chamfering_excel_path = (chamfering_excel_path or "").strip()
+        self.plating_watcher_enabled = plating_watcher_enabled
+        self.plating_excel_path = (plating_excel_path or "").strip()
         self.in_queue_excel_filenames = (
             in_queue_excel_filenames if in_queue_excel_filenames is not None else set()
         )
@@ -169,12 +205,14 @@ class UnifiedHandler(FileSystemEventHandler):
         is_welding = is_welding_watch_task(filepath, filename, self.welding_excel_path)
         is_cutting = is_cutting_watch_task(filepath, filename, self.cutting_excel_path)
         is_forming = is_forming_watch_task(filepath, filename, self.forming_excel_path)
+        is_chamfering = is_chamfering_watch_task(filepath, filename, self.chamfering_excel_path)
+        is_plating = is_plating_watch_task(filepath, filename, self.plating_excel_path)
         is_excel_plan = is_excel_plan_watch_task(filename)
         is_csv = is_csv_watch_task(filename, filepath)
-        if not is_inspection and not is_welding and not is_cutting and not is_forming and not is_excel_plan and not is_csv:
+        if not is_inspection and not is_welding and not is_cutting and not is_forming and not is_chamfering and not is_plating and not is_excel_plan and not is_csv:
             logger.debug("監視対象外のため無視: %s", filename)
             return
-        if is_inspection or is_welding or is_cutting or is_forming or is_excel_plan:
+        if is_inspection or is_welding or is_cutting or is_forming or is_chamfering or is_plating or is_excel_plan:
             if is_inspection:
                 if not self.inspection_watcher_enabled:
                     logger.debug("検査管理指標 Excel 監視は無効のためスキップ: %s", filename)
@@ -190,6 +228,14 @@ class UnifiedHandler(FileSystemEventHandler):
             elif is_forming:
                 if not self.forming_watcher_enabled:
                     logger.debug("成形管理指標 Excel 監視は無効のためスキップ: %s", filename)
+                    return
+            elif is_chamfering:
+                if not self.chamfering_watcher_enabled:
+                    logger.debug("面取管理指標 Excel 監視は無効のためスキップ: %s", filename)
+                    return
+            elif is_plating:
+                if not self.plating_watcher_enabled:
+                    logger.debug("メッキ管理指標 Excel 監視は無効のためスキップ: %s", filename)
                     return
             elif not self.excel_watcher_enabled:
                 logger.debug("Excel 計画監視は無効のためスキップ: %s", filename)
@@ -224,11 +270,15 @@ class UnifiedHandler(FileSystemEventHandler):
             queue_label = "切断Excel"
         elif is_forming:
             queue_label = "成形Excel"
+        elif is_chamfering:
+            queue_label = "面取Excel"
+        elif is_plating:
+            queue_label = "メッキExcel"
         elif is_excel_plan:
             queue_label = "Excel"
         else:
             queue_label = "CSV"
-        if is_inspection or is_welding or is_cutting or is_forming or is_excel_plan:
+        if is_inspection or is_welding or is_cutting or is_forming or is_chamfering or is_plating or is_excel_plan:
             self.in_queue_excel_filenames.add(filename)
         else:
             self.in_queue_csv_paths.add(path_key)
@@ -236,7 +286,7 @@ class UnifiedHandler(FileSystemEventHandler):
         try:
             target_queue.put((filepath, filename))
         except Exception as e:
-            if is_inspection or is_welding or is_cutting or is_forming or is_excel_plan:
+            if is_inspection or is_welding or is_cutting or is_forming or is_chamfering or is_plating or is_excel_plan:
                 self.in_queue_excel_filenames.discard(filename)
             else:
                 self.in_queue_csv_paths.discard(path_key)

@@ -10833,7 +10833,27 @@ async def get_welding_utilization_analysis(
 
 
 from app.modules.production_schedule.cutting_productivity_api import register_routes as _register_cutting_productivity_routes
+from app.modules.production_schedule.cutting_production_indicator_registration_api import (
+    register_registration_routes as _register_cutting_indicator_registration_routes,
+)
 from app.modules.production_schedule.forming_productivity_api import register_routes as _register_forming_productivity_routes
+from app.modules.production_schedule.chamfering_productivity_api import (
+    register_routes as _register_chamfering_productivity_routes,
+)
+from app.modules.production_schedule.chamfering_production_indicator_registration_api import (
+    register_registration_routes as _register_chamfering_indicator_registration_routes,
+)
+from app.modules.production_schedule.plating_productivity_api import (
+    register_routes as _register_plating_productivity_routes,
+)
+from app.modules.production_schedule.plating_production_indicator_registration_api import (
+    register_registration_routes as _register_plating_indicator_registration_routes,
+)
 
 _register_cutting_productivity_routes(router)
+_register_cutting_indicator_registration_routes(router)
 _register_forming_productivity_routes(router)
+_register_chamfering_productivity_routes(router)
+_register_chamfering_indicator_registration_routes(router)
+_register_plating_productivity_routes(router)
+_register_plating_indicator_registration_routes(router)
