@@ -520,7 +520,6 @@
 
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import type { ECharts } from 'echarts'
 import {
@@ -554,12 +553,8 @@ import type { CuttingProductionIndicatorLineOption as CuttingLineOption } from '
 import { getProductList } from '@/api/master/productMaster'
 import type { Product } from '@/types/master'
 import { getJSTToday, parseDateAsJST } from '@/utils/dateFormat'
-import { loadCuttingLineOptions } from '@/views/mes/shared/cuttingLineFilter'
+import { lineLabel, loadCuttingLineOptions, resolveCuttingMetricsLabel } from '@/views/mes/shared/cuttingLineFilter'
 import { filterCuttingSelectableProducts } from '@/views/mes/shared/cuttingProductFilter'
-import {
-  loadMesDefectItemsForProcess,
-  resolveCuttingMetricsLabel,
-} from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 import {
   CHART_INIT_OPTS,
   chartTheme,
@@ -645,8 +640,6 @@ const reportMenuItems: Array<{
   },
 ]
 
-const { t, te } = useI18n()
-
 const loading = ref(false)
 const exportBusy = ref(false)
 const contentVisible = ref(false)
@@ -731,12 +724,11 @@ function buildProductOperatorRankingFromSessions(
     prod.sum_actual_qty += Number(s.actual_production_quantity ?? 0)
     prod.session_count += 1
 
-    const operatorId = s.mes_operator_user_id
-    const operatorKey = operatorId != null ? String(operatorId) : 'none'
     const operatorName = (s.operator_display_name ?? s.mes_operator_name ?? '—').trim() || '—'
+    const operatorKey = operatorName
     if (!prod.operators.has(operatorKey)) {
       prod.operators.set(operatorKey, {
-        operator_user_id: operatorId ?? null,
+        operator_user_id: null,
         operator_name: operatorName,
         session_count: 0,
         sum_actual_qty: 0,
@@ -1017,16 +1009,9 @@ const selectedProductRankStats = computed(() => {
   }
 })
 
-function lineLabel(u: UserListItem): string {
-  const name = (u.full_name ?? '').trim()
-  const username = (u.username ?? '').trim()
-  if (name && username) return `${name}（${username}）`
-  return name || username || `#${u.id}`
-}
-
 function buildOperatorProductRows(
   sessions: CuttingProductivitySessionRow[],
-  operatorKey: string,
+  lineKey: string,
   includeProduct: (productCd: string) => boolean,
 ): ProductDisplayRow[] {
   const map = new Map<string, CuttingProductivityProductRow & { sum_net_production_sec: number }>()
@@ -1034,8 +1019,8 @@ function buildOperatorProductRows(
     const productCd = (s.product_cd ?? '').trim()
     if (!productCd || !includeProduct(productCd)) continue
 
-    const opKey = s.mes_operator_user_id != null ? String(s.mes_operator_user_id) : 'none'
-    if (opKey !== operatorKey) continue
+    const opKey = (s.mes_operator_name ?? s.operator_display_name ?? '—').trim() || 'none'
+    if (opKey !== lineKey) continue
 
     if (!map.has(productCd)) {
       map.set(productCd, {
@@ -1052,7 +1037,7 @@ function buildOperatorProductRows(
     prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
     prod.sum_defect_qty = (prod.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     prod.sum_net_production_sec =
-      (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? s.mes_net_production_sec ?? 0)
+      (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
   }
 
   return [...map.values()]
@@ -1072,10 +1057,10 @@ function buildReportFilters(): CuttingProductivityReportFilters | null {
   const [start, end] = dateRange.value ?? []
   if (!start || !end) return null
 
-  let operatorFilterLabel = '（すべて）'
+  let lineFilterLabel = '（すべて）'
   if (filterLineName.value !== '') {
     const found = lineOptions.value.find((u) => u.line_name === filterLineName.value)
-    operatorFilterLabel = found ? operatorLabel(found) : `#${filterLineName.value}`
+    lineFilterLabel = found ? lineLabel(found) : filterLineName.value
   }
 
   let productFilterLabel = '（すべて）'
@@ -1089,7 +1074,7 @@ function buildReportFilters(): CuttingProductivityReportFilters | null {
   return {
     startDate: start,
     endDate: end,
-    operatorLabel: operatorFilterLabel,
+    lineLabel: lineFilterLabel,
     productLabel: productFilterLabel,
     includeIncomplete: includeIncomplete.value,
   }
@@ -1113,9 +1098,9 @@ function buildReportContext(): CuttingProductivityReportContext | null {
       product: captureChartDataUrl(productChart),
       productRank: captureChartDataUrl(productRankChart),
     },
-    operatorRows: operatorDisplayRows.value,
+    lineRows: operatorDisplayRows.value,
     productRows: productDisplayRows.value,
-    operatorSectionAvgEfficiency: operatorSectionAvgEfficiency.value,
+    lineSectionAvgEfficiency: operatorSectionAvgEfficiency.value,
     productSectionTotalQty: productSectionTotalQty.value,
     productRank: {
       selected: selectedProductRanking.value,
@@ -1251,11 +1236,11 @@ async function handleBatchDailyByOperatorPrint() {
   }
 
   const items: CuttingProductivityDailyBatchItem[] = []
-  for (const op of operators) {
+  for (const [idx, op] of operators.entries()) {
     const res = await fetchCuttingProductivityAnalysis({
       start_date: start,
       end_date: end,
-      mes_operator_user_id: op.id,
+      production_line: op.line_name,
       product_cd: filterProductCd.value || null,
       include_incomplete: includeIncomplete.value,
     })
@@ -1266,8 +1251,8 @@ async function handleBatchDailyByOperatorPrint() {
     if (!chartSrc) continue
     const summary = res.data.summary
     items.push({
-      operatorUserId: op.id,
-      operatorLabel: operatorLabel(op),
+      operatorUserId: idx + 1,
+      lineLabel: lineLabel(op),
       chartSrc,
       dayCount: daily.length,
       sumActualQty: summary?.sum_actual_qty ?? 0,
@@ -1311,7 +1296,7 @@ async function handleBatchOperatorProductPrint() {
   const items: CuttingProductivityOperatorProductBatchItem[] = []
 
   for (const op of operators) {
-    const rows = buildOperatorProductRows(sessions, String(op.id), () => true)
+    const rows = buildOperatorProductRows(sessions, op.line_name, () => true)
     if (!rows.length) continue
 
     const sessionCount = rows.reduce((sum, row) => sum + Number(row.session_count ?? 0), 0)
@@ -1321,7 +1306,7 @@ async function handleBatchOperatorProductPrint() {
       sumActualQty > 0 && totalSec > 0 ? Math.round(sumActualQty / (totalSec / 3600)) : null
 
     items.push({
-      operatorLabel: operatorLabel(op),
+      lineLabel: lineLabel(op),
       productCount: rows.length,
       sessionCount,
       sumActualQty,
@@ -1359,13 +1344,18 @@ async function loadProductOptions() {
 
 function defectLabel(defectCd: string): string {
   const cd = (defectCd ?? '').trim()
-  return defectLabelMap.value.get(cd) ?? resolveCuttingMetricsLabel(cd, cd, t, te)
+  return defectLabelMap.value.get(cd) ?? resolveCuttingMetricsLabel(cd, defectLabelMap.value)
 }
 
 async function loadLines() {
+  const [start, end] = dateRange.value ?? []
+  if (!start || !end) {
+    lineOptions.value = []
+    return
+  }
   try {
-    lineOptions.value = await loadCuttingLineOptions()
-    const allowed = new Set(lineOptions.value.map((u) => u.id))
+    lineOptions.value = await loadCuttingLineOptions({ start_date: start, end_date: end })
+    const allowed = new Set(lineOptions.value.map((u) => u.line_name))
     if (filterLineName.value !== '' && !allowed.has(filterLineName.value)) {
       filterLineName.value = ''
     }
@@ -1375,14 +1365,7 @@ async function loadLines() {
 }
 
 async function loadDefectLabels() {
-  try {
-    const items = await /* cutting: no defect master */ Promise.resolve([])
-    const map = new Map<string, string>()
-    for (const item of items) map.set(item.id, item.label)
-    defectLabelMap.value = map
-  } catch {
-    defectLabelMap.value = new Map()
-  }
+  defectLabelMap.value = new Map()
 }
 
 let analysisRequestSeq = 0
@@ -1401,7 +1384,7 @@ async function loadAnalysis(options?: { silent?: boolean }) {
     const res = await fetchCuttingProductivityAnalysis({
       start_date: start,
       end_date: end,
-      mes_operator_user_id: filterLineName.value,
+      production_line: filterLineName.value === '' ? undefined : filterLineName.value,
       product_cd: filterProductCd.value || null,
       include_incomplete: includeIncomplete.value,
     })
@@ -1546,6 +1529,7 @@ watch(
 )
 
 watch(dateRange, () => {
+  void loadLines()
   scheduleLoadAnalysis()
 }, { deep: true })
 watch(filterLineName, scheduleLoadAnalysis)
