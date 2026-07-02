@@ -155,6 +155,24 @@
                 </div>
                 <span class="header-notif-item__link header-notif-item__link--rose">{{ t('common.headerNotifOpenStagnation') }} →</span>
               </div>
+              <div
+                v-if="retentionDeadlineAlert"
+                class="header-notif-item header-notif-item--retention"
+                role="button"
+                tabindex="0"
+                @click="gotoRetentionDeadline"
+                @keydown.enter.prevent="gotoRetentionDeadline"
+              >
+                <div class="header-notif-item__row">
+                  <el-icon class="header-notif-item__icon header-notif-item__icon--amber" :size="18"><Warning /></el-icon>
+                  <div class="header-notif-item__text">
+                    <span class="header-notif-item__label">{{ t('common.headerNotifRetentionDeadlineLabel') }}</span>
+                    <p class="header-notif-item__desc">{{ retentionDeadlineDescription }}</p>
+                    <p v-if="retentionDeadlineSamples" class="header-notif-item__sub">{{ retentionDeadlineSamples }}</p>
+                  </div>
+                </div>
+                <span class="header-notif-item__link header-notif-item__link--amber">{{ t('common.headerNotifOpenRetentionDeadline') }} →</span>
+              </div>
             </div>
           </div>
         </el-popover>
@@ -239,6 +257,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPickingNewProgress } from '@/api/shipping/picking'
 import { getInventoryStagnation, getWarehouseNegativeToday } from '@/api/database'
+import { getBulkDisposalRetentionOverdueSummary } from '@/api/erp/bulkDisposalRetention'
 import { parseTodayOverviewFromPickingProgressResponse } from '@/utils/shippingPickingNewProgressParse'
 import type { ShippingPickingTodayOverview } from '@/utils/shippingPickingNewProgressParse'
 import {
@@ -251,6 +270,10 @@ import {
   parseWarehouseNegativeOverview,
   type WarehouseNegativeHeaderOverview,
 } from '@/utils/warehouseNegativeOverview'
+import {
+  parseRetentionDeadlineOverview,
+  type RetentionDeadlineHeaderOverview,
+} from '@/utils/retentionDeadlineOverview'
 import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
@@ -321,14 +344,19 @@ const notifPopoverWidth = computed(() => (typeof window !== 'undefined' ? Math.m
 const PICKING_ALERT_POLL_MS = 5 * 60 * 1000
 const STAGNATION_ALERT_POLL_MS = 5 * 60 * 1000
 const WAREHOUSE_NEGATIVE_POLL_MS = 5 * 60 * 1000
+const RETENTION_DEADLINE_POLL_MS = 5 * 60 * 1000
 const pickingOverview = ref<ShippingPickingTodayOverview | null>(null)
 const stagnationOverview = ref<InventoryStagnationHeaderOverview | null>(null)
 const warehouseNegativeOverview = ref<WarehouseNegativeHeaderOverview | null>(null)
+const retentionDeadlineOverview = ref<RetentionDeadlineHeaderOverview | null>(null)
 
 const canViewProductionDataHint = computed(
   () => userStore.isAuthenticated && canAccessPath(userStore.user, '/erp/production/data-management'),
 )
 const canViewStagnationHint = canViewProductionDataHint
+const canViewRetentionDeadlineHint = computed(
+  () => userStore.isAuthenticated && canAccessPath(userStore.user, '/erp/inventory/bulk-disposal-retention'),
+)
 
 const pickingIncompleteAlert = computed(() => {
   const o = pickingOverview.value
@@ -339,18 +367,21 @@ const pickingIncompleteAlert = computed(() => {
 
 const stagnationAlert = computed(() => stagnationOverview.value)
 const warehouseNegativeAlert = computed(() => warehouseNegativeOverview.value)
+const retentionDeadlineAlert = computed(() => retentionDeadlineOverview.value)
 
 const notifBellActive = computed(
   () =>
     pickingIncompleteAlert.value != null ||
     stagnationAlert.value != null ||
-    warehouseNegativeAlert.value != null,
+    warehouseNegativeAlert.value != null ||
+    retentionDeadlineAlert.value != null,
 )
 const notifCount = computed(
   () =>
     (pickingIncompleteAlert.value ? 1 : 0) +
     (stagnationAlert.value ? 1 : 0) +
-    (warehouseNegativeAlert.value ? 1 : 0),
+    (warehouseNegativeAlert.value ? 1 : 0) +
+    (retentionDeadlineAlert.value ? 1 : 0),
 )
 const notifCountDisplay = computed(() => (notifCount.value > 99 ? '99+' : String(notifCount.value)))
 const hasAnyNotif = computed(() => notifCount.value > 0)
@@ -406,6 +437,28 @@ const warehouseNegativeSamples = computed(() => {
   return t('common.headerNotifWarehouseNegativeSamples', { samples })
 })
 
+const retentionDeadlineDescription = computed(() => {
+  const o = retentionDeadlineAlert.value
+  if (!o) return ''
+  return t('common.headerNotifRetentionDeadlineBody', {
+    asOf: o.as_of,
+    count: o.count,
+  })
+})
+
+const retentionDeadlineSamples = computed(() => {
+  const o = retentionDeadlineAlert.value
+  if (!o?.samples.length) return ''
+  const samples = o.samples
+    .map((row) => {
+      const name = row.product_name || row.product_cd || '—'
+      const deadline = row.processing_deadline_date || '—'
+      return `${name} 期限${deadline}`
+    })
+    .join('、')
+  return t('common.headerNotifRetentionDeadlineSamples', { samples })
+})
+
 async function fetchPickingAlertOverview() {
   try {
     const raw = await getPickingNewProgress()
@@ -445,11 +498,25 @@ async function fetchWarehouseNegativeAlertOverview() {
   }
 }
 
+async function fetchRetentionDeadlineAlertOverview() {
+  if (!canViewRetentionDeadlineHint.value) {
+    retentionDeadlineOverview.value = null
+    return
+  }
+  try {
+    const raw = await getBulkDisposalRetentionOverdueSummary()
+    retentionDeadlineOverview.value = parseRetentionDeadlineOverview(raw)
+  } catch {
+    /* 静默失败 */
+  }
+}
+
 async function fetchHeaderNotifOverview() {
   await Promise.all([
     fetchPickingAlertOverview(),
     fetchStagnationAlertOverview(),
     fetchWarehouseNegativeAlertOverview(),
+    fetchRetentionDeadlineAlertOverview(),
   ])
 }
 
@@ -475,6 +542,14 @@ function gotoWarehouseNegative() {
   router.push({
     path: '/erp/production/data-management',
     query: { openWarehouseNegative: '1' },
+  })
+}
+
+function gotoRetentionDeadline() {
+  notifPopoverVisible.value = false
+  router.push({
+    path: '/erp/inventory/bulk-disposal-retention',
+    query: { overdue: '1' },
   })
 }
 
@@ -531,6 +606,7 @@ let weatherTimer: number | null = null
 let pickingPollTimer: number | null = null
 let stagnationPollTimer: number | null = null
 let warehouseNegativePollTimer: number | null = null
+let retentionDeadlinePollTimer: number | null = null
 
 onMounted(() => {
   timer = window.setInterval(() => {
@@ -552,6 +628,9 @@ onMounted(() => {
   warehouseNegativePollTimer = window.setInterval(() => {
     void fetchWarehouseNegativeAlertOverview()
   }, WAREHOUSE_NEGATIVE_POLL_MS)
+  retentionDeadlinePollTimer = window.setInterval(() => {
+    void fetchRetentionDeadlineAlertOverview()
+  }, RETENTION_DEADLINE_POLL_MS)
 
   document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
@@ -571,6 +650,9 @@ onUnmounted(() => {
   }
   if (warehouseNegativePollTimer) {
     clearInterval(warehouseNegativePollTimer)
+  }
+  if (retentionDeadlinePollTimer) {
+    clearInterval(retentionDeadlinePollTimer)
   }
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
@@ -1465,6 +1547,22 @@ const handleCommand = async (command: string) => {
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
+.header-notif-item--retention {
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow:
+    0 2px 12px rgba(234, 88, 12, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.header-notif-item--retention:hover {
+  background: #fff;
+  transform: translateY(-1px);
+  border-color: rgba(234, 88, 12, 0.58);
+  box-shadow:
+    0 6px 18px rgba(234, 88, 12, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
 .header-notif-item:focus-visible {
   outline: 2px solid #6366f1;
   outline-offset: 2px;
@@ -1488,6 +1586,10 @@ const handleCommand = async (command: string) => {
 
 .header-notif-item__icon--indigo {
   color: #4f46e5;
+}
+
+.header-notif-item__icon--amber {
+  color: #ea580c;
 }
 
 .header-notif-item__label {
@@ -1528,6 +1630,10 @@ const handleCommand = async (command: string) => {
 
 .header-notif-item__link--indigo {
   color: #4f46e5;
+}
+
+.header-notif-item__link--amber {
+  color: #ea580c;
 }
 
 .header-notif-empty {

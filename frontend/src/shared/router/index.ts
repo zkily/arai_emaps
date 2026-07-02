@@ -155,6 +155,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory/stock-transaction-logs', name: 'StockTransactionLog', component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'), meta: { title: '在庫取引記録', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/manual-entry-statistics', name: 'ManualEntryStatistics', component: () => import('@/views/erp/inventory/stock/ManualEntryStatistics.vue'), meta: { title: '実績修正統計', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/theoretical-stocktake-comparison', name: 'TheoreticalStocktakeComparison', component: () => import('@/views/erp/inventory/stock/TheoreticalStocktakeComparison.vue'), meta: { title: '理論棚卸比較', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/bulk-disposal-retention', name: 'BulkDisposalRetentionManagement', component: () => import('@/views/erp/inventory/disposal/BulkDisposalRetentionManagement.vue'), meta: { title: '大量廃棄・保留品管理', group: '在庫管理', requiresAuth: true } },
       {
         path: 'erp/inventory/stocktake',
         name: 'StocktakeManagement',

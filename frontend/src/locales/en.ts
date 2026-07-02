@@ -37,6 +37,11 @@ export default {
     headerNotifWarehouseNegativeBody: 'Today ({asOf}): {count} row(s) with warehouse inventory below zero.',
     headerNotifWarehouseNegativeSamples: 'Examples: {samples}',
     headerNotifOpenWarehouseNegative: 'Open production data',
+    headerNotifRetentionDeadlineLabel: 'Retention processing overdue',
+    headerNotifRetentionDeadlineBody:
+      'Today ({asOf}): {count} retention item(s) past the in-period processing deadline (pending).',
+    headerNotifRetentionDeadlineSamples: 'Examples: {samples}',
+    headerNotifOpenRetentionDeadline: 'Open bulk disposal / retention management',
     headerNotifEmpty: 'Nothing to highlight right now.',
     headerTodoTitle: 'Notices',
     headerTodoSubtitle: 'Notices (saved on server)',
