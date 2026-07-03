@@ -29,9 +29,24 @@ export interface LotForecastAttributionRow {
   source_entity?: string | null
   source_entity_id?: number | null
   run_id?: string
+  cutting_completed?: boolean
   molding_completed?: boolean
+  cutting_completed_source?: 'AUTO' | 'MANUAL'
+  molding_completed_source?: 'AUTO' | 'MANUAL'
+  status_override?: boolean
+  status_remark?: string | null
   current_process_key?: string | null
   current_process_label?: string | null
+}
+
+export type ProcessStatusTriState = 'auto' | 'done' | 'pending'
+
+export interface ProcessStatusOverrideBody {
+  management_code: string
+  aps_batch_plan_id?: number | null
+  cutting_completed?: boolean | null
+  molding_completed?: boolean | null
+  remark?: string | null
 }
 
 export interface ForecastAttributionDestination {
@@ -98,4 +113,17 @@ export function reconcileLotForecastAttribution(params: {
   canonical_product_cd?: string
 }) {
   return request.get<{ code?: number; data?: unknown }>(`${BASE}/reconcile`, { params })
+}
+
+export function saveProcessStatusOverride(body: ProcessStatusOverrideBody) {
+  return request.put<{ code?: number; data?: ProcessStatusOverrideBody; message?: string }>(
+    `${BASE}/process-status-override`,
+    body,
+  )
+}
+
+export function clearProcessStatusOverride(management_code: string) {
+  return request.delete<{ code?: number; message?: string }>(`${BASE}/process-status-override`, {
+    params: { management_code },
+  })
 }

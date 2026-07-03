@@ -189,3 +189,17 @@ class LotForecastAttribution(Base):
     run_id = Column(String(64), nullable=False)
     is_current = Column(Boolean, nullable=False, default=True)
     computed_at = Column(DateTime, server_default=func.now())
+
+
+class LotProcessStatusOverride(Base):
+    """管理コードの切断完了・成型完了手動指定（帰属再計算と独立）"""
+    __tablename__ = "lot_process_status_override"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    management_code = Column(String(100), nullable=False, unique=True)
+    aps_batch_plan_id = Column(Integer)
+    cutting_completed = Column(Boolean)
+    molding_completed = Column(Boolean)
+    remark = Column(String(500))
+    updated_by = Column(Integer)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

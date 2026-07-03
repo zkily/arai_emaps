@@ -22,7 +22,11 @@ from app.modules.database.forming_daily_plan_service import (
     daterange_inclusive,
     parse_iso_date,
 )
-from app.modules.database.models import LotForecastAttribution, ProductionSummary
+from app.modules.database.models import (
+    LotForecastAttribution,
+    LotProcessStatusOverride,
+    ProductionSummary,
+)
 from app.modules.erp.models import OrderDaily
 from app.modules.master.models import Destination, Product
 
@@ -1525,11 +1529,12 @@ def _resolve_management_code_process_status(
     ch_rows: list[dict[str, Any]],
     today: date,
 ) -> dict[str, Any]:
-    """管理コードの成型完了と現工程を判定（切断→面取→成型の順）。"""
+    """管理コードの切断完了・成型完了と現工程を判定（切断→面取→成型の順）。"""
     if cm:
-        cutting_done = int(cm.get("production_completed_check") or 0) == 1
-        if not cutting_done:
+        cutting_completed = int(cm.get("production_completed_check") or 0) == 1
+        if not cutting_completed:
             return {
+                "cutting_completed": False,
                 "molding_completed": False,
                 "current_process_key": "cutting",
                 "current_process_label": "切断",
@@ -1546,12 +1551,14 @@ def _resolve_management_code_process_status(
             ]
             if not related:
                 return {
+                    "cutting_completed": True,
                     "molding_completed": False,
                     "current_process_key": "chamfering_pending",
                     "current_process_label": "面取待ち",
                 }
             if any(int(c.get("production_completed_check") or 0) != 1 for c in related):
                 return {
+                    "cutting_completed": True,
                     "molding_completed": False,
                     "current_process_key": "chamfering",
                     "current_process_label": "面取",
@@ -1561,17 +1568,20 @@ def _resolve_management_code_process_status(
         start_d = _to_date(cm.get("start_date"))
         if end_d is not None and end_d <= today:
             return {
+                "cutting_completed": True,
                 "molding_completed": True,
                 "current_process_key": "molding_completed",
                 "current_process_label": "成型完了",
             }
         if start_d is not None:
             return {
+                "cutting_completed": True,
                 "molding_completed": False,
                 "current_process_key": "molding",
                 "current_process_label": "成型",
             }
         return {
+            "cutting_completed": True,
             "molding_completed": False,
             "current_process_key": "molding_pending",
             "current_process_label": "成型待ち",
@@ -1579,93 +1589,293 @@ def _resolve_management_code_process_status(
 
     if ip:
         return {
+            "cutting_completed": False,
             "molding_completed": False,
             "current_process_key": "batch",
             "current_process_label": "生産ロット",
         }
 
     return {
+        "cutting_completed": False,
         "molding_completed": False,
         "current_process_key": "unknown",
         "current_process_label": "不明",
     }
 
 
+def _lot_process_status_key(
+    management_code: str | None,
+    aps_batch_plan_id: int | None = None,
+) -> str:
+    mc = (management_code or "").strip()
+    if mc:
+        return f"mc:{mc}"
+    if aps_batch_plan_id is not None:
+        return f"aps:{int(aps_batch_plan_id)}"
+    return ""
+
+
+def _chamfering_rows_for_cutting(
+    management_code: str,
+    cm: dict[str, Any] | None,
+    ch_by_cm_id: dict[int, list[dict[str, Any]]],
+    ch_by_mc: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    if cm:
+        cm_id = cm.get("id")
+        if cm_id is not None:
+            related = ch_by_cm_id.get(int(cm_id), [])
+            if related:
+                return related
+    return ch_by_mc.get(management_code, [])
+
+
+def _pick_cutting_record(
+    management_code: str | None,
+    aps_batch_plan_id: int | None,
+    cm_by_mc: dict[str, dict[str, Any]],
+    cm_by_aps: dict[int, dict[str, Any]],
+    cm_by_ip_mc: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    """管理コード直一致 → aps_batch_plan_id → instruction_plans 経由の順で切断行を解決。"""
+    mc = (management_code or "").strip()
+    if mc and mc in cm_by_mc:
+        return cm_by_mc[mc]
+    if aps_batch_plan_id is not None:
+        cm = cm_by_aps.get(int(aps_batch_plan_id))
+        if cm is not None:
+            return cm
+    if mc and mc in cm_by_ip_mc:
+        return cm_by_ip_mc[mc]
+    return None
+
+
+def _pick_instruction_record(
+    management_code: str | None,
+    aps_batch_plan_id: int | None,
+    ip_by_mc: dict[str, dict[str, Any]],
+    ip_by_aps: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    mc = (management_code or "").strip()
+    if mc and mc in ip_by_mc:
+        return ip_by_mc[mc]
+    if aps_batch_plan_id is not None:
+        return ip_by_aps.get(int(aps_batch_plan_id))
+    return None
+
+
+async def batch_resolve_lot_process_status(
+    db: AsyncSession,
+    lots: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """
+    ロット一括：切断完了・成型完了フラグと現工程。
+    6月→7月跨ぎ等で管理コードと cutting_management が不一致の場合は
+    aps_batch_plan_id / instruction_plans 経由で照合する。
+    """
+    seen_keys: set[str] = set()
+    normalized: list[tuple[str, str | None, int | None]] = []
+    for lot in lots:
+        mc = str(lot.get("management_code") or "").strip() or None
+        aps_raw = lot.get("aps_batch_plan_id")
+        aps_id = int(aps_raw) if aps_raw is not None else None
+        key = _lot_process_status_key(mc, aps_id)
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        normalized.append((key, mc, aps_id))
+
+    if not normalized:
+        return {}
+
+    codes = list(dict.fromkeys(mc for _, mc, _ in normalized if mc))
+    aps_ids = list(dict.fromkeys(aps for _, _, aps in normalized if aps is not None))
+
+    params: dict[str, Any] = {}
+    today = date.today()
+
+    cm_by_mc: dict[str, dict[str, Any]] = {}
+    if codes:
+        ph = ", ".join(f":mc{i}" for i in range(len(codes)))
+        for i, c in enumerate(codes):
+            params[f"mc{i}"] = c
+        cm_res = await db.execute(
+            text(
+                f"""
+                SELECT id, aps_batch_plan_id, management_code, production_completed_check,
+                       has_chamfering_process, start_date, end_date
+                FROM cutting_management
+                WHERE management_code IN ({ph})
+                ORDER BY id DESC
+                """
+            ),
+            params,
+        )
+        for row in cm_res.mappings().all():
+            mc = str(row.get("management_code") or "").strip()
+            if mc and mc not in cm_by_mc:
+                cm_by_mc[mc] = dict(row)
+
+    cm_by_aps: dict[int, dict[str, Any]] = {}
+    cm_by_ip_mc: dict[str, dict[str, Any]] = {}
+    if aps_ids:
+        aph = ", ".join(f":aps{i}" for i in range(len(aps_ids)))
+        aps_params = {f"aps{i}": aid for i, aid in enumerate(aps_ids)}
+        cm_aps_res = await db.execute(
+            text(
+                f"""
+                SELECT id, aps_batch_plan_id, management_code, production_completed_check,
+                       has_chamfering_process, start_date, end_date
+                FROM cutting_management
+                WHERE aps_batch_plan_id IN ({aph})
+                ORDER BY id DESC
+                """
+            ),
+            aps_params,
+        )
+        for row in cm_aps_res.mappings().all():
+            r = dict(row)
+            aps_id = r.get("aps_batch_plan_id")
+            if aps_id is not None and int(aps_id) not in cm_by_aps:
+                cm_by_aps[int(aps_id)] = r
+
+    if codes:
+        ph = ", ".join(f":mc{i}" for i in range(len(codes)))
+        ip_mc_params = {f"mc{i}": c for i, c in enumerate(codes)}
+        ip_bridge_res = await db.execute(
+            text(
+                f"""
+                SELECT ip.management_code AS ip_management_code,
+                       cm.id, cm.aps_batch_plan_id, cm.management_code,
+                       cm.production_completed_check, cm.has_chamfering_process,
+                       cm.start_date, cm.end_date
+                FROM instruction_plans ip
+                INNER JOIN cutting_management cm ON cm.aps_batch_plan_id = ip.aps_batch_plan_id
+                WHERE ip.management_code IN ({ph})
+                ORDER BY cm.id DESC
+                """
+            ),
+            ip_mc_params,
+        )
+        for row in ip_bridge_res.mappings().all():
+            ip_mc = str(row.get("ip_management_code") or "").strip()
+            if ip_mc and ip_mc not in cm_by_ip_mc:
+                cm_by_ip_mc[ip_mc] = {
+                    "id": row.get("id"),
+                    "aps_batch_plan_id": row.get("aps_batch_plan_id"),
+                    "management_code": row.get("management_code"),
+                    "production_completed_check": row.get("production_completed_check"),
+                    "has_chamfering_process": row.get("has_chamfering_process"),
+                    "start_date": row.get("start_date"),
+                    "end_date": row.get("end_date"),
+                }
+
+    ip_by_mc: dict[str, dict[str, Any]] = {}
+    ip_by_aps: dict[int, dict[str, Any]] = {}
+    ip_filters: list[str] = []
+    ip_params: dict[str, Any] = {}
+    if codes:
+        mc_ph = ", ".join(f":ipmc{i}" for i in range(len(codes)))
+        for i, c in enumerate(codes):
+            ip_params[f"ipmc{i}"] = c
+        ip_filters.append(f"management_code IN ({mc_ph})")
+    if aps_ids:
+        aph = ", ".join(f":ipaps{i}" for i in range(len(aps_ids)))
+        for i, aid in enumerate(aps_ids):
+            ip_params[f"ipaps{i}"] = aid
+        ip_filters.append(f"aps_batch_plan_id IN ({aph})")
+    if ip_filters:
+        ip_res = await db.execute(
+            text(
+                f"""
+                SELECT management_code, aps_batch_plan_id, start_date, end_date
+                FROM instruction_plans
+                WHERE {' OR '.join(ip_filters)}
+                ORDER BY id DESC
+                """
+            ),
+            ip_params,
+        )
+        for row in ip_res.mappings().all():
+            r = dict(row)
+            mc = str(r.get("management_code") or "").strip()
+            if mc and mc not in ip_by_mc:
+                ip_by_mc[mc] = r
+            aps_id = r.get("aps_batch_plan_id")
+            if aps_id is not None and int(aps_id) not in ip_by_aps:
+                ip_by_aps[int(aps_id)] = r
+
+    cm_ids: set[int] = set()
+    for cm in list(cm_by_mc.values()) + list(cm_by_aps.values()) + list(cm_by_ip_mc.values()):
+        cid = cm.get("id")
+        if cid is not None:
+            cm_ids.add(int(cid))
+
+    ch_by_mc: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    ch_by_cm_id: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    ch_filters: list[str] = []
+    ch_params: dict[str, Any] = {}
+    if codes:
+        ch_ph = ", ".join(f":chmc{i}" for i in range(len(codes)))
+        for i, c in enumerate(codes):
+            ch_params[f"chmc{i}"] = c
+        ch_filters.append(f"management_code IN ({ch_ph})")
+    if cm_ids:
+        cid_ph = ", ".join(f":chid{i}" for i, cid in enumerate(sorted(cm_ids)))
+        for i, cid in enumerate(sorted(cm_ids)):
+            ch_params[f"chid{i}"] = cid
+        ch_filters.append(f"cutting_management_id IN ({cid_ph})")
+    if ch_filters:
+        ch_res = await db.execute(
+            text(
+                f"""
+                SELECT management_code, cutting_management_id, production_completed_check
+                FROM chamfering_management
+                WHERE {' OR '.join(ch_filters)}
+                ORDER BY id DESC
+                """
+            ),
+            ch_params,
+        )
+        for row in ch_res.mappings().all():
+            r = dict(row)
+            mc = str(r.get("management_code") or "").strip()
+            if mc:
+                ch_by_mc[mc].append(r)
+            cid = r.get("cutting_management_id")
+            if cid is not None:
+                ch_by_cm_id[int(cid)].append(r)
+
+    out: dict[str, dict[str, Any]] = {}
+    for key, mc, aps_id in normalized:
+        cm = _pick_cutting_record(mc, aps_id, cm_by_mc, cm_by_aps, cm_by_ip_mc)
+        ip = _pick_instruction_record(mc, aps_id, ip_by_mc, ip_by_aps)
+        ch_rows = _chamfering_rows_for_cutting(mc or "", cm, ch_by_cm_id, ch_by_mc)
+        out[key] = _resolve_management_code_process_status(
+            mc or "",
+            cm,
+            ip,
+            ch_rows,
+            today,
+        )
+    return out
+
+
 async def batch_resolve_management_code_process_status(
     db: AsyncSession,
     management_codes: list[str],
 ) -> dict[str, dict[str, Any]]:
-    """管理コード一括：成型完了フラグと現工程。"""
-    codes = list(dict.fromkeys((c or "").strip() for c in management_codes if (c or "").strip()))
-    if not codes:
-        return {}
-
-    ph = ", ".join(f":mc{i}" for i in range(len(codes)))
-    params = {f"mc{i}": c for i, c in enumerate(codes)}
-    today = date.today()
-
-    cm_res = await db.execute(
-        text(
-            f"""
-            SELECT id, management_code, production_completed_check, has_chamfering_process,
-                   start_date, end_date
-            FROM cutting_management
-            WHERE management_code IN ({ph})
-            ORDER BY id DESC
-            """
-        ),
-        params,
-    )
-    ip_res = await db.execute(
-        text(
-            f"""
-            SELECT management_code, start_date, end_date
-            FROM instruction_plans
-            WHERE management_code IN ({ph})
-            ORDER BY id DESC
-            """
-        ),
-        params,
-    )
-    ch_res = await db.execute(
-        text(
-            f"""
-            SELECT management_code, cutting_management_id, production_completed_check
-            FROM chamfering_management
-            WHERE management_code IN ({ph})
-            ORDER BY id DESC
-            """
-        ),
-        params,
-    )
-
-    cm_by_mc: dict[str, dict[str, Any]] = {}
-    for row in cm_res.mappings().all():
-        mc = str(row.get("management_code") or "").strip()
-        if mc and mc not in cm_by_mc:
-            cm_by_mc[mc] = dict(row)
-
-    ip_by_mc: dict[str, dict[str, Any]] = {}
-    for row in ip_res.mappings().all():
-        mc = str(row.get("management_code") or "").strip()
-        if mc and mc not in ip_by_mc:
-            ip_by_mc[mc] = dict(row)
-
-    ch_by_mc: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in ch_res.mappings().all():
-        mc = str(row.get("management_code") or "").strip()
-        if mc:
-            ch_by_mc[mc].append(dict(row))
-
+    """管理コード一括（後方互換）。aps_batch_plan_id なしの簡易版。"""
+    lots = [{"management_code": c} for c in management_codes if (c or "").strip()]
+    resolved = await batch_resolve_lot_process_status(db, lots)
     out: dict[str, dict[str, Any]] = {}
-    for mc in codes:
-        out[mc] = _resolve_management_code_process_status(
-            mc,
-            cm_by_mc.get(mc),
-            ip_by_mc.get(mc),
-            ch_by_mc.get(mc, []),
-            today,
-        )
+    for mc in management_codes:
+        mc_norm = (mc or "").strip()
+        if not mc_norm:
+            continue
+        key = _lot_process_status_key(mc_norm)
+        if key in resolved:
+            out[mc_norm] = resolved[key]
     return out
 
 
@@ -1715,3 +1925,160 @@ async def get_primary_forecast_summary(
             "attribution_mode": pool[0].attribution_mode if pool else None,
         }
     return out
+
+
+def merge_process_status_with_override(
+    auto_status: dict[str, Any],
+    override: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """自動判定に手動指定をマージ（指定項目のみ上書き）。"""
+    result = dict(auto_status)
+    cutting_manual = False
+    molding_manual = False
+    if override:
+        if override.get("cutting_completed") is not None:
+            result["cutting_completed"] = bool(override["cutting_completed"])
+            cutting_manual = True
+        if override.get("molding_completed") is not None:
+            result["molding_completed"] = bool(override["molding_completed"])
+            molding_manual = True
+        if result.get("molding_completed") and not result.get("cutting_completed"):
+            result["cutting_completed"] = True
+    result["cutting_completed_source"] = "MANUAL" if cutting_manual else "AUTO"
+    result["molding_completed_source"] = "MANUAL" if molding_manual else "AUTO"
+    result["status_override"] = cutting_manual or molding_manual
+    result["status_remark"] = (override or {}).get("remark") if override else None
+    return result
+
+
+async def load_process_status_overrides(
+    db: AsyncSession,
+    management_codes: list[str],
+) -> dict[str, dict[str, Any]]:
+    codes = list(dict.fromkeys((c or "").strip() for c in management_codes if (c or "").strip()))
+    if not codes:
+        return {}
+    try:
+        res = await db.execute(
+            select(LotProcessStatusOverride).where(LotProcessStatusOverride.management_code.in_(codes))
+        )
+    except Exception as exc:
+        # マイグレーション 77 未適用時は手動指定なしとして続行
+        if "lot_process_status_override" in str(exc).lower():
+            return {}
+        raise
+    out: dict[str, dict[str, Any]] = {}
+    for row in res.scalars().all():
+        mc = (row.management_code or "").strip()
+        if not mc:
+            continue
+        out[mc] = {
+            "management_code": mc,
+            "aps_batch_plan_id": row.aps_batch_plan_id,
+            "cutting_completed": row.cutting_completed,
+            "molding_completed": row.molding_completed,
+            "remark": row.remark,
+            "updated_by": row.updated_by,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+    return out
+
+
+async def enrich_rows_with_process_status(
+    db: AsyncSession,
+    rows: list[dict[str, Any]],
+) -> None:
+    """一覧行に工程完了状態（自動＋手動上書き）を付与。"""
+    if not rows:
+        return
+    lots = [
+        {
+            "management_code": str(r.get("management_code") or "").strip() or None,
+            "aps_batch_plan_id": r.get("aps_batch_plan_id"),
+        }
+        for r in rows
+    ]
+    status_map = await batch_resolve_lot_process_status(db, lots)
+    mcs = [str(r.get("management_code") or "").strip() for r in rows if r.get("management_code")]
+    overrides = await load_process_status_overrides(db, mcs)
+    for row in rows:
+        mc = str(row.get("management_code") or "").strip()
+        key = _lot_process_status_key(row.get("management_code"), row.get("aps_batch_plan_id"))
+        merged = merge_process_status_with_override(status_map.get(key, {}), overrides.get(mc))
+        row["cutting_completed"] = bool(merged.get("cutting_completed"))
+        row["molding_completed"] = bool(merged.get("molding_completed"))
+        row["current_process_key"] = merged.get("current_process_key")
+        row["current_process_label"] = merged.get("current_process_label")
+        row["cutting_completed_source"] = merged.get("cutting_completed_source", "AUTO")
+        row["molding_completed_source"] = merged.get("molding_completed_source", "AUTO")
+        row["status_override"] = bool(merged.get("status_override"))
+        row["status_remark"] = merged.get("status_remark")
+
+
+async def upsert_process_status_override(
+    db: AsyncSession,
+    management_code: str,
+    *,
+    aps_batch_plan_id: int | None = None,
+    cutting_completed: bool | None = None,
+    molding_completed: bool | None = None,
+    remark: str | None = None,
+    updated_by: int | None = None,
+) -> dict[str, Any] | None:
+    """
+    手動指定を保存。cutting_completed / molding_completed が両方 NULL の場合は行を削除（全自動に戻す）。
+    """
+    mc = (management_code or "").strip()
+    if not mc:
+        raise ValueError("management_code is required")
+
+    res = await db.execute(
+        select(LotProcessStatusOverride).where(LotProcessStatusOverride.management_code == mc)
+    )
+    row = res.scalar_one_or_none()
+    if row is None:
+        if cutting_completed is None and molding_completed is None:
+            return None
+        row = LotProcessStatusOverride(management_code=mc)
+        db.add(row)
+
+    row.cutting_completed = cutting_completed
+    row.molding_completed = molding_completed
+    if aps_batch_plan_id is not None:
+        row.aps_batch_plan_id = aps_batch_plan_id
+    if remark is not None:
+        row.remark = (remark or "").strip() or None
+    row.updated_by = updated_by
+
+    if row.cutting_completed is None and row.molding_completed is None:
+        await db.delete(row)
+        await db.flush()
+        return None
+
+    await db.flush()
+    await db.refresh(row)
+    updated_at = row.updated_at
+    return {
+        "management_code": mc,
+        "aps_batch_plan_id": row.aps_batch_plan_id,
+        "cutting_completed": row.cutting_completed,
+        "molding_completed": row.molding_completed,
+        "remark": row.remark,
+        "updated_by": row.updated_by,
+        "updated_at": updated_at.isoformat() if updated_at else None,
+    }
+
+
+async def delete_process_status_override(db: AsyncSession, management_code: str) -> bool:
+    mc = (management_code or "").strip()
+    if not mc:
+        return False
+    res = await db.execute(
+        select(LotProcessStatusOverride).where(LotProcessStatusOverride.management_code == mc)
+    )
+    row = res.scalar_one_or_none()
+    if row is None:
+        return False
+    await db.delete(row)
+    await db.flush()
+    return True

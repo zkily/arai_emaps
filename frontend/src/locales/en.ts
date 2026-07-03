@@ -371,7 +371,7 @@ export default {
     ERP_PRODUCTION_BASELINE: 'Plan Baseline',
     ERP_PRODUCTION_PLAN_SCHEDULES: '生産スケジュール',
     ERP_PRODUCTION_FORMING_DAILY_PLAN: 'Plan Simulation by Process',
-    ERP_PRODUCTION_LOT_FORECAST_ATTRIBUTION: 'Forecast Attribution',
+    ERP_PRODUCTION_LOT_FORECAST_ATTRIBUTION: 'Production Lot Progress',
     ERP_PRODUCTION_PROCESS_MACHINE_PLAN: 'Plan by Process & Machine',
     ERP_PRODUCTION_INSTRUCTION: 'Production Instruction',
     ERP_PRODUCTION_INSTR_CUTTING: 'Cutting & Chamfering Instruction',

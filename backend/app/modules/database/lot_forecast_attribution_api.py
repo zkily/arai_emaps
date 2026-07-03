@@ -14,12 +14,14 @@ from app.modules.auth.operation_deps import require_mes_operation
 from app.modules.auth.models import User
 from app.modules.database.forming_daily_plan_service import parse_iso_date
 from app.modules.database.lot_forecast_attribution_service import (
-    batch_resolve_management_code_process_status,
+    delete_process_status_override,
+    enrich_rows_with_process_status,
     build_reconcile_report,
     enrich_attribution_display_names,
     get_primary_forecast_summary,
     query_attributions,
     recompute_attribution,
+    upsert_process_status_override,
 )
 
 router = APIRouter(prefix="/lot-forecast-attribution", tags=["lot-forecast-attribution"])
@@ -34,6 +36,18 @@ class RecomputeBody(BaseModel):
 class BatchSummaryBody(BaseModel):
     management_codes: List[str] = Field(..., min_length=1, max_length=500)
     process_key: str = Field(default="molding")
+
+
+class ProcessStatusOverrideBody(BaseModel):
+    management_code: str = Field(..., min_length=1, max_length=100)
+    aps_batch_plan_id: Optional[int] = None
+    cutting_completed: Optional[bool] = Field(
+        None, description="true/false=手動指定、null=自動判定"
+    )
+    molding_completed: Optional[bool] = Field(
+        None, description="true/false=手動指定、null=自動判定"
+    )
+    remark: Optional[str] = Field(None, max_length=500)
 
 
 @router.post("/recompute")
@@ -94,16 +108,48 @@ async def list_lot_forecast_attribution(
         require_management_code=True,
     )
     await enrich_attribution_display_names(db, rows)
-    mcs = list({str(r.get("management_code") or "").strip() for r in rows if r.get("management_code")})
-    status_map = await batch_resolve_management_code_process_status(db, mcs)
-    for row in rows:
-        mc = str(row.get("management_code") or "").strip()
-        st = status_map.get(mc, {})
-        row["molding_completed"] = bool(st.get("molding_completed"))
-        row["current_process_key"] = st.get("current_process_key")
-        row["current_process_label"] = st.get("current_process_label")
+    await enrich_rows_with_process_status(db, rows)
     return {"code": 200, "data": rows, "total": len(rows)}
 
+
+@router.put("/process-status-override")
+async def save_process_status_override(
+    body: ProcessStatusOverrideBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """管理コードの切断完了・成型完了を手動指定（帰属再計算の影響を受けない）。"""
+    try:
+        data = await upsert_process_status_override(
+            db,
+            body.management_code,
+            aps_batch_plan_id=body.aps_batch_plan_id,
+            cutting_completed=body.cutting_completed,
+            molding_completed=body.molding_completed,
+            remark=body.remark,
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"状態の保存に失敗しました: {e}") from e
+    return {"code": 200, "data": data, "message": "状態を保存しました"}
+
+
+@router.delete("/process-status-override")
+async def remove_process_status_override(
+    management_code: str = Query(..., min_length=1, max_length=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """手動指定を解除し、全項目を自動判定に戻す。"""
+    try:
+        deleted = await delete_process_status_override(db, management_code)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"状態の解除に失敗しました: {e}") from e
+    if not deleted:
+        return {"code": 200, "message": "手動指定はありません"}
+    return {"code": 200, "message": "手動指定を解除しました"}
 
 @router.get("/reconcile")
 async def reconcile_lot_forecast_attribution(

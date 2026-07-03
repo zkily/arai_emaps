@@ -1,14 +1,14 @@
--- 生産計画 > 内示帰属管理（menuConfig / SidebarMenu と整合）
+-- 生産計画 > 生産ロット進捗管理（menuConfig / SidebarMenu と整合）
 
 INSERT IGNORE INTO menus (code, name, parent_id, path, icon, sort_order)
-SELECT 'ERP_PRODUCTION_LOT_FORECAST_ATTRIBUTION', '内示帰属管理', m.id, '/erp/production/lot-forecast-attribution', 'Calendar', 5
+SELECT 'ERP_PRODUCTION_LOT_FORECAST_ATTRIBUTION', '生産ロット進捗管理', m.id, '/erp/production/lot-forecast-attribution', 'Calendar', 5
 FROM menus m
 WHERE m.code = 'ERP_PRODUCTION_PLANNING'
 LIMIT 1;
 
 UPDATE menus child
 INNER JOIN menus parent ON parent.code = 'ERP_PRODUCTION_PLANNING'
-SET child.name = '内示帰属管理',
+SET child.name = '生産ロット進捗管理',
     child.path = '/erp/production/lot-forecast-attribution',
     child.icon = 'Calendar',
     child.sort_order = 5,
