@@ -749,7 +749,7 @@
                       class="plan-batch-td plan-batch-td-cutting-day"
                       :class="{ 'plan-batch-td-cutting-day--due': isCuttingProductionDayDueOrOverdue(row.management_code) }"
                     >{{ getCuttingProductionDayDisplay(row.management_code) }}</div>
-                    <div class="plan-batch-td plan-batch-td-forming-day">{{ getFormingStartDateDisplay(row.management_code) }}</div>
+                    <div class="plan-batch-td plan-batch-td-forming-day">{{ getFormingStartDateDisplay(row) }}</div>
                     <div class="plan-batch-td">{{ row.product_name || row.product_cd || '-' }}</div>
                     <div class="plan-batch-td">{{ row.material_name ?? '-' }}</div>
                     <div class="plan-batch-td">{{ row.actual_production_quantity ?? '-' }}</div>
@@ -925,10 +925,16 @@
                 >
                   <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_line ?? '-' }}</div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-forming-day">{{ getFormingStartDateDisplay(row.management_code) }}</div>
+                  <div
+                    class="cutting-mgmt-td cutting-mgmt-td-forming-day"
+                    :class="{ 'forming-date-overdue': isProductionDayAfterFormingDay(row) }"
+                  >{{ getFormingStartDateDisplay(row) }}</div>
                   <div
                     class="cutting-mgmt-td cutting-mgmt-td-production-day"
-                    :class="{ 'is-editing-production-day': editingChamferingProductionDayId === row.id }"
+                    :class="{
+                      'is-editing-production-day': editingChamferingProductionDayId === row.id,
+                      'forming-date-overdue': isProductionDayAfterFormingDay(row),
+                    }"
                     @dblclick.stop="startEditChamferingProductionDay(row)"
                   >
                     <template v-if="editingChamferingProductionDayId === row.id">
@@ -2089,11 +2095,15 @@
       width="504px"
       :close-on-click-modal="false"
       class="cutting-edit-dialog chamfering-edit-dialog"
-      @close="editingChamferingId = null; chamferingEditOriginalMachine = ''; chamferingEditMachineLocked = false"
+      @close="editingChamferingId = null; chamferingEditOriginalMachine = ''; chamferingEditMachineLocked = false; chamferingEditManagementCode = ''"
     >
       <template #header>
         <div class="cutting-edit-dialog__header">
           <span class="cutting-edit-dialog__title">面取指示編集</span>
+          <span class="cutting-edit-dialog__mgmt">
+            <span class="cutting-edit-dialog__mgmt-label">管理コード</span>
+            <span class="cutting-edit-dialog__mgmt-value">{{ chamferingEditManagementCode || '—' }}</span>
+          </span>
         </div>
       </template>
       <el-form :model="chamferingEditForm" label-width="72px" label-position="left" class="cutting-edit-form chamfering-edit-form">
@@ -2520,6 +2530,7 @@
       class="split-to-next-day-dialog"
       :close-on-click-modal="false"
       @close="splitDialogRow = null"
+      @opened="onSplitToNextDayDialogOpened"
     >
       <template #header>
         <div class="snd-header">
@@ -2556,26 +2567,25 @@
           <div class="snd-form-grid">
             <div class="snd-field">
               <label class="snd-field-label">当日完成数 <span class="snd-required">*</span></label>
-              <el-input
-                ref="splitTodayQuantityInputRef"
-                v-model="splitTodayQuantityInput"
-                type="text"
-                inputmode="numeric"
-                placeholder="0"
-                maxlength="8"
-                size="small"
-                class="snd-qty-input"
-                @input="onSplitTodayQuantityInput"
-              >
-                <template #suffix>
-                  <span class="snd-input-suffix">個</span>
-                </template>
-              </el-input>
+              <div class="snd-qty-badge snd-qty-badge--today">
+                <input
+                  ref="splitTodayQuantityInputRef"
+                  :value="splitTodayQuantityInput"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder=""
+                  maxlength="8"
+                  class="snd-qty-badge__input"
+                  @input="onSplitTodayQuantityInput(($event.target as HTMLInputElement).value)"
+                  @keydown.enter.prevent="handleSplitTodayQuantityEnter"
+                />
+                <span class="snd-qty-badge__unit">個</span>
+              </div>
             </div>
             <div class="snd-field">
               <label class="snd-field-label">翌日順延数</label>
               <div class="snd-remainder-badge">
-                {{ Math.max(0, (splitDialogRow.actual_production_quantity ?? 0) - (parseInt(splitTodayQuantityInput, 10) || 0)) }}
+                {{ formatSplitRemainderDisplay(splitDialogRow.actual_production_quantity ?? 0, splitTodayQuantityInput) }}
                 <span class="snd-remainder-unit">個</span>
               </div>
             </div>
@@ -2623,6 +2633,7 @@
       class="split-to-next-day-dialog chamfering-snd-dialog"
       :close-on-click-modal="false"
       @close="chamferingSplitDialogRow = null"
+      @opened="onChamferingSplitDialogOpened"
     >
       <template #header>
         <div class="snd-header">
@@ -2657,26 +2668,25 @@
           <div class="snd-form-grid">
             <div class="snd-field">
               <label class="snd-field-label">当日完成数 <span class="snd-required">*</span></label>
-              <el-input
-                ref="chamferingSplitTodayQuantityInputRef"
-                v-model="chamferingSplitTodayQuantityInput"
-                type="text"
-                inputmode="numeric"
-                placeholder="0"
-                maxlength="8"
-                size="small"
-                class="snd-qty-input"
-                @input="onChamferingSplitTodayQuantityInput"
-              >
-                <template #suffix>
-                  <span class="snd-input-suffix">個</span>
-                </template>
-              </el-input>
+              <div class="snd-qty-badge snd-qty-badge--today">
+                <input
+                  ref="chamferingSplitTodayQuantityInputRef"
+                  :value="chamferingSplitTodayQuantityInput"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder=""
+                  maxlength="8"
+                  class="snd-qty-badge__input"
+                  @input="onChamferingSplitTodayQuantityInput(($event.target as HTMLInputElement).value)"
+                  @keydown.enter.prevent="handleChamferingSplitTodayQuantityEnter"
+                />
+                <span class="snd-qty-badge__unit">個</span>
+              </div>
             </div>
             <div class="snd-field">
               <label class="snd-field-label">翌日順延数</label>
               <div class="snd-remainder-badge">
-                {{ Math.max(0, (chamferingSplitDialogRow.actual_production_quantity ?? 0) - (parseInt(chamferingSplitTodayQuantityInput, 10) || 0)) }}
+                {{ formatSplitRemainderDisplay(chamferingSplitDialogRow.actual_production_quantity ?? 0, chamferingSplitTodayQuantityInput) }}
                 <span class="snd-remainder-unit">個</span>
               </div>
             </div>
@@ -2917,143 +2927,211 @@
 
     <el-dialog
       v-model="cuttingDoneDialogVisible"
-      title="切断済リスト"
       width="min(98vw, 1420px)"
       destroy-on-close
       class="cutting-done-dialog"
+      :show-close="true"
       @open="loadCuttingDoneList"
     >
-      <div class="cutting-done-toolbar">
-        <el-form :model="cuttingDoneFilter" inline size="small" class="filter-form">
-          <el-form-item label="期間">
-            <el-date-picker
-              v-model="cuttingDoneFilter.period"
-              type="daterange"
-              range-separator="~"
-              start-placeholder="開始日"
-              end-placeholder="終了日"
-              value-format="YYYY-MM-DD"
-              style="width: 260px"
-              @change="onCuttingDoneFilterChange"
-            />
-          </el-form-item>
-          <el-form-item label="製品名">
-            <el-select
-              v-model="cuttingDoneFilter.product_name"
-              placeholder="全部"
-              clearable
-              filterable
-              style="width: 180px"
-              popper-class="data-management-product-select-dropdown"
-              @change="onCuttingDoneFilterChange"
+      <template #header>
+        <div class="cddl-header">
+          <div class="cddl-header__brand">
+            <div class="cddl-header__icon" aria-hidden="true">
+              <el-icon :size="18"><Document /></el-icon>
+            </div>
+            <div class="cddl-header__text">
+              <h3 class="cddl-header__title">切断済リスト</h3>
+              <span class="cddl-header__meta">切断完了実績の照会・編集</span>
+            </div>
+          </div>
+          <div class="cddl-header__stats">
+            <span class="cddl-stat cddl-stat--count">
+              <span class="cddl-stat__label">件数</span>
+              <span class="cddl-stat__value">{{ cuttingDoneListFiltered.length }}</span>
+            </span>
+            <span class="cddl-stat cddl-stat--done">
+              <span class="cddl-stat__label">切断済</span>
+              <span class="cddl-stat__value">{{ cuttingDoneCompletedCount }}</span>
+            </span>
+            <span class="cddl-stat cddl-stat--qty">
+              <span class="cddl-stat__label">生産数合計</span>
+              <span class="cddl-stat__value">{{ cuttingDoneProductionTotalLabel }}</span>
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <div class="cddl-shell">
+        <div class="cddl-toolbar">
+          <div class="cddl-toolbar__filters">
+            <span class="cddl-toolbar__section-label cddl-toolbar__section-label--filter">絞り込み</span>
+            <el-form :model="cuttingDoneFilter" inline size="small" class="cddl-filter-form">
+              <el-form-item label="期間">
+                <el-date-picker
+                  v-model="cuttingDoneFilter.period"
+                  type="daterange"
+                  range-separator="~"
+                  start-placeholder="開始日"
+                  end-placeholder="終了日"
+                  value-format="YYYY-MM-DD"
+                  class="cddl-date-range"
+                  @change="onCuttingDoneFilterChange"
+                />
+              </el-form-item>
+              <el-form-item label="製品名">
+                <el-select
+                  v-model="cuttingDoneFilter.product_name"
+                  placeholder="全部"
+                  clearable
+                  filterable
+                  class="cddl-product-select"
+                  popper-class="data-management-product-select-dropdown"
+                  @change="onCuttingDoneFilterChange"
+                >
+                  <el-option label="（全部）" value="" />
+                  <el-option v-for="name in cuttingDoneProductNameOptions" :key="name" :label="name" :value="name" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="管理コード">
+                <el-input
+                  v-model="cuttingDoneFilter.management_code"
+                  placeholder="部分一致"
+                  clearable
+                  class="cddl-mgmt-input"
+                  @input="onCuttingDoneFilterChange"
+                  @clear="onCuttingDoneFilterChange"
+                />
+              </el-form-item>
+              <el-form-item label="完了">
+                <el-switch
+                  v-model="cuttingDoneFilter.only_completed"
+                  inline-prompt
+                  active-text="完了のみ"
+                  inactive-text="全部"
+                  class="cddl-complete-switch"
+                  @change="onCuttingDoneFilterChange"
+                />
+              </el-form-item>
+            </el-form>
+          </div>
+          <div class="cddl-toolbar__actions">
+            <el-button size="small" class="cddl-btn-reset" @click="resetCuttingDoneFilter">リセット</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              class="cddl-btn-print"
+              :icon="Printer"
+              :loading="printCuttingDoneLoading"
+              :disabled="cuttingDoneListFiltered.length === 0"
+              @click="printCuttingDoneList"
             >
-              <el-option label="（全部）" value="" />
-              <el-option v-for="name in cuttingDoneProductNameOptions" :key="name" :label="name" :value="name" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="管理コード">
-            <el-input
-              v-model="cuttingDoneFilter.management_code"
-              placeholder="management_code（部分一致）"
-              clearable
-              style="width: 200px"
-              @input="onCuttingDoneFilterChange"
-              @clear="onCuttingDoneFilterChange"
-            />
-          </el-form-item>
-          <el-form-item label="生産完了チェック">
-            <el-switch
-              v-model="cuttingDoneFilter.only_completed"
-              inline-prompt
-              active-text="完了のみ"
-              inactive-text="全部"
-              @change="onCuttingDoneFilterChange"
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button size="small" @click="resetCuttingDoneFilter">リセット</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-      <div class="cutting-done-table-wrap">
-        <el-table
-          v-loading="cuttingDoneLoading"
-          :data="cuttingDoneListPaged"
-          size="small"
-          stripe
-          border
-          max-height="65vh"
-          style="width: 100%"
-        >
-          <el-table-column prop="production_day" label="生産日" width="104" align="center">
-            <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="production_line" label="ライン" width="94" align="center" show-overflow-tooltip />
-          <el-table-column prop="cutting_machine" label="切断機" width="106" align="center" show-overflow-tooltip />
-          <el-table-column prop="product_cd" label="製品CD" width="112" align="center" show-overflow-tooltip />
-          <el-table-column prop="product_name" label="製品名" min-width="166" show-overflow-tooltip />
-          <el-table-column prop="actual_production_quantity" label="生産数" width="84" align="right" />
-          <el-table-column prop="defect_qty" label="不良数" width="84" align="right" />
-          <el-table-column prop="production_completed_check" label="生産完了" width="92" align="center">
-            <template #default="{ row }">{{ row.production_completed_check ? '切断済' : '未切断' }}</template>
-          </el-table-column>
-          <el-table-column prop="start_date" label="開始日" width="108" align="center">
-            <template #default="{ row }">
-              <template v-if="isEditingCuttingDoneCell(row, 'start_date')">
-                <el-date-picker
-                  :model-value="row.start_date ? String(row.start_date).slice(0, 10) : ''"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  size="small"
-                  style="width: 100%"
-                  clearable
-                  @change="(v: string) => saveCuttingDoneCell(row, 'start_date', v)"
-                  @blur="cuttingDoneEditingCell = null"
-                />
-              </template>
-              <span v-else class="editable-cell" @dblclick="startEditCuttingDoneCell(row, 'start_date')">{{ row.start_date ? String(row.start_date).slice(0, 10) : '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="end_date" label="終了日" width="108" align="center">
-            <template #default="{ row }">
-              <template v-if="isEditingCuttingDoneCell(row, 'end_date')">
-                <el-date-picker
-                  :model-value="row.end_date ? String(row.end_date).slice(0, 10) : ''"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  size="small"
-                  style="width: 100%"
-                  clearable
-                  @change="(v: string) => saveCuttingDoneCell(row, 'end_date', v)"
-                  @blur="cuttingDoneEditingCell = null"
-                />
-              </template>
-              <span v-else class="editable-cell" @dblclick="startEditCuttingDoneCell(row, 'end_date')">{{ row.end_date ? String(row.end_date).slice(0, 10) : '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="management_code"
-            label="管理コード"
-            min-width="200"
-            show-overflow-tooltip
+              印刷
+            </el-button>
+          </div>
+        </div>
+
+        <div class="cutting-done-table-wrap">
+          <el-table
+            v-loading="cuttingDoneLoading"
+            :data="cuttingDoneListPaged"
+            size="small"
+            stripe
+            border
+            max-height="62vh"
+            class="cddl-table"
+            :row-class-name="cuttingDoneRowClassName"
+            :header-cell-class-name="cuttingDoneHeaderCellClassName"
+            empty-text="該当データがありません"
           >
-            <template #default="{ row }">{{ formatCuttingDoneManagementCode(row) }}</template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div class="cutting-done-footer">
-        <span class="total-text">計 {{ cuttingDoneListFiltered.length }} 件</span>
-        <el-pagination
-          v-model:current-page="cuttingDonePagination.currentPage"
-          v-model:page-size="cuttingDonePagination.pageSize"
-          :page-sizes="[30, 50, 100]"
-          :total="cuttingDoneListFiltered.length"
-          size="small"
-          layout="total, sizes, prev, pager, next"
-          background
-          @size-change="cuttingDonePagination.currentPage = 1"
-          @current-change="() => {}"
-        />
+            <el-table-column prop="production_day" label="切断日" width="104" align="center" class-name="cddl-col-date">
+              <template #default="{ row }">
+                <span class="cddl-date-cell">{{ formatDateOnly(String(row.production_day ?? '')) || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="production_line" label="使用ライン" width="100" align="center" show-overflow-tooltip />
+            <el-table-column prop="cutting_machine" label="切断機" width="106" align="center" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="cddl-machine-cell">{{ row.cutting_machine || '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="product_cd" label="製品CD" width="112" align="center" show-overflow-tooltip />
+            <el-table-column prop="product_name" label="製品名" min-width="166" show-overflow-tooltip />
+            <el-table-column prop="actual_production_quantity" label="生産数" width="88" align="right">
+              <template #default="{ row }">
+                <span class="cddl-qty-cell">{{ row.actual_production_quantity ?? '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="production_completed_check" label="状態" width="96" align="center">
+              <template #default="{ row }">
+                <span
+                  class="cddl-status"
+                  :class="row.production_completed_check ? 'cddl-status--done' : 'cddl-status--pending'"
+                >
+                  {{ row.production_completed_check ? '切断済' : '未切断' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="start_date" label="成型開始日" width="112" align="center">
+              <template #default="{ row }">
+                <template v-if="isEditingCuttingDoneCell(row, 'start_date')">
+                  <el-date-picker
+                    :model-value="row.start_date ? String(row.start_date).slice(0, 10) : ''"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    size="small"
+                    style="width: 100%"
+                    clearable
+                    @change="(v: string) => saveCuttingDoneCell(row, 'start_date', v)"
+                    @blur="cuttingDoneEditingCell = null"
+                  />
+                </template>
+                <span v-else class="editable-cell cddl-editable" @dblclick="startEditCuttingDoneCell(row, 'start_date')">{{ row.start_date ? String(row.start_date).slice(0, 10) : '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="end_date" label="成型終了日" width="112" align="center">
+              <template #default="{ row }">
+                <template v-if="isEditingCuttingDoneCell(row, 'end_date')">
+                  <el-date-picker
+                    :model-value="row.end_date ? String(row.end_date).slice(0, 10) : ''"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    size="small"
+                    style="width: 100%"
+                    clearable
+                    @change="(v: string) => saveCuttingDoneCell(row, 'end_date', v)"
+                    @blur="cuttingDoneEditingCell = null"
+                  />
+                </template>
+                <span v-else class="editable-cell cddl-editable" @dblclick="startEditCuttingDoneCell(row, 'end_date')">{{ row.end_date ? String(row.end_date).slice(0, 10) : '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="management_code"
+              label="管理コード"
+              min-width="200"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <span class="cddl-mgmt-code">{{ formatCuttingDoneManagementCode(row) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <div class="cutting-done-footer">
+          <span class="cutting-done-footer__hint">成型開始日・成型終了日はダブルクリックで編集</span>
+          <el-pagination
+            v-model:current-page="cuttingDonePagination.currentPage"
+            v-model:page-size="cuttingDonePagination.pageSize"
+            :page-sizes="[30, 50, 100]"
+            :total="cuttingDoneListFiltered.length"
+            size="small"
+            layout="total, sizes, prev, pager, next"
+            background
+            @size-change="cuttingDonePagination.currentPage = 1"
+            @current-change="() => {}"
+          />
+        </div>
       </div>
     </el-dialog>
 
@@ -4672,6 +4750,7 @@ const editingChamferingId = ref<number | null>(null)
 const chamferingEditBaselineQuantity = ref(0)
 const chamferingEditOriginalMachine = ref('')
 const chamferingEditMachineLocked = ref(false)
+const chamferingEditManagementCode = ref('')
 const chamferingEditForm = reactive({
   chamfering_machine: '',
   actual_production_quantity: '' as string,
@@ -5433,6 +5512,150 @@ const cuttingDoneListPaged = computed(() => {
   const start = (cuttingDonePagination.currentPage - 1) * cuttingDonePagination.pageSize
   return cuttingDoneListFiltered.value.slice(start, start + cuttingDonePagination.pageSize)
 })
+function sumCuttingManagementProductionQty(rows: CuttingManagementRow[]): number {
+  let qty = 0
+  for (const row of rows) {
+    const n = row.actual_production_quantity
+    if (n != null && typeof n === 'number' && !Number.isNaN(n)) qty += n
+    else if (n != null && String(n).trim() !== '') {
+      const v = Number(String(n).trim())
+      if (!Number.isNaN(v)) qty += v
+    }
+  }
+  return qty
+}
+const cuttingDoneProductionTotal = computed(() =>
+  sumCuttingManagementProductionQty(cuttingDoneListFiltered.value),
+)
+const cuttingDoneProductionTotalLabel = computed(() =>
+  cuttingDoneProductionTotal.value.toLocaleString('ja-JP'),
+)
+const cuttingDoneCompletedCount = computed(() =>
+  cuttingDoneListFiltered.value.filter((row) => Boolean(row.production_completed_check)).length,
+)
+function cuttingDoneRowClassName({ row }: { row: CuttingManagementRow }) {
+  return row.production_completed_check ? 'cddl-row--done' : 'cddl-row--pending'
+}
+function cuttingDoneHeaderCellClassName({ column }: { column: { property?: string } }) {
+  const prop = column.property ?? ''
+  if (prop === 'production_day' || prop === 'start_date' || prop === 'end_date') return 'cddl-th--date'
+  if (prop === 'actual_production_quantity') return 'cddl-th--qty'
+  if (prop === 'production_completed_check') return 'cddl-th--status'
+  if (prop === 'cutting_machine') return 'cddl-th--machine'
+  return ''
+}
+const printCuttingDoneLoading = ref(false)
+function buildCuttingDoneFilterLabel(): string {
+  const parts: string[] = []
+  const [startDay, endDay] = cuttingDoneFilter.period
+  if (startDay && endDay) parts.push(`期間：${startDay} 〜 ${endDay}`)
+  else if (startDay) parts.push(`期間：${startDay} 〜`)
+  else if (endDay) parts.push(`期間：〜 ${endDay}`)
+  if (cuttingDoneFilter.product_name) parts.push(`製品名：${cuttingDoneFilter.product_name}`)
+  const mc = (cuttingDoneFilter.management_code || '').trim()
+  if (mc) parts.push(`管理コード：${mc}`)
+  if (cuttingDoneFilter.only_completed) parts.push('生産完了：完了のみ')
+  return parts.length ? parts.join(' · ') : '（フィルタなし）'
+}
+function buildCuttingDonePrintHtml(): string {
+  const rows = cuttingDoneListFiltered.value
+  const totalQty = sumCuttingManagementProductionQty(rows)
+  const filterLabel = buildCuttingDoneFilterLabel()
+  const printedAt = new Date().toLocaleString('ja-JP', { hour12: false })
+  const rowsHtml = rows
+    .map((row) => {
+      const day = formatDateOnly(String(row.production_day ?? '')) || '-'
+      const startDate = row.start_date ? String(row.start_date).slice(0, 10) : '-'
+      const endDate = row.end_date ? String(row.end_date).slice(0, 10) : '-'
+      const completed = row.production_completed_check ? '切断済' : '未切断'
+      const qty = row.actual_production_quantity ?? ''
+      return `<tr class="${row.production_completed_check ? 'row-done' : 'row-pending'}">
+        <td class="col-day">${escapeHtml(day)}</td>
+        <td class="col-machine">${escapeHtml(String(row.cutting_machine ?? ''))}</td>
+        <td class="col-name">${escapeHtml(String(row.product_name ?? ''))}</td>
+        <td class="col-qty num">${escapeHtml(String(qty))}</td>
+        <td class="col-status status-${row.production_completed_check ? 'done' : 'pending'}">${escapeHtml(completed)}</td>
+        <td class="col-line">${escapeHtml(String(row.production_line ?? ''))}</td>
+        <td class="col-date">${escapeHtml(startDate)}</td>
+        <td class="col-date">${escapeHtml(endDate)}</td>
+        <td class="col-mgmt">${escapeHtml(formatCuttingDoneManagementCode(row))}</td>
+      </tr>`
+    })
+    .join('')
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>切断リスト</title><style>
+    @page { size: A4 landscape; margin: 10mm; }
+    body { font-family: 'Segoe UI', 'Hiragino Sans', Meiryo, sans-serif; margin: 0; padding: 10px 12px; color: #0f172a; font-size: 10px; }
+    .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #2563eb; }
+    h1 { margin: 0; font-size: 17px; color: #1e3a8a; letter-spacing: 0.02em; }
+    .meta { font-size: 9.5px; color: #64748b; line-height: 1.45; text-align: right; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    col.col-day { width: 9%; }
+    col.col-machine { width: 10%; }
+    col.col-name { width: 24%; }
+    col.col-qty { width: 7%; }
+    col.col-status { width: 8%; }
+    col.col-line { width: 10%; }
+    col.col-date { width: 9%; }
+    col.col-mgmt { width: 14%; }
+    th, td { border: 1px solid #cbd5e1; padding: 4px 5px; text-align: center; word-break: break-all; line-height: 1.3; }
+    th { background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%); font-weight: 700; color: #1e40af; font-size: 10px; }
+    th.col-name, th.col-mgmt { text-align: left; }
+    td.col-name, td.col-mgmt { text-align: left; }
+    td.num { text-align: right; font-weight: 600; color: #0369a1; }
+    tr.row-done td { background: #f0fdf4; }
+    tr.row-pending td { background: #fff; }
+    .status-done { color: #15803d; font-weight: 700; }
+    .status-pending { color: #b45309; font-weight: 600; }
+    tfoot td { font-weight: 700; background: #f1f5f9; color: #1e293b; font-size: 10.5px; }
+    @media print { body { padding: 0; } }
+  </style></head><body>
+    <div class="head">
+      <h1>切断リスト</h1>
+      <div class="meta">${escapeHtml(filterLabel)}<br/>出力日時：${escapeHtml(printedAt)}</div>
+    </div>
+    <table>
+      <colgroup>
+        <col class="col-day" /><col class="col-machine" /><col class="col-name" />
+        <col class="col-qty" /><col class="col-status" /><col class="col-line" />
+        <col class="col-date" /><col class="col-date" /><col class="col-mgmt" />
+      </colgroup>
+      <thead><tr>
+        <th class="col-day">切断日</th>
+        <th class="col-machine">切断機</th>
+        <th class="col-name">製品名</th>
+        <th class="col-qty">生産数</th>
+        <th class="col-status">状態</th>
+        <th class="col-line">使用ライン</th>
+        <th class="col-date">成型開始日</th>
+        <th class="col-date">成型終了日</th>
+        <th class="col-mgmt">管理コード</th>
+      </tr></thead>
+      <tbody>${rowsHtml || '<tr><td colspan="9">データがありません</td></tr>'}</tbody>
+      <tfoot><tr>
+        <td colspan="9" style="text-align: right;">計 ${rows.length.toLocaleString('ja-JP')} 件　生産数合計：${totalQty.toLocaleString('ja-JP')}</td>
+      </tr></tfoot>
+    </table>
+  </body></html>`
+}
+function printCuttingDoneList() {
+  if (!guardMesOperation(canExport)) return
+  if (cuttingDoneListFiltered.value.length === 0) {
+    ElMessage.warning('印刷するデータがありません')
+    return
+  }
+  printCuttingDoneLoading.value = true
+  try {
+    const html = buildCuttingDonePrintHtml()
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
+    }
+  } catch (e) {
+    console.error('切断済リストの印刷に失敗:', e)
+    ElMessage.error('印刷の準備に失敗しました')
+  } finally {
+    printCuttingDoneLoading.value = false
+  }
+}
 watch(
   () => [
     cuttingDoneFilter.period,
@@ -5724,6 +5947,7 @@ interface ChamferingManagementRow {
   mes_production_started_at?: string | null
   mes_production_ended_at?: string | null
   cd?: string | null
+  forming_start_date?: string | null
   created_at?: string | null
 }
 const chamferingManagementList = ref<ChamferingManagementRow[]>([])
@@ -5752,28 +5976,76 @@ interface ChamferingBatchRow {
   developed_length?: number | null
   material_name?: string | null
   management_code?: string | null
+  forming_start_date?: string | null
   cd?: string | null
   has_sw_process?: number | null
   created_at?: string | null
 }
 const chamferingBatchList = ref<ChamferingBatchRow[]>([])
 const chamferingBatchLoading = ref(false)
-/** cutting_management.management_code → start_date / production_day */
+/** cutting_management: id / management_code → start_date / production_day */
 const cuttingFormingStartDateByMgmtCode = ref<Map<string, string>>(new Map())
+const cuttingFormingStartDateByMgmtId = ref<Map<number, string>>(new Map())
 const cuttingProductionDayByMgmtCode = ref<Map<string, string>>(new Map())
 
-function getFormingStartDateDisplay(managementCode?: string | null): string {
-  const code = String(managementCode ?? '').trim()
-  if (!code) return '-'
-  const raw = cuttingFormingStartDateByMgmtCode.value.get(code)
+type FormingStartDateRowRef = {
+  forming_start_date?: string | null
+  cutting_management_id?: number | null
+  management_code?: string | null
+}
+
+function resolveFormingStartDateRaw(source?: string | null | FormingStartDateRowRef): string {
+  if (source != null && typeof source === 'object') {
+    const inline = source.forming_start_date
+    if (inline) return String(inline).slice(0, 10)
+    const id = source.cutting_management_id
+    if (id != null) {
+      const byId = cuttingFormingStartDateByMgmtId.value.get(id)
+      if (byId) return byId
+    }
+    return resolveFormingStartDateRaw(source.management_code)
+  }
+  const code = String(source ?? '').trim()
+  if (!code) return ''
+  return cuttingFormingStartDateByMgmtCode.value.get(code) ?? ''
+}
+
+function getFormingStartDateDisplay(source?: string | null | FormingStartDateRowRef): string {
+  const raw = resolveFormingStartDateRaw(source)
   return raw ? formatDateOnly(raw) || '-' : '-'
 }
 
+type FormingProductionDateRow = FormingStartDateRowRef & {
+  production_day?: string | null
+}
+
+/** 生産日が成型予定日より後（遅延）のとき true */
+function isProductionDayAfterFormingDay(row: FormingProductionDateRow): boolean {
+  const formingDay = resolveFormingStartDateRaw(row)
+  const productionDay = formatDateOnly(String(row.production_day ?? ''))
+  if (!formingDay || !productionDay) return false
+  return productionDay > formingDay
+}
+
+function upsertCuttingFormingStartDateInMap(managementCode: string, startDate: string, cuttingManagementId?: number | null) {
+  const code = managementCode.trim()
+  if (code) {
+    const next = new Map(cuttingFormingStartDateByMgmtCode.value)
+    if (startDate) next.set(code, startDate)
+    else next.delete(code)
+    cuttingFormingStartDateByMgmtCode.value = next
+  }
+  if (cuttingManagementId != null) {
+    const nextById = new Map(cuttingFormingStartDateByMgmtId.value)
+    if (startDate) nextById.set(cuttingManagementId, startDate)
+    else nextById.delete(cuttingManagementId)
+    cuttingFormingStartDateByMgmtId.value = nextById
+  }
+}
+
 /** 面取生産指示書印刷：成型予定日の色分け（当日=赤、翌日=浅赤、それ以外=黒） */
-function getFormingStartDatePrintClass(managementCode?: string | null): string {
-  const code = String(managementCode ?? '').trim()
-  if (!code) return ''
-  const raw = cuttingFormingStartDateByMgmtCode.value.get(code)
+function getFormingStartDatePrintClass(source?: string | null | FormingStartDateRowRef): string {
+  const raw = resolveFormingStartDateRaw(source)
   const formingDay = raw ? formatDateOnly(raw) : ''
   if (!formingDay) return ''
   const today = getTodayString()
@@ -5805,28 +6077,30 @@ async function loadCuttingFormingStartDateMap() {
   try {
     const result = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
       '/api/plan/cutting-management/list',
-      { params: { limit: 5000 } }
+      { params: { limit: 10000 } }
     )
     const rows = (result as any)?.success ? ((result as any).data ?? []) as CuttingManagementRow[] : []
     const startDateMap = new Map<string, string>()
+    const startDateByIdMap = new Map<number, string>()
     const productionDayMap = new Map<string, string>()
     for (const cm of rows) {
       const code = String(cm.management_code ?? '').trim()
+      const sd = cm.start_date ? String(cm.start_date).slice(0, 10) : ''
+      if (cm.id != null && sd) startDateByIdMap.set(cm.id, sd)
       if (!code) continue
-      if (!startDateMap.has(code)) {
-        const sd = cm.start_date ? String(cm.start_date).slice(0, 10) : ''
-        if (sd) startDateMap.set(code, sd)
-      }
+      if (!startDateMap.has(code) && sd) startDateMap.set(code, sd)
       if (!productionDayMap.has(code)) {
         const pd = cm.production_day ? String(cm.production_day).slice(0, 10) : ''
         if (pd) productionDayMap.set(code, pd)
       }
     }
     cuttingFormingStartDateByMgmtCode.value = startDateMap
+    cuttingFormingStartDateByMgmtId.value = startDateByIdMap
     cuttingProductionDayByMgmtCode.value = productionDayMap
   } catch (e) {
     console.error('切断指示参照（成型予定日・切断生産日）の取得に失敗:', e)
     cuttingFormingStartDateByMgmtCode.value = new Map()
+    cuttingFormingStartDateByMgmtId.value = new Map()
     cuttingProductionDayByMgmtCode.value = new Map()
   }
 }
@@ -6364,6 +6638,10 @@ async function saveCuttingDoneCell(row: CuttingManagementRow, prop: 'start_date'
       [prop]: dateStr,
     })
     ;(row as Record<string, unknown>)[prop] = dateStr || null
+    if (prop === 'start_date') {
+      const code = String(row.management_code ?? '').trim()
+      if (code) upsertCuttingFormingStartDateInMap(code, dateStr, row.id)
+    }
     ElMessage.success('更新しました')
   } catch (e) {
     console.error('切断済リストの更新に失敗:', e)
@@ -7614,6 +7892,8 @@ function openChamferingEditDialog(row: ChamferingManagementRow) {
   chamferingEditBaselineQuantity.value = Number.isNaN(baseQty) ? 0 : baseQty
   chamferingEditOriginalMachine.value = (row.chamfering_machine ?? '').trim()
   chamferingEditMachineLocked.value = isChamferingMachineLocked(row)
+  chamferingEditManagementCode.value =
+    row.management_code != null ? String(row.management_code).trim() : ''
   chamferingEditForm.chamfering_machine = chamferingEditOriginalMachine.value
   chamferingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
   chamferingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
@@ -7896,16 +8176,16 @@ function cancelEditChamferingProductionDay() {
 /** 顺延：未完了分を翌日へ分割（当日完成数 + 翌日行を新規） */
 const splitToNextDayDialogVisible = ref(false)
 const splitDialogRow = ref<CuttingManagementRow | null>(null)
-const splitTodayQuantityInput = ref('0')
+const splitTodayQuantityInput = ref('')
 const splitNextDay = ref('')
 const splitToNextDaySubmitting = ref(false)
 /** 順延ダイアログ：当日完成数入力にフォーカス用 */
-const splitTodayQuantityInputRef = ref<{ focus: () => void } | null>(null)
-const chamferingSplitTodayQuantityInputRef = ref<{ focus: () => void } | null>(null)
+const splitTodayQuantityInputRef = ref<HTMLInputElement | null>(null)
+const chamferingSplitTodayQuantityInputRef = ref<HTMLInputElement | null>(null)
 /** 面取指示 順延用 */
 const chamferingSplitDialogVisible = ref(false)
 const chamferingSplitDialogRow = ref<ChamferingManagementRow | null>(null)
-const chamferingSplitTodayQuantityInput = ref('0')
+const chamferingSplitTodayQuantityInput = ref('')
 const chamferingSplitNextDay = ref('')
 const chamferingSplitSubmitting = ref(false)
 
@@ -7926,25 +8206,69 @@ function nextWeekdayFrom(dateStr: string): string {
 }
 
 function onSplitTodayQuantityInput(val: string) {
-  const s = val.replace(/\D/g, '')
-  splitTodayQuantityInput.value = s
+  splitTodayQuantityInput.value = val.replace(/\D/g, '')
+}
+
+function calcSplitRemainderQty(total: number, input: string): number {
+  const trimmed = String(input ?? '').trim()
+  const todayQty = trimmed ? parseInt(trimmed, 10) : 0
+  const parsed = Number.isNaN(todayQty) ? 0 : todayQty
+  return Math.max(0, total - parsed)
+}
+
+function formatSplitRemainderDisplay(total: number, input: string): string {
+  return String(calcSplitRemainderQty(total, input))
+}
+
+function parseSplitTodayQuantityInput(input: string): number | null {
+  const trimmed = String(input ?? '').trim()
+  if (!trimmed) return null
+  const todayQty = parseInt(trimmed, 10)
+  return Number.isNaN(todayQty) ? null : todayQty
+}
+
+function focusSplitTodayQuantityInput(inputEl: HTMLInputElement | null | undefined) {
+  if (!inputEl) return
+  inputEl.focus()
+  inputEl.select()
+}
+
+function onSplitToNextDayDialogOpened() {
+  nextTick(() => focusSplitTodayQuantityInput(splitTodayQuantityInputRef.value))
+}
+
+function onChamferingSplitDialogOpened() {
+  nextTick(() => focusSplitTodayQuantityInput(chamferingSplitTodayQuantityInputRef.value))
+}
+
+function handleSplitTodayQuantityEnter() {
+  if (splitToNextDaySubmitting.value) return
+  void confirmSplitToNextDay()
+}
+
+function handleChamferingSplitTodayQuantityEnter() {
+  if (chamferingSplitSubmitting.value) return
+  void confirmChamferingSplit()
 }
 
 function openSplitToNextDayDialog(row: CuttingManagementRow) {
   const total = row.actual_production_quantity ?? 0
   if (total <= 0) return
   splitDialogRow.value = row
-  splitTodayQuantityInput.value = '0'
+  splitTodayQuantityInput.value = ''
   splitNextDay.value = nextWeekdayFrom(String(row.production_day ?? ''))
   splitToNextDayDialogVisible.value = true
-  nextTick(() => splitTodayQuantityInputRef.value?.focus())
 }
 
 async function confirmSplitToNextDay() {
   const row = splitDialogRow.value
   if (!row || row.id == null) return
-  const todayQty = parseInt(splitTodayQuantityInput.value, 10) || 0
+  const todayQty = parseSplitTodayQuantityInput(splitTodayQuantityInput.value)
   const total = row.actual_production_quantity ?? 0
+  if (todayQty == null) {
+    ElMessage.warning('当日完成数を入力してください')
+    return
+  }
   if (todayQty < 0 || todayQty >= total) {
     ElMessage.warning('当日完成数は 0 以上、かつ現在の生産数より少なく入力してください')
     return
@@ -8056,17 +8380,20 @@ function openChamferingSplitDialog(row: ChamferingManagementRow) {
   const total = row.actual_production_quantity ?? 0
   if (total <= 0) return
   chamferingSplitDialogRow.value = row
-  chamferingSplitTodayQuantityInput.value = '0'
+  chamferingSplitTodayQuantityInput.value = ''
   chamferingSplitNextDay.value = nextWeekdayFrom(String(row.production_day ?? ''))
   chamferingSplitDialogVisible.value = true
-  nextTick(() => chamferingSplitTodayQuantityInputRef.value?.focus())
 }
 
 async function confirmChamferingSplit() {
   const row = chamferingSplitDialogRow.value
   if (!row || row.id == null) return
-  const todayQty = parseInt(chamferingSplitTodayQuantityInput.value, 10) || 0
+  const todayQty = parseSplitTodayQuantityInput(chamferingSplitTodayQuantityInput.value)
   const total = row.actual_production_quantity ?? 0
+  if (todayQty == null) {
+    ElMessage.warning('当日完成数を入力してください')
+    return
+  }
   if (todayQty < 0 || todayQty >= total) {
     ElMessage.warning('当日完成数は 0 以上、かつ現在の生産数より少なく入力してください')
     return
@@ -9646,8 +9973,8 @@ async function issueChamferingInstructionSheet() {
         const qty = r.actual_production_quantity ?? 0
         totalQty += qty
         const noCountDisplay = r.no_count ? 'あり' : '--'
-        const formingStartDisplay = getFormingStartDateDisplay(r.management_code)
-        const formingDateClass = getFormingStartDatePrintClass(r.management_code)
+        const formingStartDisplay = getFormingStartDateDisplay(r)
+        const formingDateClass = getFormingStartDatePrintClass(r)
         return `<tr>
           <td>${escapeHtml(r.cd ?? r.management_code ?? '')}</td>
           <td>${escapeHtml(r.production_line ?? '')}</td>
@@ -10835,6 +11162,12 @@ onUnmounted(() => {
   color: #059669;
   font-weight: 500;
 }
+.chamfering-management-section .cutting-mgmt-td-forming-day.forming-date-overdue,
+.chamfering-management-section .cutting-mgmt-td-production-day.forming-date-overdue:not(.is-editing-production-day) {
+  color: #dc2626 !important;
+  background: #fef2f2 !important;
+  font-weight: 700;
+}
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(4),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 72px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
@@ -11716,48 +12049,212 @@ onUnmounted(() => {
 }
 
 .cutting-done-dialog :deep(.el-dialog__body) {
-  padding: 10px 12px 12px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+  padding: 0;
+  background: linear-gradient(165deg, #f8fbff 0%, #f1f5f9 48%, #eef2ff 100%);
 }
 .cutting-done-dialog :deep(.el-dialog) {
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
-  border: 1px solid #dbeafe;
-  box-shadow: 0 16px 36px rgba(30, 64, 175, 0.14);
+  border: 1px solid #bfdbfe;
+  box-shadow:
+    0 22px 48px rgba(30, 64, 175, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
 }
 .cutting-done-dialog :deep(.el-dialog__header) {
-  margin-right: 0;
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
-}
-.cutting-done-dialog :deep(.el-dialog__title) {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e3a8a;
-  letter-spacing: 0.01em;
+  margin: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #dbeafe;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 55%, #e0e7ff 100%);
 }
 .cutting-done-dialog :deep(.el-dialog__headerbtn) {
-  top: 10px;
-  right: 10px;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  transition: background 0.15s;
 }
-.cutting-done-toolbar {
-  margin-bottom: 8px;
-  padding: 8px 10px 4px;
-  border: 1px solid #dbeafe;
+.cutting-done-dialog :deep(.el-dialog__headerbtn:hover) {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+/* 切断済リスト — ヘッダー */
+.cddl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-right: 28px;
+}
+.cddl-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cddl-header__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85);
+  background: linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  flex-shrink: 0;
 }
-.cutting-done-toolbar .filter-form :deep(.el-form-item) {
+.cddl-header__text {
+  min-width: 0;
+}
+.cddl-header__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+.cddl-header__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+.cddl-header__stats {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cddl-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  line-height: 1.2;
+}
+.cddl-stat__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.cddl-stat__value {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.cddl-stat--count {
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-color: #e2e8f0;
+  color: #334155;
+}
+.cddl-stat--done {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.cddl-stat--qty {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+/* シェル・ツールバー */
+.cddl-shell {
+  padding: 10px 14px 12px;
+}
+.cddl-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.06);
+}
+.cddl-toolbar__filters {
+  flex: 1;
+  min-width: 280px;
+}
+.cddl-toolbar__section-label {
+  display: inline-block;
   margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.cddl-toolbar__section-label--filter {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.cddl-filter-form :deep(.el-form-item) {
+  margin-bottom: 4px;
   margin-right: 10px;
 }
-.cutting-done-toolbar .filter-form :deep(.el-form-item__label) {
+.cddl-filter-form :deep(.el-form-item__label) {
   font-size: 11px;
   font-weight: 600;
-  color: #334155;
+  color: #475569;
   padding-right: 6px;
+}
+.cddl-date-range {
+  width: 260px !important;
+}
+.cddl-product-select {
+  width: 180px;
+}
+.cddl-mgmt-input {
+  width: 168px;
+}
+.cddl-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 18px;
+}
+.cddl-btn-reset {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+.cddl-btn-reset:hover {
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #f8fafc;
+}
+.cddl-btn-print {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-color: #2563eb;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+}
+.cddl-btn-print:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  border-color: #1d4ed8;
+}
+.cddl-btn-print:disabled {
+  box-shadow: none;
+}
+.cddl-filter-form :deep(.el-input__wrapper),
+.cddl-filter-form :deep(.el-select__wrapper),
+.cddl-filter-form :deep(.el-range-editor) {
+  min-height: 28px;
+  border-radius: 7px;
 }
 /* 成型前在庫・時間換算ダイアログ */
 .mpi-dialog :deep(.el-dialog) {
@@ -12282,69 +12779,146 @@ onUnmounted(() => {
 .mpi-panel--right .mpi-group-list {
   gap: 3px;
 }
-.cutting-done-toolbar .filter-form :deep(.el-input__wrapper),
-.cutting-done-toolbar .filter-form :deep(.el-select__wrapper),
-.cutting-done-toolbar .filter-form :deep(.el-range-editor) {
-  min-height: 28px;
-}
-.cutting-done-toolbar .filter-form :deep(.el-button) {
-  min-height: 28px;
-  padding: 0 10px;
-}
 .cutting-done-table-wrap {
   min-height: 200px;
-  border: 1px solid #dbeafe;
-  border-radius: 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
   overflow: hidden;
   background: #fff;
+  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.07);
 }
 .cutting-done-table-wrap :deep(.el-table) {
-  --el-table-header-bg-color: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  --el-table-border-color: #e2e8f0;
+  --el-table-row-hover-bg-color: #f0f9ff;
 }
 .cutting-done-table-wrap :deep(.el-table th.el-table__cell) {
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-  color: #1e3a8a;
   font-size: 11px;
   font-weight: 700;
-  padding: 6px 0;
+  padding: 7px 0;
+  border-bottom: 2px solid #bfdbfe;
+}
+.cutting-done-table-wrap :deep(.el-table th.cddl-th--date) {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+}
+.cutting-done-table-wrap :deep(.el-table th.cddl-th--machine) {
+  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #5b21b6;
+}
+.cutting-done-table-wrap :deep(.el-table th.cddl-th--qty) {
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  color: #0e7490;
+}
+.cutting-done-table-wrap :deep(.el-table th.cddl-th--status) {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  color: #b45309;
+}
+.cutting-done-table-wrap :deep(.el-table th.el-table__cell:not(.cddl-th--date):not(.cddl-th--machine):not(.cddl-th--qty):not(.cddl-th--status)) {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #334155;
 }
 .cutting-done-table-wrap :deep(.el-table td.el-table__cell) {
-  padding: 5px 0;
+  padding: 6px 0;
   font-size: 11px;
+  color: #334155;
 }
 .cutting-done-table-wrap :deep(.el-table--small .cell) {
-  line-height: 1.3;
+  line-height: 1.35;
 }
-.cutting-done-table-wrap .editable-cell {
+.cutting-done-table-wrap :deep(.cddl-row--done td.el-table__cell) {
+  background-color: #f0fdf4 !important;
+}
+.cutting-done-table-wrap :deep(.el-table--striped .cddl-row--done.el-table__row--striped td.el-table__cell) {
+  background-color: #ecfdf5 !important;
+}
+.cutting-done-table-wrap :deep(.cddl-row--pending td.el-table__cell) {
+  background-color: #fff;
+}
+.cutting-done-table-wrap :deep(.el-table--striped .cddl-row--pending.el-table__row--striped td.el-table__cell) {
+  background-color: #fafbfc;
+}
+.cddl-date-cell {
+  font-weight: 600;
+  color: #1e40af;
+  font-variant-numeric: tabular-nums;
+}
+.cddl-machine-cell {
+  font-weight: 600;
+  color: #6d28d9;
+}
+.cddl-qty-cell {
+  font-weight: 700;
+  color: #0369a1;
+  font-variant-numeric: tabular-nums;
+}
+.cddl-mgmt-code {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 10.5px;
+  color: #475569;
+}
+.cddl-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.cddl-status--done {
+  background: linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+.cddl-status--pending {
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  color: #c2410c;
+  border: 1px solid #fdba74;
+}
+.cutting-done-table-wrap .editable-cell,
+.cutting-done-table-wrap .cddl-editable {
   cursor: pointer;
   min-height: 1em;
   display: inline-block;
+  border-radius: 4px;
+  padding: 0 2px;
+  transition: background 0.12s;
 }
-.cutting-done-table-wrap .editable-cell:hover {
-  background: var(--el-fill-color-light);
-  border-radius: 2px;
+.cutting-done-table-wrap .editable-cell:hover,
+.cutting-done-table-wrap .cddl-editable:hover {
+  background: #e0f2fe;
+  color: #0369a1;
 }
 .cutting-done-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
-  padding: 6px 2px 0;
-  border-top: 1px solid #e2e8f0;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 8px 4px 0;
+  border-top: 1px solid #dbeafe;
   font-size: 11px;
-  color: #475569;
+  color: #64748b;
 }
-.cutting-done-footer .total-text {
-  font-weight: 600;
+.cutting-done-footer__hint {
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-style: italic;
 }
 .cutting-done-footer :deep(.el-pagination) {
   --el-pagination-font-size: 11px;
+  --el-pagination-bg-color: #eff6ff;
+  --el-pagination-hover-color: #2563eb;
 }
 .cutting-done-footer :deep(.el-pagination button),
 .cutting-done-footer :deep(.el-pagination .el-pager li) {
-  min-width: 24px;
-  height: 24px;
-  line-height: 24px;
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  border-radius: 6px;
 }
 
 .chamfering-done-dialog :deep(.el-dialog__body) {
@@ -13054,12 +13628,40 @@ onUnmounted(() => {
   color: #ef4444;
   margin-left: 2px;
 }
-.snd-qty-input {
-  width: 100%;
+.snd-qty-badge {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-height: 32px;
+  box-sizing: border-box;
 }
-.snd-input-suffix {
+.snd-qty-badge--today {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+}
+.snd-qty-badge__input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2563eb;
+  outline: none;
+  padding: 0;
+  line-height: 1.2;
+}
+.snd-qty-badge__input::placeholder {
+  color: #93c5fd;
+}
+.snd-qty-badge__unit {
   font-size: 11px;
-  color: #94a3b8;
+  color: #1d4ed8;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 .snd-remainder-badge {
   display: flex;
@@ -13431,7 +14033,40 @@ onUnmounted(() => {
   padding: 0;
 }
 .chamfering-edit-dialog .cutting-edit-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 36px;
   background: linear-gradient(135deg, #047857 0%, #059669 50%, #10b981 100%);
+}
+.chamfering-edit-dialog .cutting-edit-dialog__mgmt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 58%;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 1;
+  min-width: 0;
+}
+.chamfering-edit-dialog .cutting-edit-dialog__mgmt-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.88;
+  white-space: nowrap;
+}
+.chamfering-edit-dialog .cutting-edit-dialog__mgmt-value {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chamfering-edit-dialog .el-dialog__body {
   padding: 14px 16px 16px;

@@ -4645,10 +4645,12 @@ async def get_chamfering_plans_list(
         conditions.append("production_line LIKE :production_line")
         params["production_line"] = f"%{production_line.strip()}%"
 
+    forming_start_sql = _forming_start_date_select_sql("chamfering_plans")
     sql = text(f"""
         SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
                product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-               cutting_length, chamfering_length, developed_length, material_name, management_code, cd, has_sw_process, created_at
+               cutting_length, chamfering_length, developed_length, material_name, management_code, cd, has_sw_process, created_at,
+               {forming_start_sql}
         FROM chamfering_plans
         WHERE {" AND ".join(conditions)}
         ORDER BY production_month DESC, production_day DESC, production_line, production_order
@@ -4698,6 +4700,7 @@ async def get_chamfering_plans_list(
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
             "cd": row.get("cd") or (str(row.get("management_code") or "")[-5:] or None),
+            "forming_start_date": _iso_date_only(row.get("forming_start_date")),
             "has_sw_process": 1 if row.get("has_sw_process") else 0,
             "created_at": _v(row, "created_at"),
         }
@@ -5202,6 +5205,31 @@ async def move_chamfering_management_to_batch(
     return {"success": True, "message": "面取ロット一覧に戻しました"}
 
 
+def _forming_start_date_select_sql(table_alias: str) -> str:
+    """chamfering_management / chamfering_plans 行の成型予定日（cutting_management.start_date 等）を解決。"""
+    a = table_alias
+    return f"""COALESCE(
+  (SELECT cm.start_date FROM cutting_management cm WHERE cm.id = {a}.cutting_management_id LIMIT 1),
+  (SELECT cm.start_date FROM cutting_management cm
+   WHERE {a}.management_code IS NOT NULL AND TRIM({a}.management_code) <> ''
+     AND cm.management_code = {a}.management_code
+   ORDER BY cm.id DESC LIMIT 1),
+  (SELECT ip.start_date FROM instruction_plans ip
+   WHERE {a}.management_code IS NOT NULL AND TRIM({a}.management_code) <> ''
+     AND ip.management_code = {a}.management_code
+   ORDER BY ip.id DESC LIMIT 1)
+) AS forming_start_date"""
+
+
+def _iso_date_only(v) -> Optional[str]:
+    if v is None:
+        return None
+    if hasattr(v, "isoformat"):
+        return v.isoformat()[:10]
+    s = str(v).strip()
+    return s[:10] if len(s) >= 10 else None
+
+
 # ---------- 面取指示（chamfering_management）----------
 @router.get("/plan/chamfering-management/list")
 async def get_chamfering_management_list(
@@ -5247,6 +5275,7 @@ async def get_chamfering_management_list(
     where_clause = " AND ".join(conditions)
     cm_cols = await _get_chamfering_mgmt_columns(db)
     mes_select = _chamfering_mgmt_mes_select_fragment(cm_cols)
+    forming_start_sql = _forming_start_date_select_sql("chamfering_management")
     sql = text(f"""
         SELECT `chamfering_management`.id, `chamfering_management`.cutting_management_id, `chamfering_management`.production_month,
                `chamfering_management`.production_day, `chamfering_management`.production_line, `chamfering_management`.chamfering_machine,
@@ -5256,6 +5285,7 @@ async def get_chamfering_management_list(
                `chamfering_management`.cutting_length, `chamfering_management`.chamfering_length, `chamfering_management`.developed_length,
                `chamfering_management`.material_name, `chamfering_management`.management_code, `chamfering_management`.has_sw_process,
                `chamfering_management`.production_completed_check, `chamfering_management`.no_count, `chamfering_management`.remarks, `chamfering_management`.cd,
+               {forming_start_sql},
                {mes_select}
                `chamfering_management`.created_at,
                `equipment_efficiency`.efficiency_rate AS efficiency_rate
@@ -5335,6 +5365,7 @@ async def get_chamfering_management_list(
             "production_time": production_time,
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
+            "forming_start_date": _iso_date_only(row.get("forming_start_date")),
             "has_sw_process": 1 if row.get("has_sw_process") else 0,
             "production_completed_check": row.get("production_completed_check"),
             "no_count": 1 if row.get("no_count") else 0,
