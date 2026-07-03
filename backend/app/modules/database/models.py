@@ -1,7 +1,8 @@
 """
 production_summarys テーブルモデル（生産実績サマリーデータ）
 """
-from sqlalchemy import Column, Integer, String, Date
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String
+from sqlalchemy.sql import func
 from app.core.database import Base
 
 
@@ -161,3 +162,30 @@ class ProductionSummary(Base):
     pre_outsourcing_scrap = Column(Integer, default=0)
     pre_outsourcing_inventory = Column(Integer, default=0)
     pre_outsourcing_trend = Column(Integer, default=0)
+
+
+class LotForecastAttribution(Base):
+    """管理コード → 日内示归属"""
+    __tablename__ = "lot_forecast_attribution"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    management_code = Column(String(100))
+    aps_batch_plan_id = Column(Integer)
+    instruction_plan_id = Column(Integer)
+    product_cd = Column(String(50), nullable=False)
+    canonical_product_cd = Column(String(50), nullable=False)
+    demand_product_cd = Column(String(50))
+    destination_cd = Column(String(50))
+    process_key = Column(String(32), nullable=False)
+    source_date = Column(Date)
+    forecast_attribution_date = Column(Date)
+    attributed_qty = Column(Integer, nullable=False, default=0)
+    method = Column(String(32), nullable=False, default="FIFO_DEMAND")
+    allocation_rule = Column(String(32))
+    attribution_mode = Column(String(16), nullable=False, default="PLAN")
+    confidence = Column(String(16), nullable=False, default="HIGH")
+    source_entity = Column(String(32))
+    source_entity_id = Column(Integer)
+    run_id = Column(String(64), nullable=False)
+    is_current = Column(Boolean, nullable=False, default=True)
+    computed_at = Column(DateTime, server_default=func.now())

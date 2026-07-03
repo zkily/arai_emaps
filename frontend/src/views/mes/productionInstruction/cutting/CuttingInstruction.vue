@@ -5985,6 +5985,7 @@ const chamferingBatchList = ref<ChamferingBatchRow[]>([])
 const chamferingBatchLoading = ref(false)
 /** cutting_management: id / management_code → start_date / production_day */
 const cuttingFormingStartDateByMgmtCode = ref<Map<string, string>>(new Map())
+
 const cuttingFormingStartDateByMgmtId = ref<Map<number, string>>(new Map())
 const cuttingProductionDayByMgmtCode = ref<Map<string, string>>(new Map())
 

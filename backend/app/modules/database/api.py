@@ -2250,6 +2250,26 @@ async def update_production_summarys_from_order_daily(
 
     await db.commit()
 
+    try:
+        from datetime import timedelta
+        from app.modules.database.lot_forecast_attribution_service import recompute_attribution
+
+        affected_cds = list({str(r.product_cd) for r in agg_rows if r.product_cd})
+        if affected_cds:
+            today = datetime.utcnow().date()
+            await recompute_attribution(
+                db,
+                today - timedelta(days=30),
+                product_cds=affected_cds[:50],
+                modes=["PLAN", "ACTUAL"],
+            )
+            await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
     elapsed = perf_counter() - start_time
     message = f"{updated}件のデータを更新しました（変更なし {unchanged} 件 / スキップ {skipped} 件）"
 

@@ -3649,6 +3649,14 @@ async def move_batch_to_cutting_management(
 
         await db.execute(text("DELETE FROM instruction_plans WHERE id = :plan_id"), {"plan_id": body.plan_id})
         await db.commit()
+        try:
+            from app.modules.database.lot_forecast_attribution_api import (
+                trigger_attribution_recompute_for_product,
+            )
+
+            await trigger_attribution_recompute_for_product(db, product_cd)
+        except Exception:
+            pass
     except HTTPException:
         await db.rollback()
         raise
@@ -4499,6 +4507,16 @@ async def split_cutting_to_next_day(
         """)
         await db.execute(ins, params)
         await db.commit()
+        try:
+            from app.modules.database.lot_forecast_attribution_api import (
+                trigger_attribution_recompute_for_product,
+            )
+
+            pcd = str(r.get("product_cd") or "").strip()
+            if pcd:
+                await trigger_attribution_recompute_for_product(db, pcd)
+        except Exception:
+            pass
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
