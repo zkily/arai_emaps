@@ -2261,7 +2261,6 @@ async def update_production_summarys_from_order_daily(
                 db,
                 today - timedelta(days=30),
                 product_cds=affected_cds[:50],
-                modes=["PLAN", "ACTUAL"],
             )
             await db.commit()
     except Exception:

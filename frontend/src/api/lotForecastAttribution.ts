@@ -106,6 +106,31 @@ export function batchForecastAttributionSummary(management_codes: string[], proc
   )
 }
 
+export function lookupAttributionByManagementCode(
+  management_code: string,
+  process_key = 'molding',
+) {
+  return request.get<LotForecastAttributionListResponse>(`${BASE}/lookup`, {
+    params: { management_code, process_key },
+  }) as unknown as Promise<LotForecastAttributionListResponse>
+}
+
+export function batchLookupLotForecastAttribution(
+  management_codes: string[],
+  process_key = 'molding',
+  prefer_actual = false,
+  aps_batch_plan_ids?: number[],
+  source_date?: string,
+) {
+  return request.post<LotForecastAttributionListResponse>(`${BASE}/batch-lookup`, {
+    management_codes,
+    process_key,
+    prefer_actual,
+    ...(aps_batch_plan_ids?.length ? { aps_batch_plan_ids } : {}),
+    ...(source_date ? { source_date } : {}),
+  }) as unknown as Promise<LotForecastAttributionListResponse>
+}
+
 export function reconcileLotForecastAttribution(params: {
   start_date: string
   end_date: string

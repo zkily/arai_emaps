@@ -42,6 +42,8 @@ POST_MOLDING_PROCESS_KEYS = (
 
 # 内示帰属：成型後在庫を先に消化し、その後 7/1 以降の成型計画で FIFO する基準日
 ATTRIBUTION_ANCHOR_DATE = date(2026, 7, 1)
+# DB 保存用（UI では計画/実績を分けない単一口径）
+UNIFIED_ATTRIBUTION_MODE = "PLAN"
 
 SOURCE_ENTITY_PRODUCTION_SUMMARY = "production_summarys"
 SOURCE_ENTITY_PS_MOLDING_PLAN = "ps_molding_plan"
@@ -182,13 +184,11 @@ def _pipeline_inventory_process_order(post_keys: list[str], pools: dict[str, int
 
 def peg_pipeline_inventory_to_buckets(
     buckets: dict[tuple[str, str, str], int],
-    forecast_map: dict[tuple[str, str, str], int],
     pools: dict[str, int],
     post_keys: list[str],
     anchor_date: date,
     lt_by_process: dict[str, int],
     canonical: str,
-    mode: str,
 ) -> tuple[list[AttributionRow], dict[tuple[str, str, str], int]]:
     """
     成型＋成型後在庫を需要桶へ先に FIFO 充当（管理コードなし・INVENTORY_PEG）。
@@ -242,10 +242,10 @@ def peg_pipeline_inventory_to_buckets(
                         process_key="molding",
                         source_date=anchor_date,
                         forecast_attribution_date=parse_iso_date(ds),
-                        attributed_qty=_forecast_units_for_bucket(forecast_map, k),
+                        attributed_qty=int(alloc),
                         method="INVENTORY_PEG",
                         allocation_rule=_stock_allocation_rule(pk),
-                        attribution_mode=mode,
+                        attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                         confidence="HIGH",
                         source_entity=SOURCE_ENTITY_PRODUCTION_SUMMARY,
                         source_entity_id=None,
@@ -268,19 +268,15 @@ async def load_molding_plan_supplement_lots(
     ps: date,
     pe: date | None,
     existing_lots: list[LotRecord],
-    mode: str,
 ) -> list[LotRecord]:
     """
-    PLAN 時：production_summarys.molding_plan から日別成型計画を補完。
+    production_summarys.molding_plan から日別成型計画を補完。
     同日の管理コードロット合計を差し引き、残りを仮想ロットとして追加。
     """
-    if mode != "PLAN":
-        return existing_lots
-
     by_date: dict[date, int] = defaultdict(int)
     for lot in existing_lots:
         if lot.start_date:
-            by_date[lot.start_date] += _lot_planned_qty(lot, mode)
+            by_date[lot.start_date] += _lot_effective_qty(lot)
 
     ps_filters = [
         ProductionSummary.product_cd == canonical,
@@ -419,17 +415,10 @@ class DemandBucketKey:
 
 @dataclass(frozen=True)
 class DemandBucketContext:
-    """FIFO 消化用需要桶 + order_daily.forecast_units（帰属数表示用）。"""
+    """FIFO 消化用需要桶 + order_daily.forecast_units（参考）。"""
 
     buckets: dict[tuple[str, str, str], int]
     forecast_units: dict[tuple[str, str, str], int]
-
-
-def _forecast_units_for_bucket(
-    forecast_map: dict[tuple[str, str, str], int],
-    bucket_key: tuple[str, str, str],
-) -> int:
-    return max(int(forecast_map.get(bucket_key, 0)), 0)
 
 
 @dataclass
@@ -567,7 +556,7 @@ async def build_demand_buckets(
     键: (destination_cd, demand_product_cd, date_iso)
 
     buckets: FIFO 消化用（確定日以前は confirmed_units、以降は forecast_units）
-    forecast_units: order_daily.forecast_units 合計（帰属数 attributed_qty の表示値）
+    forecast_units: order_daily.forecast_units 合計（需要参考；帰属数は按分本数 alloc）
     """
     variants = await load_product_variants(db, canonical)
     if not variants:
@@ -619,13 +608,22 @@ async def build_demand_buckets(
     return DemandBucketContext(buckets=buckets, forecast_units=forecast_units)
 
 
-def _lot_planned_qty(lot: LotRecord, mode: str) -> int:
-    if mode == "ACTUAL":
-        return max(int(lot.actual_quantity or 0), 0)
+def _lot_effective_qty(lot: LotRecord) -> int:
+    """帰属按分本数：実績があれば実績、なければ計画。"""
+    actual = max(int(lot.actual_quantity or 0), 0)
+    if actual > 0:
+        return actual
     pq = int(lot.planned_quantity or 0)
     if pq > 0:
         return pq
-    return max(int(lot.actual_quantity or 0), 0)
+    return 0
+
+
+def _effective_qty_from_source_row(row: dict) -> int:
+    actual = max(int(row.get("actual_production_quantity") or 0), 0)
+    if actual > 0:
+        return actual
+    return max(int(row.get("planned_quantity") or row.get("production_lot_size") or 0), 0)
 
 
 async def load_lots(
@@ -633,7 +631,6 @@ async def load_lots(
     ps: date,
     pe: date | None,
     product_cds: list[str] | None,
-    mode: str,
 ) -> list[LotRecord]:
     """instruction_plans + cutting_management（aps_batch_plan_id 去重，cutting 优先）。"""
     params: dict[str, Any] = {"ps": ps}
@@ -734,8 +731,6 @@ async def load_lots(
 def run_layer1_fifo(
     lots: list[LotRecord],
     buckets: dict[tuple[str, str, str], int],
-    forecast_map: dict[tuple[str, str, str], int],
-    mode: str,
 ) -> list[AttributionRow]:
     """组内多桶 FIFO + 同日纳入先占比分摊。"""
     remaining = dict(buckets)
@@ -743,7 +738,7 @@ def run_layer1_fifo(
     rows: list[AttributionRow] = []
 
     for lot in lots:
-        qty_left = _lot_planned_qty(lot, mode)
+        qty_left = _lot_effective_qty(lot)
         if qty_left <= 0:
             continue
 
@@ -774,10 +769,10 @@ def run_layer1_fifo(
                         process_key="molding",
                         source_date=lot.start_date,
                         forecast_attribution_date=parse_iso_date(ds),
-                        attributed_qty=_forecast_units_for_bucket(forecast_map, k),
+                        attributed_qty=int(alloc),
                         method="FIFO_DEMAND",
                         allocation_rule="SAME_DAY_PROPORTIONAL",
-                        attribution_mode=mode,
+                        attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                         confidence="HIGH",
                         source_entity=lot.source_entity,
                         source_entity_id=lot.source_entity_id,
@@ -802,7 +797,7 @@ def run_layer1_fifo(
                     attributed_qty=qty_left,
                     method="FIFO_OVERFLOW",
                     allocation_rule="CROSS_DAY_FIFO",
-                    attribution_mode=mode,
+                    attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                     confidence="OVERFLOW",
                     source_entity=lot.source_entity,
                     source_entity_id=lot.source_entity_id,
@@ -834,7 +829,6 @@ def _lot_match_where(aps_ids: list[int], mcs: list[str], *, col_prefix: str = ""
 async def run_layer3_chain(
     db: AsyncSession,
     molding_rows: list[AttributionRow],
-    mode: str,
 ) -> list[AttributionRow]:
     """切断/面取链式继承 molding 归属。"""
     by_lot: dict[str, list[AttributionRow]] = defaultdict(list)
@@ -879,10 +873,7 @@ async def run_layer3_chain(
         if not refs:
             continue
 
-        qty = int(r.get("actual_production_quantity") or 0) if mode == "ACTUAL" else int(
-            r.get("planned_quantity") or r.get("production_lot_size") or 0
-        )
-        if qty <= 0 and mode == "ACTUAL":
+        if _effective_qty_from_source_row(r) <= 0:
             continue
 
         for ref in refs:
@@ -903,7 +894,7 @@ async def run_layer3_chain(
                     attributed_qty=ref.attributed_qty,
                     method="CHAIN_INHERIT",
                     allocation_rule=ref.allocation_rule,
-                    attribution_mode=mode,
+                    attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                     confidence=ref.confidence,
                     source_entity="cutting_management",
                     source_entity_id=int(r["id"]),
@@ -933,10 +924,7 @@ async def run_layer3_chain(
         refs = by_lot.get(key)
         if not refs:
             continue
-        qty = int(r.get("actual_production_quantity") or 0) if mode == "ACTUAL" else int(
-            r.get("planned_quantity") or r.get("production_lot_size") or 0
-        )
-        if qty <= 0 and mode == "ACTUAL":
+        if _effective_qty_from_source_row(r) <= 0:
             continue
         for ref in refs:
             if ref.attributed_qty <= 0 or not ref.forecast_attribution_date:
@@ -958,7 +946,7 @@ async def run_layer3_chain(
                     attributed_qty=ref.attributed_qty,
                     method="CHAIN_INHERIT",
                     allocation_rule=ref.allocation_rule,
-                    attribution_mode=mode,
+                    attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                     confidence=ref.confidence,
                     source_entity="chamfering_management",
                     source_entity_id=int(r["chamfer_id"]),
@@ -972,7 +960,6 @@ async def run_layer2_inventory(
     molding_rows: list[AttributionRow],
     ps: date,
     pe: date | None,
-    mode: str,
 ) -> list[AttributionRow]:
     """成型后工程：LT 反算 source_date，继承 forecast_attribution_date。"""
     out: list[AttributionRow] = []
@@ -1058,13 +1045,30 @@ async def run_layer2_inventory(
                         attributed_qty=ref.attributed_qty,
                         method="INVENTORY_PEG",
                         allocation_rule=ref.allocation_rule,
-                        attribution_mode=mode,
+                        attribution_mode=UNIFIED_ATTRIBUTION_MODE,
                         confidence=conf,
                         source_entity=ref.source_entity,
                         source_entity_id=ref.source_entity_id,
                     )
                 )
     return out
+
+
+async def _mark_stale_all(db: AsyncSession, canonical_cds: list[str]) -> None:
+    """単一口径再計算：当該 canonical の現行行をすべて無効化（PLAN/ACTUAL 両方）。"""
+    if not canonical_cds:
+        return
+    chunk_size = 200
+    for i in range(0, len(canonical_cds), chunk_size):
+        chunk = canonical_cds[i : i + chunk_size]
+        await db.execute(
+            update(LotForecastAttribution)
+            .where(
+                LotForecastAttribution.canonical_product_cd.in_(chunk),
+                LotForecastAttribution.is_current.is_(True),
+            )
+            .values(is_current=False)
+        )
 
 
 async def _mark_stale(db: AsyncSession, canonical_cds: list[str], mode: str) -> None:
@@ -1114,121 +1118,110 @@ async def recompute_attribution(
     product_cds: list[str] | None = None,
     modes: list[str] | None = None,
 ) -> dict[str, Any]:
-    """主入口：指定開始日から先を重算（終了日上限なし。FIFO ロジックは期間指定時と同一）。"""
-    if modes is None:
-        modes = ["PLAN", "ACTUAL"]
+    """主入口：指定開始日から先を単一口径で重算（実績>0 なら実績、否则計画）。"""
+    _ = modes  # 後方互換：modes は受け取るが単一口径のみ計算
     effective_start = attribution_effective_start(start_date)
     run_id = uuid.uuid4().hex
     all_rows: list[LotForecastAttribution] = []
     canonicals_touched: set[str] = set()
 
-    for mode in modes:
-        lots = await load_lots(db, effective_start, None, product_cds, mode)
+    lots = await load_lots(db, effective_start, None, product_cds)
 
-        by_canonical: dict[str, list[LotRecord]] = defaultdict(list)
-        for lot in lots:
-            if lot.start_date and lot.start_date < effective_start:
-                continue
-            by_canonical[lot.canonical_product_cd].append(lot)
+    by_canonical: dict[str, list[LotRecord]] = defaultdict(list)
+    for lot in lots:
+        if lot.start_date and lot.start_date < effective_start:
+            continue
+        by_canonical[lot.canonical_product_cd].append(lot)
 
-        if mode == "PLAN":
-            if product_cds:
-                extra_canonicals = {canonical_product_cd(c) for c in product_cds}
-            else:
-                ps_res = await db.execute(
-                    text(
-                        "SELECT DISTINCT product_cd FROM production_summarys "
-                        "WHERE date >= :ps AND molding_plan > 0"
-                    ),
-                    {"ps": effective_start},
+    if product_cds:
+        extra_canonicals = {canonical_product_cd(c) for c in product_cds}
+    else:
+        ps_res = await db.execute(
+            text(
+                "SELECT DISTINCT product_cd FROM production_summarys "
+                "WHERE date >= :ps AND molding_plan > 0"
+            ),
+            {"ps": effective_start},
+        )
+        extra_canonicals = {
+            canonical_product_cd(str(r[0])) for r in ps_res.all() if r[0]
+        }
+    for c in extra_canonicals:
+        by_canonical.setdefault(c, [])
+
+    mode_rows: list[AttributionRow] = []
+    for canonical, group_lots in by_canonical.items():
+        canonicals_touched.add(canonical)
+        bucket_ctx = await build_demand_buckets(db, canonical, effective_start)
+        remaining_buckets = dict(bucket_ctx.buckets)
+
+        route_ctx = await _load_canonical_route_context(db, canonical)
+        post_keys: list[str] = []
+        if route_ctx:
+            _, post_keys = route_ctx
+        lt_map = await _load_product_lt_map(db, canonical)
+        inv_pools = await load_molding_and_post_inventory_pools(
+            db, canonical, effective_start, post_keys
+        )
+        inv_rows, remaining_buckets = peg_pipeline_inventory_to_buckets(
+            remaining_buckets,
+            inv_pools,
+            post_keys,
+            effective_start,
+            lt_map,
+            canonical,
+        )
+        mode_rows.extend(inv_rows)
+
+        molding_lots = await load_molding_plan_supplement_lots(
+            db, canonical, effective_start, None, group_lots
+        )
+        molding_lots = [
+            lot
+            for lot in molding_lots
+            if lot.start_date is None or lot.start_date >= effective_start
+        ]
+
+        if not remaining_buckets and molding_lots:
+            for lot in molding_lots:
+                qty = _lot_effective_qty(lot)
+                if qty <= 0:
+                    continue
+                mode_rows.append(
+                    AttributionRow(
+                        management_code=lot.management_code,
+                        aps_batch_plan_id=lot.aps_batch_plan_id,
+                        instruction_plan_id=lot.instruction_plan_id,
+                        product_cd=lot.product_cd,
+                        canonical_product_cd=lot.canonical_product_cd,
+                        demand_product_cd=None,
+                        destination_cd=None,
+                        process_key="molding",
+                        source_date=lot.start_date,
+                        forecast_attribution_date=None,
+                        attributed_qty=qty,
+                        method="NO_DEMAND",
+                        allocation_rule=None,
+                        attribution_mode=UNIFIED_ATTRIBUTION_MODE,
+                        confidence="LOW",
+                        source_entity=lot.source_entity,
+                        source_entity_id=lot.source_entity_id,
+                    )
                 )
-                extra_canonicals = {
-                    canonical_product_cd(str(r[0])) for r in ps_res.all() if r[0]
-                }
-            for c in extra_canonicals:
-                by_canonical.setdefault(c, [])
-
-        if not by_canonical:
             continue
 
-        mode_rows: list[AttributionRow] = []
-        for canonical, group_lots in by_canonical.items():
-            canonicals_touched.add(canonical)
-            bucket_ctx = await build_demand_buckets(db, canonical, effective_start)
-            remaining_buckets = dict(bucket_ctx.buckets)
-            forecast_map = bucket_ctx.forecast_units
+        if molding_lots:
+            mode_rows.extend(run_layer1_fifo(molding_lots, remaining_buckets))
 
-            route_ctx = await _load_canonical_route_context(db, canonical)
-            post_keys: list[str] = []
-            if route_ctx:
-                _, post_keys = route_ctx
-            lt_map = await _load_product_lt_map(db, canonical)
-            inv_pools = await load_molding_and_post_inventory_pools(
-                db, canonical, effective_start, post_keys
-            )
-            inv_rows, remaining_buckets = peg_pipeline_inventory_to_buckets(
-                remaining_buckets,
-                forecast_map,
-                inv_pools,
-                post_keys,
-                effective_start,
-                lt_map,
-                canonical,
-                mode,
-            )
-            mode_rows.extend(inv_rows)
+    layer3 = await run_layer3_chain(db, mode_rows)
+    layer2 = await run_layer2_inventory(db, mode_rows, effective_start, None)
+    combined = mode_rows + layer3 + layer2
 
-            molding_lots = await load_molding_plan_supplement_lots(
-                db, canonical, effective_start, None, group_lots, mode
-            )
-            molding_lots = [
-                lot
-                for lot in molding_lots
-                if lot.start_date is None or lot.start_date >= effective_start
-            ]
-
-            if not remaining_buckets and molding_lots:
-                for lot in molding_lots:
-                    qty = _lot_planned_qty(lot, mode)
-                    if qty <= 0:
-                        continue
-                    mode_rows.append(
-                        AttributionRow(
-                            management_code=lot.management_code,
-                            aps_batch_plan_id=lot.aps_batch_plan_id,
-                            instruction_plan_id=lot.instruction_plan_id,
-                            product_cd=lot.product_cd,
-                            canonical_product_cd=lot.canonical_product_cd,
-                            demand_product_cd=None,
-                            destination_cd=None,
-                            process_key="molding",
-                            source_date=lot.start_date,
-                            forecast_attribution_date=None,
-                            attributed_qty=qty,
-                            method="NO_DEMAND",
-                            allocation_rule=None,
-                            attribution_mode=mode,
-                            confidence="LOW",
-                            source_entity=lot.source_entity,
-                            source_entity_id=lot.source_entity_id,
-                        )
-                    )
-                continue
-
-            if molding_lots:
-                mode_rows.extend(
-                    run_layer1_fifo(molding_lots, remaining_buckets, forecast_map, mode)
-                )
-
-        layer3 = await run_layer3_chain(db, mode_rows, mode)
-        layer2 = await run_layer2_inventory(db, mode_rows, effective_start, None, mode)
-        combined = mode_rows + layer3 + layer2
-
-        await _mark_stale(db, list(canonicals_touched), mode)
-        for ar in combined:
-            if ar.attributed_qty <= 0 and ar.method not in ("FIFO_OVERFLOW", "NO_DEMAND"):
-                continue
-            all_rows.append(_row_to_model(ar, run_id))
+    await _mark_stale_all(db, list(canonicals_touched))
+    for ar in combined:
+        if ar.attributed_qty <= 0 and ar.method not in ("FIFO_OVERFLOW", "NO_DEMAND"):
+            continue
+        all_rows.append(_row_to_model(ar, run_id))
 
     if all_rows:
         db.add_all(all_rows)
@@ -1238,7 +1231,7 @@ async def recompute_attribution(
         "run_id": run_id,
         "inserted": len(all_rows),
         "canonical_product_cds": sorted(canonicals_touched),
-        "modes": modes,
+        "modes": [UNIFIED_ATTRIBUTION_MODE],
         "anchor_date": effective_start.isoformat(),
     }
 
@@ -1362,28 +1355,39 @@ async def build_reconcile_report(
 async def query_attributions(
     db: AsyncSession,
     management_code: str | None = None,
+    management_codes: list[str] | None = None,
     aps_batch_plan_id: int | None = None,
+    aps_batch_plan_ids: list[int] | None = None,
     product_cd: str | None = None,
     destination_cd: str | None = None,
+    source_date: date | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     process_key: str | None = None,
     attribution_mode: str | None = None,
-    prefer_actual: bool = True,
+    prefer_actual: bool = False,
     group_by: str = "destination",
     require_management_code: bool = False,
 ) -> list[dict[str, Any]]:
-    """查询归属；prefer_actual 时 ACTUAL 优先于 PLAN。"""
+    """查询归属（単一口径：計画/実績の二重行は再計算後に存在しない）。"""
     q = select(LotForecastAttribution).where(LotForecastAttribution.is_current.is_(True))
     if require_management_code:
         q = q.where(
             LotForecastAttribution.management_code.isnot(None),
             LotForecastAttribution.management_code != "",
         )
-    if management_code:
+    if management_codes:
+        codes = list(dict.fromkeys((c or "").strip() for c in management_codes if (c or "").strip()))
+        if codes:
+            q = q.where(LotForecastAttribution.management_code.in_(codes))
+    elif management_code:
         q = q.where(LotForecastAttribution.management_code == management_code)
     if aps_batch_plan_id is not None:
         q = q.where(LotForecastAttribution.aps_batch_plan_id == aps_batch_plan_id)
+    if aps_batch_plan_ids:
+        bid_list = list(dict.fromkeys(int(x) for x in aps_batch_plan_ids if x is not None))
+        if bid_list:
+            q = q.where(LotForecastAttribution.aps_batch_plan_id.in_(bid_list))
     if product_cd:
         q = q.where(
             (LotForecastAttribution.product_cd == product_cd)
@@ -1391,6 +1395,8 @@ async def query_attributions(
         )
     if destination_cd:
         q = q.where(LotForecastAttribution.destination_cd == destination_cd)
+    if source_date:
+        q = q.where(LotForecastAttribution.source_date == source_date)
     if start_date:
         q = q.where(LotForecastAttribution.forecast_attribution_date >= start_date)
     if end_date:
@@ -1399,8 +1405,16 @@ async def query_attributions(
         q = q.where(LotForecastAttribution.process_key == process_key)
     if attribution_mode:
         q = q.where(LotForecastAttribution.attribution_mode == attribution_mode)
+    elif not prefer_actual:
+        q = q.where(LotForecastAttribution.attribution_mode != "ACTUAL")
 
-    res = await db.execute(q.order_by(LotForecastAttribution.forecast_attribution_date))
+    res = await db.execute(
+        q.order_by(
+            LotForecastAttribution.forecast_attribution_date,
+            LotForecastAttribution.destination_cd,
+            LotForecastAttribution.id,
+        )
+    )
     rows = res.scalars().all()
 
     if prefer_actual and not attribution_mode:
@@ -1424,6 +1438,59 @@ async def query_attributions(
 
     out: list[dict[str, Any]] = []
     for r in sorted(rows, key=lambda x: (x.forecast_attribution_date or date.min, x.id)):
+        out.append(
+            {
+                "id": r.id,
+                "management_code": r.management_code,
+                "aps_batch_plan_id": r.aps_batch_plan_id,
+                "product_cd": r.product_cd,
+                "canonical_product_cd": r.canonical_product_cd,
+                "demand_product_cd": r.demand_product_cd,
+                "destination_cd": r.destination_cd,
+                "process_key": r.process_key,
+                "source_date": _to_date_str(r.source_date),
+                "forecast_attribution_date": _to_date_str(r.forecast_attribution_date),
+                "attributed_qty": r.attributed_qty,
+                "method": r.method,
+                "allocation_rule": r.allocation_rule,
+                "attribution_mode": r.attribution_mode,
+                "confidence": r.confidence,
+                "source_entity": r.source_entity,
+                "source_entity_id": r.source_entity_id,
+                "run_id": r.run_id,
+            }
+        )
+    return out
+
+
+async def lookup_attributions_for_management_codes(
+    db: AsyncSession,
+    management_codes: list[str],
+    *,
+    process_key: str = "molding",
+) -> list[dict[str, Any]]:
+    """スケジューリングボード向け：管理コードで lot_forecast_attribution を直接取得。"""
+    codes = list(dict.fromkeys((c or "").strip() for c in management_codes if (c or "").strip()))
+    if not codes:
+        return []
+    q = (
+        select(LotForecastAttribution)
+        .where(
+            LotForecastAttribution.is_current.is_(True),
+            LotForecastAttribution.management_code.in_(codes),
+            LotForecastAttribution.process_key == process_key,
+            LotForecastAttribution.attribution_mode != "ACTUAL",
+        )
+        .order_by(
+            LotForecastAttribution.forecast_attribution_date,
+            LotForecastAttribution.destination_cd,
+            LotForecastAttribution.id,
+        )
+    )
+    res = await db.execute(q)
+    rows = res.scalars().all()
+    out: list[dict[str, Any]] = []
+    for r in rows:
         out.append(
             {
                 "id": r.id,
@@ -1892,6 +1959,7 @@ async def get_primary_forecast_summary(
         LotForecastAttribution.management_code.in_(management_codes),
         LotForecastAttribution.process_key == process_key,
         LotForecastAttribution.method.in_(("FIFO_DEMAND", "CHAIN_INHERIT")),
+        LotForecastAttribution.attribution_mode != "ACTUAL",
     )
     res = await db.execute(q)
     rows = res.scalars().all()
@@ -1903,8 +1971,7 @@ async def get_primary_forecast_summary(
 
     out: dict[str, dict[str, Any]] = {}
     for mc, items in by_mc.items():
-        actual = [x for x in items if x.attribution_mode == "ACTUAL"]
-        pool = actual if actual else items
+        pool = items
         by_date: dict[str, int] = defaultdict(int)
         dests: dict[str, dict[str, Any]] = {}
         for x in pool:
@@ -1922,7 +1989,6 @@ async def get_primary_forecast_summary(
             "primary_forecast_date": primary_date,
             "by_date": dict(by_date),
             "destinations": list(dests.values()),
-            "attribution_mode": pool[0].attribution_mode if pool else None,
         }
     return out
 

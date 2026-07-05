@@ -19,6 +19,7 @@ from app.modules.database.lot_forecast_attribution_service import (
     build_reconcile_report,
     enrich_attribution_display_names,
     get_primary_forecast_summary,
+    lookup_attributions_for_management_codes,
     query_attributions,
     recompute_attribution,
     upsert_process_status_override,
@@ -30,12 +31,33 @@ router = APIRouter(prefix="/lot-forecast-attribution", tags=["lot-forecast-attri
 class RecomputeBody(BaseModel):
     startDate: str = Field(..., description="YYYY-MM-DD 計算開始日（この日以降を対象、終了日上限なし）")
     productCds: Optional[List[str]] = None
-    modes: Optional[List[str]] = Field(default=None, description="PLAN / ACTUAL")
+    modes: Optional[List[str]] = Field(
+        default=None,
+        description="非推奨・無視されます（単一口径で再計算）",
+    )
 
 
 class BatchSummaryBody(BaseModel):
     management_codes: List[str] = Field(..., min_length=1, max_length=500)
     process_key: str = Field(default="molding")
+
+
+class BatchLookupBody(BaseModel):
+    management_codes: List[str] = Field(..., min_length=1, max_length=200)
+    process_key: str = Field(default="molding")
+    prefer_actual: bool = Field(default=False)
+    include_process_status: bool = Field(
+        default=False,
+        description="true のとき切断/成型完了状態を付与（一覧画面用）",
+    )
+    aps_batch_plan_ids: Optional[List[int]] = Field(
+        default=None,
+        description="指定時は当該 APS ロットに紐づく帰属行のみ",
+    )
+    source_date: Optional[str] = Field(
+        default=None,
+        description="YYYY-MM-DD 生産日（スケジュールセル日付で絞り込み）",
+    )
 
 
 class ProcessStatusOverrideBody(BaseModel):
@@ -61,13 +83,8 @@ async def recompute_lot_forecast_attribution(
     except (ValueError, IndexError) as e:
         raise HTTPException(status_code=400, detail="日付形式は YYYY-MM-DD です") from e
 
-    modes = body.modes or ["PLAN", "ACTUAL"]
-    for m in modes:
-        if m not in ("PLAN", "ACTUAL"):
-            raise HTTPException(status_code=400, detail="modes は PLAN / ACTUAL のみ")
-
     try:
-        result = await recompute_attribution(db, ps, body.productCds, modes)
+        result = await recompute_attribution(db, ps, body.productCds)
         await db.commit()
     except Exception as e:
         await db.rollback()
@@ -88,7 +105,8 @@ async def list_lot_forecast_attribution(
     end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
     process_key: Optional[str] = Query(None),
     attribution_mode: Optional[str] = Query(None),
-    prefer_actual: bool = Query(True),
+    prefer_actual: bool = Query(False),
+    include_process_status: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -108,7 +126,24 @@ async def list_lot_forecast_attribution(
         require_management_code=True,
     )
     await enrich_attribution_display_names(db, rows)
-    await enrich_rows_with_process_status(db, rows)
+    if include_process_status:
+        await enrich_rows_with_process_status(db, rows)
+    return {"code": 200, "data": rows, "total": len(rows)}
+
+
+@router.get("/lookup")
+async def lookup_lot_forecast_attribution(
+    management_code: str = Query(..., min_length=1, max_length=100),
+    process_key: str = Query("molding"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """スケジューリングボード：管理コードで lot_forecast_attribution を直接取得。"""
+    mc = (management_code or "").strip()
+    if not mc:
+        return {"code": 200, "data": [], "total": 0}
+    rows = await lookup_attributions_for_management_codes(db, [mc], process_key=process_key)
+    await enrich_attribution_display_names(db, rows)
     return {"code": 200, "data": rows, "total": len(rows)}
 
 
@@ -166,6 +201,42 @@ async def reconcile_lot_forecast_attribution(
     return {"code": 200, "data": report}
 
 
+@router.post("/batch-lookup")
+async def batch_lookup_lot_forecast_attribution(
+    body: BatchLookupBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """スケジューリングボード等：管理コード一括で内示帰属行を取得。"""
+    codes = list(dict.fromkeys((c or "").strip() for c in body.management_codes if (c or "").strip()))
+    if not codes:
+        return {"code": 200, "data": [], "total": 0}
+    if body.source_date or body.aps_batch_plan_ids or body.prefer_actual:
+        source_date = None
+        if body.source_date:
+            try:
+                source_date = parse_iso_date(body.source_date)
+            except (ValueError, IndexError) as e:
+                raise HTTPException(status_code=400, detail="source_date は YYYY-MM-DD 形式です") from e
+        rows = await query_attributions(
+            db,
+            management_codes=codes,
+            aps_batch_plan_ids=body.aps_batch_plan_ids,
+            source_date=source_date,
+            process_key=body.process_key,
+            prefer_actual=body.prefer_actual,
+            require_management_code=True,
+        )
+    else:
+        rows = await lookup_attributions_for_management_codes(
+            db, codes, process_key=body.process_key
+        )
+    await enrich_attribution_display_names(db, rows)
+    if body.include_process_status:
+        await enrich_rows_with_process_status(db, rows)
+    return {"code": 200, "data": rows, "total": len(rows)}
+
+
 @router.post("/batch-summary")
 async def batch_forecast_summary(
     body: BatchSummaryBody,
@@ -192,7 +263,6 @@ async def trigger_attribution_recompute_for_product(
             db,
             start_date,
             product_cds=[product_cd],
-            modes=["PLAN", "ACTUAL"],
         )
         await db.commit()
     except Exception:

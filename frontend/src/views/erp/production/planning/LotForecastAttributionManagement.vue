@@ -234,19 +234,6 @@
             </template>
           </el-table-column>
           <el-table-column
-            prop="attribution_mode"
-            label="区分"
-            width="72"
-            align="center"
-            header-align="center"
-          >
-            <template #default="{ row }">
-              <span class="lfa-pill" :class="modePillClass(row.attribution_mode)">
-                {{ modeLabel(row.attribution_mode) }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column
             prop="management_code"
             label="管理コード"
             min-width="176"
@@ -481,18 +468,6 @@ const pageRows = computed(() => {
   return filteredRows.value.slice(start, start + pagination.pageSize)
 })
 
-function modeLabel(mode?: string | null): string {
-  if (mode === 'PLAN') return '計画'
-  if (mode === 'ACTUAL') return '実績'
-  return String(mode ?? '—')
-}
-
-function modePillClass(mode?: string | null): string {
-  if (mode === 'PLAN') return 'lfa-pill--plan'
-  if (mode === 'ACTUAL') return 'lfa-pill--actual'
-  return 'lfa-pill--muted'
-}
-
 function formatQty(value?: number | null): string {
   if (value == null || Number.isNaN(Number(value))) return '—'
   return Number(value).toLocaleString('ja-JP')
@@ -632,7 +607,6 @@ async function loadList() {
     const params: Record<string, string | boolean> = {
       start_date: startDate,
       end_date: endDate,
-      prefer_actual: true,
       process_key: DEFAULT_PROCESS_KEY,
     }
     const res = await getLotForecastAttribution(params)
@@ -682,7 +656,6 @@ async function recompute() {
   try {
     const res = await recomputeLotForecastAttribution({
       startDate,
-      modes: ['PLAN', 'ACTUAL'],
     })
     const inserted = res.data?.inserted ?? 0
     ElMessage.success(`再計算が完了しました（${inserted} 件）`)

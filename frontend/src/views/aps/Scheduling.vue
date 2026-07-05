@@ -238,11 +238,12 @@
                 class="numeric-cell data-cell sc-selectable-cell"
                 :class="getMatrixCellClasses(row, date)"
                 :style="getMatrixCellStyle(row, date)"
-                :title="getMatrixCellTitle(row, date)"
+                :title="getMatrixCellNativeTitle(row, date)"
                 role="button"
                 tabindex="0"
                 @mousedown.prevent="onMatrixDateCellMouseDown(row, date, $event)"
-                @mouseenter="onMatrixDateCellMouseEnter(row, date)"
+                @mouseenter="onMatrixCellMouseEnter(row, date, $event)"
+                @mouseleave="onMatrixCellMouseLeave"
               >
                 <span v-if="row.type === 'item' && getMatrixCellDisplayValue(row, date)">
                   {{ getMatrixCellDisplayText(row, date) }}
@@ -265,6 +266,45 @@
         </table>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="attribTooltip.visible"
+        class="sc-attrib-tooltip"
+        :style="{ left: `${attribTooltip.x}px`, top: `${attribTooltip.y}px` }"
+        @mouseenter="onAttribTooltipMouseEnter"
+        @mouseleave="onMatrixCellMouseLeave"
+      >
+        <div class="sc-attrib-tooltip__head">
+          <span class="sc-attrib-tooltip__title">内示帰属</span>
+          <span v-if="attribTooltip.managementCode" class="sc-attrib-tooltip__code sc-attrib-tooltip__code--head">
+            {{ attribTooltip.managementCode }}
+          </span>
+        </div>
+        <div v-if="attribTooltip.loading" class="sc-attrib-tooltip__loading">読込中…</div>
+        <div v-else-if="!attribTooltip.rows.length" class="sc-attrib-tooltip__empty">帰属データなし</div>
+        <table v-else class="sc-attrib-tooltip__table">
+          <thead>
+            <tr>
+              <th>製品名</th>
+              <th>納入先</th>
+              <th>出荷日</th>
+              <th>帰属数</th>
+              <th>生産日</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(ar, idx) in attribTooltip.rows" :key="`${ar.management_code}-${ar.destination_cd}-${idx}`">
+              <td>{{ ar.product_name || ar.product_cd || '—' }}</td>
+              <td>{{ ar.destination_name || '—' }}</td>
+              <td class="sc-attrib-tooltip__ship">{{ formatAttribDate(ar.forecast_attribution_date) }}</td>
+              <td class="sc-attrib-tooltip__num">{{ formatQty(ar.attributed_qty ?? 0) }}</td>
+              <td>{{ formatAttribDate(ar.source_date) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -276,12 +316,17 @@ import type { ProcessItem } from '@/types/master'
 import {
   fetchLines,
   fetchSchedulingGrid,
+  type DailyManagementCodeAlloc,
   type DailyUpstreamTintSeg,
   type LineGridBlock,
   type ProductionLine,
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
+import {
+  lookupAttributionByManagementCode,
+  type LotForecastAttributionRow,
+} from '@/api/lotForecastAttribution'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
 import { guardApsOperation } from '@/utils/apsOperationGuard'
 
@@ -323,6 +368,9 @@ type MatrixItemRow = {
   /** aps_batch_plans がある日セル：ロット別上流状態をスライス按分で合成（背景は inline style） */
   has_aps_batch_plans?: boolean
   daily_upstream_tint?: Record<string, DailyUpstreamTintSeg>
+  /** 日別管理コード（buildMatrixRows で事前解決） */
+  management_code_by_date?: Record<string, string>
+  daily_management_codes?: Record<string, DailyManagementCodeAlloc[]>
 }
 
 type MatrixRow = MatrixGroupRow | MatrixItemRow
@@ -499,11 +547,164 @@ function getMatrixCellTitle(row: MatrixRow, date: string): string {
   return getMatrixCellEntry(row, date)?.title ?? ''
 }
 
+function getMatrixCellNativeTitle(row: MatrixRow, date: string): string {
+  if (row.type === 'item' && getCellManagementCode(row, date)) return ''
+  return getMatrixCellTitle(row, date)
+}
+
+const attribTooltip = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  loading: false,
+  managementCode: '',
+  rows: [] as LotForecastAttributionRow[],
+})
+const ATTRIB_HOVER_DELAY_MS = 180
+const attribCache = new Map<string, LotForecastAttributionRow[]>()
+const attribInflight = new Map<string, Promise<LotForecastAttributionRow[]>>()
+let attribHoverTimer: ReturnType<typeof setTimeout> | null = null
+let attribHideTimer: ReturnType<typeof setTimeout> | null = null
+let attribFetchToken = 0
+let attribTooltipHovered = false
+
+function buildManagementCodeByDate(
+  daily: Record<string, DailyManagementCodeAlloc[]> | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!daily) return out
+  for (const [date, list] of Object.entries(daily)) {
+    const mc = String(list[0]?.management_code ?? '').trim()
+    if (mc) out[date] = mc
+  }
+  return out
+}
+
+function getCellManagementCode(row: MatrixRow, date: string): string {
+  if (row.type !== 'item') return ''
+  return String(row.management_code_by_date?.[date] ?? '').trim()
+}
+
+async function fetchAttributionRows(managementCode: string): Promise<LotForecastAttributionRow[]> {
+  const cached = attribCache.get(managementCode)
+  if (cached) return cached
+
+  const inflight = attribInflight.get(managementCode)
+  if (inflight) return inflight
+
+  const task = lookupAttributionByManagementCode(managementCode, 'molding')
+    .then((res) => {
+      const rows = res.data ?? []
+      attribCache.set(managementCode, rows)
+      return rows
+    })
+    .finally(() => {
+      attribInflight.delete(managementCode)
+    })
+  attribInflight.set(managementCode, task)
+  return task
+}
+
+function formatAttribDate(value?: string | null): string {
+  if (!value) return '—'
+  return String(value).slice(0, 10)
+}
+
+function positionAttribTooltip(ev: MouseEvent) {
+  const pad = 12
+  const width = 520
+  const height = 280
+  let x = ev.clientX + 14
+  let y = ev.clientY + 14
+  if (x + width > window.innerWidth - pad) x = ev.clientX - width - 14
+  if (y + height > window.innerHeight - pad) y = Math.max(pad, ev.clientY - height - 8)
+  attribTooltip.x = Math.max(pad, x)
+  attribTooltip.y = Math.max(pad, y)
+}
+
+function hideAttribTooltip() {
+  attribTooltip.visible = false
+  attribTooltip.loading = false
+  attribTooltip.managementCode = ''
+  attribTooltip.rows = []
+}
+
+function onAttribTooltipMouseEnter() {
+  attribTooltipHovered = true
+  if (attribHideTimer) {
+    clearTimeout(attribHideTimer)
+    attribHideTimer = null
+  }
+}
+
+async function loadAttribTooltip(managementCode: string, ev: MouseEvent) {
+  const token = ++attribFetchToken
+  attribTooltip.visible = true
+  attribTooltip.managementCode = managementCode
+  positionAttribTooltip(ev)
+
+  const cached = attribCache.get(managementCode)
+  if (cached) {
+    attribTooltip.loading = false
+    attribTooltip.rows = cached
+    return
+  }
+
+  attribTooltip.loading = true
+  attribTooltip.rows = []
+  try {
+    const rows = await fetchAttributionRows(managementCode)
+    if (token !== attribFetchToken) return
+    attribTooltip.rows = rows
+  } catch (e) {
+    console.error('内示帰属の取得に失敗:', e)
+    if (token === attribFetchToken) attribTooltip.rows = []
+  } finally {
+    if (token === attribFetchToken) attribTooltip.loading = false
+  }
+}
+
+function onMatrixCellMouseEnter(row: MatrixRow, date: string, ev: MouseEvent) {
+  onMatrixDateCellMouseEnter(row, date)
+  if (attribHideTimer) {
+    clearTimeout(attribHideTimer)
+    attribHideTimer = null
+  }
+  if (row.type !== 'item') return
+  const managementCode = getCellManagementCode(row, date)
+  if (!managementCode) {
+    if (!attribTooltipHovered) hideAttribTooltip()
+    return
+  }
+  if (attribHoverTimer) clearTimeout(attribHoverTimer)
+  if (attribCache.has(managementCode)) {
+    void loadAttribTooltip(managementCode, ev)
+    return
+  }
+  attribHoverTimer = setTimeout(() => {
+    void loadAttribTooltip(managementCode, ev)
+  }, ATTRIB_HOVER_DELAY_MS)
+}
+
+function onMatrixCellMouseLeave() {
+  if (attribHoverTimer) {
+    clearTimeout(attribHoverTimer)
+    attribHoverTimer = null
+  }
+  attribTooltipHovered = false
+  attribHideTimer = setTimeout(() => {
+    hideAttribTooltip()
+  }, 180)
+}
+
 function getMatrixCellClasses(row: MatrixRow, date: string): string | string[] {
   const tone = getMatrixCellEntry(row, date)?.toneClass ?? ''
   const extra: string[] = []
   if (isMatrixCellInRangeSelection(row, date)) extra.push('sc-range-selected')
   if (isMatrixRangeAnchorCell(row, date)) extra.push('sc-range-anchor')
+  if (row.type === 'item' && getCellManagementCode(row, date)) {
+    extra.push('sc-cell-has-attrib')
+  }
   if (!extra.length) return tone
   if (!tone) return extra
   return [tone, ...extra]
@@ -843,6 +1044,8 @@ function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
         actual_daily: r.actual_daily ?? {},
         has_aps_batch_plans: !!r.has_aps_batch_plans,
         daily_upstream_tint: r.daily_upstream_tint ?? {},
+        management_code_by_date: buildManagementCodeByDate(r.daily_management_codes),
+        daily_management_codes: r.daily_management_codes ?? {},
       })
     })
 
@@ -1025,6 +1228,11 @@ async function loadLines() {
   }
 }
 
+function clearAttribCache() {
+  attribCache.clear()
+  attribInflight.clear()
+}
+
 async function loadGrid() {
   const [startDate, endDate] = searchForm.dateRange
   if (!startDate || !endDate) return
@@ -1036,6 +1244,7 @@ async function loadGrid() {
       searchForm.lineId ?? undefined,
       (searchForm.processCd || '').trim() || undefined,
     )
+    clearAttribCache()
     clearMatrixRangeSelection()
   } finally {
     loading.value = false
@@ -1931,6 +2140,119 @@ watch(
     font-size: 20px;
     white-space: normal;
   }
+}
+
+.sc-attrib-tooltip {
+  position: fixed;
+  z-index: 9999;
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(320px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  pointer-events: auto;
+}
+
+.sc-attrib-tooltip__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sc-attrib-tooltip__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.sc-attrib-tooltip__meta {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-attrib-tooltip__loading,
+.sc-attrib-tooltip__empty {
+  font-size: 12px;
+  color: #64748b;
+  padding: 8px 2px;
+}
+
+.sc-attrib-tooltip__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sc-attrib-tooltip__table th,
+.sc-attrib-tooltip__table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sc-attrib-tooltip__table th {
+  color: #475569;
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+.sc-attrib-tooltip__ship {
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.sc-attrib-tooltip__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.sc-attrib-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sc-attrib-pill.is-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.sc-attrib-pill.is-pending {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.sc-attrib-tooltip__code--head {
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.sc-attrib-tooltip__code {
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.matrix-table td.sc-cell-has-attrib {
+  cursor: help;
 }
 </style>
 

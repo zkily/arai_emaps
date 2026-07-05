@@ -234,6 +234,14 @@ class DailyUpstreamTintSeg(BaseModel):
     only_planned: int = Field(0, description="上流未同期・計画のみ")
 
 
+class DailyManagementCodeAlloc(BaseModel):
+    """日セル内の APS ロット按分に対応する管理コード。"""
+
+    management_code: str
+    aps_batch_plan_id: Optional[int] = None
+    allocated_qty: int = Field(0, description="当日セル按分本数")
+
+
 class ScheduleGridRow(BaseModel):
     """一行 = 一個工単 + 展平された日別 planned_qty"""
     id: int
@@ -276,6 +284,10 @@ class ScheduleGridRow(BaseModel):
     daily_upstream_tint: Dict[str, DailyUpstreamTintSeg] = Field(
         default_factory=dict,
         description="日付(YYYY-MM-DD)ごとの上流状態別按分（スライス×ロット窓の比率で daily を分割）",
+    )
+    daily_management_codes: Dict[str, List[DailyManagementCodeAlloc]] = Field(
+        default_factory=dict,
+        description="日付ごとの管理コード按分（ホバーで内示帰属照会用）",
     )
 
 

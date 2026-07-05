@@ -69,6 +69,7 @@ from app.modules.aps.schemas import (
     ProgressLotItem,
     ProductionProgressResponse,
     DailyUpstreamTintSeg,
+    DailyManagementCodeAlloc,
     LineReplanAnchorOut,
     LineReplanAnchorsBatchBody,
     UpstreamApsBatchPlanLinksBody,
@@ -1833,7 +1834,7 @@ async def get_scheduling_grid(
         for sl in slice_detail_result.scalars().all():
             slices_by_sched[int(sl.schedule_id)].append(sl)
 
-    batch_by_sid, lot_upstream_state = await _schedule_batch_upstream_context(db, all_schedule_ids)
+    batch_by_sid, lot_upstream_state, mc_by_lk = await _schedule_batch_upstream_context(db, all_schedule_ids)
 
     blocks: list[LineGridBlock] = []
 
@@ -1970,6 +1971,7 @@ async def get_scheduling_grid(
             batches_here = batch_by_sid.get(sid, [])
             has_aps_batch_plans = len(batches_here) > 0
             daily_upstream_tint: dict[str, DailyUpstreamTintSeg] = {}
+            daily_management_codes: dict[str, list[DailyManagementCodeAlloc]] = {}
             if has_aps_batch_plans:
                 daily_upstream_tint = _daily_upstream_tint_map_for_schedule(
                     daily,
@@ -1978,6 +1980,14 @@ async def get_scheduling_grid(
                     batches_here,
                     slices_by_sched.get(sid, []),
                     lot_upstream_state,
+                )
+                daily_management_codes = _daily_management_codes_for_schedule(
+                    daily,
+                    dates_list,
+                    sid,
+                    batches_here,
+                    slices_by_sched.get(sid, []),
+                    mc_by_lk,
                 )
 
             rows.append(ScheduleGridRow(
@@ -2010,6 +2020,7 @@ async def get_scheduling_grid(
                 upstream_defect_qty_total=int(upstream_defect_total_rows.get(sid, 0) or 0),
                 has_aps_batch_plans=has_aps_batch_plans,
                 daily_upstream_tint=daily_upstream_tint,
+                daily_management_codes=daily_management_codes,
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
             sum_planned_output += int(ps.planned_output_qty or 0)
@@ -4276,14 +4287,99 @@ def _daily_upstream_tint_map_for_schedule(
     return out
 
 
+def _batch_covers_work_date(batch: ApsBatchPlan, work_date: str) -> bool:
+    """ロット計画窓が当該稼働日を含むか（日付のみ比較）。"""
+    b_start = batch.start_date
+    b_end = batch.end_date
+    if b_start is None or b_end is None:
+        return False
+    try:
+        d = date.fromisoformat(str(work_date)[:10])
+    except ValueError:
+        return False
+    sd = b_start.date() if isinstance(b_start, datetime) else b_start
+    ed = b_end.date() if isinstance(b_end, datetime) else b_end
+    return sd <= d <= ed
+
+
+def _daily_management_codes_for_schedule(
+    daily: dict[str, int],
+    dates_list: list[str],
+    aps_schedule_id: int,
+    batches: List[ApsBatchPlan],
+    slices: list,
+    mc_by_lk: dict[str, tuple[str, int]],
+) -> dict[str, list[DailyManagementCodeAlloc]]:
+    """日セル按分に対応する management_code 一覧（内示帰属ホバー照会用）。"""
+    if not batches or not mc_by_lk:
+        return {}
+    sid = int(aps_schedule_id)
+    lot_planned = _lot_planned_daily_from_slices_for_schedule(sid, batches, slices)
+    lot_keys = [_lot_progress_key(sid, str(b.lot_number or "")) for b in batches if int(b.aps_schedule_id) == sid]
+    lot_keys = list(dict.fromkeys(lot_keys))
+    out: dict[str, list[DailyManagementCodeAlloc]] = {}
+    for d in dates_list:
+        t_total = int(daily.get(d, 0) or 0)
+        if t_total <= 0:
+            continue
+        shares = {lk: int(lot_planned.get(lk, {}).get(d, 0) or 0) for lk in lot_keys}
+        active_shares = {lk: w for lk, w in shares.items() if w > 0}
+        if not active_shares:
+            # スライス按分が無い日は、当日を計画窓に含むロットのみ（全ロット一括按分はしない）
+            for b in batches:
+                if int(b.aps_schedule_id) != sid:
+                    continue
+                if not _batch_covers_work_date(b, d):
+                    continue
+                lk0 = _lot_progress_key(sid, str(b.lot_number or ""))
+                active_shares[lk0] = active_shares.get(lk0, 0) + max(
+                    0, int(_batch_display_planned_qty(b))
+                )
+        if not active_shares:
+            continue
+        portions = _split_int_by_weights(t_total, active_shares)
+        merged: dict[str, DailyManagementCodeAlloc] = {}
+        for lk, qty in portions.items():
+            if qty <= 0:
+                continue
+            pair = mc_by_lk.get(lk)
+            if not pair:
+                continue
+            mc, bid = pair
+            mc_norm = str(mc or "").strip()
+            if not mc_norm:
+                continue
+            prev = merged.get(mc_norm)
+            if prev is None:
+                merged[mc_norm] = DailyManagementCodeAlloc(
+                    management_code=mc_norm,
+                    aps_batch_plan_id=int(bid) if bid else None,
+                    allocated_qty=int(qty),
+                )
+            else:
+                merged[mc_norm] = DailyManagementCodeAlloc(
+                    management_code=mc_norm,
+                    aps_batch_plan_id=prev.aps_batch_plan_id,
+                    allocated_qty=int(prev.allocated_qty) + int(qty),
+                )
+        if merged:
+            allocs = list(merged.values())
+            dominant = max(
+                allocs,
+                key=lambda a: (int(a.allocated_qty or 0), str(a.management_code or "")),
+            )
+            out[d] = [dominant]
+    return out
+
+
 async def _schedule_batch_upstream_context(
     db: AsyncSession, schedule_ids: list[int],
-) -> tuple[dict[int, list[ApsBatchPlan]], dict[str, str]]:
+) -> tuple[dict[int, list[ApsBatchPlan]], dict[str, str], dict[str, tuple[str, int]]]:
     """
     各製造指示の APS ロット一覧と、ロットキー別の上流状態（cutting / instruction / planned）。
     """
     if not schedule_ids:
-        return {}, {}
+        return {}, {}, {}
     by_sched: dict[int, list[ApsBatchPlan]] = defaultdict(list)
     batch_result = await db.execute(
         select(ApsBatchPlan).where(ApsBatchPlan.aps_schedule_id.in_(schedule_ids))
@@ -4292,8 +4388,9 @@ async def _schedule_batch_upstream_context(
     for b in line_batches:
         by_sched[int(b.aps_schedule_id)].append(b)
     if not line_batches:
-        return dict(by_sched), {}
+        return dict(by_sched), {}, {}
 
+    mc_by_lk: dict[str, tuple[str, int]] = {}
     bids = [int(b.id) for b in line_batches]
     mc_by_bid: dict[int, str] = {}
     for b in line_batches:
@@ -4306,6 +4403,8 @@ async def _schedule_batch_upstream_context(
             int(b.production_lot_size or 0),
             b.lot_number or "",
         )
+        lk = _lot_progress_key(b.aps_schedule_id, str(b.lot_number or ""))
+        mc_by_lk[lk] = (mc_by_bid[bid], bid)
 
     hit_bids_cm: set[int] = set()
     if bids:
@@ -4403,7 +4502,7 @@ async def _schedule_batch_upstream_context(
         else:
             lot_upstream_state[lk] = "planned"
 
-    return dict(by_sched), lot_upstream_state
+    return dict(by_sched), lot_upstream_state, mc_by_lk
 
 
 # cutting_management ↔ aps_batch_plans の「業務上一致」JOIN（照会・進捗・不良と共通）

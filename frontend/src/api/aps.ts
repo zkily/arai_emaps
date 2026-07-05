@@ -197,6 +197,12 @@ export interface DailyEquipmentReportRow {
 }
 
 /** スケジューリングマトリクス：日セル内の上流状態別按分（本数） */
+export interface DailyManagementCodeAlloc {
+  management_code: string
+  aps_batch_plan_id?: number | null
+  allocated_qty?: number
+}
+
 export interface DailyUpstreamTintSeg {
   in_cutting: number
   in_instruction: number
@@ -240,6 +246,8 @@ export interface ScheduleGridRow {
   has_aps_batch_plans?: boolean
   /** 日別・ロット上流状態別按分（cutting_management / instruction_plans / 計画のみ） */
   daily_upstream_tint?: Record<string, DailyUpstreamTintSeg>
+  /** 日別管理コード按分（内示帰属ホバー照会用） */
+  daily_management_codes?: Record<string, DailyManagementCodeAlloc[]>
 }
 
 export interface LineGridBlock {
