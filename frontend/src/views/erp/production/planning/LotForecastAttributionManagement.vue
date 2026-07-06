@@ -73,9 +73,27 @@
           <div class="lfa-filter-group lfa-filter-group--attrs">
             <span class="lfa-filter-group__tag">条件</span>
             <el-form :model="filter" inline size="small" class="lfa-filter-form">
+              <el-form-item label="納入先">
+                <el-select
+                  v-model="filter.destination_cd"
+                  placeholder="全部"
+                  clearable
+                  filterable
+                  class="lfa-dest-select"
+                  @change="onDestinationFilterChange"
+                >
+                  <el-option label="（全部）" value="" />
+                  <el-option
+                    v-for="opt in destinationOptions"
+                    :key="opt.cd"
+                    :label="opt.name || opt.cd"
+                    :value="opt.cd"
+                  />
+                </el-select>
+              </el-form-item>
               <el-form-item label="製品名">
                 <el-select
-                  v-model="filter.product_name"
+                  v-model="filter.product_cd"
                   placeholder="全部"
                   clearable
                   filterable
@@ -84,24 +102,11 @@
                   @change="onFilterChange"
                 >
                   <el-option label="（全部）" value="" />
-                  <el-option v-for="name in productNameOptions" :key="name" :label="name" :value="name" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="納入先">
-                <el-select
-                  v-model="filter.destination_cd"
-                  placeholder="全部"
-                  clearable
-                  filterable
-                  class="lfa-dest-select"
-                  @change="onFilterChange"
-                >
-                  <el-option label="（全部）" value="" />
                   <el-option
-                    v-for="opt in destinationOptions"
-                    :key="opt.cd"
-                    :label="opt.name || opt.cd"
-                    :value="opt.cd"
+                    v-for="opt in productFilterOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
                   />
                 </el-select>
               </el-form-item>
@@ -171,54 +176,15 @@
           empty-text="該当データがありません"
         >
           <el-table-column
-            prop="destination_name"
-            label="納入先名"
-            width="148"
+            prop="management_code"
+            label="管理コード"
+            min-width="176"
             show-overflow-tooltip
             fixed="left"
-            class-name="lfa-col--dest"
+            class-name="lfa-col--mgmt"
           >
             <template #default="{ row }">
-              <span class="lfa-cell-dest">{{ row.destination_name || '—' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="product_cd" label="製品CD" width="76" show-overflow-tooltip class-name="lfa-col--code">
-            <template #default="{ row }">
-              <span class="lfa-cell-code">{{ row.product_cd || '—' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="product_name" label="製品名" min-width="136" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="lfa-cell-product">{{ row.product_name || '—' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="forecast_attribution_date"
-            label="出荷日"
-            width="104"
-            align="center"
-            header-align="center"
-            class-name="lfa-col--ship"
-          >
-            <template #default="{ row }">
-              <span class="lfa-cell-ship">{{ formatAttributionDate(row.forecast_attribution_date) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="demand_product_cd" label="内示品番" width="80" show-overflow-tooltip class-name="lfa-col--code">
-            <template #default="{ row }">
-              <span class="lfa-cell-code">{{ row.demand_product_cd || '—' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="attributed_qty"
-            label="帰属数"
-            width="80"
-            align="right"
-            header-align="right"
-            class-name="lfa-col--qty"
-          >
-            <template #default="{ row }">
-              <span class="lfa-cell-qty">{{ formatQty(row.attributed_qty) }}</span>
+              <span class="lfa-cell-mgmt">{{ row.management_code || '—' }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -233,15 +199,14 @@
               <span class="lfa-cell-date">{{ formatAttributionDate(row.source_date) }}</span>
             </template>
           </el-table-column>
-          <el-table-column
-            prop="management_code"
-            label="管理コード"
-            min-width="176"
-            show-overflow-tooltip
-            class-name="lfa-col--mgmt"
-          >
+          <el-table-column prop="product_cd" label="製品CD" width="76" show-overflow-tooltip class-name="lfa-col--code">
             <template #default="{ row }">
-              <span class="lfa-cell-mgmt">{{ row.management_code || '—' }}</span>
+              <span class="lfa-cell-code">{{ row.product_cd || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_name" label="製品名" min-width="136" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="lfa-cell-product">{{ row.product_name || '—' }}</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -250,7 +215,6 @@
             width="96"
             align="center"
             header-align="center"
-            fixed="right"
             class-name="lfa-col--status"
           >
             <template #default="{ row }">
@@ -279,7 +243,6 @@
             width="96"
             align="center"
             header-align="center"
-            fixed="right"
             class-name="lfa-col--status"
           >
             <template #default="{ row }">
@@ -300,6 +263,71 @@
                   {{ row.molding_completed ? '完了' : '未完了' }}
                 </span>
               </button>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="predicted_production_completion_date"
+            label="予測生産完了"
+            width="112"
+            align="center"
+            header-align="center"
+            class-name="lfa-col--predicted"
+          >
+            <template #default="{ row }">
+              <span
+                class="lfa-cell-predicted"
+                :title="predictedCompletionTitle(row)"
+              >{{ formatAttributionDate(row.predicted_production_completion_date) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="forecast_attribution_date"
+            label="出荷日"
+            width="104"
+            align="center"
+            header-align="center"
+            class-name="lfa-col--shipping"
+            label-class-name="lfa-col--shipping-header"
+          >
+            <template #default="{ row }">
+              <span class="lfa-cell-ship">{{ formatAttributionDate(row.forecast_attribution_date) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="destination_name"
+            label="納入先名"
+            width="148"
+            show-overflow-tooltip
+            class-name="lfa-col--shipping"
+            label-class-name="lfa-col--shipping-header"
+          >
+            <template #default="{ row }">
+              <span class="lfa-cell-dest">{{ row.destination_name || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="demand_product_cd"
+            label="内示品番"
+            width="80"
+            show-overflow-tooltip
+            class-name="lfa-col--shipping"
+            label-class-name="lfa-col--shipping-header"
+          >
+            <template #default="{ row }">
+              <span class="lfa-cell-code lfa-cell-code--shipping">{{ row.demand_product_cd || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="attributed_qty"
+            label="内示数"
+            width="80"
+            align="right"
+            header-align="right"
+            class-name="lfa-col--shipping"
+            label-class-name="lfa-col--shipping-header"
+          >
+            <template #default="{ row }">
+              <span class="lfa-cell-qty">{{ formatQty(row.attributed_qty) }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -420,7 +448,7 @@ const DEFAULT_PROCESS_KEY = 'molding'
 const filter = reactive({
   period: [] as string[],
   recomputeStartDate: '' as string,
-  product_name: '',
+  product_cd: '',
   destination_cd: '',
   cutting_completed: '' as '' | 'done' | 'pending',
   molding_completed: '' as '' | 'done' | 'pending',
@@ -428,20 +456,54 @@ const filter = reactive({
 
 const pagination = reactive({ currentPage: 1, pageSize: 100 })
 
-const productNameOptions = computed(() => {
-  const set = new Set<string>()
-  rawList.value.forEach((row) => {
-    const name = String(row.product_name ?? '').trim()
-    if (name) set.add(name)
-  })
-  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
+type ProductFilterOption = { value: string; label: string }
+
+/** 行から製品CD候補（内示品番優先・末尾1以外の variant を含む） */
+function collectProductCdsFromRow(row: LotForecastAttributionRow): string[] {
+  const demandCd = String(row.demand_product_cd ?? '').trim()
+  const productCd = String(row.product_cd ?? '').trim()
+  const out: string[] = []
+  if (demandCd) out.push(demandCd)
+  if (productCd && productCd !== demandCd) out.push(productCd)
+  return out
+}
+
+function productLabelForCd(row: LotForecastAttributionRow, cd: string): string {
+  const demandCd = String(row.demand_product_cd ?? '').trim()
+  const name = String(
+    cd === demandCd && row.demand_product_name ? row.demand_product_name : row.product_name ?? '',
+  ).trim()
+  return name ? `${name}（${cd}）` : cd
+}
+
+const productFilterOptions = computed((): ProductFilterOption[] => {
+  const destCd = filter.destination_cd.trim()
+  const byCd = new Map<string, string>()
+
+  for (const row of rawList.value) {
+    if (!String(row.management_code ?? '').trim()) continue
+    if (destCd && String(row.destination_cd ?? '').trim() !== destCd) continue
+
+    for (const cd of collectProductCdsFromRow(row)) {
+      if (!cd || byCd.has(cd)) continue
+      byCd.set(cd, productLabelForCd(row, cd))
+    }
+  }
+
+  return Array.from(byCd.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'ja'))
 })
 
 const filteredRows = computed(() => {
   let rows = rawList.value.filter((r) => String(r.management_code ?? '').trim().length > 0)
-  const productName = filter.product_name.trim()
-  if (productName) {
-    rows = rows.filter((r) => String(r.product_name ?? '').trim() === productName)
+  const productCd = filter.product_cd.trim()
+  if (productCd) {
+    rows = rows.filter(
+      (r) =>
+        String(r.demand_product_cd ?? '').trim() === productCd ||
+        String(r.product_cd ?? '').trim() === productCd,
+    )
   }
   const destCd = filter.destination_cd.trim()
   if (destCd) {
@@ -574,6 +636,15 @@ function formatAttributionDate(value?: string | null): string {
   return String(value).slice(0, 10)
 }
 
+function predictedCompletionTitle(row: LotForecastAttributionRow): string {
+  const lt = row.predicted_production_completion_lt_days
+  const src = formatAttributionDate(row.source_date)
+  if (lt == null || lt <= 0) {
+    return src !== '—' ? `生産日: ${src}` : '生産日または工程LTが未設定です'
+  }
+  return `生産日 ${src} + (成型LT−検査LT) ${lt} 営業日（product_process_bom）`
+}
+
 function initFilterPeriod() {
   const today = dayjs()
   const fiscalYear = today.month() >= 6 ? today.year() : today.year() - 1
@@ -587,6 +658,14 @@ function initFilterPeriod() {
 
 function onFilterChange() {
   pagination.currentPage = 1
+}
+
+function onDestinationFilterChange() {
+  const selected = filter.product_cd.trim()
+  if (selected && !productFilterOptions.value.some((o) => o.value === selected)) {
+    filter.product_cd = ''
+  }
+  onFilterChange()
 }
 
 async function loadDestinationOptions() {
@@ -622,7 +701,7 @@ async function loadList() {
 }
 
 function resetFilter() {
-  filter.product_name = ''
+  filter.product_cd = ''
   filter.destination_cd = ''
   filter.cutting_completed = ''
   filter.molding_completed = ''
@@ -992,9 +1071,48 @@ onMounted(async () => {
 .lfa-table :deep(.lfa-row--cutting-pending:hover td.el-table__cell) {
   background: #fef3c7 !important;
 }
+.lfa-table :deep(th.el-table__cell.lfa-col--shipping-header) {
+  background: #eff6ff !important;
+  color: #1e40af !important;
+  border-bottom-color: #93c5fd !important;
+}
+.lfa-table :deep(td.el-table__cell.lfa-col--shipping) {
+  background: #f0f9ff !important;
+  border-color: #dbeafe !important;
+}
+.lfa-table :deep(.el-table__body tr.el-table__row--striped td.el-table__cell.lfa-col--shipping) {
+  background: #e0f2fe !important;
+}
+.lfa-table :deep(.el-table__body tr:hover > td.el-table__cell.lfa-col--shipping) {
+  background: #bae6fd !important;
+}
+.lfa-table :deep(.lfa-row--molding-done td.el-table__cell.lfa-col--shipping) {
+  background: #e0f2fe !important;
+}
+.lfa-table :deep(.lfa-row--molding-done.el-table__row--striped td.el-table__cell.lfa-col--shipping) {
+  background: #dbeafe !important;
+}
+.lfa-table :deep(.lfa-row--molding-done:hover td.el-table__cell.lfa-col--shipping) {
+  background: #bae6fd !important;
+}
+.lfa-table :deep(.lfa-row--cutting-pending td.el-table__cell.lfa-col--shipping) {
+  background: #f0f9ff !important;
+}
+.lfa-table :deep(.lfa-row--cutting-pending.el-table__row--striped td.el-table__cell.lfa-col--shipping) {
+  background: #e0f2fe !important;
+}
+.lfa-table :deep(.lfa-row--cutting-pending:hover td.el-table__cell.lfa-col--shipping) {
+  background: #bae6fd !important;
+}
+.lfa-table :deep(.lfa-row--manual-override td.el-table__cell.lfa-col--shipping) {
+  background: #e0f2fe !important;
+}
+.lfa-table :deep(.lfa-row--manual-override.el-table__row--striped td.el-table__cell.lfa-col--shipping) {
+  background: #dbeafe !important;
+}
 .lfa-cell-dest {
   font-weight: 600;
-  color: #1c1917;
+  color: #1e3a8a;
 }
 .lfa-cell-product {
   font-weight: 500;
@@ -1012,25 +1130,33 @@ onMounted(async () => {
   color: #44403c;
 }
 .lfa-cell-ship {
-  display: inline-block;
-  min-width: 84px;
-  padding: 2px 6px;
-  border-radius: 6px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #b45309;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  color: #1d4ed8;
+}
+.lfa-cell-code--shipping {
+  color: #1e40af;
 }
 .lfa-cell-date {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: #57534e;
 }
+.lfa-cell-predicted {
+  display: inline-block;
+  min-width: 84px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #7c3aed;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+}
 .lfa-cell-qty {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: #c2410c;
+  color: #1d4ed8;
 }
 .lfa-pill {
   display: inline-block;

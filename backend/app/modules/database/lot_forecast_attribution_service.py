@@ -1585,6 +1585,7 @@ async def enrich_attribution_display_names(
         pcd = str(r.get("product_cd") or "").strip()
         dpcd = str(r.get("demand_product_cd") or "").strip()
         r["product_name"] = product_name_by_cd.get(pcd) or product_name_by_cd.get(dpcd) or None
+        r["demand_product_name"] = product_name_by_cd.get(dpcd) if dpcd else None
         dest = str(r.get("destination_cd") or "").strip()
         r["destination_name"] = dest_name_by_cd.get(dest) or None
 
@@ -2048,6 +2049,78 @@ async def load_process_status_overrides(
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         }
     return out
+
+
+def _forming_inspection_lt_days_from_bom_row(row: dict[str, Any]) -> int:
+    """product_process_bom の forming_process_lt − inspection_process_lt（営業日加算用）。"""
+
+    def _int_or_zero(col: str) -> int:
+        v = row.get(col)
+        if v is None:
+            return 0
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+    return max(0, _int_or_zero("forming_process_lt") - _int_or_zero("inspection_process_lt"))
+
+
+async def _batch_resolve_forming_inspection_lt_days(
+    db: AsyncSession,
+    product_cds: list[str],
+) -> dict[str, int]:
+    """品番 → forming_process_lt − inspection_process_lt（product_process_bom）。"""
+    codes = list(dict.fromkeys((c or "").strip() for c in product_cds if (c or "").strip()))
+    if not codes:
+        return {}
+    placeholders = ", ".join(f":cd{i}" for i in range(len(codes)))
+    sql = (
+        "SELECT product_cd, forming_process_lt, inspection_process_lt "
+        f"FROM product_process_bom WHERE product_cd IN ({placeholders})"
+    )
+    params = {f"cd{i}": cd for i, cd in enumerate(codes)}
+    res = await db.execute(text(sql), params)
+    out: dict[str, int] = {}
+    for row in res.mappings().all():
+        cd = str(row.get("product_cd") or "").strip()
+        if not cd:
+            continue
+        out[cd] = _forming_inspection_lt_days_from_bom_row(dict(row))
+    return out
+
+
+def _row_product_cd_for_bom(row: dict[str, Any]) -> str:
+    """BOM 参照用の品番（canonical 優先、無ければ product_cd）。"""
+    canonical = str(row.get("canonical_product_cd") or "").strip()
+    if canonical:
+        return canonical
+    return str(row.get("product_cd") or "").strip()
+
+
+async def enrich_rows_with_predicted_production_completion(
+    db: AsyncSession,
+    rows: list[dict[str, Any]],
+) -> None:
+    """一覧行に予測生産完了日（生産日 + (forming−inspection) LT・営業日）を付与。"""
+    if not rows:
+        return
+    product_cds = list(
+        dict.fromkeys(_row_product_cd_for_bom(r) for r in rows if _row_product_cd_for_bom(r))
+    )
+    lt_days_map = await _batch_resolve_forming_inspection_lt_days(db, product_cds)
+    for row in rows:
+        product_cd = _row_product_cd_for_bom(row)
+        src_str = _to_date_str(row.get("source_date"))
+        if not product_cd or not src_str:
+            row["predicted_production_completion_date"] = None
+            row["predicted_production_completion_lt_days"] = None
+            continue
+        lt_days = lt_days_map.get(product_cd, 0)
+        src_d = parse_iso_date(src_str)
+        predicted = _add_business_days(src_d, lt_days) if lt_days > 0 else src_d
+        row["predicted_production_completion_date"] = predicted.isoformat()
+        row["predicted_production_completion_lt_days"] = lt_days
 
 
 async def enrich_rows_with_process_status(

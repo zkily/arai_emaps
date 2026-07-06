@@ -15,6 +15,7 @@ export interface LotForecastAttributionRow {
   product_cd?: string
   canonical_product_cd?: string
   product_name?: string | null
+  demand_product_name?: string | null
   demand_product_cd?: string | null
   destination_cd?: string | null
   destination_name?: string | null
@@ -37,6 +38,9 @@ export interface LotForecastAttributionRow {
   status_remark?: string | null
   current_process_key?: string | null
   current_process_label?: string | null
+  /** 生産日 + (forming_process_lt − inspection_process_lt) 営業日 */
+  predicted_production_completion_date?: string | null
+  predicted_production_completion_lt_days?: number | null
 }
 
 export type ProcessStatusTriState = 'auto' | 'done' | 'pending'

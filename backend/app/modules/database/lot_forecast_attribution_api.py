@@ -15,6 +15,7 @@ from app.modules.auth.models import User
 from app.modules.database.forming_daily_plan_service import parse_iso_date
 from app.modules.database.lot_forecast_attribution_service import (
     delete_process_status_override,
+    enrich_rows_with_predicted_production_completion,
     enrich_rows_with_process_status,
     build_reconcile_report,
     enrich_attribution_display_names,
@@ -128,6 +129,7 @@ async def list_lot_forecast_attribution(
     await enrich_attribution_display_names(db, rows)
     if include_process_status:
         await enrich_rows_with_process_status(db, rows)
+        await enrich_rows_with_predicted_production_completion(db, rows)
     return {"code": 200, "data": rows, "total": len(rows)}
 
 
@@ -234,6 +236,7 @@ async def batch_lookup_lot_forecast_attribution(
     await enrich_attribution_display_names(db, rows)
     if body.include_process_status:
         await enrich_rows_with_process_status(db, rows)
+        await enrich_rows_with_predicted_production_completion(db, rows)
     return {"code": 200, "data": rows, "total": len(rows)}
 
 
