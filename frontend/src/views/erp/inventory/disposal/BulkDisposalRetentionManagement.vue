@@ -511,7 +511,7 @@
     <el-dialog
       v-model="notifyDialogVisible"
       title="未処理データ メール通知"
-      width="600px"
+      width="720px"
       destroy-on-close
       append-to-body
       align-center
@@ -525,11 +525,39 @@
           </div>
           <div class="notify-hero-meta">
             <p>合計 <strong>{{ notifyPreview.total_quantity }}</strong> 本の未処理データ</p>
+            <p
+              v-if="notifyPreview.overdue_count && notifyPreview.overdue_count > 0"
+              class="notify-deadline-warn"
+            >
+              ⚠ 処理期限超過 <strong>{{ notifyPreview.overdue_count }}</strong> 件 — メールに重要提醒として記載されます
+            </p>
             <p class="notify-hint">
               {{ selectedRows.length > 0 ? '※ 選択中の未処理行のみ通知' : '※ 全未処理データを通知' }}
             </p>
           </div>
         </div>
+        <el-alert
+          v-if="notifyPreview?.overdue_count && notifyPreview.overdue_count > 0"
+          type="error"
+          :closable="false"
+          show-icon
+          class="notify-alert notify-alert--deadline"
+        >
+          <template #title>
+            重要：処理期限超過の保留品が {{ notifyPreview.overdue_count }} 件含まれます
+          </template>
+          <p class="notify-deadline-detail">
+            送信メールには処理期限を強調表示し、至急対応の提醒を自動挿入します。
+          </p>
+        </el-alert>
+        <el-alert
+          v-else-if="notifyPreview?.has_deadline_notice"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="保留品の処理期限が通知メールに記載されます"
+          class="notify-alert notify-alert--deadline"
+        />
         <el-alert
           v-if="notifyPreview && !notifyPreview.can_send"
           type="warning"
@@ -569,8 +597,20 @@
           <el-table-column prop="occurred_date" label="発生日" width="96" />
           <el-table-column prop="report_category" label="区分" width="84" />
           <el-table-column prop="process_name" label="工程" width="72" />
-          <el-table-column prop="product_name" label="製品名" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" min-width="100" show-overflow-tooltip />
           <el-table-column prop="quantity" label="本数" width="64" align="right" />
+          <el-table-column prop="processing_deadline_date" label="処理期限" width="108" align="center">
+            <template #default="{ row }">
+              <span
+                v-if="row.report_category === '保留品' && row.processing_deadline_date"
+                class="cell-deadline"
+                :class="{ 'cell-deadline--overdue': row.is_overdue }"
+              >
+                <template v-if="row.is_overdue">⚠ </template>{{ row.processing_deadline_date }}
+              </span>
+              <span v-else class="cell-muted">—</span>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <template #footer>
@@ -1832,7 +1872,15 @@ onMounted(async () => {
 
 .notify-hero-meta p { margin: 0 0 4px; font-size: 13px; color: #475569; }
 .notify-hint { font-size: 11px !important; color: #94a3b8 !important; }
+.notify-deadline-warn {
+  margin: 0 0 4px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #dc2626 !important;
+}
+.notify-deadline-detail { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
 .notify-alert { margin-bottom: 10px; }
+.notify-alert--deadline { border-radius: 8px; }
 .notify-form { margin-top: 4px; }
 .notify-table { margin-top: 8px; border-radius: 8px; overflow: hidden; }
 

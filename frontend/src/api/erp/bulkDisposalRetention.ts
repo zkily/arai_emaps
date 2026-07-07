@@ -71,6 +71,8 @@ export interface BulkDisposalRetentionNotifyPreview {
   success: boolean
   item_count: number
   total_quantity: number
+  overdue_count?: number
+  has_deadline_notice?: boolean
   items: BulkDisposalRetentionRecord[]
   email_enabled: boolean
   smtp_configured: boolean
