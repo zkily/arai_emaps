@@ -5,8 +5,10 @@ MES（製造実行システム）APIエンドポイント
 from fastapi import APIRouter, Depends
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
+from app.modules.mes.product_label_api import router as product_label_router
 
 router = APIRouter()
+router.include_router(product_label_router, prefix="/product-label", tags=["製品ラベル発行"])
 
 
 @router.get("/execution")

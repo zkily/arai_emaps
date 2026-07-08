@@ -371,6 +371,30 @@ class ProductMachineConfig(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class ProductLabelConfig(Base):
+    """製品ラベル（現品票）設定（product_label_config）"""
+    __tablename__ = "product_label_config"
+    __table_args__ = ({"mysql_comment": "製品ラベル（現品票）設定テーブル"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), unique=True, nullable=False, index=True)
+    label_product_name = Column(String(100))
+    process_unit_qty = Column(Integer)
+    process_slot_1 = Column(String(50))
+    process_slot_2 = Column(String(50))
+    process_slot_3 = Column(String(50))
+    process_slot_4 = Column(String(50))
+    process_slot_5 = Column(String(50))
+    process_slot_6 = Column(String(50))
+    process_slot_7 = Column(String(50))
+    process_slot_8 = Column(String(50))
+    paper_color = Column(String(30))
+    product_name_color = Column(String(20))
+    upper_slots_locked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class EquipmentEfficiency(Base):
     """設備能率管理（equipment_efficiency）"""
     __tablename__ = "equipment_efficiency"
