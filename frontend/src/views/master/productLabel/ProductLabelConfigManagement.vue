@@ -83,58 +83,92 @@
         size="small"
         class="plc-table"
         :header-cell-style="headerCellStyle"
+        :default-sort="{ prop: 'master_product_name', order: 'ascending' }"
         height="calc(100vh - 210px)"
+        @sort-change="handleSortChange"
       >
         <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" fixed="left" show-overflow-tooltip />
-        <el-table-column prop="master_product_name" label="製品名（マスタ）" :min-width="TABLE_COL.masterName" show-overflow-tooltip />
+        <el-table-column
+          prop="master_product_name"
+          label="製品名（マスタ）"
+          :min-width="TABLE_COL.masterName"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column label="終息" :width="TABLE_COL.discontinued" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.is_discontinued ? 'info' : 'success'" size="small" effect="plain">
+              {{ row.is_discontinued ? '終息' : '現行' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="label_product_name" label="加工用製品名" :min-width="TABLE_COL.labelName" show-overflow-tooltip />
         <el-table-column prop="process_unit_qty" label="入数" :width="TABLE_COL.qty" align="center">
           <template #default="{ row }">{{ row.process_unit_qty ?? '—' }}</template>
         </el-table-column>
+        <el-table-column label="区分" :width="TABLE_COL.supplyType" align="center">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="normalizeSupplyType(row.supply_type) === '外注'"
+              :disabled="!canEdit"
+              size="small"
+              inline-prompt
+              active-text="外注"
+              inactive-text="社内"
+              @change="(val: boolean) => handleSupplyTypeChange(row, val)"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="用紙色" :width="TABLE_COL.paperColor" align="center">
           <template #default="{ row }">
-            <el-select
-              v-if="canEdit"
-              :model-value="row.paper_color || '白'"
-              size="small"
-              class="plc-inline-select"
-              @change="(val: string) => saveInlineField(row, { paper_color: val })"
-            >
-              <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
-                <span class="plc-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
-              </el-option>
-            </el-select>
-            <span v-else class="plc-paper-chip" :style="paperChipStyle(row.paper_color)">
-              {{ row.paper_color || '白' }}
-            </span>
+            <div class="plc-table-color-cell">
+              <span class="plc-paper-chip" :style="paperChipStyle(row.paper_color)">
+                {{ row.paper_color || '白' }}
+              </span>
+              <el-select
+                v-if="canEdit"
+                :model-value="row.paper_color || '白'"
+                size="small"
+                class="plc-table-color-select"
+                @change="(val: string) => saveInlineField(row, { paper_color: val })"
+              >
+                <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
+                  <span class="plc-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
+                </el-option>
+              </el-select>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="製品名色" :width="TABLE_COL.nameColor" align="center">
           <template #default="{ row }">
-            <el-select
-              v-if="canEdit"
-              :model-value="normalizeNameColor(row.product_name_color)"
-              size="small"
-              class="plc-inline-select"
-              @change="(val: string) => saveInlineField(row, { product_name_color: val })"
-            >
-              <el-option
-                v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
-                :key="c.value"
-                :label="c.label"
-                :value="c.value"
+            <div class="plc-table-color-cell">
+              <span class="plc-name-color-preview">
+                <span class="plc-color-dot" :style="{ background: normalizeNameColor(row.product_name_color) }" />
+                <span>{{ productNameColorLabel(row.product_name_color) }}</span>
+              </span>
+              <el-select
+                v-if="canEdit"
+                :model-value="normalizeNameColor(row.product_name_color)"
+                size="small"
+                class="plc-table-color-select"
+                @change="(val: string) => saveInlineField(row, { product_name_color: val })"
               >
-                <span class="plc-opt-color">
-                  <span class="plc-color-dot" :style="{ background: c.value }" />
-                  {{ c.label }}
-                </span>
-              </el-option>
-            </el-select>
-            <span v-else class="plc-color-dot" :style="{ background: normalizeNameColor(row.product_name_color) }" />
+                <el-option
+                  v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
+                  :key="c.value"
+                  :label="c.label"
+                  :value="c.value"
+                >
+                  <span class="plc-opt-color">
+                    <span class="plc-color-dot" :style="{ background: c.value }" />
+                    {{ c.label }}
+                  </span>
+                </el-option>
+              </el-select>
+            </div>
           </template>
         </el-table-column>
-
-        <el-table-column label="上段固定" :width="TABLE_COL.upperLock" align="center" fixed="left">
+        <el-table-column label="固定" :width="TABLE_COL.upperLock" align="center">
           <template #default="{ row }">
             <el-switch
               v-if="canEdit"
@@ -185,6 +219,21 @@
           </el-table-column>
         </el-table-column>
 
+        <el-table-column prop="remark" label="備考" :min-width="TABLE_COL.remark" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-input
+              v-if="canEdit"
+              :model-value="row.remark || ''"
+              size="small"
+              placeholder="備考"
+              maxlength="255"
+              clearable
+              @change="(val: string) => saveInlineField(row, { remark: val?.trim() || null })"
+            />
+            <span v-else>{{ row.remark || '—' }}</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="操作" :width="TABLE_COL.action" fixed="right" align="center">
           <template #default="{ row }">
             <div class="plc-row-actions">
@@ -206,18 +255,15 @@
               >
                 印刷
               </el-button>
-              <el-dropdown v-if="canEdit || canDelete" trigger="click" @command="(cmd: string) => onRowCommand(cmd, row)">
-                <el-button link type="info" size="small">
-                  その他<el-icon class="plc-more-icon"><ArrowDown /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item v-if="canEdit" command="import">マスタ取込</el-dropdown-item>
-                    <el-dropdown-item v-if="canEdit" command="derive">枠導出</el-dropdown-item>
-                    <el-dropdown-item v-if="canDelete" command="delete" divided>削除</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <el-button
+                v-if="canDelete"
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+              >
+                削除
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -289,6 +335,19 @@
               />
               <div class="plc-field-hint">ロットサイズとは別に、現品票の入数を入力してください</div>
             </el-form-item>
+            <el-form-item label="備考" class="plc-span-full">
+              <el-input
+                v-model="form.remark"
+                placeholder="現品票の入数行左側に印字（任意）"
+                maxlength="255"
+                clearable
+              />
+            </el-form-item>
+            <el-form-item label="区分">
+              <el-select v-model="form.supply_type" placeholder="区分を選択" style="width: 100%">
+                <el-option v-for="t in SUPPLY_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="用紙色">
               <el-select v-model="form.paper_color" placeholder="用紙色を選択" style="width: 100%">
                 <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
@@ -316,18 +375,22 @@
 
         <div class="plc-form-section">
           <div class="plc-section-title plc-section-title-row">
-            <span>上段（枠1〜4：成型設備・手直し）</span>
+            <span>8枠（上段・下段）</span>
             <el-switch
               v-model="form.upper_slots_locked"
               inline-prompt
-              active-text="上段固定ON"
-              inactive-text="上段固定OFF"
+              active-text="固定ON"
+              inactive-text="固定OFF"
               size="small"
             />
           </div>
           <p class="plc-field-hint plc-section-hint">
-            上段固定ONのとき、枠導出・一括枠導出・マスタ取込では枠1〜4を上書きしません
+            固定ONのとき、枠導出・一括枠導出・マスタ取込では枠1〜8（上段・下段）を上書きしません
           </p>
+        </div>
+
+        <div class="plc-form-section">
+          <div class="plc-section-title">上段（枠1〜4：成型設備・手直し）</div>
           <div class="plc-form-grid">
             <el-form-item v-for="i in 4" :key="`top-${i}`" :label="slotLabel(i)">
               <el-input
@@ -386,21 +449,68 @@
       <div v-if="printTarget" class="plc-print-body">
         <div class="plc-print-product">
           <span class="plc-print-cd">{{ printTarget.product_cd }}</span>
-          <strong>{{ printTarget.label_product_name || printTarget.master_product_name }}</strong>
+          <div class="plc-print-name-row">
+            <span class="plc-print-name-label">製品名</span>
+            <strong class="plc-print-master-name">{{ printTarget.master_product_name || '—' }}</strong>
+          </div>
+          <div class="plc-print-name-row">
+            <span class="plc-print-name-label">加工用製品名</span>
+            <strong
+              class="plc-print-label-name"
+              :style="{ color: normalizeNameColor(printTarget.product_name_color) }"
+            >
+              {{ printTarget.label_product_name || '—' }}
+            </strong>
+          </div>
         </div>
-        <div class="plc-print-paper">
-          <span>用紙色</span>
-          <span class="plc-print-paper-val" :style="paperChipStyle(printTarget.paper_color)">
-            {{ printTarget.paper_color || '白' }}
-          </span>
+        <div class="plc-print-settings">
+          <div class="plc-print-settings-row">
+            <div class="plc-print-settings-item">
+              <span class="plc-print-settings-label">用紙色</span>
+              <span class="plc-print-paper-val" :style="paperChipStyle(printTarget.paper_color)">
+                {{ printTarget.paper_color || '白' }}
+              </span>
+            </div>
+            <div class="plc-print-settings-item">
+              <span class="plc-print-settings-label">製品名色</span>
+              <span class="plc-print-name-color">
+                <span
+                  class="plc-color-dot"
+                  :style="{ background: normalizeNameColor(printTarget.product_name_color) }"
+                />
+                {{ productNameColorLabel(normalizeNameColor(printTarget.product_name_color)) }}
+              </span>
+            </div>
+          </div>
+          <div class="plc-print-settings-row plc-print-settings-qty">
+            <div v-if="printTarget.remark?.trim()" class="plc-print-remark">
+              <span class="plc-print-settings-label">備考</span>
+              <span class="plc-print-remark-val">{{ printTarget.remark }}</span>
+            </div>
+            <div class="plc-print-qty-block">
+              <span class="plc-print-settings-label">入数</span>
+              <strong class="plc-print-qty-val">{{ printTarget.process_unit_qty ?? '—' }}</strong>
+            </div>
+          </div>
         </div>
         <el-form label-position="top" size="small">
+          <el-form-item label="初マーク">
+            <div class="plc-print-initial-row">
+              <el-switch
+                v-model="printShowInitial"
+                inline-prompt
+                active-text="ON"
+                inactive-text="OFF"
+              />
+              <span class="plc-print-hint">ONで各ラベル左上に赤丸「初」を印字</span>
+            </div>
+          </el-form-item>
           <el-form-item label="印刷枚数（A4用紙）">
             <el-input-number v-model="printPages" :min="1" :max="20" style="width: 140px" />
             <span class="plc-print-hint">1枚あたり 6 ラベル（2列×3行）</span>
           </el-form-item>
         </el-form>
-        <p class="plc-print-note">用紙色をご確認のうえ、印刷を開始してください。</p>
+        <p class="plc-print-note">用紙色・製品名色をご確認のうえ、印刷を開始してください。</p>
       </div>
       <template #footer>
         <div class="plc-dialog-footer">
@@ -418,7 +528,6 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowDown,
   Download,
   Plus,
   PriceTag,
@@ -430,6 +539,7 @@ import {
 import {
   PAPER_COLOR_OPTIONS,
   PRODUCT_NAME_COLOR_OPTIONS,
+  SUPPLY_TYPE_OPTIONS,
   createProductLabelConfig,
   deleteProductLabelConfig,
   deriveAllProductLabelProcesses,
@@ -438,6 +548,7 @@ import {
   fetchProductLabelConfigList,
   fetchProductLabelPrefill,
   importProductLabelFromMaster,
+  productNameColorLabel,
   syncProductLabelFromMaster,
   updateProductLabelConfig,
   type AvailableProductForLabel,
@@ -465,13 +576,16 @@ const headerCellStyle = {
 const TABLE_COL = {
   productCd: 70,
   masterName: 130,
+  discontinued: 64,
   labelName: 150,
   qty: 56,
-  paperColor: 92,
-  nameColor: 100,
+  remark: 120,
+  supplyType: 96,
+  paperColor: 118,
+  nameColor: 128,
   slot: 85,
   upperLock: 88,
-  action: 150,
+  action: 132,
 } as const
 
 const PAPER_CHIP_STYLES: Record<string, { background: string; border: string; color: string }> = {
@@ -498,9 +612,14 @@ const list = ref<ProductLabelConfig[]>([])
 const availableProducts = ref<AvailableProductForLabel[]>([])
 const printTarget = ref<ProductLabelConfig | null>(null)
 const printPages = ref(1)
+const printShowInitial = ref(false)
 
 const filters = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
+const sortConfig = reactive({
+  prop: 'master_product_name',
+  order: 'asc' as 'asc' | 'desc',
+})
 
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -514,6 +633,18 @@ function onKeywordInput() {
 
 function onKeywordClear() {
   if (keywordTimer) clearTimeout(keywordTimer)
+  pagination.page = 1
+  void loadList()
+}
+
+function handleSortChange(payload: { prop: string; order: 'ascending' | 'descending' | null }) {
+  if (!payload.order) {
+    sortConfig.prop = 'master_product_name'
+    sortConfig.order = 'asc'
+  } else {
+    sortConfig.prop = payload.prop || 'master_product_name'
+    sortConfig.order = payload.order === 'descending' ? 'desc' : 'asc'
+  }
   pagination.page = 1
   void loadList()
 }
@@ -533,8 +664,10 @@ const form = reactive({
   product_cd: '',
   label_product_name: '',
   process_unit_qty: null as number | null,
+  remark: '' as string,
   paper_color: '白' as string | null,
   product_name_color: '#000000',
+  supply_type: '社内' as string,
   upper_slots_locked: false,
   process_slots: emptySlots() as (string | null)[],
 })
@@ -553,6 +686,15 @@ function normalizeNameColor(hex?: string | null): string {
   const v = (hex || '#000000').toLowerCase()
   const found = PRODUCT_NAME_COLOR_OPTIONS.find((o) => o.value.toLowerCase() === v)
   return found?.value ?? '#000000'
+}
+
+function normalizeSupplyType(value?: string | null): string {
+  const v = (value || '社内').trim()
+  return SUPPLY_TYPE_OPTIONS.includes(v as (typeof SUPPLY_TYPE_OPTIONS)[number]) ? v : '社内'
+}
+
+function handleSupplyTypeChange(row: ProductLabelConfig, isOutsource: boolean) {
+  void saveInlineField(row, { supply_type: isOutsource ? '外注' : '社内' })
 }
 
 async function saveInlineField(row: ProductLabelConfig, patch: Partial<ProductLabelConfig>) {
@@ -612,9 +754,12 @@ function configToPrintInput(row: ProductLabelConfig): ProductLabelPrintInput {
   const slots = normalizeSlots(row)
   if (!String(slots[3] || '').trim()) slots[3] = '手直し'
   return {
+    product_cd: row.product_cd,
     label_product_name: row.label_product_name || row.master_product_name || '',
     process_unit_qty: row.process_unit_qty ?? null,
+    remark: row.remark ?? null,
     product_name_color: row.product_name_color || '#000000',
+    route_description: row.route_description || '',
     top_row: {
       machine_1: slots[0] || '',
       machine_2: slots[1] || '',
@@ -640,6 +785,7 @@ function applyPrefill(data: ProductLabelPrefill, includeEditable = true) {
   // 入数は手動入力（ロットサイズとは連動しない）
   form.paper_color = data.paper_color || '白'
   form.product_name_color = data.product_name_color || '#000000'
+  form.supply_type = normalizeSupplyType(data.supply_type)
   form.process_slots = [...(data.process_slots || emptySlots())]
   while (form.process_slots.length < 8) form.process_slots.push(null)
 }
@@ -659,6 +805,8 @@ async function loadList() {
       keyword: filters.keyword || undefined,
       page: pagination.page,
       page_size: pagination.pageSize,
+      sort_by: sortConfig.prop,
+      sort_order: sortConfig.order,
     })
     const data = (res as { list?: ProductLabelConfig[]; total?: number }) || res
     list.value = data.list || []
@@ -684,8 +832,10 @@ function resetForm() {
   form.product_cd = ''
   form.label_product_name = ''
   form.process_unit_qty = null
+  form.remark = ''
   form.paper_color = '白'
   form.product_name_color = '#000000'
+  form.supply_type = '社内'
   form.upper_slots_locked = false
   form.process_slots = emptySlots()
   resetMasterInfo()
@@ -729,8 +879,10 @@ function openDialog(row?: ProductLabelConfig) {
     form.product_cd = row.product_cd
     form.label_product_name = row.label_product_name || ''
     form.process_unit_qty = row.process_unit_qty ?? null
+    form.remark = row.remark || ''
     form.paper_color = row.paper_color || '白'
     form.product_name_color = row.product_name_color || '#000000'
+    form.supply_type = normalizeSupplyType(row.supply_type)
     form.upper_slots_locked = !!row.upper_slots_locked
     form.process_slots = [...normalizeSlots(row)]
     masterInfo.product_name = row.master_product_name || ''
@@ -747,6 +899,7 @@ function openPrintDialog(row: ProductLabelConfig) {
   }
   printTarget.value = row
   printPages.value = 1
+  printShowInitial.value = false
   printDialogVisible.value = true
 }
 
@@ -760,7 +913,11 @@ async function doPrint() {
   printing.value = true
   printingCd.value = printTarget.value.product_cd
   try {
-    printProductLabels(input, { pages: printPages.value, copiesPerPage: 6 })
+    await printProductLabels(input, {
+      pages: printPages.value,
+      copiesPerPage: 6,
+      showInitialMark: printShowInitial.value,
+    })
     printDialogVisible.value = false
     ElMessage.success('印刷ダイアログを開きました')
   } catch {
@@ -798,8 +955,10 @@ async function handleSubmit() {
       product_cd: form.product_cd,
       label_product_name: form.label_product_name || null,
       process_unit_qty: form.process_unit_qty,
+      remark: form.remark?.trim() || null,
       paper_color: form.paper_color,
       product_name_color: form.product_name_color,
+      supply_type: form.supply_type,
       upper_slots_locked: form.upper_slots_locked,
       process_slots: form.process_slots.map((s) => (String(s || '').trim() ? String(s).trim() : null)),
     }
@@ -847,10 +1006,10 @@ async function handleUpperLockChange(row: ProductLabelConfig, val: boolean) {
   try {
     await updateProductLabelConfig(row.id, { upper_slots_locked: val })
     row.upper_slots_locked = val
-    ElMessage.success(val ? '上段固定をONにしました' : '上段固定をOFFにしました')
+    ElMessage.success(val ? '固定をONにしました' : '固定をOFFにしました')
   } catch {
     row.upper_slots_locked = prev
-    ElMessage.error('上段固定の更新に失敗しました')
+    ElMessage.error('固定の更新に失敗しました')
   }
 }
 
@@ -858,7 +1017,7 @@ async function handleImportFromMaster(row: ProductLabelConfig) {
   if (!guardMasterOperation(canEdit)) return
   try {
     const lockNote = row.upper_slots_locked
-      ? '上段固定ONのため、枠1〜4は維持され下段のみ更新されます。'
+      ? '固定ONのため、枠1〜8は維持され導出結果は反映されません。'
       : ''
     await ElMessageBox.confirm(
       `製品 ${row.product_cd} の設定を製品マスタと工程ルートで上書き取込します。${lockNote}よろしいですか？`,
@@ -883,7 +1042,7 @@ async function applyDerivedSlots(productCd: string) {
       form.process_slots = [...slots]
       while (form.process_slots.length < 8) form.process_slots.push(null)
       ElMessage.success(
-        data.upper_preserved ? '下段のみ導出しました（上段固定ON）' : '枠を導出しました'
+        data.upper_preserved ? '固定ONのため枠は維持しました' : '枠を導出しました'
       )
     }
   } catch {
@@ -897,7 +1056,7 @@ async function handleDeriveAll() {
   if (!guardMasterOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(
-      '登録済みの全製品について枠を再導出します。上段固定ONの製品は枠1〜4を維持し、下段（枠5〜8）のみ更新します。よろしいですか？',
+      '登録済みの全製品について枠を再導出します。固定ONの製品は枠1〜8を維持し、導出結果は反映されません。よろしいですか？',
       '一括枠導出',
       { type: 'warning' }
     )
@@ -906,7 +1065,7 @@ async function handleDeriveAll() {
     const updated = res?.data?.updated ?? 0
     const skipped = res?.data?.skipped ?? 0
     const upperPreserved = res?.data?.upper_preserved ?? 0
-    const lockNote = upperPreserved > 0 ? `、上段固定 ${upperPreserved} 件` : ''
+    const lockNote = upperPreserved > 0 ? `、固定 ${upperPreserved} 件` : ''
     const suffix = skipped > 0 ? `（スキップ ${skipped} 件）` : ''
     ElMessage.success(`一括導出完了：${updated} 件を更新しました${lockNote}${suffix}`)
     await loadList()
@@ -921,7 +1080,7 @@ async function handleDerive(row: ProductLabelConfig) {
   if (!guardMasterOperation(canEdit)) return
   try {
     const lockNote = row.upper_slots_locked
-      ? '上段固定ONのため、枠1〜4は維持され下段のみ更新されます。'
+      ? '固定ONのため、枠1〜8は維持され導出結果は反映されません。'
       : ''
     await ElMessageBox.confirm(
       `設備能率・工程ルートから8枠を再導出します。${lockNote}よろしいですか？`,
@@ -931,7 +1090,7 @@ async function handleDerive(row: ProductLabelConfig) {
     deriving.value = true
     const res = await deriveProductLabelProcesses(row.product_cd)
     const preserved = (res as ProductLabelConfig & { upper_preserved?: boolean }).upper_preserved
-    ElMessage.success(preserved ? '下段のみ導出しました（上段固定ON）' : '枠を導出しました')
+    ElMessage.success(preserved ? '固定ONのため枠は維持しました' : '枠を導出しました')
     await loadList()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('枠導出に失敗しました')
@@ -959,12 +1118,6 @@ async function handleDelete(row: ProductLabelConfig) {
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('削除に失敗しました')
   }
-}
-
-function onRowCommand(command: string, row: ProductLabelConfig) {
-  if (command === 'import') void handleImportFromMaster(row)
-  else if (command === 'derive') void handleDerive(row)
-  else if (command === 'delete') void handleDelete(row)
 }
 
 onMounted(async () => {
@@ -1127,6 +1280,40 @@ onUnmounted(() => {
   min-height: 26px;
 }
 
+.plc-table-color-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.plc-name-color-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.plc-table-color-select {
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.plc-table-color-select :deep(.el-select__wrapper) {
+  padding: 0 4px;
+  min-height: 24px;
+}
+
+.plc-table-color-select :deep(.el-select__selected-item),
+.plc-table-color-select :deep(.el-select__placeholder) {
+  display: none;
+}
+
 .plc-opt-paper {
   display: inline-block;
   padding: 0 8px;
@@ -1168,11 +1355,6 @@ onUnmounted(() => {
   justify-content: center;
   gap: 2px;
   flex-wrap: nowrap;
-}
-
-.plc-more-icon {
-  margin-left: 2px;
-  font-size: 10px;
 }
 
 /* ダイアログ */
@@ -1296,7 +1478,7 @@ onUnmounted(() => {
 .plc-print-product {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 8px 10px;
   background: #f0fdfa;
   border-radius: 8px;
@@ -1309,16 +1491,104 @@ onUnmounted(() => {
   font-family: monospace;
 }
 
-.plc-print-paper {
+.plc-print-name-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.plc-print-name-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #64748b;
+  min-width: 72px;
+}
+
+.plc-print-master-name {
+  font-size: 14px;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.plc-print-label-name {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.plc-print-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   background: #fffbeb;
   border: 2px solid #fbbf24;
   border-radius: 8px;
+}
+
+.plc-print-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plc-print-settings-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.plc-print-settings-label {
   font-size: 12px;
   color: #92400e;
+  white-space: nowrap;
+}
+
+.plc-print-settings-qty {
+  padding-top: 8px;
+  border-top: 1px dashed #fcd34d;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.plc-print-remark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.plc-print-remark-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+  word-break: break-word;
+}
+
+.plc-print-qty-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.plc-print-name-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.plc-print-qty-val {
+  font-size: 16px;
+  color: #0f766e;
 }
 
 .plc-print-paper-val {
@@ -1332,6 +1602,13 @@ onUnmounted(() => {
   margin-left: 8px;
   font-size: 11px;
   color: #94a3b8;
+}
+
+.plc-print-initial-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .plc-print-note {

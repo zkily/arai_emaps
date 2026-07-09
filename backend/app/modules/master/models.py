@@ -391,6 +391,8 @@ class ProductLabelConfig(Base):
     paper_color = Column(String(30))
     product_name_color = Column(String(20))
     upper_slots_locked = Column(Boolean, default=False, nullable=False)
+    supply_type = Column(String(10), default="社内", nullable=False)
+    remark = Column(String(255))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

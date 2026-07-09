@@ -17,8 +17,10 @@ export interface ProductLabelPreview {
   master_product_name: string
   label_product_name: string
   process_unit_qty: number | null
+  remark?: string | null
   paper_color: string
   product_name_color: string
+  route_description?: string
   top_row: ProductLabelTopRow
   process_slots: (string | null)[]
   print_columns: number

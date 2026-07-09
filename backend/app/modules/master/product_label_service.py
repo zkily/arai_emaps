@@ -13,6 +13,8 @@ from app.modules.master.models import (
     EquipmentEfficiency,
     Machine,
     Process,
+    ProcessRoute,
+    ProcessRouteStep,
     Product,
     ProductLabelConfig,
     ProductRouteStep,
@@ -20,11 +22,14 @@ from app.modules.master.models import (
 
 FORMING_PROCESS_CD = "KT04"
 TOP_ROW_FIXED_COL4 = "手直し"
+SUPPLY_TYPE_INTERNAL = "社内"
+SUPPLY_TYPE_OUTSOURCE = "外注"
+SUPPLY_TYPES = (SUPPLY_TYPE_INTERNAL, SUPPLY_TYPE_OUTSOURCE)
 PRINT_COLUMNS = 4
 PROCESS_SLOT_COUNT = 8
 MOLDING_EQUIPMENT_SLOT_COUNT = 3
 POST_MOLDING_SLOT_COUNT = 4
-UPPER_SLOT_PRESERVE_COUNT = 4
+UPPER_SLOT_PRESERVE_COUNT = 4  # 後方互換（固定ON時は全8枠を維持）
 
 EXCLUDED_PROCESS_NAMES: frozenset[str] = frozenset(
     {
@@ -71,6 +76,16 @@ def is_excluded_process_name(process_name: str | None) -> bool:
     return False
 
 
+def normalize_supply_type(value: str | None) -> str:
+    """区分を正規化（社内/外注のみ）。"""
+    if not value or not str(value).strip():
+        return SUPPLY_TYPE_INTERNAL
+    v = str(value).strip()
+    if v not in SUPPLY_TYPES:
+        raise ValueError("区分は「社内」「外注」のみ指定できます")
+    return v
+
+
 def config_process_slots(config: ProductLabelConfig | None) -> list[str | None]:
     if not config:
         return [None] * PROCESS_SLOT_COUNT
@@ -88,13 +103,13 @@ def merge_derived_slots_preserving_upper(
     derived: list[str | None],
     upper_locked: bool,
 ) -> list[str | None]:
-    """枠導出結果を反映。upper_locked 時は枠1-4（上段）を既存値で維持。"""
+    """枠導出結果を反映。upper_locked（固定ON）時は枠1-8（上段・下段）を既存値で維持。"""
     result = list(derived)
     while len(result) < PROCESS_SLOT_COUNT:
         result.append(None)
     if not upper_locked or not existing:
         return result[:PROCESS_SLOT_COUNT]
-    for i in range(UPPER_SLOT_PRESERVE_COUNT):
+    for i in range(PROCESS_SLOT_COUNT):
         if i < len(existing):
             result[i] = existing[i]
     return result[:PROCESS_SLOT_COUNT]
@@ -105,7 +120,7 @@ async def apply_derived_slots_to_config(
     row: ProductLabelConfig,
     product_cd: str,
 ) -> bool:
-    """工程・設備から8枠を導出して行に反映。戻り値=上段を保護したか。"""
+    """工程・設備から8枠を導出して行に反映。戻り値=固定ONで全枠を保護したか。"""
     existing = config_process_slots(row)
     derived = await derive_label_process_slots(db, product_cd)
     locked = bool(getattr(row, "upper_slots_locked", False))
@@ -114,8 +129,15 @@ async def apply_derived_slots_to_config(
     return locked
 
 
-def config_to_dict(row: ProductLabelConfig, master_product_name: str = "") -> dict:
+def config_to_dict(
+    row: ProductLabelConfig,
+    master_product_name: str = "",
+    route_description: str = "",
+    product_status: str | None = None,
+) -> dict:
     slots = config_process_slots(row)
+    status = (product_status or "active").strip().lower() or "active"
+    is_discontinued = status != "active"
     return {
         "id": row.id,
         "product_cd": row.product_cd,
@@ -127,9 +149,65 @@ def config_to_dict(row: ProductLabelConfig, master_product_name: str = "") -> di
         "paper_color": row.paper_color,
         "product_name_color": row.product_name_color or "#000000",
         "upper_slots_locked": bool(getattr(row, "upper_slots_locked", False)),
+        "supply_type": normalize_supply_type(getattr(row, "supply_type", None)),
+        "route_description": (route_description or "").strip(),
+        "remark": (getattr(row, "remark", None) or "").strip() or None,
+        "product_status": status,
+        "is_discontinued": is_discontinued,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
+
+def normalize_route_description_display(text: str | None) -> str:
+    """工程ルート表示用文字列を整形（区切りを → に統一）。"""
+    if not text or not str(text).strip():
+        return ""
+    normalized = str(text).strip()
+    normalized = re.sub(r"\s*(?:⇒|->|=>|｜|\|)\s*", "→", normalized)
+    normalized = re.sub(r"\s*,\s*", "→", normalized)
+    normalized = re.sub(r"→+", "→", normalized)
+    return normalized.strip()
+
+
+async def resolve_route_description_for_product(
+    db: AsyncSession,
+    product_cd: str,
+    joined_description: str | None = None,
+) -> str:
+    """製品の route_cd から process_routes.description を取得。"""
+    if joined_description and str(joined_description).strip():
+        return normalize_route_description_display(str(joined_description))
+    product = await _get_product(db, product_cd)
+    if not product:
+        return ""
+    route_cd = (product.route_cd or "").strip()
+    if not route_cd:
+        return ""
+    res = await db.execute(
+        select(ProcessRoute.description).where(ProcessRoute.route_cd == route_cd)
+    )
+    desc = res.scalar_one_or_none()
+    if desc and str(desc).strip():
+        return normalize_route_description_display(str(desc))
+    return await _build_route_description_from_steps(db, route_cd)
+
+
+async def _build_route_description_from_steps(db: AsyncSession, route_cd: str) -> str:
+    """description 未設定時は process_route_steps から工程名を連結。"""
+    q = (
+        select(Process.process_name, ProcessRouteStep.process_cd)
+        .join(ProcessRouteStep, ProcessRouteStep.process_cd == Process.process_cd)
+        .where(ProcessRouteStep.route_cd == route_cd)
+        .order_by(ProcessRouteStep.step_no)
+    )
+    res = await db.execute(q)
+    names: list[str] = []
+    for process_name, process_cd in res.all():
+        name = (process_name or process_cd or "").strip()
+        if name:
+            names.append(name)
+    return "→".join(names)
 
 
 async def derive_post_molding_process_names(db: AsyncSession, product_cd: str) -> list[str | None]:
@@ -270,6 +348,7 @@ async def build_label_preview(db: AsyncSession, product_cd: str) -> dict:
     }
 
     label_name = (config.label_product_name if config else None) or product.product_name
+    route_description = await resolve_route_description_for_product(db, product_cd)
 
     return {
         "product_cd": product.product_cd,
@@ -278,6 +357,9 @@ async def build_label_preview(db: AsyncSession, product_cd: str) -> dict:
         "process_unit_qty": config.process_unit_qty if config else None,
         "paper_color": (config.paper_color if config else None) or "白",
         "product_name_color": (config.product_name_color if config else None) or "#000000",
+        "supply_type": normalize_supply_type(getattr(config, "supply_type", None) if config else None),
+        "remark": ((config.remark or "").strip() if config and config.remark else None),
+        "route_description": route_description,
         "top_row": top_row,
         "process_slots": process_slots,
         "print_columns": PRINT_COLUMNS,
@@ -295,12 +377,14 @@ async def build_prefill_from_product(db: AsyncSession, product_cd: str) -> dict:
     label_name = alias or product.product_name or ""
     lot_size = int(product.lot_size) if product.lot_size is not None and int(product.lot_size) > 0 else None
     slots = await derive_label_process_slots(db, product_cd)
+    route_description = await resolve_route_description_for_product(db, product_cd)
 
     return {
         "product_cd": product.product_cd,
         "master_product_name": product.product_name or "",
         "product_alias": alias or None,
         "route_cd": product.route_cd,
+        "route_description": route_description,
         "lot_size": lot_size,
         "unit_per_box": int(product.unit_per_box) if product.unit_per_box is not None else None,
         "label_product_name": label_name,
@@ -308,6 +392,7 @@ async def build_prefill_from_product(db: AsyncSession, product_cd: str) -> dict:
         "process_slots": slots,
         "paper_color": "白",
         "product_name_color": "#000000",
+        "supply_type": SUPPLY_TYPE_INTERNAL,
     }
 
 
@@ -319,6 +404,8 @@ async def apply_product_master_to_config(row: ProductLabelConfig, product: Produ
         row.paper_color = "白"
     if not row.product_name_color:
         row.product_name_color = "#000000"
+    if not getattr(row, "supply_type", None):
+        row.supply_type = SUPPLY_TYPE_INTERNAL
 
 
 async def _get_product(db: AsyncSession, product_cd: str) -> Product | None:

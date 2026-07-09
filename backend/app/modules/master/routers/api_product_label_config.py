@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.auth.operation_deps import require_master_operation
-from app.modules.master.models import Product, ProductLabelConfig
+from app.modules.master.models import Product, ProductLabelConfig, ProcessRoute
 from app.modules.master.product_label_service import (
     PROCESS_SLOT_FIELDS,
     apply_derived_slots_to_config,
@@ -19,6 +19,8 @@ from app.modules.master.product_label_service import (
     config_to_dict,
     derive_label_process_slots,
     is_molding_label_target_product_cd,
+    normalize_supply_type,
+    resolve_route_description_for_product,
     set_config_process_slots,
 )
 
@@ -40,6 +42,32 @@ async def _get_master_name(db: AsyncSession, product_cd: str) -> str:
     return row or ""
 
 
+async def _get_product_status(db: AsyncSession, product_cd: str) -> str:
+    res = await db.execute(select(Product.status).where(Product.product_cd == product_cd))
+    row = res.scalar_one_or_none()
+    return (row or "active").strip().lower() or "active"
+
+
+async def _config_dict_with_route(
+    db: AsyncSession,
+    row: ProductLabelConfig,
+    master_name: str = "",
+    joined_route_description: str | None = None,
+    product_status: str | None = None,
+) -> dict:
+    route_desc = await resolve_route_description_for_product(
+        db, row.product_cd, joined_route_description
+    )
+    if product_status is None:
+        product_status = await _get_product_status(db, row.product_cd)
+    return config_to_dict(
+        row,
+        master_product_name=master_name,
+        route_description=route_desc,
+        product_status=product_status,
+    )
+
+
 def _parse_body(body: dict) -> dict:
     data: dict = {}
     if "product_cd" in body:
@@ -58,6 +86,14 @@ def _parse_body(body: dict) -> dict:
         data["product_name_color"] = (val.strip() if val else None) or None
     if "upper_slots_locked" in body:
         data["upper_slots_locked"] = bool(body.get("upper_slots_locked"))
+    if "supply_type" in body:
+        try:
+            data["supply_type"] = normalize_supply_type(body.get("supply_type"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if "remark" in body:
+        val = body.get("remark")
+        data["remark"] = (val.strip() if val else None) or None
 
     slots = body.get("process_slots")
     if isinstance(slots, list):
@@ -77,12 +113,16 @@ async def list_product_label_config(
     keyword: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    sort_by: Optional[str] = Query("master_product_name"),
+    sort_order: Optional[str] = Query("asc"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    query = select(ProductLabelConfig, Product.product_name).outerjoin(
+    query = select(
+        ProductLabelConfig, Product.product_name, Product.status, ProcessRoute.description
+    ).outerjoin(
         Product, _product_cd_join()
-    )
+    ).outerjoin(ProcessRoute, Product.route_cd == ProcessRoute.route_cd)
     if keyword and keyword.strip():
         k = f"%{keyword.strip()}%"
         query = query.where(
@@ -92,16 +132,33 @@ async def list_product_label_config(
                 Product.product_name.like(k),
             )
         )
-    query = query.order_by(ProductLabelConfig.product_cd)
+
+    order = (sort_order or "asc").strip().lower()
+    descending = order == "desc"
+    sort_field = (sort_by or "master_product_name").strip()
+    if sort_field == "master_product_name":
+        primary = Product.product_name.desc() if descending else Product.product_name.asc()
+    else:
+        primary = ProductLabelConfig.product_cd.desc() if descending else ProductLabelConfig.product_cd.asc()
+    query = query.order_by(primary, ProductLabelConfig.product_cd.asc())
     result = await db.execute(query)
     rows = result.all()
     total = len(rows)
     start = (page - 1) * page_size
     page_rows = rows[start : start + page_size]
-    items = [
-        config_to_dict(config, master_product_name=master_name or "")
-        for config, master_name in page_rows
-    ]
+    items = []
+    for config, master_name, product_status, route_desc_raw in page_rows:
+        route_desc = await resolve_route_description_for_product(
+            db, config.product_cd, route_desc_raw
+        )
+        items.append(
+            config_to_dict(
+                config,
+                master_product_name=master_name or "",
+                route_description=route_desc,
+                product_status=product_status,
+            )
+        )
     return {"list": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -118,7 +175,7 @@ async def get_product_label_config_by_product_cd(
     if not row:
         raise HTTPException(status_code=404, detail="成型用ラベル設定が見つかりません")
     master_name = await _get_master_name(db, product_cd)
-    return config_to_dict(row, master_product_name=master_name)
+    return await _config_dict_with_route(db, row, master_name)
 
 
 @router.get("/available-products")
@@ -227,7 +284,7 @@ async def import_from_product_master(
     await db.commit()
     await db.refresh(row)
     master_name = await _get_master_name(db, product_cd)
-    return config_to_dict(row, master_product_name=master_name)
+    return await _config_dict_with_route(db, row, master_name)
 
 
 @router.get("/{config_id:int}")
@@ -241,7 +298,7 @@ async def get_product_label_config_by_id(
     if not row:
         raise HTTPException(status_code=404, detail="成型用ラベル設定が見つかりません")
     master_name = await _get_master_name(db, row.product_cd)
-    return config_to_dict(row, master_product_name=master_name)
+    return await _config_dict_with_route(db, row, master_name)
 
 
 @router.post("")
@@ -278,6 +335,10 @@ async def create_product_label_config(
         row.product_name_color = data["product_name_color"]
     if "upper_slots_locked" in data:
         row.upper_slots_locked = bool(data["upper_slots_locked"])
+    if "supply_type" in data:
+        row.supply_type = data["supply_type"]
+    if "remark" in data:
+        row.remark = data["remark"]
     if "process_slots" in data:
         set_config_process_slots(row, data["process_slots"])
 
@@ -285,7 +346,7 @@ async def create_product_label_config(
     await db.commit()
     await db.refresh(row)
     master_name = await _get_master_name(db, product_cd)
-    return config_to_dict(row, master_product_name=master_name)
+    return await _config_dict_with_route(db, row, master_name)
 
 
 @router.put("/{config_id:int}")
@@ -311,13 +372,17 @@ async def update_product_label_config(
         row.product_name_color = data["product_name_color"]
     if "upper_slots_locked" in data:
         row.upper_slots_locked = bool(data["upper_slots_locked"])
+    if "supply_type" in data:
+        row.supply_type = data["supply_type"]
+    if "remark" in data:
+        row.remark = data["remark"]
     if "process_slots" in data:
         set_config_process_slots(row, data["process_slots"])
 
     await db.commit()
     await db.refresh(row)
     master_name = await _get_master_name(db, row.product_cd)
-    return config_to_dict(row, master_product_name=master_name)
+    return await _config_dict_with_route(db, row, master_name)
 
 
 @router.delete("/{config_id:int}")
@@ -340,7 +405,7 @@ async def derive_processes_for_all(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_master_operation("edit")),
 ):
-    """登録済みの全成型用ラベル設定について8枠を一括再導出（上段固定ONは枠1-4を維持）。"""
+    """登録済みの全成型用ラベル設定について8枠を一括再導出（固定ONは枠1-8を維持）。"""
     result = await db.execute(
         select(ProductLabelConfig).order_by(ProductLabelConfig.product_cd)
     )
@@ -381,7 +446,7 @@ async def derive_processes_for_product(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_master_operation("edit")),
 ):
-    """工程ルート・設備能率から8枠を再導出し、既存設定があれば更新（上段固定ONは枠1-4を維持）。"""
+    """工程ルート・設備能率から8枠を再導出し、既存設定があれば更新（固定ONは枠1-8を維持）。"""
     product_res = await db.execute(select(Product).where(Product.product_cd == product_cd))
     if not product_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="製品が見つかりません")
@@ -395,7 +460,7 @@ async def derive_processes_for_product(
         await db.commit()
         await db.refresh(row)
         master_name = await _get_master_name(db, product_cd)
-        data = config_to_dict(row, master_product_name=master_name)
+        data = await _config_dict_with_route(db, row, master_name)
         data["upper_preserved"] = upper_preserved
         return data
 

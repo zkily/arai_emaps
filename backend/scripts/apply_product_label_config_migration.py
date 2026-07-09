@@ -51,6 +51,32 @@ def main() -> int:
                     if exc.errno != 1060:
                         raise
             conn.commit()
+        supply_type_path = BACKEND_ROOT / "database/migrations/83_product_label_config_supply_type.sql"
+        if supply_type_path.exists():
+            supply_type_sql = supply_type_path.read_text(encoding="utf-8")
+            for stmt in supply_type_sql.split(";"):
+                stmt = stmt.strip()
+                if not stmt or stmt.startswith("--"):
+                    continue
+                try:
+                    cur.execute(stmt)
+                except mysql.connector.Error as exc:
+                    if exc.errno != 1060:
+                        raise
+            conn.commit()
+        remark_path = BACKEND_ROOT / "database/migrations/84_product_label_config_remark.sql"
+        if remark_path.exists():
+            remark_sql = remark_path.read_text(encoding="utf-8")
+            for stmt in remark_sql.split(";"):
+                stmt = stmt.strip()
+                if not stmt or stmt.startswith("--"):
+                    continue
+                try:
+                    cur.execute(stmt)
+                except mysql.connector.Error as exc:
+                    if exc.errno != 1060:
+                        raise
+            conn.commit()
         cur.execute("SHOW TABLES LIKE 'product_label_config'")
         print("table exists:", cur.fetchone())
         return 0

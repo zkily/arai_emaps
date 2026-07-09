@@ -195,9 +195,11 @@ const printData = computed(() => {
   if (!previewData.value || !displayData.value) return null
   const slots = displayData.value.process_slots || []
   return {
+    product_cd: previewData.value?.product_cd || selectedProductCd.value,
     label_product_name: displayData.value.label_product_name,
     process_unit_qty: displayData.value.process_unit_qty,
     product_name_color: displayData.value.product_name_color,
+    route_description: displayData.value.route_description || '',
     top_row: {
       machine_1: slots[0] || '',
       machine_2: slots[1] || '',
@@ -301,11 +303,15 @@ function openPrintConfirm() {
   printConfirmVisible.value = true
 }
 
-function doPrint() {
+async function doPrint() {
   if (!printData.value) return
-  printProductLabels(printData.value, { pages: printPages.value, copiesPerPage: 6 })
-  printConfirmVisible.value = false
-  ElMessage.success('印刷ダイアログを開きました')
+  try {
+    await printProductLabels(printData.value, { pages: printPages.value, copiesPerPage: 6 })
+    printConfirmVisible.value = false
+    ElMessage.success('印刷ダイアログを開きました')
+  } catch {
+    ElMessage.error('印刷の開始に失敗しました')
+  }
 }
 
 onMounted(() => {

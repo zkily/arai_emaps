@@ -23,6 +23,11 @@ export interface ProductLabelConfig {
   paper_color?: string | null
   product_name_color?: string | null
   upper_slots_locked?: boolean
+  supply_type?: string | null
+  remark?: string | null
+  route_description?: string | null
+  product_status?: string | null
+  is_discontinued?: boolean
   created_at?: string | null
   updated_at?: string | null
 }
@@ -31,6 +36,8 @@ export interface ProductLabelConfigQuery {
   keyword?: string
   page?: number
   page_size?: number
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
 }
 
 export interface AvailableProductForLabel {
@@ -41,10 +48,14 @@ export interface AvailableProductForLabel {
 
 export const PAPER_COLOR_OPTIONS = ['白', '黄', 'ピンク', '緑', '青', 'オレンジ'] as const
 
+export const SUPPLY_TYPE_OPTIONS = ['社内', '外注'] as const
+
 export const PRODUCT_NAME_COLOR_OPTIONS = [
   { label: '黒', value: '#000000' },
   { label: '濃紺', value: '#000080' },
   { label: '赤', value: '#CC0000' },
+  { label: '深黄', value: '#996600' },
+  { label: '深緑', value: '#006400' },
 ] as const
 
 export function productNameColorLabel(hex?: string | null): string {
@@ -91,6 +102,9 @@ export interface ProductLabelPrefill {
   process_slots: (string | null)[]
   paper_color: string
   product_name_color: string
+  supply_type: string
+  route_description?: string
+  remark?: string | null
 }
 
 export function fetchProductLabelPrefill(productCd: string) {
