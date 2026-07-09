@@ -137,3 +137,52 @@ export function deriveAllProductLabelProcesses() {
     data?: { updated: number; skipped: number; upper_preserved: number; total: number }
   }>(`${BASE}/derive-processes-all`)
 }
+
+export interface OutsourceOrderEmailItem {
+  product_cd: string
+  order_qty: number
+  label_product_name?: string | null
+  master_product_name?: string | null
+  process_unit_qty?: number | null
+  paper_color?: string | null
+}
+
+export interface OutsourceOrderEmailAttachment {
+  filename: string
+  mime_type: string
+  content_base64: string
+}
+
+export interface OutsourceOrderEmailPreview {
+  success: boolean
+  item_count: number
+  items: ProductLabelConfig[]
+  email_enabled: boolean
+  smtp_configured: boolean
+  template_subject?: string | null
+  can_send: boolean
+}
+
+export function fetchOutsourceLabelOrders() {
+  return request.get<{ list: ProductLabelConfig[]; total: number }>(`${BASE}/outsource-orders`)
+}
+
+export function fetchOutsourceOrderEmailPreview() {
+  return request.get<OutsourceOrderEmailPreview>(`${BASE}/outsource-order/email-preview`)
+}
+
+export function sendOutsourceOrderEmail(data: {
+  user_ids: number[]
+  items: OutsourceOrderEmailItem[]
+  attachments: OutsourceOrderEmailAttachment[]
+}) {
+  return request.post<{
+    success: boolean
+    message: string
+    item_count: number
+    total_order_qty: number
+    attachment_count: number
+    email_sent_count: number
+    email_failed?: { email: string; error: string }[]
+  }>(`${BASE}/outsource-order/send-email`, data)
+}

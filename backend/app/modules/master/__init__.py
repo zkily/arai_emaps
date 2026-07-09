@@ -23,6 +23,7 @@ from app.modules.master.routers.api_process_route import router as process_route
 from app.modules.master.routers.api_product_bom import router as product_bom_router
 from app.modules.master.routers.api_product_cost_snapshot import router as product_cost_snapshot_router
 from app.modules.master.routers.api_product_label_config import router as product_label_config_router
+from app.modules.master.routers.api_product_use_label_config import router as product_use_label_config_router
 from app.modules.master.routers.api_product_machine_config import router as product_machine_config_router
 from app.modules.master.routers.api_product_process_bom import router as product_process_bom_router
 from app.modules.master.routers.api_product_process_unit_price import router as product_unit_price_router
@@ -63,6 +64,7 @@ router.include_router(
 router.include_router(product_process_bom_router, prefix="/product-process-bom", tags=["製品工程BOM"])
 router.include_router(product_machine_config_router, prefix="/product-machine-config", tags=["製品機器設定"])
 router.include_router(product_label_config_router, prefix="/product-label-config", tags=["成型用ラベル設定"])
+router.include_router(product_use_label_config_router, prefix="/product-use-label-config", tags=["製品用ラベル設定"])
 router.include_router(equipment_efficiency_router, prefix="/equipment-efficiency", tags=["設備能率管理"])
 router.include_router(product_bom_router, prefix="/product-bom", tags=["明細BOM"])
 router.include_router(product_unit_price_router, prefix="/product-process-unit-prices", tags=["工程別標準原価"])

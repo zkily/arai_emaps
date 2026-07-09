@@ -25,6 +25,24 @@ export interface ProductLabelPrintOptions {
   showInitialMark?: boolean
 }
 
+/** ラベル印刷 A4 レイアウト（@page 余白・シート寸法） */
+export function getProductLabelA4Layout() {
+  return {
+    a4WidthMm: A4_WIDTH_MM,
+    a4HeightMm: A4_HEIGHT_MM,
+    pageMarginMm: PAGE_MARGIN_MM,
+    sheetWidthMm: SHEET_WIDTH_MM,
+    sheetHeightMm: SHEET_HEIGHT_MM,
+    gutterMm: GUTTER_MM,
+    labelWidthMm: LABEL_WIDTH_MM,
+    labelHeightMm: LABEL_HEIGHT_MM,
+  }
+}
+
+export function mmToLabelPrintPx(mm: number): number {
+  return Math.round((mm / 25.4) * 96)
+}
+
 const PRINT_COLUMNS = 4
 const TENAOSHI = '手直し'
 
@@ -381,6 +399,11 @@ const PRINT_STYLES = `
     overflow: hidden;
     background: #fff;
   }
+  .label-card--empty {
+    border: none;
+    background: transparent;
+    visibility: hidden;
+  }
   .label-initial-mark {
     position: absolute;
     top: 0;
@@ -617,6 +640,61 @@ const PRINT_STYLES = `
     }
   }
 `
+
+const EMPTY_LABEL_HTML = '<div class="label-card label-card--empty" aria-hidden="true"></div>'
+
+/** 複数製品を1製品1ラベルで A4 2×3 に詰めた印刷 HTML（不足分は空枠） */
+export async function buildMixedProductLabelPrintHtml(
+  items: ProductLabelPrintInput[],
+  options: ProductLabelPrintOptions = {}
+): Promise<string> {
+  const showInitialMark = !!options.showInitialMark
+  const copiesPerPage = LABEL_COLS * LABEL_ROWS
+  const labelHtmls: string[] = []
+
+  for (const data of items) {
+    const qrDataUrl = await buildProductCdQrDataUrl(data.product_cd)
+    labelHtmls.push(buildOneLabelHtml(data, qrDataUrl, showInitialMark))
+  }
+
+  const cutGuides = buildSheetCutGuidesHtml()
+  const sheets: string[] = []
+  for (let i = 0; i < labelHtmls.length; i += copiesPerPage) {
+    const pageLabels = labelHtmls.slice(i, i + copiesPerPage)
+    while (pageLabels.length < copiesPerPage) {
+      pageLabels.push(EMPTY_LABEL_HTML)
+    }
+    sheets.push(`<div class="sheet">${pageLabels.join('')}${cutGuides}</div>`)
+  }
+
+  return buildPrintHtmlDocument('現品票', PRINT_STYLES, sheets.join(''))
+}
+
+/** 1枚（6ラベル）ごとに分割した HTML ドキュメント */
+export async function buildMixedProductLabelSheetDocuments(
+  items: ProductLabelPrintInput[],
+  options: ProductLabelPrintOptions = {}
+): Promise<string[]> {
+  const showInitialMark = !!options.showInitialMark
+  const copiesPerPage = LABEL_COLS * LABEL_ROWS
+  const labelHtmls: string[] = []
+
+  for (const data of items) {
+    const qrDataUrl = await buildProductCdQrDataUrl(data.product_cd)
+    labelHtmls.push(buildOneLabelHtml(data, qrDataUrl, showInitialMark))
+  }
+
+  const cutGuides = buildSheetCutGuidesHtml()
+  const docs: string[] = []
+  for (let i = 0; i < labelHtmls.length; i += copiesPerPage) {
+    const pageLabels = labelHtmls.slice(i, i + copiesPerPage)
+    while (pageLabels.length < copiesPerPage) {
+      pageLabels.push(EMPTY_LABEL_HTML)
+    }
+    docs.push(buildPrintHtmlDocument('現品票', PRINT_STYLES, `<div class="sheet">${pageLabels.join('')}${cutGuides}</div>`))
+  }
+  return docs
+}
 
 export async function buildProductLabelPrintHtml(
   data: ProductLabelPrintInput,

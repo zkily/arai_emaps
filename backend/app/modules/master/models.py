@@ -397,6 +397,27 @@ class ProductLabelConfig(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class ProductUseLabelConfig(Base):
+    """製品用ラベル設定（product_use_label_config）"""
+    __tablename__ = "product_use_label_config"
+    __table_args__ = ({"mysql_comment": "製品用ラベル設定テーブル"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), unique=True, nullable=False, index=True)
+    use_label_product_name = Column(String(100))
+    unit_qty = Column(Integer)
+    part_no = Column(String(80))
+    destination_name = Column(String(200))
+    paper_color = Column(String(30))
+    product_name_color = Column(String(20))
+    back_no_1 = Column(String(50))
+    back_no_2 = Column(String(50))
+    back_no_3 = Column(String(50))
+    barcode_no = Column(String(80))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class EquipmentEfficiency(Base):
     """設備能率管理（equipment_efficiency）"""
     __tablename__ = "equipment_efficiency"

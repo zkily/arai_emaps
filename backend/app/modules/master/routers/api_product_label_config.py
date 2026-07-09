@@ -2,6 +2,7 @@
 成型用ラベル設定 API（product_label_config）
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -25,6 +26,28 @@ from app.modules.master.product_label_service import (
 )
 
 router = APIRouter()
+
+
+class OutsourceOrderEmailItem(BaseModel):
+    product_cd: str
+    order_qty: int = Field(ge=0)
+    label_product_name: str | None = None
+    master_product_name: str | None = None
+    process_unit_qty: int | None = None
+    paper_color: str | None = None
+
+
+class OutsourceOrderEmailAttachment(BaseModel):
+    filename: str
+    mime_type: str = "application/pdf"
+    content_base64: str
+
+
+class SendOutsourceOrderEmailBody(BaseModel):
+    user_ids: list[int] = Field(min_length=1)
+    items: list[OutsourceOrderEmailItem] = Field(min_length=1)
+    attachments: list[OutsourceOrderEmailAttachment] = Field(min_length=1)
+
 
 # products は utf8mb4_0900_ai_ci、新規テーブルは utf8mb4_unicode_ci になりがち — JOIN 1267 回避
 _PRODUCT_CD_COLLATION = "utf8mb4_unicode_ci"
@@ -470,3 +493,44 @@ async def derive_processes_for_product(
         "process_slots": slots,
         "derived_only": True,
     }
+
+
+@router.get("/outsource-orders")
+async def list_outsource_orders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """区分が外注の成型用ラベル設定一覧。"""
+    from app.services.product_label_outsource_order_email import fetch_outsource_label_configs
+
+    items = await fetch_outsource_label_configs(db)
+    return {"list": items, "total": len(items)}
+
+
+@router.get("/outsource-order/email-preview")
+async def preview_outsource_order_email(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """外注注文メール送信の事前確認。"""
+    from app.services.product_label_outsource_order_email import get_outsource_order_email_preview
+
+    return await get_outsource_order_email_preview(db)
+
+
+@router.post("/outsource-order/send-email")
+async def send_outsource_order_email(
+    body: SendOutsourceOrderEmailBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_master_operation("edit")),
+):
+    """注文数1以上の外注ラベル注文をメール送信（現品票PDF添付）。"""
+    from app.services.product_label_outsource_order_email import send_outsource_order_email as send_email
+
+    return await send_email(
+        db,
+        user_ids=body.user_ids,
+        items=[item.model_dump() for item in body.items],
+        attachments_payload=[att.model_dump() for att in body.attachments],
+        current_user=current_user,
+    )

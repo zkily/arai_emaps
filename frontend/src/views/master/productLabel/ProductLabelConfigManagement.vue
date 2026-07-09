@@ -1,9 +1,9 @@
 <template>
   <div class="plc-page">
-    <header class="plc-header">
-      <div class="plc-header-main">
+    <header class="plc-hero">
+      <div class="plc-hero-inner">
         <div class="plc-title-row">
-          <span class="plc-title-icon"><el-icon :size="18"><PriceTag /></el-icon></span>
+          <span class="plc-title-icon"><el-icon :size="20"><PriceTag /></el-icon></span>
           <div>
             <h1 class="plc-title">成型用ラベル設定</h1>
             <p class="plc-subtitle">現品票（A4縦・2列×3行）の加工用製品名・入数・8枠・印刷色を管理（製品CD末尾「1」のみ）</p>
@@ -14,27 +14,50 @@
           <span class="plc-stat-lbl">登録件数</span>
         </div>
       </div>
+    </header>
 
+    <section class="plc-toolbar-card">
       <div class="plc-toolbar">
-        <el-input
-          v-model="filters.keyword"
-          placeholder="製品CD・製品名・加工用製品名で検索"
-          clearable
-          size="small"
-          class="plc-search"
-          @input="onKeywordInput"
-          @clear="onKeywordClear"
-        >
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
+        <div class="plc-search-wrap">
+          <span class="plc-search-label"><el-icon :size="14"><Search /></el-icon> 検索</span>
+          <el-input
+            v-model="filters.keyword"
+            placeholder="製品CD・製品名・加工用製品名で検索"
+            clearable
+            size="small"
+            class="plc-search"
+            @input="onKeywordInput"
+            @clear="onKeywordClear"
+          />
+        </div>
 
         <div class="plc-toolbar-actions">
-          <el-button size="small" :icon="Refresh" @click="loadList">再読込</el-button>
+          <el-button size="small" class="plc-btn plc-btn--refresh" :icon="Refresh" @click="loadList">
+            再読込
+          </el-button>
+          <el-button
+            size="small"
+            class="plc-btn plc-btn--print"
+            :icon="Printer"
+            :loading="printingAll"
+            :disabled="pagination.total === 0"
+            @click="openPrintAllDialog"
+          >
+            一括印刷
+          </el-button>
           <el-button
             v-if="canEdit"
             size="small"
-            type="success"
-            plain
+            class="plc-btn plc-btn--outsource"
+            :icon="Message"
+            @click="openOutsourceOrderDialog"
+          >
+            外注注文
+          </el-button>
+          <el-button
+            v-if="canEdit"
+            size="small"
+            class="plc-btn plc-btn--sync"
             :icon="Download"
             :loading="syncing"
             @click="handleSyncFromMaster"
@@ -44,30 +67,35 @@
           <el-button
             v-if="canEdit"
             size="small"
-            type="warning"
-            plain
+            class="plc-btn plc-btn--derive"
             :icon="RefreshRight"
             :loading="derivingAll"
             @click="handleDeriveAll"
           >
             一括枠導出
           </el-button>
-          <el-button v-if="canCreate" size="small" type="primary" :icon="Plus" @click="openDialog()">
+          <el-button
+            v-if="canCreate"
+            size="small"
+            class="plc-btn plc-btn--create"
+            :icon="Plus"
+            @click="openDialog()"
+          >
             新規登録
           </el-button>
         </div>
       </div>
-    </header>
+    </section>
 
-    <section class="plc-table-wrap">
+    <section ref="tableWrapRef" class="plc-table-wrap">
       <div class="plc-result-bar">
-        <span>{{ pagination.total }} 件中 {{ list.length }} 件を表示</span>
+        <span class="plc-result-text">{{ pagination.total }} 件中 {{ list.length }} 件を表示</span>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
-          layout="sizes, prev, pager, next"
+          :layout="paginationLayout"
           size="small"
           background
           @current-change="loadList"
@@ -84,10 +112,10 @@
         class="plc-table"
         :header-cell-style="headerCellStyle"
         :default-sort="{ prop: 'master_product_name', order: 'ascending' }"
-        height="calc(100vh - 210px)"
+        :height="tableHeight"
         @sort-change="handleSortChange"
       >
-        <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" fixed="left" show-overflow-tooltip />
+        <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" :fixed="tableFixed" show-overflow-tooltip />
         <el-table-column
           prop="master_product_name"
           label="製品名（マスタ）"
@@ -234,7 +262,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" :width="TABLE_COL.action" fixed="right" align="center">
+        <el-table-column label="操作" :width="TABLE_COL.action" :fixed="tableFixedRight" align="center">
           <template #default="{ row }">
             <div class="plc-row-actions">
               <el-button
@@ -274,165 +302,179 @@
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '成型用ラベル設定の編集' : '成型用ラベル設定の新規登録'"
-      width="720px"
+      :width="editDialogWidth"
       destroy-on-close
       class="plc-dialog"
     >
       <el-form ref="formRef" :model="form" label-position="top" class="plc-form" size="small">
-        <el-form-item label="製品CD" required>
-          <el-select
-            v-model="form.product_cd"
-            filterable
-            :disabled="isEdit"
-            placeholder="製品を選択してください"
-            style="width: 100%"
-            @change="onProductCdChange"
-          >
-            <el-option
-              v-for="p in availableProducts"
-              :key="p.product_cd"
-              :label="`${p.product_cd}　${p.product_name}`"
-              :value="p.product_cd"
-              :disabled="!isEdit && p.configured"
-            />
-          </el-select>
-        </el-form-item>
-
-        <div class="plc-form-section">
-          <div class="plc-section-title">製品マスタ情報（参照）</div>
-          <div class="plc-form-grid">
-            <el-form-item label="製品名（マスタ）">
-              <el-input :model-value="masterInfo.product_name || '—'" readonly />
-            </el-form-item>
-            <el-form-item label="別名">
-              <el-input :model-value="masterInfo.product_alias || '—'" readonly />
-            </el-form-item>
-            <el-form-item label="工程ルート">
-              <el-input :model-value="masterInfo.route_cd || '—'" readonly />
-            </el-form-item>
-            <el-form-item label="ロットサイズ">
-              <el-input :model-value="formatMasterNumber(masterInfo.lot_size)" readonly />
-            </el-form-item>
-            <el-form-item label="箱入数" class="plc-span-full">
-              <el-input :model-value="formatMasterNumber(masterInfo.unit_per_box)" readonly />
-            </el-form-item>
-          </div>
-        </div>
-
-        <div class="plc-form-section">
-          <div class="plc-section-title">ラベル印刷設定</div>
-          <div class="plc-form-grid">
-            <el-form-item label="加工用製品名" class="plc-span-full">
-              <el-input v-model="form.label_product_name" placeholder="現場表示用の製品名" />
-            </el-form-item>
-            <el-form-item label="加工入数">
-              <el-input-number
-                v-model="form.process_unit_qty"
-                :min="0"
-                :controls="true"
-                placeholder="手動入力"
-                style="width: 100%"
-              />
-              <div class="plc-field-hint">ロットサイズとは別に、現品票の入数を入力してください</div>
-            </el-form-item>
-            <el-form-item label="備考" class="plc-span-full">
-              <el-input
-                v-model="form.remark"
-                placeholder="現品票の入数行左側に印字（任意）"
-                maxlength="255"
-                clearable
-              />
-            </el-form-item>
-            <el-form-item label="区分">
-              <el-select v-model="form.supply_type" placeholder="区分を選択" style="width: 100%">
-                <el-option v-for="t in SUPPLY_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="用紙色">
-              <el-select v-model="form.paper_color" placeholder="用紙色を選択" style="width: 100%">
-                <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
-                  <span class="plc-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
-                </el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="製品名色">
-              <el-select v-model="form.product_name_color" placeholder="文字色を選択" style="width: 100%">
-                <el-option
-                  v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
-                  :key="c.value"
-                  :label="c.label"
-                  :value="c.value"
+        <el-tabs v-model="editDialogTab" class="plc-edit-tabs">
+          <el-tab-pane label="基本情報" name="basic">
+            <div class="plc-tab-pane">
+              <el-form-item label="製品CD" required>
+                <el-select
+                  v-model="form.product_cd"
+                  filterable
+                  :disabled="isEdit"
+                  placeholder="製品を選択してください"
+                  style="width: 100%"
+                  @change="onProductCdChange"
                 >
-                  <span class="plc-opt-color">
-                    <span class="plc-color-dot" :style="{ background: c.value }" />
-                    {{ c.label }}
-                  </span>
-                </el-option>
-              </el-select>
-            </el-form-item>
-          </div>
-        </div>
+                  <el-option
+                    v-for="p in availableProducts"
+                    :key="p.product_cd"
+                    :label="`${p.product_cd}　${p.product_name}`"
+                    :value="p.product_cd"
+                    :disabled="!isEdit && p.configured"
+                  />
+                </el-select>
+              </el-form-item>
 
-        <div class="plc-form-section">
-          <div class="plc-section-title plc-section-title-row">
-            <span>8枠（上段・下段）</span>
-            <el-switch
-              v-model="form.upper_slots_locked"
-              inline-prompt
-              active-text="固定ON"
-              inactive-text="固定OFF"
-              size="small"
-            />
-          </div>
-          <p class="plc-field-hint plc-section-hint">
-            固定ONのとき、枠導出・一括枠導出・マスタ取込では枠1〜8（上段・下段）を上書きしません
-          </p>
-        </div>
+              <div class="plc-form-section">
+                <div class="plc-section-title">製品マスタ情報（参照）</div>
+                <div class="plc-form-grid">
+                  <el-form-item label="製品名（マスタ）">
+                    <el-input :model-value="masterInfo.product_name || '—'" readonly />
+                  </el-form-item>
+                  <el-form-item label="別名">
+                    <el-input :model-value="masterInfo.product_alias || '—'" readonly />
+                  </el-form-item>
+                  <el-form-item label="工程ルート">
+                    <el-input :model-value="masterInfo.route_cd || '—'" readonly />
+                  </el-form-item>
+                  <el-form-item label="ロットサイズ">
+                    <el-input :model-value="formatMasterNumber(masterInfo.lot_size)" readonly />
+                  </el-form-item>
+                  <el-form-item label="箱入数" class="plc-span-full">
+                    <el-input :model-value="formatMasterNumber(masterInfo.unit_per_box)" readonly />
+                  </el-form-item>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
 
-        <div class="plc-form-section">
-          <div class="plc-section-title">上段（枠1〜4：成型設備・手直し）</div>
-          <div class="plc-form-grid">
-            <el-form-item v-for="i in 4" :key="`top-${i}`" :label="slotLabel(i)">
-              <el-input
-                v-model="form.process_slots[i - 1]"
-                :placeholder="slotPlaceholder(i)"
-                :readonly="i === 4"
-              />
-            </el-form-item>
-          </div>
-        </div>
+          <el-tab-pane label="印刷設定" name="print">
+            <div class="plc-tab-pane">
+              <div class="plc-form-section">
+                <div class="plc-section-title">ラベル印刷設定</div>
+                <div class="plc-form-grid">
+                  <el-form-item label="加工用製品名" class="plc-span-full">
+                    <el-input v-model="form.label_product_name" placeholder="現場表示用の製品名" />
+                  </el-form-item>
+                  <el-form-item label="加工入数">
+                    <el-input-number
+                      v-model="form.process_unit_qty"
+                      :min="0"
+                      :controls="true"
+                      placeholder="手動入力"
+                      style="width: 100%"
+                    />
+                    <div class="plc-field-hint">ロットサイズとは別に、現品票の入数を入力してください</div>
+                  </el-form-item>
+                  <el-form-item label="備考" class="plc-span-full">
+                    <el-input
+                      v-model="form.remark"
+                      placeholder="現品票の入数行左側に印字（任意）"
+                      maxlength="255"
+                      clearable
+                    />
+                  </el-form-item>
+                  <el-form-item label="区分">
+                    <el-select v-model="form.supply_type" placeholder="区分を選択" style="width: 100%">
+                      <el-option v-for="t in SUPPLY_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="用紙色">
+                    <el-select v-model="form.paper_color" placeholder="用紙色を選択" style="width: 100%">
+                      <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
+                        <span class="plc-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="製品名色">
+                    <el-select v-model="form.product_name_color" placeholder="文字色を選択" style="width: 100%">
+                      <el-option
+                        v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
+                        :key="c.value"
+                        :label="c.label"
+                        :value="c.value"
+                      >
+                        <span class="plc-opt-color">
+                          <span class="plc-color-dot" :style="{ background: c.value }" />
+                          {{ c.label }}
+                        </span>
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                </div>
+              </div>
+            </div>
+          </el-tab-pane>
 
-        <div class="plc-form-section">
-          <div class="plc-section-title">下段（枠5〜8：成型後工程）</div>
-          <div class="plc-form-grid">
-            <el-form-item v-for="i in 4" :key="`bottom-${i}`" :label="`枠${i + 4}`">
-              <el-input v-model="form.process_slots[i + 3]" placeholder="工程名" />
-            </el-form-item>
-          </div>
-        </div>
+          <el-tab-pane label="工程枠" name="slots">
+            <div class="plc-tab-pane">
+              <div class="plc-form-section">
+                <div class="plc-section-title plc-section-title-row">
+                  <span>8枠（上段・下段）</span>
+                  <el-switch
+                    v-model="form.upper_slots_locked"
+                    inline-prompt
+                    active-text="固定ON"
+                    inactive-text="固定OFF"
+                    size="small"
+                  />
+                </div>
+                <p class="plc-field-hint plc-section-hint">
+                  固定ONのとき、枠導出・一括枠導出・マスタ取込では枠1〜8（上段・下段）を上書きしません
+                </p>
+              </div>
 
-        <div class="plc-form-actions">
-          <el-button
-            v-if="form.product_cd"
-            size="small"
-            type="success"
-            plain
-            :loading="prefilling"
-            @click="handleLoadFromMasterInDialog"
-          >
-            マスタから読込
-          </el-button>
-          <el-button
-            v-if="form.product_cd"
-            size="small"
-            type="warning"
-            plain
-            :loading="deriving"
-            @click="handleDeriveInDialog"
-          >
-            枠を再導出
-          </el-button>
-        </div>
+              <div class="plc-form-section">
+                <div class="plc-section-title">上段（枠1〜4：成型設備・手直し）</div>
+                <div class="plc-form-grid">
+                  <el-form-item v-for="i in 4" :key="`top-${i}`" :label="slotLabel(i)">
+                    <el-input
+                      v-model="form.process_slots[i - 1]"
+                      :placeholder="slotPlaceholder(i)"
+                      :readonly="i === 4"
+                    />
+                  </el-form-item>
+                </div>
+              </div>
+
+              <div class="plc-form-section">
+                <div class="plc-section-title">下段（枠5〜8：成型後工程）</div>
+                <div class="plc-form-grid">
+                  <el-form-item v-for="i in 4" :key="`bottom-${i}`" :label="`枠${i + 4}`">
+                    <el-input v-model="form.process_slots[i + 3]" placeholder="工程名" />
+                  </el-form-item>
+                </div>
+              </div>
+
+              <div class="plc-form-actions">
+                <el-button
+                  v-if="form.product_cd"
+                  size="small"
+                  type="success"
+                  plain
+                  :loading="prefilling"
+                  @click="handleLoadFromMasterInDialog"
+                >
+                  マスタから読込
+                </el-button>
+                <el-button
+                  v-if="form.product_cd"
+                  size="small"
+                  type="warning"
+                  plain
+                  :loading="deriving"
+                  @click="handleDeriveInDialog"
+                >
+                  枠を再導出
+                </el-button>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </el-form>
       <template #footer>
         <div class="plc-dialog-footer">
@@ -444,8 +486,42 @@
       </template>
     </el-dialog>
 
+    <!-- 一括印刷ダイアログ -->
+    <el-dialog
+      v-model="printAllDialogVisible"
+      title="一覧の一括印刷"
+      :width="printDialogWidth"
+      destroy-on-close
+      class="plc-dialog"
+    >
+      <div class="plc-print-body">
+        <div class="plc-print-all-summary">
+          <p class="plc-print-all-lead">
+            検索条件に一致する <strong>{{ printAllTargetCount }}</strong> 件を、一覧表形式で印刷します。
+          </p>
+          <p class="plc-print-hint">用紙: A4 横向。画面上の一覧と同じ列構成で出力します。</p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="plc-dialog-footer">
+          <el-button size="small" class="plc-btn-cancel" @click="printAllDialogVisible = false">キャンセル</el-button>
+          <el-button
+            size="small"
+            type="success"
+            class="plc-btn-print"
+            :icon="Printer"
+            :loading="printingAll"
+            :disabled="printAllTargetCount === 0"
+            @click="doPrintAll"
+          >
+            印刷開始
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 印刷ダイアログ -->
-    <el-dialog v-model="printDialogVisible" title="現品票の印刷" width="400px" destroy-on-close class="plc-dialog">
+    <el-dialog v-model="printDialogVisible" title="現品票の印刷" :width="printDialogWidth" destroy-on-close class="plc-dialog">
       <div v-if="printTarget" class="plc-print-body">
         <div class="plc-print-product">
           <span class="plc-print-cd">{{ printTarget.product_cd }}</span>
@@ -521,14 +597,109 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 外注注文ダイアログ -->
+    <el-dialog
+      v-model="outsourceDialogVisible"
+      title="外注ラベル注文"
+      :width="outsourceDialogWidth"
+      destroy-on-close
+      class="plc-dialog plc-outsource-dialog"
+    >
+      <div v-loading="outsourceLoading" class="plc-outsource-body">
+        <p class="plc-outsource-lead">
+          区分が<strong>外注</strong>の製品のみ表示。注文数を入力し、メールで注文一覧と現品票PDFを送信できます。
+        </p>
+        <el-table :data="outsourceOrderRows" stripe border size="small" max-height="360" class="plc-outsource-table">
+          <el-table-column prop="product_cd" label="製品CD" width="88" show-overflow-tooltip />
+          <el-table-column prop="label_product_name" label="加工用製品名" min-width="160" show-overflow-tooltip />
+          <el-table-column label="入数" width="72" align="center">
+            <template #default="{ row }">{{ row.process_unit_qty ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="用紙色" width="100" align="center">
+            <template #default="{ row }">
+              <span class="plc-paper-chip" :style="paperChipStyle(row.paper_color)">
+                {{ row.paper_color || '白' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="注文数" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.order_qty"
+                :min="0"
+                :max="99999"
+                :controls="true"
+                size="small"
+                style="width: 100%"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="plc-outsource-mail">
+          <div class="plc-outsource-mail-head">
+            <span>メール送信</span>
+            <span v-if="outsourceOrderSendCount > 0" class="plc-outsource-mail-stat">
+              送信対象 {{ outsourceOrderSendCount }} 件 / 現品票PDF 約 {{ outsourceLabelPdfCount }} 枚（1枚6品種）
+            </span>
+          </div>
+          <el-alert
+            v-if="outsourceEmailPreview && !outsourceEmailPreview.can_send"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="メール送信の準備ができていません（SMTP・テンプレート・通知設定を確認）"
+            class="plc-outsource-alert"
+          />
+          <el-form label-width="88px" size="small" class="plc-outsource-form">
+            <el-form-item label="送信先" required>
+              <el-select
+                v-model="outsourceUserIds"
+                multiple
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="ユーザーを選択"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="u in outsourceUsers"
+                  :key="u.id"
+                  :label="`${u.full_name || u.username} (${u.email || 'メール未設定'})`"
+                  :value="u.id"
+                  :disabled="!u.email"
+                />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      <template #footer>
+        <div class="plc-dialog-footer">
+          <el-button size="small" class="plc-btn-cancel" @click="outsourceDialogVisible = false">閉じる</el-button>
+          <el-button
+            size="small"
+            class="plc-btn plc-btn--outsource"
+            :icon="Message"
+            :loading="outsourceSending"
+            :disabled="!canSendOutsourceEmail"
+            @click="sendOutsourceOrderEmail"
+          >
+            メール送信
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Download,
+  Message,
   Plus,
   PriceTag,
   Printer,
@@ -545,20 +716,27 @@ import {
   deriveAllProductLabelProcesses,
   deriveProductLabelProcesses,
   fetchAvailableProductsForLabel,
+  fetchOutsourceLabelOrders,
+  fetchOutsourceOrderEmailPreview,
   fetchProductLabelConfigList,
   fetchProductLabelPrefill,
   importProductLabelFromMaster,
   productNameColorLabel,
+  sendOutsourceOrderEmail as apiSendOutsourceOrderEmail,
   syncProductLabelFromMaster,
   updateProductLabelConfig,
   type AvailableProductForLabel,
+  type OutsourceOrderEmailPreview,
   type ProductLabelConfig,
   type ProductLabelPrefill,
 } from '@/api/master/productLabelConfig'
+import { getUsers, type UserListItem } from '@/api/system'
 import {
   printProductLabels,
   type ProductLabelPrintInput,
 } from '@/views/mes/productionInstruction/productLabel/utils/productLabelPrint'
+import { printProductLabelConfigList } from '@/views/master/productLabel/utils/productLabelConfigListPrint'
+import { buildLabelEmailAttachments } from '@/views/master/productLabel/utils/productLabelOutsourceOrderPdf'
 import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
 import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
@@ -605,14 +783,63 @@ const prefilling = ref(false)
 const syncing = ref(false)
 const printing = ref(false)
 const printingCd = ref('')
+const printingAll = ref(false)
 const dialogVisible = ref(false)
+const editDialogTab = ref<'basic' | 'print' | 'slots'>('basic')
 const printDialogVisible = ref(false)
+const printAllDialogVisible = ref(false)
 const isEdit = ref(false)
 const list = ref<ProductLabelConfig[]>([])
 const availableProducts = ref<AvailableProductForLabel[]>([])
 const printTarget = ref<ProductLabelConfig | null>(null)
 const printPages = ref(1)
 const printShowInitial = ref(false)
+const printAllRows = ref<ProductLabelConfig[]>([])
+
+type OutsourceOrderRow = {
+  product_cd: string
+  label_product_name: string
+  process_unit_qty: number | null
+  paper_color: string
+  order_qty: number
+  config: ProductLabelConfig
+}
+
+const outsourceDialogVisible = ref(false)
+const outsourceLoading = ref(false)
+const outsourceSending = ref(false)
+const outsourceOrderRows = ref<OutsourceOrderRow[]>([])
+const outsourceEmailPreview = ref<OutsourceOrderEmailPreview | null>(null)
+const outsourceUserIds = ref<number[]>([])
+const outsourceUsers = ref<UserListItem[]>([])
+
+const tableWrapRef = ref<HTMLElement | null>(null)
+const tableHeight = ref(480)
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+
+const tableFixed = computed<'left' | false>(() => (viewportWidth.value >= 900 ? 'left' : false))
+const tableFixedRight = computed<'right' | false>(() => (viewportWidth.value >= 900 ? 'right' : false))
+const paginationLayout = computed(() =>
+  viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next'
+)
+const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(720px, 96vw)' : '720px'))
+const printDialogWidth = computed(() => (viewportWidth.value < 480 ? 'min(400px, 96vw)' : '400px'))
+const outsourceDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(900px, 96vw)' : '900px'))
+const printAllTargetCount = computed(() => printAllRows.value.length)
+const outsourceOrderSendRows = computed(() =>
+  outsourceOrderRows.value.filter((row) => (row.order_qty || 0) > 0)
+)
+const outsourceOrderSendCount = computed(() => outsourceOrderSendRows.value.length)
+const outsourceLabelPdfCount = computed(() =>
+  outsourceOrderSendCount.value > 0 ? Math.ceil(outsourceOrderSendCount.value / 6) : 0
+)
+const canSendOutsourceEmail = computed(
+  () =>
+    !!outsourceEmailPreview.value?.can_send &&
+    outsourceOrderSendCount.value > 0 &&
+    outsourceUserIds.value.length > 0 &&
+    !outsourceSending.value
+)
 
 const filters = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
@@ -815,6 +1042,7 @@ async function loadList() {
     ElMessage.error('一覧の取得に失敗しました')
   } finally {
     loading.value = false
+    requestAnimationFrame(updateLayoutMetrics)
   }
 }
 
@@ -828,6 +1056,7 @@ async function loadAvailableProducts() {
 }
 
 function resetForm() {
+  editDialogTab.value = 'basic'
   form.id = undefined
   form.product_cd = ''
   form.label_product_name = ''
@@ -843,6 +1072,7 @@ function resetForm() {
 
 async function loadPrefillFromMaster(showMessage = true, overwriteEditable = true) {
   if (!form.product_cd) {
+    editDialogTab.value = 'basic'
     ElMessage.warning('製品CDを選択してください')
     return
   }
@@ -889,6 +1119,182 @@ function openDialog(row?: ProductLabelConfig) {
     void loadPrefillFromMaster(false, false)
   }
   dialogVisible.value = true
+}
+
+function updateLayoutMetrics() {
+  viewportWidth.value = window.innerWidth
+  const wrapTop = tableWrapRef.value?.getBoundingClientRect().top ?? 0
+  const bottomGap = viewportWidth.value < 768 ? 12 : 16
+  tableHeight.value = Math.max(260, Math.floor(window.innerHeight - wrapTop - bottomGap))
+}
+
+async function fetchAllListForPrint(): Promise<ProductLabelConfig[]> {
+  const pageSize = 200
+  const firstRes = await fetchProductLabelConfigList({
+    keyword: filters.keyword || undefined,
+    page: 1,
+    page_size: pageSize,
+    sort_by: sortConfig.prop,
+    sort_order: sortConfig.order,
+  })
+  const firstData = (firstRes as { list?: ProductLabelConfig[]; total?: number }) || firstRes
+  const all = [...(firstData.list || [])]
+  const total = firstData.total || 0
+  let page = 2
+  while (all.length < total) {
+    const res = await fetchProductLabelConfigList({
+      keyword: filters.keyword || undefined,
+      page,
+      page_size: pageSize,
+      sort_by: sortConfig.prop,
+      sort_order: sortConfig.order,
+    })
+    const data = (res as { list?: ProductLabelConfig[] }) || res
+    all.push(...(data.list || []))
+    page += 1
+  }
+  return all
+}
+
+async function openPrintAllDialog() {
+  if (pagination.total === 0) {
+    ElMessage.warning('印刷対象のデータがありません')
+    return
+  }
+  printingAll.value = true
+  try {
+    printAllRows.value = await fetchAllListForPrint()
+    if (printAllRows.value.length === 0) {
+      ElMessage.warning('印刷対象のデータがありません')
+      return
+    }
+    printAllDialogVisible.value = true
+  } catch {
+    ElMessage.error('印刷対象の取得に失敗しました')
+  } finally {
+    printingAll.value = false
+  }
+}
+
+async function doPrintAll() {
+  if (printAllRows.value.length === 0) return
+  printingAll.value = true
+  try {
+    printProductLabelConfigList(printAllRows.value, {
+      keyword: filters.keyword || undefined,
+      total: printAllRows.value.length,
+    })
+    printAllDialogVisible.value = false
+    ElMessage.success('一覧印刷ダイアログを開きました')
+  } catch {
+    ElMessage.error('一覧印刷の開始に失敗しました')
+  } finally {
+    printingAll.value = false
+  }
+}
+
+function mapOutsourceOrderRow(config: ProductLabelConfig): OutsourceOrderRow {
+  return {
+    product_cd: config.product_cd,
+    label_product_name: config.label_product_name || config.master_product_name || '',
+    process_unit_qty: config.process_unit_qty ?? null,
+    paper_color: config.paper_color || '白',
+    order_qty: 0,
+    config,
+  }
+}
+
+async function loadOutsourceUsers() {
+  try {
+    const res = await getUsers({ page: 1, page_size: 500, status: 'active' })
+    outsourceUsers.value = res?.items ?? []
+  } catch {
+    outsourceUsers.value = []
+  }
+}
+
+async function openOutsourceOrderDialog() {
+  if (!guardMasterOperation(canEdit)) return
+  outsourceDialogVisible.value = true
+  outsourceLoading.value = true
+  outsourceUserIds.value = []
+  try {
+    const [ordersRes, previewRes] = await Promise.all([
+      fetchOutsourceLabelOrders(),
+      fetchOutsourceOrderEmailPreview(),
+      loadOutsourceUsers(),
+    ])
+    const orders = (ordersRes as { list?: ProductLabelConfig[] })?.list || []
+    outsourceOrderRows.value = orders.map(mapOutsourceOrderRow)
+    outsourceEmailPreview.value = previewRes as OutsourceOrderEmailPreview
+    if (orders.length === 0) {
+      ElMessage.info('外注区分の設定がありません')
+    }
+  } catch {
+    outsourceOrderRows.value = []
+    outsourceEmailPreview.value = null
+    ElMessage.error('外注注文データの取得に失敗しました')
+  } finally {
+    outsourceLoading.value = false
+  }
+}
+
+async function sendOutsourceOrderEmail() {
+  if (!guardMasterOperation(canEdit)) return
+  if (outsourceOrderSendCount.value === 0) {
+    ElMessage.warning('注文数が1以上の行を入力してください')
+    return
+  }
+  if (outsourceUserIds.value.length === 0) {
+    ElMessage.warning('送信先ユーザーを選択してください')
+    return
+  }
+
+  const sendRows = outsourceOrderSendRows.value
+  const missingLabel = sendRows.filter((row) => !row.label_product_name?.trim())
+  if (missingLabel.length > 0) {
+    ElMessage.warning(
+      `加工用製品名未設定のためラベル生成できません: ${missingLabel.map((r) => r.product_cd).join(', ')}`
+    )
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `注文 ${sendRows.length} 件をメール送信します（現品票PDF 約 ${outsourceLabelPdfCount.value} 枚）。よろしいですか？`,
+      'メール送信確認',
+      { type: 'info' }
+    )
+  } catch {
+    return
+  }
+
+  outsourceSending.value = true
+  try {
+    const printInputs: ProductLabelPrintInput[] = sendRows.map((row) =>
+      configToPrintInput(row.config)
+    )
+    const attachments = await buildLabelEmailAttachments(printInputs)
+    const res = await apiSendOutsourceOrderEmail({
+      user_ids: outsourceUserIds.value,
+      items: sendRows.map((row) => ({
+        product_cd: row.product_cd,
+        order_qty: row.order_qty,
+        label_product_name: row.label_product_name,
+        master_product_name: row.config.master_product_name,
+        process_unit_qty: row.process_unit_qty,
+        paper_color: row.paper_color,
+      })),
+      attachments,
+    })
+    ElMessage.success(res?.message || 'メールを送信しました')
+    outsourceDialogVisible.value = false
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'メール送信に失敗しました'
+    ElMessage.error(msg)
+  } finally {
+    outsourceSending.value = false
+  }
 }
 
 function openPrintDialog(row: ProductLabelConfig) {
@@ -946,6 +1352,7 @@ async function handleLoadFromMasterInDialog() {
 async function handleSubmit() {
   if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   if (!form.product_cd) {
+    editDialogTab.value = 'basic'
     ElMessage.warning('製品CDを選択してください')
     return
   }
@@ -1101,6 +1508,7 @@ async function handleDerive(row: ProductLabelConfig) {
 
 async function handleDeriveInDialog() {
   if (!form.product_cd) {
+    editDialogTab.value = 'basic'
     ElMessage.warning('製品CDを選択してください')
     return
   }
@@ -1121,119 +1529,332 @@ async function handleDelete(row: ProductLabelConfig) {
 }
 
 onMounted(async () => {
+  updateLayoutMetrics()
+  window.addEventListener('resize', updateLayoutMetrics)
   await Promise.all([loadList(), loadAvailableProducts()])
+  updateLayoutMetrics()
 })
 
 onUnmounted(() => {
   if (keywordTimer) clearTimeout(keywordTimer)
+  window.removeEventListener('resize', updateLayoutMetrics)
 })
 </script>
 
 <style scoped>
 .plc-page {
-  padding: 10px 14px 14px;
+  padding: 12px 16px 16px;
   min-height: 100%;
-  background: linear-gradient(160deg, #f8fafc 0%, #f0fdfa 40%, #f8fafc 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(13, 148, 136, 0.12), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 95% 0%, rgba(8, 145, 178, 0.1), transparent 50%),
+    linear-gradient(165deg, #f1f5f9 0%, #ecfdf5 38%, #f8fafc 100%);
 }
 
-.plc-header {
-  margin-bottom: 8px;
+/* ── ヒーローヘッダー ── */
+.plc-hero {
+  border-radius: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 42%, #0891b2 78%, #0284c7 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 8px 24px rgba(13, 148, 136, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
-.plc-header-main {
+.plc-hero-inner {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 16px;
 }
 
 .plc-title-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
 }
 
 .plc-title-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #0d9488, #0891b2);
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .plc-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  color: #0f172a;
-  letter-spacing: 0.02em;
+  color: #fff;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .plc-subtitle {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   font-size: 11px;
-  color: #64748b;
-  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.45;
+  max-width: 520px;
 }
 
 .plc-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 14px;
-  border-radius: 10px;
-  background: #fff;
-  border: 1px solid rgba(13, 148, 136, 0.15);
-  box-shadow: 0 1px 6px rgba(13, 148, 136, 0.08);
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   flex-shrink: 0;
+  min-width: 88px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 4px 14px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.plc-stat:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
 }
 
 .plc-stat-num {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 800;
-  color: #0d9488;
+  color: #fff;
   line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .plc-stat-lbl {
   font-size: 10px;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+  font-weight: 600;
+}
+
+/* ── ツールバーカード ── */
+.plc-toolbar-card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(13, 148, 136, 0.1);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 16px rgba(15, 118, 110, 0.08),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
 }
 
 .plc-toolbar {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 10px;
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid rgba(13, 148, 136, 0.12);
-  box-shadow: 0 1px 6px rgba(15, 118, 110, 0.05);
+  padding: 12px 14px;
 }
 
-.plc-search {
-  width: 280px;
+.plc-search-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 240px;
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.plc-search-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f766e;
+  letter-spacing: 0.02em;
+}
+
+.plc-search :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(13, 148, 136, 0.12);
+  transition: box-shadow 0.2s ease;
+}
+
+.plc-search :deep(.el-input__wrapper:hover),
+.plc-search :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(13, 148, 136, 0.12),
+    0 0 0 1px rgba(13, 148, 136, 0.35);
 }
 
 .plc-toolbar-actions {
   margin-left: auto;
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ── 立体ボタン共通 ── */
+.plc-btn {
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease !important;
+}
+
+.plc-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.plc-btn:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.97);
+}
+
+.plc-btn:disabled {
+  opacity: 0.55;
+  filter: grayscale(0.2);
+}
+
+.plc-btn--refresh {
+  color: #475569 !important;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 3px 0 #cbd5e1,
+    0 4px 10px rgba(100, 116, 139, 0.2) !important;
+}
+
+.plc-btn--refresh:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 0 #cbd5e1,
+    0 2px 4px rgba(100, 116, 139, 0.15) !important;
+}
+
+.plc-btn--print {
+  color: #fff !important;
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #047857,
+    0 4px 12px rgba(5, 150, 105, 0.4) !important;
+}
+
+.plc-btn--print:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 0 #047857,
+    0 2px 6px rgba(5, 150, 105, 0.3) !important;
+}
+
+.plc-btn--outsource {
+  color: #fff !important;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 45%, #6d28d9 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 3px 0 #5b21b6,
+    0 4px 12px rgba(124, 58, 237, 0.4) !important;
+}
+
+.plc-btn--outsource:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 1px 0 #5b21b6,
+    0 2px 6px rgba(124, 58, 237, 0.3) !important;
+}
+
+.plc-btn--sync {
+  color: #fff !important;
+  background: linear-gradient(180deg, #22d3ee 0%, #06b6d4 45%, #0891b2 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #0e7490,
+    0 4px 12px rgba(8, 145, 178, 0.38) !important;
+}
+
+.plc-btn--sync:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 0 #0e7490,
+    0 2px 6px rgba(8, 145, 178, 0.28) !important;
+}
+
+.plc-btn--derive {
+  color: #fff !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 3px 0 #b45309,
+    0 4px 12px rgba(217, 119, 6, 0.38) !important;
+}
+
+.plc-btn--derive:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.26) inset,
+    0 1px 0 #b45309,
+    0 2px 6px rgba(217, 119, 6, 0.28) !important;
+}
+
+.plc-btn--create {
+  color: #fff !important;
+  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 40%, #0d9488 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 4px 0 #0f766e,
+    0 6px 16px rgba(13, 148, 136, 0.45) !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+.plc-btn--create:not(:disabled):hover {
+  transform: translateY(-3px);
+}
+
+.plc-btn--create:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 2px 0 #0f766e,
+    0 3px 8px rgba(13, 148, 136, 0.35) !important;
 }
 
 .plc-table-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid rgba(13, 148, 136, 0.1);
-  box-shadow: 0 2px 12px rgba(15, 118, 110, 0.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 6px 20px rgba(15, 118, 110, 0.1),
+    0 2px 6px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
@@ -1242,14 +1863,35 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 14px;
   font-size: 11px;
   color: #64748b;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.plc-result-text {
+  white-space: nowrap;
+  font-weight: 600;
+  color: #475569;
+}
+
+.plc-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.plc-table :deep(.el-table__inner-wrapper) {
+  border-radius: 0 0 12px 12px;
+}
+
+.plc-table :deep(.el-table__row:hover > td) {
+  background: #f0fdfa !important;
 }
 
 .plc-table :deep(.el-table__cell) {
-  padding: 4px 0;
+  padding: 5px 0;
   font-size: 12px;
 }
 
@@ -1358,6 +2000,15 @@ onUnmounted(() => {
 }
 
 /* ダイアログ */
+.plc-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 20px 50px rgba(15, 23, 42, 0.2),
+    0 8px 20px rgba(13, 148, 136, 0.12);
+}
+
 .plc-dialog :deep(.el-dialog__header) {
   padding: 12px 16px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
@@ -1377,7 +2028,60 @@ onUnmounted(() => {
 }
 
 .plc-dialog :deep(.el-dialog__body) {
-  padding: 10px 14px 6px;
+  padding: 8px 12px 6px;
+}
+
+.plc-edit-tabs {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.plc-edit-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ecfeff 100%);
+  padding: 6px 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.plc-edit-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.plc-edit-tabs :deep(.el-tabs__item) {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  color: #64748b;
+  border-radius: 6px 6px 0 0;
+  margin-right: 2px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.plc-edit-tabs :deep(.el-tabs__item:hover) {
+  color: #0d9488;
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.plc-edit-tabs :deep(.el-tabs__item.is-active) {
+  color: #0f766e;
+  background: #fff;
+  border-color: #e2e8f0;
+  border-bottom-color: #fff;
+  font-weight: 700;
+}
+
+.plc-edit-tabs :deep(.el-tabs__content) {
+  padding: 0;
+  min-height: 300px;
+  max-height: min(52vh, 440px);
+  overflow-y: auto;
+  background: #fff;
+}
+
+.plc-tab-pane {
+  padding: 10px 12px 8px;
 }
 
 .plc-form :deep(.el-form-item__label) {
@@ -1454,18 +2158,54 @@ onUnmounted(() => {
 
 .plc-btn-cancel {
   border-radius: 8px;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%) !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 0 #cbd5e1,
+    0 3px 8px rgba(100, 116, 139, 0.15) !important;
+}
+
+.plc-btn-cancel:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 1px 0 #cbd5e1,
+    0 2px 4px rgba(100, 116, 139, 0.12) !important;
 }
 
 .plc-btn-save {
   border-radius: 8px;
-  background: linear-gradient(135deg, #0d9488, #0891b2);
-  border: none;
+  font-weight: 700 !important;
+  color: #fff !important;
+  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 50%, #0d9488 100%) !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #0f766e,
+    0 4px 12px rgba(13, 148, 136, 0.35) !important;
+}
+
+.plc-btn-save:active {
+  transform: translateY(1px);
 }
 
 .plc-btn-print {
   border-radius: 8px;
-  background: linear-gradient(135deg, #16a34a, #059669);
-  border: none;
+  font-weight: 700 !important;
+  color: #fff !important;
+  background: linear-gradient(180deg, #34d399 0%, #10b981 50%, #059669 100%) !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #047857,
+    0 4px 12px rgba(5, 150, 105, 0.35) !important;
+}
+
+.plc-btn-print:active {
+  transform: translateY(1px);
 }
 
 /* 印刷ダイアログ */
@@ -1615,5 +2355,181 @@ onUnmounted(() => {
   margin: 0;
   font-size: 11px;
   color: #64748b;
+}
+
+.plc-print-all-summary {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.plc-print-all-lead {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.plc-print-all-lead strong {
+  color: #0d9488;
+  font-size: 16px;
+}
+
+.plc-outsource-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plc-outsource-lead {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.plc-outsource-mail {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.plc-outsource-mail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.plc-outsource-mail-stat {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.plc-outsource-alert {
+  margin-bottom: 8px;
+}
+
+.plc-outsource-form {
+  margin-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .plc-hero-inner {
+    flex-wrap: wrap;
+  }
+
+  .plc-search-wrap {
+    flex: 1 1 220px;
+    min-width: 180px;
+    max-width: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .plc-page {
+    padding: 8px 10px 10px;
+  }
+
+  .plc-hero {
+    padding: 12px 14px;
+  }
+
+  .plc-hero-inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plc-stat {
+    align-self: flex-start;
+    flex-direction: row;
+    gap: 10px;
+    padding: 8px 14px;
+  }
+
+  .plc-stat-num {
+    font-size: 20px;
+  }
+
+  .plc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plc-search-wrap {
+    width: 100%;
+    max-width: none;
+  }
+
+  .plc-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .plc-toolbar-actions :deep(.plc-btn) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .plc-title {
+    font-size: 16px;
+  }
+
+  .plc-subtitle {
+    font-size: 10px;
+  }
+
+  .plc-result-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .plc-result-bar :deep(.el-pagination) {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .plc-row-actions {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .plc-edit-tabs :deep(.el-tabs__content) {
+    min-height: 240px;
+    max-height: min(48vh, 380px);
+  }
+}
+
+@media (max-width: 480px) {
+  .plc-page {
+    padding: 6px 8px 8px;
+  }
+
+  .plc-title-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .plc-toolbar-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .plc-toolbar-actions :deep(.plc-btn) {
+    width: 100%;
+    margin: 0;
+  }
 }
 </style>
