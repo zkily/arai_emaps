@@ -9,6 +9,10 @@
             <p class="pul-subtitle">
               B4横向・通常4×5枚／東北INOAC向け4×4枚。製品マスタから取込後、背番号・バーコード等を編集して印刷します。
             </p>
+            <div class="pul-hero-badges">
+              <span class="pul-hero-badge">B4 横向 4×5</span>
+              <span class="pul-hero-badge pul-hero-badge--inoac">東北INOAC 4×4</span>
+            </div>
           </div>
         </div>
         <div class="pul-stat">
@@ -20,20 +24,60 @@
 
     <section class="pul-toolbar-card">
       <div class="pul-toolbar">
-        <div class="pul-search-wrap">
-          <span class="pul-search-label"><el-icon :size="14"><Search /></el-icon> 検索</span>
-          <el-input
-            v-model="filters.keyword"
-            placeholder="製品CD・製品名・品番・納入先で検索"
-            clearable
-            size="small"
-            class="pul-search"
-            @input="onKeywordInput"
-            @clear="onKeywordClear"
-          />
+        <div class="pul-filters">
+          <div class="pul-filter-field pul-filter-field--search">
+            <label class="pul-field-label">
+              <el-icon :size="14"><Search /></el-icon>
+              キーワード検索
+            </label>
+            <el-input
+              v-model="filters.keyword"
+              placeholder="製品CD・製品名・品番・納入先"
+              clearable
+              size="small"
+              class="pul-search"
+              @input="onKeywordInput"
+              @clear="onKeywordClear"
+            />
+          </div>
+          <div class="pul-filter-field">
+            <label class="pul-field-label">製品</label>
+            <el-select
+              v-model="filters.product_cd"
+              placeholder="すべて"
+              clearable
+              filterable
+              size="small"
+              class="pul-filter"
+              :loading="loadingFilterOptions"
+              @change="onFilterChange"
+            >
+              <el-option
+                v-for="p in filterProductOptions"
+                :key="p.product_cd"
+                :label="`${p.product_cd} — ${p.product_name || '—'}`"
+                :value="p.product_cd"
+              />
+            </el-select>
+          </div>
+          <div class="pul-filter-field">
+            <label class="pul-field-label">納入先</label>
+            <el-select
+              v-model="filters.destination_name"
+              placeholder="すべて"
+              clearable
+              filterable
+              size="small"
+              class="pul-filter pul-filter--dest"
+              :loading="loadingFilterOptions"
+              @change="onFilterChange"
+            >
+              <el-option v-for="d in filterDestinationOptions" :key="d" :label="d" :value="d" />
+            </el-select>
+          </div>
         </div>
         <div class="pul-toolbar-actions">
-          <el-button size="small" class="pul-btn pul-btn--refresh" :icon="Refresh" @click="loadList">
+          <el-button size="small" class="pul-btn pul-btn--refresh" :icon="Refresh" @click="reloadPage">
             再読込
           </el-button>
           <el-button
@@ -89,7 +133,6 @@
         v-loading="loading"
         :data="list"
         stripe
-        border
         size="small"
         class="pul-table"
         :header-cell-style="headerCellStyle"
@@ -101,24 +144,13 @@
         <el-table-column
           prop="master_product_name"
           label="製品名（マスタ）"
-          min-width="120"
+          width="150"
           sortable="custom"
           show-overflow-tooltip
         />
-        <el-table-column label="終息" width="56" align="center">
+        <el-table-column label="製品用製品名" width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-tag v-if="row.is_discontinued" type="info" size="small" effect="plain">終</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="製品用製品名" min-width="130" show-overflow-tooltip>
-          <template #default="{ row }">
-            <el-input
-              v-if="canEdit"
-              :model-value="row.use_label_product_name || ''"
-              size="small"
-              @change="(v: string) => saveInlineField(row, { use_label_product_name: v })"
-            />
-            <span v-else>{{ row.use_label_product_name || '—' }}</span>
+            <span class="pul-readonly-val">{{ row.use_label_product_name || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="入数" width="56" align="center">
@@ -126,19 +158,14 @@
             <span class="pul-readonly-val">{{ row.unit_qty ?? '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="品番" min-width="110" show-overflow-tooltip>
+        <el-table-column label="品番" width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="pul-readonly-val">{{ row.part_no || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="納入先名" min-width="150" show-overflow-tooltip>
+        <el-table-column label="納入先名" width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <div class="pul-dest-cell">
-              <span class="pul-readonly-val">{{ row.destination_name || '—' }}</span>
-              <el-tag v-if="row.is_inoac_layout" size="small" type="warning" effect="plain" class="pul-inoac-tag">
-                4×4
-              </el-tag>
-            </div>
+            <span class="pul-readonly-val">{{ row.destination_name || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="用紙色" width="118" align="center">
@@ -192,49 +219,39 @@
         </el-table-column>
         <el-table-column label="背番1" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-input
-              v-if="canEdit"
-              :model-value="row.back_no_1 || ''"
-              size="small"
-              @change="(v: string) => saveInlineField(row, { back_no_1: v })"
-            />
-            <span v-else>{{ row.back_no_1 || '—' }}</span>
+            <span class="pul-readonly-val">{{ row.back_no_1 || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="背番2" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-input
-              v-if="canEdit"
-              :model-value="row.back_no_2 || ''"
-              size="small"
-              @change="(v: string) => saveInlineField(row, { back_no_2: v })"
-            />
-            <span v-else>{{ row.back_no_2 || '—' }}</span>
+            <span class="pul-readonly-val">{{ row.back_no_2 || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="背番3" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-input
-              v-if="canEdit"
-              :model-value="row.back_no_3 || ''"
-              size="small"
-              @change="(v: string) => saveInlineField(row, { back_no_3: v })"
-            />
-            <span v-else>{{ row.back_no_3 || '—' }}</span>
+            <span class="pul-readonly-val">{{ row.back_no_3 || '—' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="バーコード" width="88" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-input
-              v-if="canEdit"
-              :model-value="row.barcode_no || ''"
-              size="small"
-              @change="(v: string) => saveInlineField(row, { barcode_no: v })"
-            />
-            <span v-else>{{ row.barcode_no || '—' }}</span>
+            <span class="pul-readonly-val pul-readonly-val--mono">{{ row.barcode_no || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="148" :fixed="tableFixedRight" align="center">
+        <el-table-column label="終息" width="64" align="center" :fixed="tableFixedRight">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.is_discontinued"
+              type="info"
+              size="small"
+              effect="plain"
+              class="pul-discontinued-tag"
+            >
+              終息
+            </el-tag>
+            <span v-else class="pul-readonly-val">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="168" :fixed="tableFixedRight" align="center">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDialog(row)">編集</el-button>
             <el-button
@@ -267,92 +284,135 @@
       destroy-on-close
       class="pul-dialog"
     >
-      <el-form label-width="120px" size="small">
-        <el-form-item label="製品CD" required>
-          <el-select
-            v-model="form.product_cd"
-            filterable
-            :disabled="isEdit"
-            placeholder="製品を選択"
-            style="width: 100%"
-            :loading="loadingProducts"
-            @change="onProductCdChange"
-          >
-            <el-option
-              v-for="p in productOptions"
-              :key="p.product_cd"
-              :label="`${p.product_cd} — ${p.product_name}`"
-              :value="p.product_cd"
-              :disabled="!isEdit && p.configured"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="製品名（マスタ）">
-          <span>{{ masterInfo.product_name || '—' }}</span>
-        </el-form-item>
-        <el-form-item label="製品用製品名">
-          <el-input v-model="form.use_label_product_name" />
-        </el-form-item>
-        <el-form-item label="入数">
-          <span class="pul-readonly-val">{{ form.unit_qty ?? '—' }}</span>
-          <p class="pul-form-hint pul-form-hint--muted">製品マスタから自動取得（マスタ取込で更新）</p>
-        </el-form-item>
-        <el-form-item label="品番">
-          <span class="pul-readonly-val">{{ form.part_no || '—' }}</span>
-          <p class="pul-form-hint pul-form-hint--muted">製品マスタから自動取得（マスタ取込で更新）</p>
-        </el-form-item>
-        <el-form-item label="納入先名">
-          <span class="pul-readonly-val">{{ form.destination_name || '—' }}</span>
-          <p v-if="formInoacLayout" class="pul-form-hint">この納入先は B4 横向 4×4 レイアウトで印刷されます。</p>
-          <p v-else class="pul-form-hint pul-form-hint--muted">製品マスタから自動取得（マスタ取込で更新）</p>
-        </el-form-item>
-        <el-form-item label="用紙色">
-          <el-select v-model="form.paper_color" placeholder="用紙色を選択" style="width: 100%">
-            <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
-              <span class="pul-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="製品名色">
-          <el-select v-model="form.product_name_color" placeholder="文字色を選択" style="width: 100%">
-            <el-option
-              v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
-              :key="c.value"
-              :label="c.label"
-              :value="c.value"
-            >
-              <span class="pul-opt-color">
-                <span class="pul-color-dot" :style="{ background: c.value }" />
-                {{ c.label }}
-              </span>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="背番号1">
-          <el-input v-model="form.back_no_1" />
-        </el-form-item>
-        <el-form-item label="背番号2">
-          <el-input v-model="form.back_no_2" />
-        </el-form-item>
-        <el-form-item label="背番号3">
-          <el-input v-model="form.back_no_3" />
-        </el-form-item>
-        <el-form-item label="バーコード番号">
-          <el-input v-model="form.barcode_no" />
-        </el-form-item>
+      <el-form label-position="top" class="pul-edit-form" size="small">
+        <div class="pul-edit-section pul-edit-section--accent">
+          <div class="pul-edit-section-title">基本情報</div>
+          <div class="pul-edit-grid">
+            <el-form-item label="製品CD" class="pul-span-full" required>
+              <el-select
+                v-model="form.product_cd"
+                filterable
+                :disabled="isEdit"
+                placeholder="製品を選択"
+                style="width: 100%"
+                :loading="loadingProducts"
+                @change="onProductCdChange"
+              >
+                <el-option
+                  v-for="p in productOptions"
+                  :key="p.product_cd"
+                  :label="`${p.product_cd} — ${p.product_name}`"
+                  :value="p.product_cd"
+                  :disabled="!isEdit && p.configured"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="製品名（マスタ）">
+              <el-input :model-value="masterInfo.product_name || '—'" readonly />
+            </el-form-item>
+            <el-form-item label="製品用製品名">
+              <el-input v-model="form.use_label_product_name" placeholder="ラベル印字用の製品名" />
+            </el-form-item>
+          </div>
+        </div>
+
+        <div class="pul-edit-section">
+          <div class="pul-edit-section-title pul-edit-section-title--row">
+            <span>マスタ参照</span>
+            <el-tag v-if="formInoacLayout" type="warning" size="small" effect="plain" class="pul-inoac-tag">
+              B4 4×4
+            </el-tag>
+          </div>
+          <div class="pul-edit-grid pul-edit-grid--3">
+            <el-form-item label="入数">
+              <el-input :model-value="formatMasterQty(form.unit_qty)" readonly />
+            </el-form-item>
+            <el-form-item label="品番">
+              <el-input :model-value="form.part_no || '—'" readonly />
+            </el-form-item>
+            <el-form-item label="納入先名" class="pul-span-full pul-span-full--sm">
+              <el-input :model-value="form.destination_name || '—'" readonly />
+            </el-form-item>
+          </div>
+          <p class="pul-edit-hint">
+            入数・品番・納入先は製品マスタから自動取得（マスタ取込で更新）
+            <template v-if="formInoacLayout"> · この納入先は 4×4 レイアウトで印刷</template>
+          </p>
+        </div>
+
+        <div class="pul-edit-section">
+          <div class="pul-edit-section-title">印刷設定</div>
+          <div class="pul-edit-grid">
+            <el-form-item label="用紙色（確認用）">
+              <el-select v-model="form.paper_color" placeholder="用紙色" style="width: 100%">
+                <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
+                  <span class="pul-opt-paper" :style="paperChipStyle(c)">{{ c }}</span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="製品名色">
+              <el-select v-model="form.product_name_color" placeholder="文字色" style="width: 100%">
+                <el-option
+                  v-for="c in PRODUCT_NAME_COLOR_OPTIONS"
+                  :key="c.value"
+                  :label="c.label"
+                  :value="c.value"
+                >
+                  <span class="pul-opt-color">
+                    <span class="pul-color-dot" :style="{ background: c.value }" />
+                    {{ c.label }}
+                  </span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+          </div>
+          <p class="pul-edit-hint">用紙色は印刷時に実用紙の色を確認するための設定です（ラベル背景には印字されません）</p>
+        </div>
+
+        <div class="pul-edit-section">
+          <div class="pul-edit-section-title">手入力</div>
+          <div class="pul-edit-grid pul-edit-grid--3">
+            <el-form-item label="背番号1">
+              <el-input v-model="form.back_no_1" placeholder="任意" />
+            </el-form-item>
+            <el-form-item label="背番号2">
+              <el-input v-model="form.back_no_2" placeholder="任意" />
+            </el-form-item>
+            <el-form-item label="背番号3">
+              <el-input v-model="form.back_no_3" placeholder="任意" />
+            </el-form-item>
+          </div>
+          <el-form-item label="バーコード番号" class="pul-span-full">
+            <el-input v-model="form.barcode_no" placeholder="任意" />
+          </el-form-item>
+        </div>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">キャンセル</el-button>
-        <el-button v-if="isEdit && canEdit" :loading="prefilling" @click="handleImportFromMaster">
-          マスタ再取込
-        </el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">
-          {{ isEdit ? '更新' : '登録' }}
-        </el-button>
+        <div class="pul-dialog-footer">
+          <el-button size="small" class="pul-btn-cancel" @click="dialogVisible = false">キャンセル</el-button>
+          <el-button
+            v-if="isEdit && canEdit"
+            size="small"
+            class="pul-btn-secondary"
+            :loading="prefilling"
+            @click="handleImportFromMaster"
+          >
+            マスタ再取込
+          </el-button>
+          <el-button size="small" type="primary" class="pul-btn-save" :loading="submitting" @click="handleSubmit">
+            {{ isEdit ? '更新' : '登録' }}
+          </el-button>
+        </div>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="printDialogVisible" title="製品用ラベル印刷" :width="printDialogWidth" destroy-on-close>
+    <el-dialog
+      v-model="printDialogVisible"
+      title="製品用ラベル印刷"
+      :width="printDialogWidth"
+      destroy-on-close
+      class="pul-print-dialog"
+    >
       <div v-if="printTarget" class="pul-print-body">
         <div class="pul-print-product">
           <span class="pul-print-cd">{{ printTarget.product_cd }}</span>
@@ -361,20 +421,51 @@
             {{ printTarget.is_inoac_layout ? 'B4 横向 4×4（東北INOAC）' : 'B4 横向 4×5（標準）' }}
           </span>
         </div>
+        <div class="pul-print-settings">
+          <div class="pul-print-settings-row">
+            <div class="pul-print-settings-item">
+              <span class="pul-print-settings-label">用紙色</span>
+              <span class="pul-paper-chip pul-print-paper-val" :style="paperChipStyle(printTarget.paper_color)">
+                {{ printTarget.paper_color || '白' }}
+              </span>
+            </div>
+            <div class="pul-print-settings-item">
+              <span class="pul-print-settings-label">製品名色</span>
+              <span class="pul-print-name-color">
+                <span
+                  class="pul-color-dot"
+                  :style="{ background: normalizeNameColor(printTarget.product_name_color) }"
+                />
+                {{ productNameColorLabel(printTarget.product_name_color) }}
+              </span>
+            </div>
+          </div>
+        </div>
         <el-form label-width="100px" size="small">
           <el-form-item label="印刷枚数">
             <el-input-number v-model="printPages" :min="1" :max="50" />
             <span class="pul-print-hint">B4用紙 1枚あたり {{ printPerPage }} 枚（満版）</span>
           </el-form-item>
         </el-form>
+        <p class="pul-print-note">用紙色は実用紙の確認用です。製品名色をご確認のうえ、印刷を開始してください。</p>
       </div>
       <template #footer>
-        <el-button @click="printDialogVisible = false">キャンセル</el-button>
-        <el-button type="primary" :loading="printing" @click="handlePrint">印刷開始</el-button>
+        <div class="pul-dialog-footer">
+          <el-button size="small" class="pul-btn-cancel" @click="printDialogVisible = false">キャンセル</el-button>
+          <el-button size="small" type="primary" class="pul-btn-save" :loading="printing" @click="handlePrint">
+            印刷開始
+          </el-button>
+        </div>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="printAllDialogVisible" title="一括ラベル印刷" width="420px" destroy-on-close>
+    <el-dialog
+      v-model="printAllDialogVisible"
+      title="一括ラベル印刷"
+      width="420px"
+      destroy-on-close
+      class="pul-print-dialog pul-print-dialog--all"
+    >
       <p class="pul-print-all-lead">
         一覧の全 <strong>{{ printAllCount }}</strong> 件を、納入先ごとのレイアウト（4×5／4×4）で印刷します。
       </p>
@@ -384,8 +475,12 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="printAllDialogVisible = false">キャンセル</el-button>
-        <el-button type="primary" :loading="printingAll" @click="handlePrintAll">印刷開始</el-button>
+        <div class="pul-dialog-footer">
+          <el-button size="small" class="pul-btn-cancel" @click="printAllDialogVisible = false">キャンセル</el-button>
+          <el-button size="small" type="primary" class="pul-btn-save" :loading="printingAll" @click="handlePrintAll">
+            印刷開始
+          </el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -402,6 +497,7 @@ import {
   deleteProductUseLabelConfig,
   fetchAvailableProductsForUseLabel,
   fetchProductUseLabelConfigList,
+  fetchProductUseLabelFilterOptions,
   fetchProductUseLabelPrefill,
   importProductUseLabelFromMaster,
   productNameColorLabel,
@@ -409,6 +505,7 @@ import {
   updateProductUseLabelConfig,
   type AvailableProductForUseLabel,
   type ProductUseLabelConfig,
+  type ProductUseLabelFilterProduct,
 } from '@/api/master/productUseLabelConfig'
 import {
   configToPrintInput,
@@ -438,6 +535,7 @@ const PAPER_CHIP_STYLES: Record<string, { background: string; border: string; co
 }
 
 const loading = ref(false)
+const loadingFilterOptions = ref(false)
 const submitting = ref(false)
 const syncing = ref(false)
 const prefilling = ref(false)
@@ -451,6 +549,8 @@ const printAllDialogVisible = ref(false)
 const isEdit = ref(false)
 const list = ref<ProductUseLabelConfig[]>([])
 const availableProducts = ref<AvailableProductForUseLabel[]>([])
+const filterProductOptions = ref<ProductUseLabelFilterProduct[]>([])
+const filterDestinationOptions = ref<string[]>([])
 const printTarget = ref<ProductUseLabelConfig | null>(null)
 const printPages = ref(1)
 const printAllPages = ref(1)
@@ -466,12 +566,12 @@ const tableFixedRight = computed<'right' | false>(() => (viewportWidth.value >= 
 const paginationLayout = computed(() =>
   viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next'
 )
-const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(640px, 96vw)' : '640px'))
+const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(680px, 96vw)' : '680px'))
 const printDialogWidth = computed(() => (viewportWidth.value < 480 ? 'min(400px, 96vw)' : '420px'))
 
 const printPerPage = computed(() => (printTarget.value?.is_inoac_layout ? 16 : 20))
 
-const filters = reactive({ keyword: '' })
+const filters = reactive({ keyword: '', product_cd: '', destination_name: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
 const sortConfig = reactive({ prop: 'master_product_name', order: 'asc' as 'asc' | 'desc' })
 
@@ -510,6 +610,11 @@ function paperChipStyle(color?: string | null) {
   return { background: s.background, border: `1px solid ${s.border}`, color: s.color }
 }
 
+function formatMasterQty(qty: number | null | undefined): string {
+  if (qty == null) return '—'
+  return String(qty)
+}
+
 function normalizeNameColor(hex?: string | null): string {
   const v = (hex || '#000000').toLowerCase()
   const found = PRODUCT_NAME_COLOR_OPTIONS.find((o) => o.value.toLowerCase() === v)
@@ -528,6 +633,23 @@ function onKeywordClear() {
   if (keywordTimer) clearTimeout(keywordTimer)
   pagination.page = 1
   void loadList()
+}
+
+function onFilterChange() {
+  pagination.page = 1
+  void loadList()
+}
+
+function listQueryParams(page = pagination.page, pageSize = pagination.pageSize) {
+  return {
+    keyword: filters.keyword || undefined,
+    product_cd: filters.product_cd || undefined,
+    destination_name: filters.destination_name || undefined,
+    page,
+    page_size: pageSize,
+    sort_by: sortConfig.prop,
+    sort_order: sortConfig.order,
+  }
 }
 
 function handleSortChange(payload: { prop: string; order: 'ascending' | 'descending' | null }) {
@@ -574,6 +696,29 @@ function fillFormFromRow(row: ProductUseLabelConfig) {
   masterInfo.product_name = row.master_product_name || ''
 }
 
+async function loadFilterOptions() {
+  loadingFilterOptions.value = true
+  try {
+    const res = await fetchProductUseLabelFilterOptions()
+    const data = res?.data
+    filterProductOptions.value = data?.products || []
+    filterDestinationOptions.value = data?.destinations || []
+    if (filters.product_cd && !filterProductOptions.value.some((p) => p.product_cd === filters.product_cd)) {
+      filters.product_cd = ''
+    }
+    if (
+      filters.destination_name &&
+      !filterDestinationOptions.value.includes(filters.destination_name)
+    ) {
+      filters.destination_name = ''
+    }
+  } catch {
+    ElMessage.error('絞込選択肢の取得に失敗しました')
+  } finally {
+    loadingFilterOptions.value = false
+  }
+}
+
 async function loadAvailableProducts() {
   loadingProducts.value = true
   try {
@@ -587,13 +732,7 @@ async function loadAvailableProducts() {
 async function loadList() {
   loading.value = true
   try {
-    const res = await fetchProductUseLabelConfigList({
-      keyword: filters.keyword || undefined,
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      sort_by: sortConfig.prop,
-      sort_order: sortConfig.order,
-    })
+    const res = await fetchProductUseLabelConfigList(listQueryParams())
     const data = (res as { list?: ProductUseLabelConfig[]; total?: number }) || res
     list.value = data.list || []
     pagination.total = data.total || 0
@@ -606,26 +745,14 @@ async function loadList() {
 }
 
 async function fetchAllListForPrint(): Promise<ProductUseLabelConfig[]> {
-  const res = await fetchProductUseLabelConfigList({
-    keyword: filters.keyword || undefined,
-    page: 1,
-    page_size: 200,
-    sort_by: sortConfig.prop,
-    sort_order: sortConfig.order,
-  })
+  const res = await fetchProductUseLabelConfigList(listQueryParams(1, 200))
   const first = (res as { list?: ProductUseLabelConfig[]; total?: number }) || res
   const total = first.total || 0
   const rows = [...(first.list || [])]
   if (total > rows.length) {
     const pages = Math.ceil(total / 200)
     for (let p = 2; p <= pages; p++) {
-      const more = await fetchProductUseLabelConfigList({
-        keyword: filters.keyword || undefined,
-        page: p,
-        page_size: 200,
-        sort_by: sortConfig.prop,
-        sort_order: sortConfig.order,
-      })
+      const more = await fetchProductUseLabelConfigList(listQueryParams(p, 200))
       const chunk = (more as { list?: ProductUseLabelConfig[] }) || more
       rows.push(...(chunk.list || []))
     }
@@ -700,6 +827,9 @@ async function handleSubmit() {
     dialogVisible.value = false
     await loadList()
     await loadAvailableProducts()
+    if (!isEdit.value) {
+      await loadFilterOptions()
+    }
   } catch {
     ElMessage.error(isEdit.value ? '更新に失敗しました' : '登録に失敗しました')
   } finally {
@@ -753,6 +883,7 @@ async function handleSyncFromMaster() {
     ElMessage.success(`新規 ${added} 件、マスタ項目更新 ${updated} 件`)
     await loadList()
     await loadAvailableProducts()
+    await loadFilterOptions()
   } catch {
     ElMessage.error('マスタ取込に失敗しました')
   } finally {
@@ -774,6 +905,7 @@ async function handleDelete(row: ProductUseLabelConfig) {
     ElMessage.success('削除しました')
     await loadList()
     await loadAvailableProducts()
+    await loadFilterOptions()
   } catch {
     ElMessage.error('削除に失敗しました')
   }
@@ -837,10 +969,16 @@ async function handlePrintAll() {
 }
 
 onMounted(() => {
+  void loadFilterOptions()
   void loadList()
   updateLayoutMetrics()
   window.addEventListener('resize', updateLayoutMetrics)
 })
+
+async function reloadPage() {
+  await loadFilterOptions()
+  await loadList()
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateLayoutMetrics)
@@ -850,25 +988,34 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .pul-page {
-  padding: 12px 16px 20px;
+  padding: 12px 16px 16px;
   min-height: 100%;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(99, 102, 241, 0.14), transparent 55%),
+    radial-gradient(ellipse 55% 42% at 96% 2%, rgba(139, 92, 246, 0.1), transparent 50%),
+    linear-gradient(165deg, #f1f5f9 0%, #eef2ff 36%, #f8fafc 100%);
 }
 
+/* ── ヒーロー ── */
 .pul-hero {
-  margin-bottom: 12px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #312e81 0%, #4338ca 45%, #6366f1 100%);
+  border-radius: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 42%, #6366f1 72%, #818cf8 100%);
   color: #fff;
-  box-shadow: 0 8px 24px rgba(67, 56, 202, 0.25);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 10px 28px rgba(67, 56, 202, 0.38),
+    0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
 .pul-hero-inner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 20px;
   flex-wrap: wrap;
 }
 
@@ -882,117 +1029,259 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
 .pul-title {
   margin: 0;
   font-size: 20px;
   font-weight: 800;
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .pul-subtitle {
   margin: 4px 0 0;
-  font-size: 12px;
-  opacity: 0.9;
+  font-size: 11px;
+  line-height: 1.5;
   max-width: 640px;
-  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.pul-hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pul-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+}
+
+.pul-hero-badge--inoac {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.45);
+  color: #fef3c7;
 }
 
 .pul-stat {
-  text-align: center;
-  padding: 8px 16px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  min-width: 88px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 4px 14px rgba(0, 0, 0, 0.12);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.pul-stat:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .pul-stat-num {
-  display: block;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .pul-stat-lbl {
-  font-size: 11px;
-  opacity: 0.85;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.78);
 }
 
+/* ── ツールバー ── */
 .pul-toolbar-card {
-  margin-bottom: 10px;
-  padding: 10px 12px;
   background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 16px rgba(67, 56, 202, 0.08),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
 }
 
 .pul-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 14px;
 }
 
-.pul-search-wrap {
+.pul-filters {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
   flex: 1;
-  min-width: 200px;
+  min-width: 0;
 }
 
-.pul-search-label {
-  font-size: 12px;
-  color: #64748b;
-  white-space: nowrap;
+.pul-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.pul-filter-field--search {
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.pul-field-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4338ca;
+  letter-spacing: 0.02em;
 }
 
-.pul-search {
-  max-width: 360px;
+.pul-search,
+.pul-filter {
+  width: 100%;
+}
+
+.pul-filter--dest {
+  min-width: 160px;
+}
+
+.pul-search :deep(.el-input__wrapper),
+.pul-filter :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(99, 102, 241, 0.12);
+  transition: box-shadow 0.2s ease;
+}
+
+.pul-search :deep(.el-input__wrapper:hover),
+.pul-search :deep(.el-input__wrapper.is-focus),
+.pul-filter :deep(.el-select__wrapper.is-hovering),
+.pul-filter :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(99, 102, 241, 0.14),
+    0 0 0 1px rgba(99, 102, 241, 0.35);
 }
 
 .pul-toolbar-actions {
+  margin-left: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .pul-btn {
-  font-weight: 600;
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease !important;
+}
+
+.pul-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.pul-btn:not(:disabled):active {
+  transform: translateY(1px);
+  filter: brightness(0.97);
 }
 
 .pul-btn--refresh {
-  color: #475569;
+  color: #475569 !important;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 3px 0 #cbd5e1,
+    0 4px 10px rgba(100, 116, 139, 0.18) !important;
 }
 
 .pul-btn--print {
-  color: #fff;
-  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
-  border: none;
+  color: #fff !important;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 45%, #4f46e5 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 3px 0 #4338ca,
+    0 4px 12px rgba(79, 70, 229, 0.38) !important;
 }
 
 .pul-btn--sync {
-  color: #1d4ed8;
-  border-color: #93c5fd;
+  color: #fff !important;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 45%, #0284c7 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #0369a1,
+    0 4px 12px rgba(2, 132, 199, 0.35) !important;
 }
 
 .pul-btn--create {
-  color: #fff;
-  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
-  border: none;
+  color: #fff !important;
+  background: linear-gradient(180deg, #a78bfa 0%, #8b5cf6 40%, #7c3aed 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 4px 0 #6d28d9,
+    0 6px 16px rgba(124, 58, 237, 0.42) !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
 }
 
+/* ── テーブル ── */
 .pul-table-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  padding: 8px 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 6px 20px rgba(67, 56, 202, 0.1),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+  padding: 0;
 }
 
 .pul-result-bar {
@@ -1001,12 +1290,49 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .pul-result-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.pul-table {
+  flex: 1;
+  min-height: 0;
+  padding: 0 10px 10px;
+}
+
+.pul-table :deep(.el-table__inner-wrapper) {
+  border-radius: 0 0 10px 10px;
+}
+
+.pul-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  border-bottom: 1px solid #c7d2fe !important;
+}
+
+.pul-table :deep(.el-table__row:hover > td) {
+  background: #eef2ff !important;
+}
+
+.pul-table :deep(.el-table__cell) {
+  padding: 6px 0;
   font-size: 12px;
-  color: #64748b;
+  border-color: #e8ecf4 !important;
+}
+
+.pul-table :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+.pul-table :deep(.el-button.is-link) {
+  font-weight: 700;
 }
 
 .pul-paper-chip {
@@ -1016,6 +1342,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.6;
+  border: 1px solid transparent;
 }
 
 .pul-color-dot {
@@ -1054,6 +1381,7 @@ onBeforeUnmount(() => {
 .pul-table-color-select :deep(.el-select__wrapper) {
   padding: 0 4px;
   min-height: 24px;
+  border-radius: 6px;
 }
 
 .pul-table-color-select :deep(.el-select__selected-item),
@@ -1079,19 +1407,233 @@ onBeforeUnmount(() => {
 
 .pul-readonly-val {
   color: #475569;
-  font-size: 13px;
+  font-size: 12px;
   word-break: break-all;
 }
 
-.pul-dest-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+.pul-readonly-val--mono {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.02em;
 }
 
 .pul-inoac-tag {
   flex-shrink: 0;
+  font-weight: 700;
+}
+
+.pul-discontinued-tag {
+  font-weight: 700;
+}
+
+/* ── 編集ダイアログ ── */
+.pul-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 20px 50px rgba(15, 23, 42, 0.2),
+    0 8px 20px rgba(67, 56, 202, 0.14);
+}
+
+.pul-dialog :deep(.el-dialog__header) {
+  padding: 12px 16px 10px;
+  margin-right: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 50%, #6366f1 100%);
+}
+
+.pul-dialog :deep(.el-dialog__title) {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pul-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.pul-dialog :deep(.el-dialog__body) {
+  padding: 10px 12px 6px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
+.pul-dialog :deep(.el-dialog__footer) {
+  padding: 8px 12px 10px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pul-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pul-edit-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.pul-edit-form :deep(.el-form-item__label) {
+  padding-bottom: 2px;
+  line-height: 1.25;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.pul-edit-form :deep(.el-input__wrapper),
+.pul-edit-form :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+
+.pul-edit-form :deep(.el-input__wrapper.is-focus),
+.pul-edit-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #a5b4fc inset, 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.pul-edit-form :deep(.el-input.is-disabled .el-input__wrapper) {
+  background: #f1f5f9;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+.pul-edit-form :deep(.el-input.is-disabled .el-input__inner) {
+  color: #475569;
+  -webkit-text-fill-color: #475569;
+}
+
+.pul-edit-section {
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.pul-edit-section--accent {
+  background: linear-gradient(180deg, #fff 0%, #f5f3ff 100%);
+  border-color: #ddd6fe;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+.pul-edit-section-title {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4338ca;
+  letter-spacing: 0.04em;
+}
+
+.pul-edit-section-title--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 6px;
+}
+
+.pul-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+
+.pul-edit-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.pul-span-full {
+  grid-column: 1 / -1;
+}
+
+.pul-span-full--sm {
+  margin-top: 2px;
+}
+
+.pul-edit-hint {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+.pul-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pul-btn-cancel {
+  border-radius: 8px;
+  font-weight: 600 !important;
+  color: #64748b !important;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%) !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 0 #cbd5e1,
+    0 3px 8px rgba(100, 116, 139, 0.12) !important;
+}
+
+.pul-btn-secondary {
+  border-radius: 8px;
+  font-weight: 600 !important;
+  color: #4338ca !important;
+  background: linear-gradient(180deg, #fff 0%, #eef2ff 100%) !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow: 0 1px 3px rgba(67, 56, 202, 0.1) !important;
+}
+
+.pul-btn-save {
+  border-radius: 8px;
+  font-weight: 700 !important;
+  color: #fff !important;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%) !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 3px 0 #4338ca,
+    0 4px 12px rgba(79, 70, 229, 0.32) !important;
+}
+
+/* ── 印刷ダイアログ ── */
+.pul-print-dialog :deep(.el-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(67, 56, 202, 0.2);
+}
+
+.pul-print-dialog :deep(.el-dialog__header) {
+  padding: 10px 14px;
+  margin-right: 0;
+  background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+}
+
+.pul-print-dialog :deep(.el-dialog__title) {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pul-print-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pul-print-dialog :deep(.el-dialog__body) {
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.pul-print-dialog :deep(.el-dialog__footer) {
+  padding: 8px 12px 10px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
 }
 
 .pul-form-hint--muted {
@@ -1110,25 +1652,97 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.pul-print-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #fff 0%, #eef2ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+}
+
+.pul-print-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pul-print-settings-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.pul-print-settings-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+  white-space: nowrap;
+}
+
+.pul-print-paper-val {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.pul-print-name-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.pul-print-note {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
 .pul-print-product {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
-  background: #eef2ff;
-  border-radius: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border-radius: 10px;
   border: 1px solid #c7d2fe;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.pul-print-product strong {
+  font-size: 15px;
+  color: #1e1b4b;
 }
 
 .pul-print-cd {
   font-size: 11px;
   color: #64748b;
-  font-family: monospace;
+  font-family: ui-monospace, monospace;
 }
 
 .pul-print-layout {
-  font-size: 11px;
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
   color: #4338ca;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #c7d2fe;
 }
 
 .pul-print-hint {
@@ -1139,8 +1753,33 @@ onBeforeUnmount(() => {
 
 .pul-print-all-lead {
   margin: 0 0 12px;
+  padding: 10px 12px;
   font-size: 13px;
   color: #334155;
-  line-height: 1.5;
+  line-height: 1.55;
+  background: #eef2ff;
+  border-radius: 8px;
+  border: 1px solid #c7d2fe;
+}
+
+@media (max-width: 900px) {
+  .pul-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .pul-edit-grid,
+  .pul-edit-grid--3 {
+    grid-template-columns: 1fr;
+  }
+
+  .pul-filter-field,
+  .pul-filter-field--search {
+    flex: 1 1 100%;
+    max-width: none;
+  }
 }
 </style>

@@ -28,10 +28,22 @@ export interface ProductUseLabelConfig {
 
 export interface ProductUseLabelConfigQuery {
   keyword?: string
+  product_cd?: string
+  destination_name?: string
   page?: number
   page_size?: number
   sort_by?: string
   sort_order?: 'asc' | 'desc'
+}
+
+export interface ProductUseLabelFilterProduct {
+  product_cd: string
+  product_name: string
+}
+
+export interface ProductUseLabelFilterOptions {
+  products: ProductUseLabelFilterProduct[]
+  destinations: string[]
 }
 
 export interface AvailableProductForUseLabel {
@@ -58,6 +70,12 @@ export function productNameColorLabel(hex?: string | null): string {
 
 export function fetchProductUseLabelConfigList(params?: ProductUseLabelConfigQuery) {
   return request.get<{ list: ProductUseLabelConfig[]; total: number }>(BASE, { params })
+}
+
+export function fetchProductUseLabelFilterOptions() {
+  return request.get<{ success?: boolean; data?: ProductUseLabelFilterOptions }>(
+    `${BASE}/filter-options`
+  )
 }
 
 export function fetchProductUseLabelConfigByProductCd(productCd: string) {

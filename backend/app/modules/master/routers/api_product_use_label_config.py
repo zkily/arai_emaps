@@ -62,6 +62,8 @@ def _parse_body(body: dict, *, include_master_fields: bool = False) -> dict:
 @router.get("")
 async def list_product_use_label_config(
     keyword: Optional[str] = Query(None),
+    product_cd: Optional[str] = Query(None),
+    destination_name: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     sort_by: Optional[str] = Query("master_product_name"),
@@ -83,6 +85,10 @@ async def list_product_use_label_config(
                 ProductUseLabelConfig.destination_name.like(k),
             )
         )
+    if product_cd and product_cd.strip():
+        query = query.where(ProductUseLabelConfig.product_cd == product_cd.strip())
+    if destination_name and destination_name.strip():
+        query = query.where(ProductUseLabelConfig.destination_name == destination_name.strip())
 
     order = (sort_order or "asc").strip().lower()
     descending = order == "desc"
@@ -148,6 +154,37 @@ async def get_available_products(
         for r in rows
     ]
     return {"success": True, "data": data}
+
+
+@router.get("/filter-options")
+async def get_filter_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """一覧絞込用：登録済み製品・納入先の選択肢"""
+    product_result = await db.execute(
+        select(ProductUseLabelConfig.product_cd, Product.product_name)
+        .outerjoin(Product, _product_cd_join())
+        .order_by(Product.product_name.asc(), ProductUseLabelConfig.product_cd.asc())
+    )
+    products = [
+        {"product_cd": cd, "product_name": name or ""}
+        for cd, name in product_result.all()
+        if cd
+    ]
+
+    dest_result = await db.execute(
+        select(ProductUseLabelConfig.destination_name)
+        .where(
+            ProductUseLabelConfig.destination_name.isnot(None),
+            ProductUseLabelConfig.destination_name != "",
+        )
+        .distinct()
+        .order_by(ProductUseLabelConfig.destination_name.asc())
+    )
+    destinations = [name for (name,) in dest_result.all() if name]
+
+    return {"success": True, "data": {"products": products, "destinations": destinations}}
 
 
 @router.get("/prefill/{product_cd}")
