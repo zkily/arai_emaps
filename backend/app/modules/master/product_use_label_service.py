@@ -5,6 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.master.models import Destination, Product, ProductUseLabelConfig
+from app.modules.master.product_label_service import (
+    SUPPLY_TYPE_INTERNAL,
+    normalize_supply_type,
+)
 
 DEFAULT_PAPER_COLOR = "白"
 DEFAULT_NAME_COLOR = "#000000"
@@ -39,6 +43,7 @@ def config_to_dict(
         "master_product_name": master_product_name,
         "use_label_product_name": row.use_label_product_name,
         "unit_qty": row.unit_qty,
+        "supply_type": normalize_supply_type(getattr(row, "supply_type", None)),
         "part_no": row.part_no,
         "destination_name": destination,
         "paper_color": row.paper_color or DEFAULT_PAPER_COLOR,
@@ -95,6 +100,7 @@ async def build_prefill_from_product(db: AsyncSession, product_cd: str) -> dict:
         "master_product_name": product.product_name or "",
         "use_label_product_name": product.product_name or "",
         "unit_qty": product.unit_per_box,
+        "supply_type": SUPPLY_TYPE_INTERNAL,
         "part_no": resolve_part_no_from_product(product),
         "destination_name": await resolve_destination_name(db, product.destination_cd),
         "paper_color": DEFAULT_PAPER_COLOR,
@@ -113,6 +119,8 @@ def apply_row_fields(row: ProductUseLabelConfig, data: dict) -> None:
     if "unit_qty" in data:
         qty = data.get("unit_qty")
         row.unit_qty = int(qty) if qty is not None and qty != "" else None
+    if "supply_type" in data:
+        row.supply_type = normalize_supply_type(data.get("supply_type"))
     if "part_no" in data:
         val = data.get("part_no")
         row.part_no = (val.strip() if val else None) or None

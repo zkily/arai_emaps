@@ -93,6 +93,15 @@
           <el-button
             v-if="canEdit"
             size="small"
+            class="pul-btn pul-btn--outsource"
+            :icon="Message"
+            @click="openOutsourceOrderDialog"
+          >
+            外注注文
+          </el-button>
+          <el-button
+            v-if="canEdit"
+            size="small"
             class="pul-btn pul-btn--sync"
             :icon="Download"
             :loading="syncing"
@@ -156,6 +165,19 @@
         <el-table-column label="入数" width="56" align="center">
           <template #default="{ row }">
             <span class="pul-readonly-val">{{ row.unit_qty ?? '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="区分" width="96" align="center">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="normalizeSupplyType(row.supply_type) === '外注'"
+              :disabled="!canEdit"
+              size="small"
+              inline-prompt
+              active-text="外注"
+              inactive-text="社内"
+              @change="(val: boolean) => handleSupplyTypeChange(row, val)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="品番" width="120" show-overflow-tooltip>
@@ -343,6 +365,11 @@
         <div class="pul-edit-section">
           <div class="pul-edit-section-title">印刷設定</div>
           <div class="pul-edit-grid">
+            <el-form-item label="区分">
+              <el-select v-model="form.supply_type" placeholder="区分を選択" style="width: 100%">
+                <el-option v-for="t in SUPPLY_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
+              </el-select>
+            </el-form-item>
             <el-form-item label="用紙色（確認用）">
               <el-select v-model="form.paper_color" placeholder="用紙色" style="width: 100%">
                 <el-option v-for="c in PAPER_COLOR_OPTIONS" :key="c" :label="c" :value="c">
@@ -483,35 +510,140 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 外注注文ダイアログ -->
+    <el-dialog
+      v-model="outsourceDialogVisible"
+      title="外注製品用ラベル注文"
+      :width="outsourceDialogWidth"
+      destroy-on-close
+      class="pul-dialog pul-outsource-dialog"
+    >
+      <div v-loading="outsourceLoading" class="pul-outsource-body">
+        <p class="pul-outsource-lead">
+          区分が<strong>外注</strong>の製品のみ表示。注文数を入力し、メールで注文一覧とラベルPDFを送信できます。
+        </p>
+        <el-table :data="outsourceOrderRows" stripe border size="small" max-height="360" class="pul-outsource-table">
+          <el-table-column prop="product_cd" label="製品CD" width="88" show-overflow-tooltip />
+          <el-table-column prop="use_label_product_name" label="製品用製品名" min-width="160" show-overflow-tooltip />
+          <el-table-column label="入数" width="72" align="center">
+            <template #default="{ row }">{{ row.unit_qty ?? '—' }}</template>
+          </el-table-column>
+          <el-table-column label="用紙色" width="100" align="center">
+            <template #default="{ row }">
+              <span class="pul-paper-chip" :style="paperChipStyle(row.paper_color)">
+                {{ row.paper_color || '白' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="注文数" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.order_qty"
+                :min="0"
+                :max="99999"
+                :controls="true"
+                size="small"
+                style="width: 100%"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="pul-outsource-mail">
+          <div class="pul-outsource-mail-head">
+            <span>メール送信</span>
+            <span v-if="outsourceOrderSendCount > 0" class="pul-outsource-mail-stat">
+              送信対象 {{ outsourceOrderSendCount }} 件 / ラベルPDF 約 {{ outsourceLabelPdfCount }} 枚
+            </span>
+          </div>
+          <el-alert
+            v-if="outsourceEmailPreview && !outsourceEmailPreview.can_send"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="メール送信の準備ができていません（SMTP・テンプレート・通知設定を確認）"
+            class="pul-outsource-alert"
+          />
+          <el-form label-width="88px" size="small" class="pul-outsource-form">
+            <el-form-item label="送信先" required>
+              <el-select
+                v-model="outsourceUserIds"
+                multiple
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="ユーザーを選択"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="u in outsourceUsers"
+                  :key="u.id"
+                  :label="`${u.full_name || u.username} (${u.email || 'メール未設定'})`"
+                  :value="u.id"
+                  :disabled="!u.email"
+                />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </div>
+      </div>
+      <template #footer>
+        <div class="pul-dialog-footer">
+          <el-button size="small" class="pul-btn-cancel" @click="outsourceDialogVisible = false">閉じる</el-button>
+          <el-button
+            size="small"
+            class="pul-btn pul-btn--outsource"
+            :icon="Message"
+            :loading="outsourceSending"
+            :disabled="!canSendOutsourceEmail"
+            @click="sendOutsourceOrderEmail"
+          >
+            メール送信
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Plus, Printer, Refresh, Search, Tickets } from '@element-plus/icons-vue'
+import { Download, Message, Plus, Printer, Refresh, Search, Tickets } from '@element-plus/icons-vue'
 import {
   PAPER_COLOR_OPTIONS,
   PRODUCT_NAME_COLOR_OPTIONS,
+  SUPPLY_TYPE_OPTIONS,
   createProductUseLabelConfig,
   deleteProductUseLabelConfig,
   fetchAvailableProductsForUseLabel,
+  fetchOutsourceUseLabelOrderEmailPreview,
+  fetchOutsourceUseLabelOrders,
   fetchProductUseLabelConfigList,
   fetchProductUseLabelFilterOptions,
   fetchProductUseLabelPrefill,
   importProductUseLabelFromMaster,
   productNameColorLabel,
+  sendOutsourceUseLabelOrderEmail,
   syncProductUseLabelFromMaster,
   updateProductUseLabelConfig,
   type AvailableProductForUseLabel,
+  type OutsourceOrderEmailPreview,
   type ProductUseLabelConfig,
   type ProductUseLabelFilterProduct,
 } from '@/api/master/productUseLabelConfig'
+import { getUsers, type UserListItem } from '@/api/system'
 import {
   configToPrintInput,
   isInoacDestination,
   printProductUseLabels,
 } from '@/views/master/productUseLabel/utils/productUseLabelPrint'
+import {
+  buildUseLabelEmailAttachments,
+  estimateUseLabelPdfPages,
+} from '@/views/master/productUseLabel/utils/productUseLabelOutsourceOrderPdf'
+import { recordLabelQuantityPrint } from '@/api/master/labelQuantity'
 import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
 import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
@@ -557,6 +689,23 @@ const printAllPages = ref(1)
 const printAllRows = ref<ProductUseLabelConfig[]>([])
 const printAllCount = computed(() => printAllRows.value.length)
 
+type OutsourceOrderRow = {
+  product_cd: string
+  use_label_product_name: string
+  unit_qty: number | null
+  paper_color: string
+  order_qty: number
+  config: ProductUseLabelConfig
+}
+
+const outsourceDialogVisible = ref(false)
+const outsourceLoading = ref(false)
+const outsourceSending = ref(false)
+const outsourceOrderRows = ref<OutsourceOrderRow[]>([])
+const outsourceEmailPreview = ref<OutsourceOrderEmailPreview | null>(null)
+const outsourceUserIds = ref<number[]>([])
+const outsourceUsers = ref<UserListItem[]>([])
+
 const tableWrapRef = ref<HTMLElement | null>(null)
 const tableHeight = ref(480)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -568,6 +717,24 @@ const paginationLayout = computed(() =>
 )
 const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(680px, 96vw)' : '680px'))
 const printDialogWidth = computed(() => (viewportWidth.value < 480 ? 'min(400px, 96vw)' : '420px'))
+const outsourceDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(900px, 96vw)' : '900px'))
+
+const outsourceOrderSendRows = computed(() =>
+  outsourceOrderRows.value.filter((row) => (row.order_qty || 0) > 0)
+)
+const outsourceOrderSendCount = computed(() => outsourceOrderSendRows.value.length)
+const outsourceLabelPdfCount = computed(() =>
+  outsourceOrderSendCount.value > 0
+    ? estimateUseLabelPdfPages(outsourceOrderSendRows.value.map((r) => r.config))
+    : 0
+)
+const canSendOutsourceEmail = computed(
+  () =>
+    !!outsourceEmailPreview.value?.can_send &&
+    outsourceOrderSendCount.value > 0 &&
+    outsourceUserIds.value.length > 0 &&
+    !outsourceSending.value
+)
 
 const printPerPage = computed(() => (printTarget.value?.is_inoac_layout ? 16 : 20))
 
@@ -582,6 +749,7 @@ const form = reactive({
   product_cd: '',
   use_label_product_name: '',
   unit_qty: null as number | null,
+  supply_type: '社内' as string,
   part_no: '',
   destination_name: '',
   paper_color: '白',
@@ -619,6 +787,15 @@ function normalizeNameColor(hex?: string | null): string {
   const v = (hex || '#000000').toLowerCase()
   const found = PRODUCT_NAME_COLOR_OPTIONS.find((o) => o.value.toLowerCase() === v)
   return found?.value ?? '#000000'
+}
+
+function normalizeSupplyType(value?: string | null): string {
+  const v = (value || '社内').trim()
+  return SUPPLY_TYPE_OPTIONS.includes(v as (typeof SUPPLY_TYPE_OPTIONS)[number]) ? v : '社内'
+}
+
+function handleSupplyTypeChange(row: ProductUseLabelConfig, isOutsource: boolean) {
+  void saveInlineField(row, { supply_type: isOutsource ? '外注' : '社内' })
 }
 
 function onKeywordInput() {
@@ -669,6 +846,7 @@ function resetForm() {
   form.product_cd = ''
   form.use_label_product_name = ''
   form.unit_qty = null
+  form.supply_type = '社内'
   form.part_no = ''
   form.destination_name = ''
   form.paper_color = '白'
@@ -685,6 +863,7 @@ function fillFormFromRow(row: ProductUseLabelConfig) {
   form.product_cd = row.product_cd
   form.use_label_product_name = row.use_label_product_name || ''
   form.unit_qty = row.unit_qty ?? null
+  form.supply_type = normalizeSupplyType(row.supply_type)
   form.part_no = row.part_no || ''
   form.destination_name = row.destination_name || ''
   form.paper_color = row.paper_color || '白'
@@ -810,6 +989,7 @@ async function handleSubmit() {
     const payload = {
       product_cd: form.product_cd,
       use_label_product_name: form.use_label_product_name,
+      supply_type: form.supply_type,
       paper_color: form.paper_color,
       product_name_color: form.product_name_color,
       back_no_1: form.back_no_1,
@@ -921,12 +1101,31 @@ async function handlePrint() {
   if (!printTarget.value) return
   printing.value = true
   printingCd.value = printTarget.value.product_cd
+  const productCd = printTarget.value.product_cd
+  const pages = Math.max(1, Number(printPages.value) || 1)
+  const perPage = printPerPage.value
   try {
     await printProductUseLabels(configToPrintInput(printTarget.value), {
-      pages: printPages.value,
-      copiesPerPage: printPerPage.value,
+      pages,
+      copiesPerPage: perPage,
     })
     printDialogVisible.value = false
+    try {
+      await recordLabelQuantityPrint({
+        label_type: 'product_use',
+        items: [
+          {
+            product_cd: productCd,
+            paper_sheets: pages,
+            labels_per_sheet: perPage,
+            label_count: pages * perPage,
+          },
+        ],
+      })
+    } catch (e) {
+      console.warn('ラベル枚数管理への印刷履歴反映に失敗:', e)
+      ElMessage.warning('印刷は開始しましたが、枚数管理の履歴更新に失敗しました')
+    }
   } catch {
     ElMessage.error('印刷の準備に失敗しました')
   } finally {
@@ -955,16 +1154,140 @@ async function openPrintAllDialog() {
 async function handlePrintAll() {
   if (!printAllRows.value.length) return
   printingAll.value = true
+  const pages = Math.max(1, Number(printAllPages.value) || 1)
+  const rows = [...printAllRows.value]
   try {
     await printProductUseLabels(
-      printAllRows.value.map((r) => configToPrintInput(r)),
-      { pages: printAllPages.value, copiesPerPage: 1 }
+      rows.map((r) => configToPrintInput(r)),
+      { pages, copiesPerPage: 1 }
     )
     printAllDialogVisible.value = false
+    try {
+      // 一括印刷: 各製品について指定ページ数分を履歴反映（1紙あたりレイアウト枚数）
+      await recordLabelQuantityPrint({
+        label_type: 'product_use',
+        items: rows
+          .filter((r) => r.product_cd)
+          .map((r) => {
+            const perPage = r.is_inoac_layout || isInoacDestination(r.destination_name) ? 16 : 20
+            return {
+              product_cd: r.product_cd,
+              paper_sheets: pages,
+              labels_per_sheet: perPage,
+              label_count: pages * perPage,
+            }
+          }),
+      })
+    } catch (e) {
+      console.warn('ラベル枚数管理への印刷履歴反映に失敗:', e)
+      ElMessage.warning('印刷は開始しましたが、枚数管理の履歴更新に失敗しました')
+    }
   } catch {
     ElMessage.error('一括印刷に失敗しました')
   } finally {
     printingAll.value = false
+  }
+}
+
+function mapOutsourceOrderRow(config: ProductUseLabelConfig): OutsourceOrderRow {
+  return {
+    product_cd: config.product_cd,
+    use_label_product_name: config.use_label_product_name || config.master_product_name || '',
+    unit_qty: config.unit_qty ?? null,
+    paper_color: config.paper_color || '白',
+    order_qty: 0,
+    config,
+  }
+}
+
+async function loadOutsourceUsers() {
+  try {
+    const res = await getUsers({ page: 1, page_size: 500, status: 'active' })
+    outsourceUsers.value = res?.items ?? []
+  } catch {
+    outsourceUsers.value = []
+  }
+}
+
+async function openOutsourceOrderDialog() {
+  if (!guardMasterOperation(canEdit)) return
+  outsourceDialogVisible.value = true
+  outsourceLoading.value = true
+  outsourceUserIds.value = []
+  try {
+    const [ordersRes, previewRes] = await Promise.all([
+      fetchOutsourceUseLabelOrders(),
+      fetchOutsourceUseLabelOrderEmailPreview(),
+      loadOutsourceUsers(),
+    ])
+    const orders = (ordersRes as { list?: ProductUseLabelConfig[] })?.list || []
+    outsourceOrderRows.value = orders.map(mapOutsourceOrderRow)
+    outsourceEmailPreview.value = previewRes as OutsourceOrderEmailPreview
+    if (orders.length === 0) {
+      ElMessage.info('外注区分の設定がありません')
+    }
+  } catch {
+    outsourceOrderRows.value = []
+    outsourceEmailPreview.value = null
+    ElMessage.error('外注注文データの取得に失敗しました')
+  } finally {
+    outsourceLoading.value = false
+  }
+}
+
+async function sendOutsourceOrderEmail() {
+  if (!guardMasterOperation(canEdit)) return
+  if (outsourceOrderSendCount.value === 0) {
+    ElMessage.warning('注文数が1以上の行を入力してください')
+    return
+  }
+  if (outsourceUserIds.value.length === 0) {
+    ElMessage.warning('送信先ユーザーを選択してください')
+    return
+  }
+
+  const sendRows = outsourceOrderSendRows.value
+  const missingLabel = sendRows.filter((row) => !row.use_label_product_name?.trim())
+  if (missingLabel.length > 0) {
+    ElMessage.warning(
+      `製品用製品名未設定のためラベル生成できません: ${missingLabel.map((r) => r.product_cd).join(', ')}`
+    )
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `注文 ${sendRows.length} 件をメール送信します（ラベルPDF 約 ${outsourceLabelPdfCount.value} 枚）。よろしいですか？`,
+      'メール送信確認',
+      { type: 'info' }
+    )
+  } catch {
+    return
+  }
+
+  outsourceSending.value = true
+  try {
+    const printInputs = sendRows.map((row) => configToPrintInput(row.config))
+    const attachments = await buildUseLabelEmailAttachments(printInputs)
+    const res = await sendOutsourceUseLabelOrderEmail({
+      user_ids: outsourceUserIds.value,
+      items: sendRows.map((row) => ({
+        product_cd: row.product_cd,
+        order_qty: row.order_qty,
+        use_label_product_name: row.use_label_product_name,
+        master_product_name: row.config.master_product_name,
+        unit_qty: row.unit_qty,
+        paper_color: row.paper_color,
+      })),
+      attachments,
+    })
+    ElMessage.success(res?.message || 'メールを送信しました')
+    outsourceDialogVisible.value = false
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'メール送信に失敗しました'
+    ElMessage.error(msg)
+  } finally {
+    outsourceSending.value = false
   }
 }
 
@@ -1245,6 +1568,15 @@ onBeforeUnmount(() => {
     0 1px 0 rgba(255, 255, 255, 0.28) inset,
     0 3px 0 #4338ca,
     0 4px 12px rgba(79, 70, 229, 0.38) !important;
+}
+
+.pul-btn--outsource {
+  color: #fff !important;
+  background: linear-gradient(180deg, #c084fc 0%, #a855f7 45%, #9333ea 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 3px 0 #7e22ce,
+    0 4px 12px rgba(147, 51, 234, 0.38) !important;
 }
 
 .pul-btn--sync {
@@ -1760,6 +2092,53 @@ onBeforeUnmount(() => {
   background: #eef2ff;
   border-radius: 8px;
   border: 1px solid #c7d2fe;
+}
+
+/* ── 外注注文ダイアログ ── */
+.pul-outsource-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pul-outsource-lead {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.pul-outsource-mail {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.pul-outsource-mail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.pul-outsource-mail-stat {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7c3aed;
+}
+
+.pul-outsource-alert {
+  margin-bottom: 10px;
+}
+
+.pul-outsource-form {
+  margin-top: 4px;
 }
 
 @media (max-width: 900px) {

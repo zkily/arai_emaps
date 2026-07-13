@@ -406,6 +406,7 @@ class ProductUseLabelConfig(Base):
     product_cd = Column(String(50), unique=True, nullable=False, index=True)
     use_label_product_name = Column(String(100))
     unit_qty = Column(Integer)
+    supply_type = Column(String(10), default="社内", nullable=False)
     part_no = Column(String(80))
     destination_name = Column(String(200))
     paper_color = Column(String(30))
@@ -414,6 +415,25 @@ class ProductUseLabelConfig(Base):
     back_no_2 = Column(String(50))
     back_no_3 = Column(String(50))
     barcode_no = Column(String(80))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class LabelQuantityMonthly(Base):
+    """ラベル枚数管理（月度：月初在庫・発行予定）"""
+    __tablename__ = "label_quantity_monthly"
+    __table_args__ = ({"mysql_comment": "ラベル枚数管理（月度）"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    year_month = Column(String(7), nullable=False, index=True)
+    label_type = Column(String(20), nullable=False)
+    product_cd = Column(String(50), nullable=False, index=True)
+    opening_stock = Column(Integer, nullable=False, default=0)
+    opening_locked = Column(Boolean, nullable=False, default=False)
+    issue_qty = Column(Integer, nullable=False, default=0)
+    issued_qty = Column(Integer, nullable=False, default=0)
+    last_issue_history = Column(String(255))
+    updated_by = Column(String(50))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

@@ -11,6 +11,7 @@ export interface ProductUseLabelConfig {
   master_product_name?: string
   use_label_product_name?: string | null
   unit_qty?: number | null
+  supply_type?: string | null
   part_no?: string | null
   destination_name?: string | null
   paper_color?: string | null
@@ -51,6 +52,8 @@ export interface AvailableProductForUseLabel {
   product_name: string
   configured: boolean
 }
+
+export const SUPPLY_TYPE_OPTIONS = ['社内', '外注'] as const
 
 export const PAPER_COLOR_OPTIONS = ['白', '黄', 'ピンク', '緑', '青', 'オレンジ'] as const
 
@@ -117,4 +120,53 @@ export function updateProductUseLabelConfig(id: number, data: Partial<ProductUse
 
 export function deleteProductUseLabelConfig(id: number) {
   return request.delete<{ success?: boolean }>(`${BASE}/${id}`)
+}
+
+export interface OutsourceOrderEmailItem {
+  product_cd: string
+  order_qty: number
+  use_label_product_name?: string | null
+  master_product_name?: string | null
+  unit_qty?: number | null
+  paper_color?: string | null
+}
+
+export interface OutsourceOrderEmailAttachment {
+  filename: string
+  mime_type: string
+  content_base64: string
+}
+
+export interface OutsourceOrderEmailPreview {
+  success: boolean
+  item_count: number
+  items: ProductUseLabelConfig[]
+  email_enabled: boolean
+  smtp_configured: boolean
+  template_subject?: string | null
+  can_send: boolean
+}
+
+export function fetchOutsourceUseLabelOrders() {
+  return request.get<{ list: ProductUseLabelConfig[]; total: number }>(`${BASE}/outsource-orders`)
+}
+
+export function fetchOutsourceUseLabelOrderEmailPreview() {
+  return request.get<OutsourceOrderEmailPreview>(`${BASE}/outsource-order/email-preview`)
+}
+
+export function sendOutsourceUseLabelOrderEmail(data: {
+  user_ids: number[]
+  items: OutsourceOrderEmailItem[]
+  attachments: OutsourceOrderEmailAttachment[]
+}) {
+  return request.post<{
+    success: boolean
+    message: string
+    item_count: number
+    total_order_qty: number
+    attachment_count: number
+    email_sent_count: number
+    email_failed?: { email: string; error: string }[]
+  }>(`${BASE}/outsource-order/send-email`, data)
 }

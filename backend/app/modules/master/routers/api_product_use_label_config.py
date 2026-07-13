@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.auth.operation_deps import require_master_operation
 from app.modules.master.models import Product, ProductUseLabelConfig
+from app.modules.master.product_label_service import normalize_supply_type
 from app.modules.master.product_use_label_service import (
     apply_master_sync_fields,
     apply_product_master_to_config,
@@ -21,6 +23,27 @@ from app.modules.master.product_use_label_service import (
 )
 
 router = APIRouter()
+
+
+class OutsourceOrderEmailItem(BaseModel):
+    product_cd: str
+    order_qty: int = Field(ge=0)
+    use_label_product_name: str | None = None
+    master_product_name: str | None = None
+    unit_qty: int | None = None
+    paper_color: str | None = None
+
+
+class OutsourceOrderEmailAttachment(BaseModel):
+    filename: str
+    mime_type: str = "application/pdf"
+    content_base64: str
+
+
+class SendOutsourceOrderEmailBody(BaseModel):
+    user_ids: list[int] = Field(min_length=1)
+    items: list[OutsourceOrderEmailItem] = Field(min_length=1)
+    attachments: list[OutsourceOrderEmailAttachment] = Field(min_length=1)
 
 
 def _product_cd_join():
@@ -56,6 +79,11 @@ def _parse_body(body: dict, *, include_master_fields: bool = False) -> dict:
     if include_master_fields and "unit_qty" in body:
         qty = body.get("unit_qty")
         data["unit_qty"] = int(qty) if qty is not None and qty != "" else None
+    if "supply_type" in body:
+        try:
+            data["supply_type"] = normalize_supply_type(body.get("supply_type"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     return data
 
 
@@ -355,3 +383,44 @@ async def delete_product_use_label_config(
     await db.delete(row)
     await db.commit()
     return {"success": True}
+
+
+@router.get("/outsource-orders")
+async def list_outsource_orders(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """区分が外注の製品用ラベル設定一覧。"""
+    from app.services.product_use_label_outsource_order_email import fetch_outsource_use_label_configs
+
+    items = await fetch_outsource_use_label_configs(db)
+    return {"list": items, "total": len(items)}
+
+
+@router.get("/outsource-order/email-preview")
+async def preview_outsource_order_email(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """外注注文メール送信の事前確認。"""
+    from app.services.product_use_label_outsource_order_email import get_outsource_order_email_preview
+
+    return await get_outsource_order_email_preview(db)
+
+
+@router.post("/outsource-order/send-email")
+async def send_outsource_order_email(
+    body: SendOutsourceOrderEmailBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_master_operation("edit")),
+):
+    """注文数1以上の外注ラベル注文をメール送信（ラベルPDF添付）。"""
+    from app.services.product_use_label_outsource_order_email import send_outsource_order_email as send_email
+
+    return await send_email(
+        db,
+        user_ids=body.user_ids,
+        items=[item.model_dump() for item in body.items],
+        attachments_payload=[att.model_dump() for att in body.attachments],
+        current_user=current_user,
+    )

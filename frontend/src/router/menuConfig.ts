@@ -223,6 +223,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_LABEL', name: 'ラベル発行', icon: 'Printer', parentCode: 'MASTER', sortOrder: 3 },
   { code: 'MASTER_PRODUCT_LABEL_CONFIG', name: '成型用ラベル設定', icon: 'PriceTag', path: '/master/product-label-config', parentCode: 'MASTER_LABEL', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_USE_LABEL_CONFIG', name: '製品用ラベル設定', icon: 'Tickets', path: '/master/product-use-label-config', parentCode: 'MASTER_LABEL', sortOrder: 2 },
+  { code: 'MASTER_LABEL_QTY_MGMT', name: 'ラベル枚数管理', icon: 'DataAnalysis', path: '/master/label-quantity', parentCode: 'MASTER_LABEL', sortOrder: 3 },
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', icon: 'Share', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', icon: 'Cpu', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
   { code: 'MASTER_EQUIPMENT_EFFICIENCY', name: '設備能率管理', icon: 'Odometer', path: '/master/bom/equipment-efficiency', parentCode: 'MASTER_BOM', sortOrder: 3 },

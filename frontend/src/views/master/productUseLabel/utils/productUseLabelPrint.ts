@@ -1362,11 +1362,11 @@ function buildPrintStyles(inoac: boolean): string {
   `
 }
 
-async function buildSheetsHtml(
+async function buildSheetsHtmlArray(
   inputs: ProductUseLabelPrintInput[],
   options?: ProductUseLabelPrintOptions
-): Promise<string> {
-  if (!inputs.length) return ''
+): Promise<string[]> {
+  if (!inputs.length) return []
 
   const grouped: { inoac: boolean; items: ProductUseLabelPrintInput[] }[] = []
   for (const item of inputs) {
@@ -1418,7 +1418,30 @@ async function buildSheetsHtml(
     }
   }
 
+  return sheets
+}
+
+async function buildSheetsHtml(
+  inputs: ProductUseLabelPrintInput[],
+  options?: ProductUseLabelPrintOptions
+): Promise<string> {
+  const sheets = await buildSheetsHtmlArray(inputs, options)
   return sheets.join('')
+}
+
+/** 外注注文メール用：製品ごと1ラベル、レイアウト別にB4シートへ分割 */
+export async function buildMixedProductUseLabelSheetDocuments(
+  items: ProductUseLabelPrintInput[]
+): Promise<string[]> {
+  if (!items.length) return []
+  const inoac = items.some((i) => isInoacDestination(i.destination_name))
+  const std = items.some((i) => !isInoacDestination(i.destination_name))
+  const styles =
+    inoac && std
+      ? buildPrintStyles(false) + buildPrintStyles(true)
+      : buildPrintStyles(inoac || false)
+  const sheets = await buildSheetsHtmlArray(items, { copiesPerPage: 1, pages: 1 })
+  return sheets.map((body) => buildPrintHtmlDocument('製品用ラベル', styles, body))
 }
 
 export async function buildProductUseLabelPrintHtml(

@@ -737,6 +737,7 @@ import {
 } from '@/views/mes/productionInstruction/productLabel/utils/productLabelPrint'
 import { printProductLabelConfigList } from '@/views/master/productLabel/utils/productLabelConfigListPrint'
 import { buildLabelEmailAttachments } from '@/views/master/productLabel/utils/productLabelOutsourceOrderPdf'
+import { recordLabelQuantityPrint } from '@/api/master/labelQuantity'
 import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
 import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
@@ -1318,14 +1319,32 @@ async function doPrint() {
   }
   printing.value = true
   printingCd.value = printTarget.value.product_cd
+  const productCd = printTarget.value.product_cd
+  const pages = Math.max(1, Number(printPages.value) || 1)
   try {
     await printProductLabels(input, {
-      pages: printPages.value,
+      pages,
       copiesPerPage: 6,
       showInitialMark: printShowInitial.value,
     })
     printDialogVisible.value = false
     ElMessage.success('印刷ダイアログを開きました')
+    try {
+      await recordLabelQuantityPrint({
+        label_type: 'molding',
+        items: [
+          {
+            product_cd: productCd,
+            paper_sheets: pages,
+            labels_per_sheet: 6,
+            label_count: pages * 6,
+          },
+        ],
+      })
+    } catch (e) {
+      console.warn('ラベル枚数管理への印刷履歴反映に失敗:', e)
+      ElMessage.warning('印刷は開始しましたが、枚数管理の履歴更新に失敗しました')
+    }
   } catch {
     ElMessage.error('印刷の開始に失敗しました')
   } finally {
