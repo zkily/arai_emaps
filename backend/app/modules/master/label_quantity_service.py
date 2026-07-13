@@ -713,7 +713,11 @@ async def batch_upsert_label_quantity(
                 row.updated_by = updated_by
 
     await db.commit()
-    period_start = ym_hint or sorted(year_months)[0]
+    period_start = ym_hint or (sorted(year_months)[0] if year_months else None)
+    if not period_start:
+        raise ValueError(
+            "start_month または items[].year_month のいずれかが必要です（対象月が空です）"
+        )
     period = await build_label_quantity_period(
         db,
         start_month=period_start,

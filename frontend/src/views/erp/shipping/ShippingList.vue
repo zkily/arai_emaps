@@ -1648,29 +1648,8 @@ async function printShipping(row: ShippingItem): Promise<void> {
     // 印刷用のHTMLを生成
     const printContent = generatePrintHTML(sameShippingNoItems)
 
-    // 印刷用のiframeを作成
-    const printFrame = document.createElement('iframe')
-    printFrame.style.position = 'absolute'
-    printFrame.style.top = '-1000px'
-    printFrame.style.left = '-1000px'
-    document.body.appendChild(printFrame)
-
-    // iframe内にHTMLを書き込み
-    const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document
-    if (frameDoc) {
-      frameDoc.open()
-      frameDoc.write(printContent)
-      frameDoc.close()
-
-      // 印刷処理
-      setTimeout(() => {
-        printFrame.contentWindow?.print()
-        // 印刷ダイアログが閉じられた後にiframeを削除
-        setTimeout(() => {
-          document.body.removeChild(printFrame)
-        }, 1000)
-      }, 500)
-    }
+    // 印刷用のiframeを作成して印刷
+    openPrintFrame(printContent)
 
     // 印刷記録をデータベースに保存し、状態を更新
     try {
@@ -1843,29 +1822,8 @@ async function printSelected(): Promise<void> {
     // 印刷用のHTMLを生成
     const printContent = generatePrintHTML(allItemsToPrint)
 
-    // 印刷用のiframeを作成
-    const printFrame = document.createElement('iframe')
-    printFrame.style.position = 'absolute'
-    printFrame.style.top = '-1000px'
-    printFrame.style.left = '-1000px'
-    document.body.appendChild(printFrame)
-
-    // iframe内にHTMLを書き込み
-    const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document
-    if (frameDoc) {
-      frameDoc.open()
-      frameDoc.write(printContent)
-      frameDoc.close()
-
-      // 印刷処理
-      setTimeout(() => {
-        printFrame.contentWindow?.print()
-        // 印刷ダイアログが閉じられた後にiframeを削除
-        setTimeout(() => {
-          document.body.removeChild(printFrame)
-        }, 1000)
-      }, 500)
-    }
+    // 印刷用のiframeを作成して印刷
+    openPrintFrame(printContent)
 
     // 印刷記録をデータベースに保存し、状態を更新
     try {
@@ -2069,6 +2027,12 @@ function generatePrintHTML(items: ShippingItem[]): string {
           font-weight: bold;
           text-align: center;
           margin-bottom: 5px;
+          width: 100%;
+          white-space: nowrap;
+          overflow: visible;
+          line-height: 58px;
+          height: 58px;
+          box-sizing: border-box;
         }
         .destination-code {
           font-size: 14px;
@@ -2297,7 +2261,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
           <!-- 第1層: 納入先 -->
           <div class="section destination-section">
             <div class="section-title">納入先</div>
-            <div class="destination-name">${firstItem.destination_name} 御中</div>
+            <div class="destination-name" style="font-size: ${calcDestinationNameFontSize(`${firstItem.destination_name} 御中`)}px">${firstItem.destination_name} 御中</div>
 
           </div>
 
@@ -2383,6 +2347,82 @@ function generatePrintHTML(items: ShippingItem[]): string {
   `
 
   return html
+}
+
+/** 印刷用納入先名の既定フォント・固定行高 */
+const DESTINATION_NAME_MAX_FONT = 50
+const DESTINATION_NAME_MIN_FONT = 14
+/** A4(210mm) - @page左右余白(10mm×2) - .page左右padding(20px×2) */
+const DESTINATION_NAME_AVAILABLE_WIDTH_PX = Math.floor(((210 - 20) / 25.4) * 96) - 40
+
+/** 納入先名が1行に収まるフォントサイズを算出（長い場合は1pxずつ縮小） */
+function calcDestinationNameFontSize(text: string): number {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return DESTINATION_NAME_MAX_FONT
+
+  const fontFamily = "'游ゴシック','Arial','Hiragino Sans','Meiryo',sans-serif"
+  let size = DESTINATION_NAME_MAX_FONT
+  while (size > DESTINATION_NAME_MIN_FONT) {
+    ctx.font = `bold ${size}px ${fontFamily}`
+    if (ctx.measureText(text).width <= DESTINATION_NAME_AVAILABLE_WIDTH_PX) {
+      break
+    }
+    size -= 1
+  }
+  return size
+}
+
+/** 印刷プレビュー内の納入先名を1行に収まるようフォントサイズを自動調整 */
+function fitDestinationNamesInDoc(doc: Document): void {
+  const els = doc.querySelectorAll<HTMLElement>('.destination-name')
+  els.forEach((el) => {
+    const availableWidth = el.parentElement?.clientWidth || el.clientWidth
+    if (!availableWidth) return
+
+    let size = parseFloat(el.style.fontSize) || DESTINATION_NAME_MAX_FONT
+    el.style.fontSize = `${size}px`
+    el.style.whiteSpace = 'nowrap'
+    el.style.width = 'auto'
+    el.style.maxWidth = 'none'
+
+    while (el.scrollWidth > availableWidth && size > DESTINATION_NAME_MIN_FONT) {
+      size -= 1
+      el.style.fontSize = `${size}px`
+    }
+
+    el.style.width = '100%'
+  })
+}
+
+/** 印刷用 iframe を開き、納入先名のフォント自動調整後に印刷する */
+function openPrintFrame(printContent: string): void {
+  const printFrame = document.createElement('iframe')
+  printFrame.style.position = 'absolute'
+  printFrame.style.top = '-1000px'
+  printFrame.style.left = '-1000px'
+  // @page 左右余白を除いた印刷可能幅に合わせ、測定と実印刷を揃える
+  printFrame.style.width = '190mm'
+  printFrame.style.height = '297mm'
+  printFrame.style.border = 'none'
+  document.body.appendChild(printFrame)
+
+  const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document
+  if (!frameDoc) return
+
+  frameDoc.open()
+  frameDoc.write(printContent)
+  frameDoc.close()
+
+  setTimeout(() => {
+    fitDestinationNamesInDoc(frameDoc)
+    printFrame.contentWindow?.print()
+    setTimeout(() => {
+      if (printFrame.parentNode) {
+        document.body.removeChild(printFrame)
+      }
+    }, 1000)
+  }, 500)
 }
 
 // 初期データ取得
