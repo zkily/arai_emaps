@@ -43,6 +43,17 @@ export interface DefectScrapComparisonSummaryRow {
   source_note?: string
 }
 
+export interface DefectScrapComparisonMonthlyRow {
+  year_month: string
+  label: string
+  summary_total: number
+  source_total: number
+  total_diff: number
+  match_rate: number
+  item_count: number
+  mismatch_count: number
+}
+
 export interface DefectScrapComparisonDetailRow {
   product_cd: string
   product_name: string
@@ -78,7 +89,7 @@ export interface DefectScrapComparisonParams {
   processCd?: string
   productCd?: string
   onlyDiff?: boolean
-  view?: 'summary' | 'detail'
+  view?: 'summary' | 'detail' | 'monthly'
   page?: number
   limit?: number
   sort_by?: string
@@ -88,8 +99,11 @@ export interface DefectScrapComparisonParams {
 export interface DefectScrapComparisonResponse {
   start_date: string
   end_date: string
-  view: 'summary' | 'detail'
-  list: DefectScrapComparisonSummaryRow[] | DefectScrapComparisonDetailRow[]
+  view: 'summary' | 'detail' | 'monthly'
+  list:
+    | DefectScrapComparisonSummaryRow[]
+    | DefectScrapComparisonDetailRow[]
+    | DefectScrapComparisonMonthlyRow[]
   plating_daily: PlatingDailyRow[]
   total?: number
   page?: number

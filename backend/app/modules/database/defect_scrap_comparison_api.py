@@ -157,6 +157,46 @@ def _combined_qty(defect: Optional[int], scrap: Optional[int]) -> Optional[int]:
     return int(defect or 0) + int(scrap or 0)
 
 
+def _qty_match_rate(summary_total: int, source_total: int) -> float:
+    """
+    数量ベース一致率。
+    1 - |製造−生産管理| / max(|生産管理|, |製造|, 1) を 0〜100% に丸める。
+    ※行件数ベースだと両方0の行が「一致」に入り、一致率が異常に高くなるため数量ベースを採用。
+    """
+    s = abs(int(summary_total or 0))
+    t = abs(int(source_total or 0))
+    base = max(s, t, 1)
+    diff = abs(t - s)
+    return round(max(0.0, (1.0 - diff / base) * 100.0), 2)
+
+
+def _row_match_counts(rows: List[dict]) -> Tuple[int, int, int, int, int]:
+    """
+    行ベース件数。両方0の一致行は一致率の分母・分子から除外する。
+    returns: (matched, mismatch, only_summary, only_source, rate_denominator)
+    """
+    matched = 0
+    mismatch = 0
+    only_summary = 0
+    only_source = 0
+    for r in rows:
+        status = r.get("status")
+        s_total = int(r.get("summary_total") or 0)
+        src_total = int(r.get("source_total") or 0) if r.get("source_total") is not None else 0
+        if status == "match":
+            if s_total == 0 and src_total == 0:
+                continue
+            matched += 1
+        elif status == "mismatch":
+            mismatch += 1
+        elif status == "only_summary":
+            only_summary += 1
+        elif status == "only_source":
+            only_source += 1
+    rate_den = matched + mismatch + only_summary + only_source
+    return matched, mismatch, only_summary, only_source, rate_den
+
+
 def _comparison_status(
     summary_defect: int,
     source_defect: Optional[int],
@@ -593,24 +633,28 @@ def _compute_kpi(detail_rows: List[dict]) -> dict:
     comparable_rows = [r for r in detail_rows if r.get("status") not in ("not_comparable", "plating_daily_only")]
     summary_total = sum(int(r.get("summary_total") or 0) for r in comparable_rows)
     source_total = sum(int(r.get("source_total") or 0) for r in comparable_rows if r.get("source_total") is not None)
-    match_count = sum(1 for r in comparable_rows if r.get("status") == "match")
-    mismatch_count = sum(1 for r in comparable_rows if r.get("status") == "mismatch")
-    only_summary_count = sum(1 for r in comparable_rows if r.get("status") == "only_summary")
-    only_source_count = sum(1 for r in comparable_rows if r.get("status") == "only_source")
+    matched_count, mismatch_count, only_summary_count, only_source_count, _ = _row_match_counts(
+        comparable_rows
+    )
     not_comparable_count = sum(1 for r in detail_rows if r.get("status") == "not_comparable")
     item_count = len(comparable_rows)
-    match_rate = round(match_count / item_count * 100, 2) if item_count else 0.0
+    # KPI 一致率は数量ベース（画面の合計値と直感が一致）
+    match_rate = _qty_match_rate(summary_total, source_total)
     return {
         "summary_total": summary_total,
         "source_total": source_total,
         "total_diff": source_total - summary_total,
         # 後方互換（内訳）
         "summary_defect_total": sum(int(r.get("summary_defect") or 0) for r in comparable_rows),
-        "source_defect_total": sum(int(r.get("source_defect") or 0) for r in comparable_rows if r.get("source_defect") is not None),
+        "source_defect_total": sum(
+            int(r.get("source_defect") or 0) for r in comparable_rows if r.get("source_defect") is not None
+        ),
         "summary_scrap_total": sum(int(r.get("summary_scrap") or 0) for r in comparable_rows),
-        "source_scrap_total": sum(int(r.get("source_scrap") or 0) for r in comparable_rows if r.get("source_scrap") is not None),
+        "source_scrap_total": sum(
+            int(r.get("source_scrap") or 0) for r in comparable_rows if r.get("source_scrap") is not None
+        ),
         "item_count": item_count,
-        "matched_count": match_count,
+        "matched_count": matched_count,
         "mismatch_count": mismatch_count,
         "only_summary_count": only_summary_count,
         "only_source_count": only_source_count,
@@ -649,10 +693,7 @@ def _build_summary_rows(
             s_total = sum(int(r.get("summary_total") or 0) for r in plating_daily_rows)
             src_total = sum(int(r.get("source_total") or 0) for r in plating_daily_rows)
             item_count = len(plating_daily_rows)
-            matched = sum(1 for r in plating_daily_rows if r.get("status") == "match")
-            mismatch = sum(1 for r in plating_daily_rows if r.get("status") == "mismatch")
-            only_summary = sum(1 for r in plating_daily_rows if r.get("status") == "only_summary")
-            only_source = sum(1 for r in plating_daily_rows if r.get("status") == "only_source")
+            matched, mismatch, only_summary, only_source, _ = _row_match_counts(plating_daily_rows)
             note = "日次合計（品番なし）"
         elif spec["source_type"] == "none":
             # 切断など：製造側なし → 製造=0、生産管理は detail / summary_map から合算
@@ -670,7 +711,7 @@ def _build_summary_rows(
                     item_count += 1
             src_total = 0
             if s_total == 0:
-                matched, mismatch, only_summary, only_source = item_count, 0, 0, 0
+                matched, mismatch, only_summary, only_source = 0, 0, 0, 0
             else:
                 matched, mismatch, only_summary, only_source = 0, 0, item_count, 0
             note = spec.get("source_note") or "製造側なし（0扱い）"
@@ -678,10 +719,7 @@ def _build_summary_rows(
             rows = by_proc.get(proc_cd, [])
             s_total = sum(int(r.get("summary_total") or 0) for r in rows)
             src_total = sum(int(r.get("source_total") or 0) for r in rows if r.get("source_total") is not None)
-            matched = sum(1 for r in rows if r.get("status") == "match")
-            mismatch = sum(1 for r in rows if r.get("status") == "mismatch")
-            only_summary = sum(1 for r in rows if r.get("status") == "only_summary")
-            only_source = sum(1 for r in rows if r.get("status") == "only_source")
+            matched, mismatch, only_summary, only_source, _ = _row_match_counts(rows)
             item_count = len(rows)
             note = spec.get("source_note")
 
@@ -691,7 +729,8 @@ def _build_summary_rows(
         if only_diff and total_diff == 0:
             continue
 
-        match_rate = round(matched / item_count * 100, 2) if item_count else 0.0
+        # 工程別一致率も数量ベース（合計同士の近さ）
+        match_rate = _qty_match_rate(s_total, src_total)
         summary.append(
             {
                 "process_cd": proc_cd,
@@ -720,7 +759,7 @@ def _compute_kpi_from_summary(summary_rows: List[dict]) -> dict:
     mismatch_count = sum(int(r.get("mismatch_count") or 0) for r in summary_rows)
     only_summary_count = sum(int(r.get("only_summary_count") or 0) for r in summary_rows)
     only_source_count = sum(int(r.get("only_source_count") or 0) for r in summary_rows)
-    match_rate = round(matched_count / item_count * 100, 2) if item_count else 0.0
+    match_rate = _qty_match_rate(summary_total, source_total)
     return {
         "summary_total": summary_total,
         "source_total": source_total,
@@ -735,6 +774,67 @@ def _compute_kpi_from_summary(summary_rows: List[dict]) -> dict:
     }
 
 
+def _iter_month_starts(start_d: date, end_d: date) -> List[date]:
+    """期間内の各月の1日を返す（start〜end を含む）。"""
+    months: List[date] = []
+    y, m = start_d.year, start_d.month
+    end_ym = (end_d.year, end_d.month)
+    while (y, m) <= end_ym:
+        months.append(date(y, m, 1))
+        if m == 12:
+            y, m = y + 1, 1
+        else:
+            m += 1
+    return months
+
+
+def _filter_rows_by_ym(rows: List[dict], ym: str) -> List[dict]:
+    prefix = f"{ym}-"
+    return [r for r in rows if str(r.get("production_day") or "").startswith(prefix)]
+
+
+def _build_monthly_trend_rows(
+    detail_rows_full: List[dict],
+    plating_daily_rows: List[dict],
+    summary_map: Dict[Tuple[str, date, str], dict],
+    process_cds: List[str],
+    proc_names: Dict[str, str],
+    start_d: date,
+    end_d: date,
+) -> List[dict]:
+    """月次の生産管理 / 製造 / 差異 / 一致率を返す（折線グラフ用）。"""
+    out: List[dict] = []
+    for month_start in _iter_month_starts(start_d, end_d):
+        ym = month_start.strftime("%Y-%m")
+        detail_m = _filter_rows_by_ym(detail_rows_full, ym)
+        plating_m = _filter_rows_by_ym(plating_daily_rows, ym)
+        summary_map_m = {
+            k: v for k, v in summary_map.items() if k[1].year == month_start.year and k[1].month == month_start.month
+        }
+        summary_rows = _build_summary_rows(
+            detail_m,
+            process_cds,
+            proc_names,
+            plating_daily_rows=plating_m,
+            summary_map=summary_map_m,
+            only_diff=False,
+        )
+        kpi = _compute_kpi_from_summary(summary_rows)
+        out.append(
+            {
+                "year_month": ym,
+                "label": f"{month_start.month}月",
+                "summary_total": kpi["summary_total"],
+                "source_total": kpi["source_total"],
+                "total_diff": kpi["total_diff"],
+                "match_rate": kpi["match_rate"],
+                "item_count": kpi["item_count"],
+                "mismatch_count": kpi["mismatch_count"],
+            }
+        )
+    return out
+
+
 @router.get("")
 async def get_defect_scrap_comparison(
     startDate: str = Query(..., description="開始日 YYYY-MM-DD"),
@@ -742,7 +842,7 @@ async def get_defect_scrap_comparison(
     processCd: Optional[str] = Query(None, description="工程CD（省略時は全対象工程）"),
     productCd: Optional[str] = Query(None, description="製品CD（完全一致）"),
     onlyDiff: bool = Query(False, description="差異のみ"),
-    view: str = Query("summary", description="summary | detail"),
+    view: str = Query("summary", description="summary | detail | monthly"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=500),
     sort_by: str = Query("total_diff"),
@@ -753,6 +853,7 @@ async def get_defect_scrap_comparison(
     """
     生産管理 vs 製造：不良・廃棄合算データ突合。
     粒度：品番 × 日期 × 工程（メッキは日次合算して工程別サマリに反映）。
+    view=monthly 時は月次系列（折線グラフ用）を返す。
     """
     start_d = _parse_date_param(startDate, "startDate")
     end_d = _parse_date_param(endDate, "endDate")
@@ -760,8 +861,15 @@ async def get_defect_scrap_comparison(
         raise HTTPException(status_code=422, detail="startDate は endDate 以前である必要があります")
 
     view_norm = (view or "summary").strip().lower()
-    if view_norm not in ("summary", "detail"):
-        raise HTTPException(status_code=422, detail="view は summary または detail を指定してください")
+    if view_norm not in ("summary", "detail", "monthly"):
+        raise HTTPException(
+            status_code=422, detail="view は summary / detail / monthly を指定してください"
+        )
+
+    if view_norm == "monthly":
+        month_count = len(_iter_month_starts(start_d, end_d))
+        if month_count > 12:
+            raise HTTPException(status_code=422, detail="月次トレンドは最大12ヶ月までです")
 
     proc_filter = (processCd or "").strip() or None
     if proc_filter and proc_filter.lower() == "all":
@@ -791,6 +899,37 @@ async def get_defect_scrap_comparison(
         else:
             summary_map_plating = summary_map
         plating_daily_rows = _build_plating_daily_rows(summary_map_plating, plating_daily_source, False)
+
+    if view_norm == "monthly":
+        monthly_rows = _build_monthly_trend_rows(
+            detail_rows_full,
+            plating_daily_rows,
+            summary_map,
+            process_cds,
+            proc_names,
+            start_d,
+            end_d,
+        )
+        return {
+            "success": True,
+            "data": {
+                "start_date": str(start_d),
+                "end_date": str(end_d),
+                "view": "monthly",
+                "list": monthly_rows,
+                "plating_daily": [],
+                "kpi": _compute_kpi_from_summary(
+                    _build_summary_rows(
+                        detail_rows_full,
+                        process_cds,
+                        proc_names,
+                        plating_daily_rows=plating_daily_rows,
+                        summary_map=summary_map,
+                        only_diff=False,
+                    )
+                ),
+            },
+        }
 
     # 工程別サマリは常に全工程。KPI は全工程合算。onlyDiff 時は差異行のみ返す。
     summary_rows_all = _build_summary_rows(

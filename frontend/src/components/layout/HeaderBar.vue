@@ -228,6 +228,11 @@
                 <el-icon><User /></el-icon>
                 {{ t('common.profile') }}
               </el-dropdown-item>
+              <el-dropdown-item command="memos">
+                <el-icon><Calendar /></el-icon>
+                <span class="user-menu-memo-label">{{ t('common.userMemoTitle') }}</span>
+                <span v-if="memoBadgeCount > 0" class="user-menu-memo-badge">{{ memoBadgeDisplay }}</span>
+              </el-dropdown-item>
               <el-dropdown-item command="logout" divided>
                 <el-icon><SwitchButton /></el-icon>
                 {{ t('common.logout') }}
@@ -249,6 +254,9 @@
     >
       <UserProfilePanel v-if="profileDialogVisible" presentation="dialog" />
     </el-dialog>
+
+    <UserMemoDrawer />
+    <UserMemoReminderDialog />
   </div>
 </template>
 
@@ -276,7 +284,10 @@ import {
 } from '@/utils/retentionDeadlineOverview'
 import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
+import UserMemoDrawer from '@/components/account/UserMemoDrawer.vue'
+import UserMemoReminderDialog from '@/components/account/UserMemoReminderDialog.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
+import { useUserMemos } from '@/composables/useUserMemos'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
 import { displayUserRoleName } from '@/utils/userRoleDisplay'
@@ -286,7 +297,7 @@ import 'dayjs/locale/ja'
 import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
-  FullScreen, Aim, User, SwitchButton, ArrowDown, Clock,
+  FullScreen, Aim, User, SwitchButton, ArrowDown, Clock, Calendar,
   Menu, Close, Promotion, Bell, Warning, Reading, MagicStick, TrendCharts, Box
 } from '@element-plus/icons-vue'
 
@@ -317,6 +328,13 @@ defineEmits<{
 
 const router = useRouter()
 const userStore = useUserStore()
+const userMemos = useUserMemos()
+
+const memoBadgeCount = computed(() => userMemos.badgeCount.value)
+const memoBadgeDisplay = computed(() => {
+  const n = memoBadgeCount.value
+  return n > 99 ? '99+' : String(n)
+})
 
 const userDisplayName = computed(() => {
   const user = userStore.user
@@ -692,6 +710,9 @@ const handleCommand = async (command: string) => {
       break
     case 'profile':
       profileDialogVisible.value = true
+      break
+    case 'memos':
+      userMemos.openDrawer()
       break
   }
 }
@@ -1450,6 +1471,24 @@ const handleCommand = async (command: string) => {
 .header-dropdown-popper .el-dropdown-menu__item .el-icon {
   font-size: 15px;
   color: #6366f1;
+}
+
+.header-dropdown-popper .user-menu-memo-label {
+  flex: 1;
+}
+
+.header-dropdown-popper .user-menu-memo-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 
 /* ヘッダ通知 Popover（teleport 先でも効くようグローバル） */
