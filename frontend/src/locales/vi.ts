@@ -255,6 +255,7 @@ export default {
     ERP_INVENTORY_STOCK_TX_LOG: 'Nhật ký giao dịch tồn kho',
     ERP_INVENTORY_MANUAL_ENTRY_STATS: 'Thống kê chỉnh sửa thực tế',
     ERP_INVENTORY_THEORETICAL_STOCKTAKE_CMP: 'So sánh tồn kho lý thuyết vs kiểm kê',
+    ERP_INVENTORY_DEFECT_SCRAP_CMP: 'Đối chiếu lỗi & phế liệu',
     ERP_PRODUCTION: 'Sản xuất',
     ERP_PRODUCTION_PLANNING: 'Kế hoạch sản xuất',
     ERP_PRODUCTION_DATA: 'Quản lý dữ liệu sản xuất',

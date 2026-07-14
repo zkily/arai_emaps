@@ -365,6 +365,7 @@ export default {
     ERP_INVENTORY_STOCK_TX_LOG: 'Stock Transaction Log',
     ERP_INVENTORY_MANUAL_ENTRY_STATS: 'Actual Correction Statistics',
     ERP_INVENTORY_THEORETICAL_STOCKTAKE_CMP: 'Theoretical vs Stocktake Comparison',
+    ERP_INVENTORY_DEFECT_SCRAP_CMP: 'Defect & Scrap Reconciliation',
     ERP_PRODUCTION: 'Production Control',
     ERP_PRODUCTION_PLANNING: 'Production Planning',
     ERP_PRODUCTION_DATA: 'Production Data Management',
