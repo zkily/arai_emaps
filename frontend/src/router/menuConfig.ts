@@ -38,6 +38,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_ORDER_MONTHLY', name: '月受注管理', icon: 'Calendar', path: '/erp/order/monthly', parentCode: 'ERP_ORDER', sortOrder: 1 },
   { code: 'ERP_ORDER_DAILY', name: '日受注管理', icon: 'Calendar', path: '/erp/order/daily', parentCode: 'ERP_ORDER', sortOrder: 2 },
   { code: 'ERP_ORDER_DEST_HIST', name: '納入先別受注履歴', icon: 'Histogram', path: '/erp/order/destination-history', parentCode: 'ERP_ORDER', sortOrder: 3 },
+  { code: 'ERP_ORDER_BUDGET', name: '予算管理', icon: 'Coin', path: '/erp/order/budget', parentCode: 'ERP_ORDER', sortOrder: 4 },
 
   // ===== 2. 購買・外注管理 (Procurement & Subcontracting) =====
   { code: 'ERP_PURCHASE', name: '購買・外注管理', path: '/erp/purchase', icon: 'ShoppingCart', parentCode: 'ERP', sortOrder: 3 },

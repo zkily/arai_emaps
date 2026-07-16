@@ -26,6 +26,7 @@ from app.modules import (
     system,
     master,
     order,
+    budget,
     database,
     shipping,
     excel_monitor,
@@ -366,6 +367,7 @@ app.include_router(mes.router, prefix="/api/mes", tags=["MES"])
 app.include_router(master.router, prefix="/api/master", tags=["マスタ管理"])
 app.include_router(system.router, prefix="/api/system", tags=["システム管理"])
 app.include_router(order.router, prefix="/api/order", tags=["受注ロット"])
+app.include_router(budget.router, prefix="/api/budget", tags=["予算管理"])
 app.include_router(database.router, prefix="/api/database", tags=["データベース"])
 app.include_router(outsourcing.router, prefix="/api/outsourcing", tags=["外注管理"])
 app.include_router(material.router, prefix="/api/material", tags=["材料管理"])

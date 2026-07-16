@@ -12,7 +12,7 @@
       </div>
       <div class="page-head-text">
         <h1 class="page-head-title">受注管理</h1>
-        <p class="page-head-sub">月次・日次の受注と納入先履歴を一元管理</p>
+        <p class="page-head-sub">月次・日次の受注、納入先履歴、予算管理を一元管理</p>
       </div>
     </header>
 
@@ -287,6 +287,16 @@
         </div>
         <el-icon class="quick-nav-card__arrow"><ArrowRight /></el-icon>
       </router-link>
+      <router-link to="/erp/order/budget" class="quick-nav-card quick-nav-card--emerald">
+        <div class="quick-nav-card__icon">
+          <el-icon :size="32"><Coin /></el-icon>
+        </div>
+        <div class="quick-nav-card__body">
+          <span class="quick-nav-card__title">予算管理</span>
+          <span class="quick-nav-card__hint">CSV・負荷・原価</span>
+        </div>
+        <el-icon class="quick-nav-card__arrow"><ArrowRight /></el-icon>
+      </router-link>
     </section>
   </div>
 </template>
@@ -303,6 +313,7 @@ import {
   Calendar,
   Check,
   Clock,
+  Coin,
   DataAnalysis,
   DataLine,
   Document,
@@ -1676,6 +1687,10 @@ onUnmounted(() => {
 
 .quick-nav-card--amber .quick-nav-card__icon {
   background: linear-gradient(145deg, #d97706 0%, #fbbf24 100%);
+}
+
+.quick-nav-card--emerald .quick-nav-card__icon {
+  background: linear-gradient(145deg, #059669 0%, #34d399 100%);
 }
 
 .quick-nav-card__body {

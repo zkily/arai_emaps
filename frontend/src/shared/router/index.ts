@@ -91,6 +91,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/order/monthly', name: 'OrderMonthlyList', component: () => import('@/views/erp/order/OrderMonthlyList.vue'), meta: { title: '月受注管理', group: '受注管理 > 月受注管理', requiresAuth: true } },
       { path: 'erp/order/daily', name: 'OrderDailyList', component: () => import('@/views/erp/order/OrderDailyList.vue'), meta: { title: '日受注管理', group: '受注管理 > 日受注管理', requiresAuth: true } },
       { path: 'erp/order/destination-history', name: 'OrderDestinationHistory', component: () => import('@/views/erp/order/OrderDestinationHistory.vue'), meta: { title: '納入先別受注履歴', group: '受注管理 > 納入先別受注履歴', requiresAuth: true } },
+      { path: 'erp/order/budget', name: 'BudgetManage', component: () => import('@/views/erp/order/BudgetManagePage.vue'), meta: { title: '予算管理', group: '受注管理 > 予算管理', requiresAuth: true } },
 
       // ========== ERP - 購買・外注管理 (Procurement / MM) ==========
       { path: 'erp/purchase', name: 'Purchase', component: () => import('@/views/erp/Purchase.vue'), meta: { title: '購買・外注管理', group: '購買・外注管理', requiresAuth: true } },

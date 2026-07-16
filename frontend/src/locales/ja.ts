@@ -473,6 +473,7 @@ export default {
     ERP_ORDER_DAILY_HIST: '日別受注履歴',
     ERP_ORDER_CUSTOMER_HIST: '顧客別受注履歴',
     ERP_ORDER_DEST_HIST: '納入先別受注履歴',
+    ERP_ORDER_BUDGET: '予算管理',
     ERP_ORDER_COMPARISON: '受注履歴比較',
     ERP_ORDER_PRINT: '受注印刷',
     APS: 'APS管理メニュー',

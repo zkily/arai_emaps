@@ -364,6 +364,7 @@ export default {
     ERP_ORDER_DAILY_HIST: 'Lịch sử theo ngày',
     ERP_ORDER_CUSTOMER_HIST: 'Lịch sử theo khách',
     ERP_ORDER_DEST_HIST: 'Lịch sử theo nơi giao',
+    ERP_ORDER_BUDGET: 'Quản lý ngân sách',
     ERP_ORDER_COMPARISON: 'So sánh lịch sử',
     ERP_ORDER_PRINT: 'In đơn hàng',
     APS: 'APS',

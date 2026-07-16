@@ -474,6 +474,7 @@ export default {
     ERP_ORDER_DAILY_HIST: 'Daily History',
     ERP_ORDER_CUSTOMER_HIST: 'Customer History',
     ERP_ORDER_DEST_HIST: 'Destination History',
+    ERP_ORDER_BUDGET: 'Budget Management',
     ERP_ORDER_COMPARISON: 'History Comparison',
     ERP_ORDER_PRINT: 'Order Print',
     APS: 'APS',

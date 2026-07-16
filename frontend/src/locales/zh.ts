@@ -472,6 +472,7 @@ export default {
     ERP_ORDER_DAILY_HIST: '日度历史',
     ERP_ORDER_CUSTOMER_HIST: '客户历史',
     ERP_ORDER_DEST_HIST: '交货地历史',
+    ERP_ORDER_BUDGET: '预算管理',
     ERP_ORDER_COMPARISON: '历史对比',
     ERP_ORDER_PRINT: '订单打印',
     APS: 'APS',
