@@ -75,6 +75,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY_THEORETICAL_STOCKTAKE_CMP', name: '理論棚卸比較', icon: 'ScaleToOriginal', path: '/erp/inventory/theoretical-stocktake-comparison', parentCode: 'ERP_INVENTORY', sortOrder: 5.6 },
   { code: 'ERP_INVENTORY_DEFECT_SCRAP_CMP', name: '不良廃棄突合', icon: 'DocumentChecked', path: '/erp/inventory/defect-scrap-comparison', parentCode: 'ERP_INVENTORY', sortOrder: 5.65 },
   { code: 'ERP_INVENTORY_BULK_DISPOSAL_RETENTION', name: '大量廃棄・保留品管理', icon: 'WarningFilled', path: '/erp/inventory/bulk-disposal-retention', parentCode: 'ERP_INVENTORY', sortOrder: 5.7 },
+  { code: 'ERP_INVENTORY_REPORT', name: '在庫報告管理', icon: 'DataBoard', path: '/erp/inventory/report', parentCode: 'ERP_INVENTORY', sortOrder: 5.8 },
   { code: 'ERP_INVENTORY_STOCKTAKE', name: '棚卸管理', icon: 'Files', path: '/erp/inventory/stocktake', parentCode: 'ERP_INVENTORY', sortOrder: 6 },
   { code: 'ERP_INVENTORY_STOCKTAKE_HOME', name: '棚卸管理ホーム', path: '/erp/inventory/stocktake', icon: 'HomeFilled', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 0 },
   { code: 'ERP_INVENTORY_STOCKTAKE_LIST', name: '棚卸リスト一覧', path: '/erp/inventory/stocktake/list', icon: 'List', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 1 },

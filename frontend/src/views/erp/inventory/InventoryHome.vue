@@ -130,7 +130,7 @@ import { ref, onMounted, computed, markRaw } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Box, Warning,
-  List, Document, Memo, Grid, Files
+  List, Document, Memo, Grid, Files, DataBoard
 } from '@element-plus/icons-vue'
 import { getStockAlerts } from '@/api/erp/inventory'
 import type { StockAlert } from '@/types/erp/inventory'
@@ -259,6 +259,12 @@ const quickNavModules: QuickNavItem[] = [
     title: '棚卸管理',
     icon: markRaw(Memo),
     gradient: 'linear-gradient(135deg, #667eea, #764ba2)'
+  },
+  {
+    path: '/erp/inventory/report',
+    title: '在庫報告管理',
+    icon: markRaw(DataBoard),
+    gradient: 'linear-gradient(135deg, #0f766e, #2563eb)'
   }
 ]
 

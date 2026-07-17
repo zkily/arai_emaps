@@ -14,6 +14,7 @@ from .inventory_value_api import router as inventory_value_router
 from .inventory_comparison_api import router as inventory_comparison_router
 from .standard_cost_api import router as standard_cost_router
 from .bulk_disposal_retention_api import router as bulk_disposal_retention_router
+from .inventory_report_api import router as inventory_report_router
 
 # メインルーター（すべてのERPサブルーターを統合）
 router = APIRouter()
@@ -32,6 +33,7 @@ router.include_router(inventory_value_router)
 router.include_router(inventory_comparison_router)
 router.include_router(standard_cost_router)
 router.include_router(bulk_disposal_retention_router)
+router.include_router(inventory_report_router)
 
 __all__ = ['router']
 

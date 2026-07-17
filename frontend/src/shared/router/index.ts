@@ -158,6 +158,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory/theoretical-stocktake-comparison', name: 'TheoreticalStocktakeComparison', component: () => import('@/views/erp/inventory/stock/TheoreticalStocktakeComparison.vue'), meta: { title: '理論棚卸比較', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/defect-scrap-comparison', name: 'DefectScrapComparison', component: () => import('@/views/erp/inventory/comparison/DefectScrapComparison.vue'), meta: { title: '不良廃棄突合', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/bulk-disposal-retention', name: 'BulkDisposalRetentionManagement', component: () => import('@/views/erp/inventory/disposal/BulkDisposalRetentionManagement.vue'), meta: { title: '大量廃棄・保留品管理', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/report', name: 'InventoryReportManagement', component: () => import('@/views/erp/inventory/report/InventoryReportManagement.vue'), meta: { title: '在庫報告管理', group: '在庫管理', requiresAuth: true } },
       {
         path: 'erp/inventory/stocktake',
         name: 'StocktakeManagement',
