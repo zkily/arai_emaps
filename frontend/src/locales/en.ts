@@ -1551,7 +1551,7 @@ export default {
       col_warehouse_stock: 'Warehouse stock',
       generateData: 'Generate data',
       generateConfirm:
-        'Create one row per product per calendar day from the first day of this month through the last day of the month three months ahead in shipping_warehouse_daily_stock (existing rows: update product name & weekday only). Continue?',
+        'Create daily rows through the end of the month three months ahead for products assigned to a destination name. Supply products, prototypes, and duplicate products are excluded (existing rows: update product name and weekday only). Continue?',
       generateDone: 'Generation finished ({n} rows).',
       generateFailed: 'Data generation failed.',
       syncFromOrderDaily: 'Update',

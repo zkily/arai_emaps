@@ -35,6 +35,16 @@ export function getProductsByDestinationForBatch(destinationCd: string): Promise
   return request.get(`/api/master/products/by-destination/${encodeURIComponent(destinationCd)}`) as Promise<ProductListResponse>
 }
 
+/** 製品CD 先頭桁（既定4桁）が一致する製品一覧（納入先名付き・検査/倉庫の実体選択用） */
+export function getProductsByCdPrefix(
+  prefix: string,
+  params?: { status?: string }
+): Promise<ProductListResponse> {
+  return request.get(`/api/master/products/by-cd-prefix/${encodeURIComponent(prefix)}`, {
+    params,
+  }) as Promise<ProductListResponse>
+}
+
 export function getMaxProductCd(): Promise<number> {
   return request.get('/api/master/products/max-cd') as Promise<number>
 }

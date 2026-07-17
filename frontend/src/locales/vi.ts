@@ -1424,7 +1424,7 @@ export default {
       col_warehouse_stock: 'Tồn kho',
       generateData: 'Tạo dữ liệu',
       generateConfirm:
-        'Tạo bản ghi mỗi sản phẩm mỗi ngày từ đầu tháng hiện tại đến cuối tháng sau 3 tháng vào shipping_warehouse_daily_stock (bản ghi đã có: chỉ cập nhật tên SP & thứ). Tiếp tục?',
+        'Tạo dữ liệu hằng ngày đến cuối tháng sau 3 tháng cho các sản phẩm thuộc tên nơi giao hàng; loại trừ sản phẩm bổ sung, sản phẩm thử nghiệm và sản phẩm trùng lặp (dòng đã có chỉ cập nhật tên SP và thứ). Tiếp tục?',
       generateDone: 'Đã tạo xong ({n} dòng).',
       generateFailed: 'Tạo dữ liệu thất bại.',
       syncFromOrderDaily: 'Cập nhật',

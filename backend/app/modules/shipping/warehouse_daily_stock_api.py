@@ -1,6 +1,6 @@
 """
 倉庫日次在庫 API
-- POST /generate-data: 当月月初～3ヶ月後月末まで、全製品の日次行を生成（UPSERT）
+- POST /generate-data: 当月月初～3ヶ月後月末まで、納入先所属製品の日次行を生成（UPSERT）
 - POST /sync-from-order-daily: order_daily + stock_transaction_logs + 倉庫在庫の日次繰り（carryover>0 の最終日から）
 - GET  /rows: 指定期間・任意製品の一覧（page / pageSize でページネーション）
 - GET  /product-options: products テーブルから製品 CD・名称（プルダウン用）
@@ -383,6 +383,21 @@ WHERE stl.stock_type = '製品'
 GROUP BY DATE(stl.transaction_time), stl.target_cd
 """
 
+# 不良・廃棄・保留は倉庫工程（KT13）のログのみ対象
+_STL_AGG_KT13 = """
+SELECT
+  DATE(stl.transaction_time) AS d,
+  stl.target_cd AS product_cd,
+  CAST(SUM(COALESCE(stl.quantity, 0)) AS DECIMAL(18,2)) AS qty
+FROM stock_transaction_logs stl
+WHERE stl.stock_type = '製品'
+  AND stl.transaction_type = :tt
+  AND stl.process_cd = 'KT13'
+  AND stl.target_cd IS NOT NULL AND stl.target_cd <> ''
+  AND stl.transaction_time IS NOT NULL
+GROUP BY DATE(stl.transaction_time), stl.target_cd
+"""
+
 # warehouse_actual = 同一日・同一 target_cd で SUM(入庫 quantity) − SUM(出庫 quantity)
 _SYNC_STL_WAREHOUSE_ACTUAL = """
 UPDATE shipping_warehouse_daily_stock s
@@ -414,23 +429,30 @@ SET s.warehouse_carryover = agg.qty
 
 _SYNC_STL_WAREHOUSE_DEFECT = f"""
 UPDATE shipping_warehouse_daily_stock s
-INNER JOIN ({_STL_AGG_BASE}) agg ON s.work_date = agg.d
+INNER JOIN ({_STL_AGG_KT13}) agg ON s.work_date = agg.d
   AND (s.product_cd COLLATE utf8mb4_unicode_ci) = (agg.product_cd COLLATE utf8mb4_unicode_ci)
 SET s.warehouse_defect = agg.qty
 """
 
 _SYNC_STL_WAREHOUSE_DISPOSAL = f"""
 UPDATE shipping_warehouse_daily_stock s
-INNER JOIN ({_STL_AGG_BASE}) agg ON s.work_date = agg.d
+INNER JOIN ({_STL_AGG_KT13}) agg ON s.work_date = agg.d
   AND (s.product_cd COLLATE utf8mb4_unicode_ci) = (agg.product_cd COLLATE utf8mb4_unicode_ci)
 SET s.warehouse_disposal = agg.qty
 """
 
 _SYNC_STL_WAREHOUSE_HOLD = f"""
 UPDATE shipping_warehouse_daily_stock s
-INNER JOIN ({_STL_AGG_BASE}) agg ON s.work_date = agg.d
+INNER JOIN ({_STL_AGG_KT13}) agg ON s.work_date = agg.d
   AND (s.product_cd COLLATE utf8mb4_unicode_ci) = (agg.product_cd COLLATE utf8mb4_unicode_ci)
 SET s.warehouse_hold = agg.qty
+"""
+
+# KT13 限定に絞ったため、旧集計（他工程分）の残存値を毎回リセットしてから反映する
+_RESET_STL_DEFECT_DISPOSAL_HOLD = """
+UPDATE shipping_warehouse_daily_stock
+SET warehouse_defect = 0, warehouse_disposal = 0, warehouse_hold = 0
+WHERE warehouse_defect <> 0 OR warehouse_disposal <> 0 OR warehouse_hold <> 0
 """
 
 # 同一製品×納入先で日付昇順に、前日の warehouse_stock を足し込む。
@@ -489,7 +511,8 @@ async def sync_from_order_daily(
     2) stock_transaction_logs（stock_type=製品）を DATE(transaction_time)+target_cd で集約し、
        transaction_type=初期 → warehouse_carryover、
        warehouse_actual = SUM(入庫 quantity) − SUM(出庫 quantity)、
-       不良 / 廃棄 / 保留 → warehouse_defect / warehouse_disposal / warehouse_hold。
+       不良 / 廃棄 / 保留 → warehouse_defect / warehouse_disposal / warehouse_hold
+       （倉庫工程 process_cd='KT13' のログのみ対象。反映前に旧値を 0 リセット）。
     3) warehouse_carryover > 0 が存在する最遅の work_date を開始日とし、当該日～テーブル最大日まで
        日付順に warehouse_stock を再計算（製品×納入先ごとに前日の warehouse_stock を加算）。
        式: carryover + actual - defect - disposal - forecast_qty + 前日 warehouse_stock。
@@ -501,6 +524,7 @@ async def sync_from_order_daily(
     n_co = result_co.rowcount if result_co.rowcount is not None else -1
     result_a = await db.execute(text(_SYNC_STL_WAREHOUSE_ACTUAL))
     n_a = result_a.rowcount if result_a.rowcount is not None else -1
+    await db.execute(text(_RESET_STL_DEFECT_DISPOSAL_HOLD))
     result_de = await db.execute(text(_SYNC_STL_WAREHOUSE_DEFECT), {"tt": "不良"})
     n_de = result_de.rowcount if result_de.rowcount is not None else -1
     result_di = await db.execute(text(_SYNC_STL_WAREHOUSE_DISPOSAL), {"tt": "廃棄"})
@@ -545,10 +569,11 @@ async def generate_warehouse_daily_data(
     current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
-    当月月初から「+3ヶ月後の月」の末日まで、products 全件 × 全日付の行を
-    shipping_warehouse_daily_stock に UPSERT する。
+    当月月初から「+3ヶ月後の月」の末日まで、納入先マスタに紐づく製品 × 全日付の行を
+    shipping_warehouse_daily_stock に UPSERT する。補給品・試作品は対象外。
+    納入先名 + 製品CDで重複を除外する。
     weekday は work_date（JST 暦）から自動（月…日）。
-    数量系は 0。destination_cd が NULL/空のときは N01。
+    数量系は 0。
     """
     start, end = _generate_date_range_jst()
     days: List[date] = []
@@ -557,12 +582,49 @@ async def generate_warehouse_daily_data(
         days.append(d)
         d += timedelta(days=1)
 
+    collation = "utf8mb4_unicode_ci"
     prod_res = await db.execute(
-        select(Product.product_cd, Product.product_name, Product.destination_cd).order_by(Product.product_cd)
+        select(
+            Product.product_cd,
+            Product.product_name,
+            Product.destination_cd,
+            Destination.destination_name,
+        )
+        .join(
+            Destination,
+            Product.destination_cd.collate(collation)
+            == Destination.destination_cd.collate(collation),
+        )
+        .where(Product.product_cd.isnot(None), Product.product_cd != "")
+        .where(Product.destination_cd.isnot(None), Product.destination_cd != "")
+        .where(Destination.destination_name.isnot(None), Destination.destination_name != "")
+        .where(
+            or_(
+                Product.product_type.is_(None),
+                ~Product.product_type.in_(("補給品", "試作品")),
+            )
+        )
+        .order_by(
+            Destination.destination_name,
+            Product.product_name,
+            Product.product_cd,
+        )
     )
-    products = prod_res.all()
+    products: list[Any] = []
+    seen_products: set[tuple[str, str]] = set()
+    for row in prod_res.all():
+        destination_name = " ".join((row.destination_name or "").split()).casefold()
+        product_cd = (row.product_cd or "").strip()
+        dedupe_key = (destination_name, product_cd.casefold())
+        if not destination_name or not product_cd or dedupe_key in seen_products:
+            continue
+        seen_products.add(dedupe_key)
+        products.append(row)
     if not products:
-        raise HTTPException(status_code=400, detail="製品マスタ（products）にデータがありません")
+        raise HTTPException(
+            status_code=400,
+            detail="納入先に所属する生成対象製品がありません（補給品・試作品は対象外です）",
+        )
 
     zero = Decimal("0")
     payload: list[dict[str, Any]] = []
@@ -573,7 +635,7 @@ async def generate_warehouse_daily_data(
             if not pcd:
                 continue
             pname = (row.product_name or "").strip() or pcd
-            dest = (row.destination_cd or "").strip() or "N01"
+            dest = (row.destination_cd or "").strip()
             payload.append(
                 {
                     "product_cd": pcd,
@@ -612,10 +674,11 @@ async def generate_warehouse_daily_data(
         pcd = (row.product_cd or "").strip()
         if not pcd:
             continue
-        dest = (row.destination_cd or "").strip() or "N01"
+        dest = (row.destination_cd or "").strip()
         pname = (row.product_name or "").strip() or pcd
+        destination_name = (row.destination_name or "").strip()
         ds = days[0].strftime("%Y/%m/%d")
-        sample.append(f"{pcd} {pname} {ds} {dest}")
+        sample.append(f"{destination_name} / {pcd} {pname} {ds} {dest}")
         if len(sample) >= 2:
             break
 

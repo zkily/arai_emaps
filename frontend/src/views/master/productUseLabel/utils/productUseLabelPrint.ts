@@ -407,20 +407,6 @@ function nameColor(hex?: string | null): string {
   return /^#[0-9a-f]{3,8}$/i.test(v) ? v : '#000000'
 }
 
-/** QR用製品CD：末尾が「1」でなければ最終桁を「1」に置換（例: ABC123 → ABC121） */
-function normalizeProductCdForQr(productCd?: string | null): string {
-  const s = (productCd || '').trim()
-  if (!s) return ''
-  if (s.endsWith('1')) return s
-  return s.slice(0, -1) + '1'
-}
-
-function resolveQrEncodeText(input: ProductUseLabelPrintInput): string {
-  const normalizedCd = normalizeProductCdForQr(input.product_cd)
-  if (normalizedCd) return normalizedCd
-  return (input.part_no || '').trim()
-}
-
 async function makeQrDataUrl(text: string, px: number): Promise<string> {
   const cd = (text || '').trim() || '-'
   try {
@@ -605,7 +591,7 @@ async function buildStandardLabelHtml(
   hMm: number
 ): Promise<string> {
   const qrPx = qrRenderPx(STD_QR_SIZE_MM)
-  const qrSrc = await makeQrDataUrl(resolveQrEncodeText(input), qrPx)
+  const qrSrc = await makeQrDataUrl(input.product_cd || '', qrPx)
   const pColor = nameColor(input.product_name_color)
   const rawProductName = (input.use_label_product_name || '').trim()
   const productName = escapeHtml(rawProductName)
@@ -651,7 +637,7 @@ async function buildInoacLabelHtml(
   hMm: number
 ): Promise<string> {
   const qrPx = qrRenderPx(INOAC_QR_SIZE_MM)
-  const qrSrc = await makeQrDataUrl(normalizeProductCdForQr(input.product_cd), qrPx)
+  const qrSrc = await makeQrDataUrl(input.product_cd || '', qrPx)
   const pColor = nameColor(input.product_name_color)
   const rawProductName = (input.use_label_product_name || '').trim()
   const productName = escapeHtml(rawProductName)

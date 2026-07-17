@@ -1549,7 +1549,7 @@ export default {
       col_warehouse_stock: '仓库在库',
       generateData: '生成数据',
       generateConfirm:
-        '将从当月初至三个月后月末，为产品主档中全部产品写入每日一行到 shipping_warehouse_daily_stock（已存在则仅更新品名与星期）。是否继续？',
+        '将从当月初至三个月后月末，按交货地名称所属产品生成每日数据；补给品、试作品及重复产品将被排除（已存在则仅更新品名与星期）。是否继续？',
       generateDone: '数据生成完成（{n} 条）。',
       generateFailed: '数据生成失败。',
       syncFromOrderDaily: '更新',

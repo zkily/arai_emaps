@@ -79,12 +79,12 @@ def _norm_name(s: str) -> str:
 
 def _normalize_product_cd(product_cd: Optional[str]) -> str:
     """
-    production_summarys の品番に揃える（前4桁 + '1'）。
-    製造側 Excel 由来の品番（4〜6桁など）と突合するため。
+    production_summarys の品番に揃える（末尾を '1' にそろえる）。
+    製造側 Excel 由来の品番（末尾が 1 以外）と突合するため。
     """
     s = str(product_cd or "").strip()
-    if len(s) >= 4:
-        return s[:4] + "1"
+    if len(s) >= 1:
+        return s[:-1] + "1"
     return s
 
 

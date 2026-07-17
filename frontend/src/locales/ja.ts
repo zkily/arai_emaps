@@ -1550,7 +1550,7 @@ export default {
       col_warehouse_stock: '倉庫在庫',
       generateData: 'データ生成',
       generateConfirm:
-        '当月月初から3ヶ月後の月末まで、全製品×全日付の行を shipping_warehouse_daily_stock に登録します（既存行は製品名・曜日のみ更新）。よろしいですか？',
+        '当月月初から3ヶ月後の月末まで、納入先名に所属する製品×全日付の行を登録します。補給品・試作品および重複製品は除外します（既存行は製品名・曜日のみ更新）。よろしいですか？',
       generateDone: 'データ生成が完了しました（{n} 件）。',
       generateFailed: 'データ生成に失敗しました。',
       syncFromOrderDaily: '更新',

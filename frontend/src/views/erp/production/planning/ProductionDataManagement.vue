@@ -752,10 +752,10 @@
     <el-dialog
       v-model="showTransactionInputDialog"
       title="在庫取引ログ入力"
-      width="580px"
+      :width="transactionNeedsEntitySelect ? '720px' : '580px'"
       class="transaction-log-dialog"
       :close-on-click-modal="false"
-      @close="showTransactionInputDialog = false"
+      @close="closeTransactionInputDialog"
     >
       <div v-if="transactionInputInfo.date" class="transaction-input-info">
         <div class="transaction-info-grid">
@@ -777,8 +777,68 @@
               {{ transactionInputInfo.processCd }} (<span class="transaction-process-name">{{ transactionInputInfo.processName }}</span>)
             </div>
           </div>
+          <div v-if="transactionInputInfo.destinationName" class="transaction-info-item">
+            <div class="transaction-info-label">納入先名</div>
+            <div class="transaction-info-value">{{ transactionInputInfo.destinationName }}</div>
+          </div>
         </div>
       </div>
+
+      <!-- 検査・倉庫：前4桁一致かつ末尾≠1の実体がある場合は選択必須 -->
+      <div v-if="transactionNeedsEntitySelect" class="transaction-entity-select">
+        <div class="transaction-entity-select__title">
+          実体製品を選択してください（製品CD前4桁が同一・末尾が1以外の製品あり）
+        </div>
+        <el-table
+          :data="transactionEntityOptions"
+          size="small"
+          border
+          highlight-current-row
+          :row-class-name="transactionEntityRowClass"
+          max-height="220"
+          @row-click="handleTransactionEntitySelect"
+        >
+          <el-table-column label="" width="44" align="center">
+            <template #default="{ row }">
+              <el-radio
+                :model-value="transactionSelectedEntityCd"
+                :value="row.product_cd"
+                @click.stop="handleTransactionEntitySelect(row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_cd" label="製品CD" width="90" align="center" />
+          <el-table-column prop="product_name" label="製品名" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="destination_name" label="納入先名" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.destination_name || '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="末尾" width="56" align="center">
+            <template #default="{ row }">
+              <el-tag
+                size="small"
+                :type="String(row.product_cd || '').endsWith('1') ? 'success' : 'warning'"
+                effect="plain"
+              >
+                {{ String(row.product_cd || '').slice(-1) || '—' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状態" width="78" align="center">
+            <template #default="{ row }">
+              <el-tag
+                size="small"
+                :type="row.status === 'active' ? 'success' : 'info'"
+                effect="plain"
+              >
+                {{ row.status === 'active' ? 'Active' : 'Inactive' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <div class="transaction-panels">
         <template v-if="transactionInputInfo.processCd === 'KT13'">
           <div class="transaction-panel transaction-panel--green">
@@ -861,7 +921,7 @@
       </div>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="showTransactionInputDialog = false">キャンセル</el-button>
+          <el-button @click="closeTransactionInputDialog">キャンセル</el-button>
           <el-button type="primary" :loading="submittingTransaction" @click="handleSubmitTransaction">登録</el-button>
         </div>
       </template>
@@ -2151,6 +2211,7 @@ import {
 import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
 import { fetchScheduledWorkdaysForMonth, calcWeekdayFallbackForMonth } from '@/api/master/companyWorkCalendar'
+import { getProductsByCdPrefix } from '@/api/master/productMaster'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import InventoryStagnationDrawer from './components/InventoryStagnationDrawer.vue'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
@@ -2334,7 +2395,8 @@ const transactionInputInfo = ref<{
   productName: string
   processCd: string
   processName: string
-}>({ date: '', productCd: '', productName: '', processCd: '', processName: '' })
+  destinationName?: string
+}>({ date: '', productCd: '', productName: '', processCd: '', processName: '', destinationName: '' })
 const transactionForm = ref<{
   actual: number | null
   defect: number | null
@@ -2343,6 +2405,18 @@ const transactionForm = ref<{
   inbound: number | null
   outbound: number | null
 }>({ actual: null, defect: null, scrap: null, onHold: null, inbound: null, outbound: null })
+/** 検査(KT09)・倉庫(KT13)：前4桁一致の実体候補（末尾≠1がある場合に選択必須） */
+type TransactionEntityOption = {
+  product_cd: string
+  product_name?: string
+  destination_cd?: string | null
+  destination_name?: string | null
+  status?: string | null
+}
+const transactionEntityOptions = ref<TransactionEntityOption[]>([])
+const transactionNeedsEntitySelect = ref(false)
+const transactionSelectedEntityCd = ref('')
+const PRODUCT_CD_PREFIX_LEN = 4
 // 工程別計画確認印刷
 const showPrintDateDialog = ref(false)
 const printTargetDate = ref<string>('')
@@ -2901,7 +2975,7 @@ const handleUpdateCarryOver = async () => {
  * 二、后端算法概要
  * -----------------------------------------------------------------------------
  * 1. 数据来源：stock_transaction_logs（在庫取引履歴）
- * 2. 产品码换算：target_cd 取前 4 位 + '1' → product_cd（与 production_summarys.product_cd 对应）
+ * 2. 产品码换算：target_cd 末尾改为 '1' → product_cd（与 production_summarys.product_cd 对应；桁数に依存しない）
  * 3. 日期：DATE(transaction_time) → production_summarys.date
  * 4. 处理范围：startDate 以降；先对该范围内所有「実績列」清零，再按同日以降のログ重新汇总写回
  *
@@ -4158,12 +4232,15 @@ async function openTransactionDialog(row: Record<string, any>, processCd: string
     ? (typeof dateVal === 'string' ? dateVal.slice(0, 10) : String(dateVal).slice(0, 10))
     : ''
   await ensureProcessOptions()
+  const baseProductCd = (row.product_cd ?? '').toString().trim()
+  const baseProductName = (row.product_name ?? '').toString().trim()
   transactionInputInfo.value = {
     date: dateStr,
-    productCd: (row.product_cd ?? '').toString().trim(),
-    productName: (row.product_name ?? '').toString().trim(),
+    productCd: baseProductCd,
+    productName: baseProductName,
     processCd,
     processName: getProcessName(processCd),
+    destinationName: '',
   }
   transactionForm.value = {
     actual: null,
@@ -4173,7 +4250,68 @@ async function openTransactionDialog(row: Record<string, any>, processCd: string
     inbound: null,
     outbound: null,
   }
+  transactionEntityOptions.value = []
+  transactionNeedsEntitySelect.value = false
+  transactionSelectedEntityCd.value = ''
+
+  // 検査・倉庫のみ：前4桁一致の製品に末尾≠1があれば実体選択を要求
+  if ((processCd === 'KT09' || processCd === 'KT13') && baseProductCd.length >= PRODUCT_CD_PREFIX_LEN) {
+    try {
+      const prefix = baseProductCd.slice(0, PRODUCT_CD_PREFIX_LEN)
+      // active / inactive の判定を表示するため、ステータスを絞らず全候補を取得
+      const res: any = await getProductsByCdPrefix(prefix, { status: '' })
+      const list: TransactionEntityOption[] = (
+        res?.data?.list ?? res?.list ?? (Array.isArray(res) ? res : [])
+      )
+        .map((p: any) => ({
+          product_cd: String(p.product_cd ?? '').trim(),
+          product_name: p.product_name != null ? String(p.product_name) : '',
+          destination_cd: p.destination_cd != null ? String(p.destination_cd) : null,
+          destination_name: p.destination_name != null ? String(p.destination_name) : null,
+          status: p.status != null ? String(p.status) : null,
+        }))
+        .filter((p: TransactionEntityOption) => p.product_cd && p.product_cd.slice(0, PRODUCT_CD_PREFIX_LEN) === prefix)
+
+      const hasNonTrailingOne = list.some((p) => !p.product_cd.endsWith('1'))
+      if (hasNonTrailingOne && list.length > 0) {
+        transactionEntityOptions.value = list.sort((a, b) =>
+          a.product_cd.localeCompare(b.product_cd, 'ja')
+        )
+        transactionNeedsEntitySelect.value = true
+        // 実体選択を必須とするため初期は未選択
+        transactionSelectedEntityCd.value = ''
+        transactionInputInfo.value.productCd = ''
+        transactionInputInfo.value.productName = ''
+        transactionInputInfo.value.destinationName = ''
+      }
+    } catch {
+      // 候補取得失敗時は従来どおり行の製品CDで登録可能
+      transactionEntityOptions.value = []
+      transactionNeedsEntitySelect.value = false
+    }
+  }
+
   showTransactionInputDialog.value = true
+}
+
+function handleTransactionEntitySelect(row: TransactionEntityOption) {
+  const cd = (row.product_cd || '').trim()
+  if (!cd) return
+  transactionSelectedEntityCd.value = cd
+  transactionInputInfo.value.productCd = cd
+  transactionInputInfo.value.productName = (row.product_name || '').trim()
+  transactionInputInfo.value.destinationName = (row.destination_name || '').trim()
+}
+
+function transactionEntityRowClass({ row }: { row: TransactionEntityOption }) {
+  return row.product_cd === transactionSelectedEntityCd.value ? 'transaction-entity-row--selected' : ''
+}
+
+function closeTransactionInputDialog() {
+  showTransactionInputDialog.value = false
+  transactionEntityOptions.value = []
+  transactionNeedsEntitySelect.value = false
+  transactionSelectedEntityCd.value = ''
 }
 
 function getTransactionTime(dateStr: string): string {
@@ -4192,7 +4330,15 @@ async function handleSubmitTransaction() {
   const processCd = info.processCd
   const dateStr = info.date
   if (!dateStr || !info.productCd) {
-    ElMessage.warning('日付・製品が設定されていません')
+    ElMessage.warning(
+      transactionNeedsEntitySelect.value
+        ? '実体製品（製品CD・納入先）を選択してください'
+        : '日付・製品が設定されていません'
+    )
+    return
+  }
+  if (transactionNeedsEntitySelect.value && !transactionSelectedEntityCd.value) {
+    ElMessage.warning('実体製品（製品CD・納入先）を選択してください')
     return
   }
   const transactionTime = getTransactionTime(dateStr)
@@ -4234,8 +4380,12 @@ async function handleSubmitTransaction() {
         ? '製品倉庫'
         : '工程中間在庫'
   const unit = processCd === 'KT09' ? '本' : null
+  // 検査・倉庫で実体選択した場合は選択した製品CDをそのまま target_cd に登録
+  const targetCd = (
+    transactionNeedsEntitySelect.value ? transactionSelectedEntityCd.value : info.productCd
+  ).trim()
   const baseBody: Record<string, any> = {
-    target_cd: info.productCd,
+    target_cd: targetCd,
     process_cd: processCd,
     transaction_time: transactionTime,
     source_file: '生産データ管理',
@@ -4310,7 +4460,7 @@ async function handleSubmitTransaction() {
   try {
     await Promise.all(insertPromises)
     ElMessage.success('在庫取引ログを登録しました')
-    showTransactionInputDialog.value = false
+    closeTransactionInputDialog()
     setTimeout(() => fetchData(), 500)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? e?.response?.data?.message ?? e?.message ?? '登録に失敗しました')
@@ -7344,6 +7494,22 @@ onUnmounted(() => {
 .transaction-process-name {
   color: #dc2626;
   font-weight: 700;
+}
+.transaction-entity-select {
+  margin-bottom: 1rem;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+.transaction-entity-select__title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+.transaction-entity-select :deep(.transaction-entity-row--selected) > td {
+  background: #fef3c7 !important;
 }
 .transaction-panels {
   display: grid;

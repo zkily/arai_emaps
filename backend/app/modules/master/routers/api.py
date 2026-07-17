@@ -16,7 +16,7 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import Product, Material, Supplier, ProductRouteStep, Process
+from app.modules.master.models import Product, Material, Supplier, ProductRouteStep, Process, Destination
 from app.modules.master.schemas import ProductCreate, ProductUpdate
 
 router = APIRouter()
@@ -288,6 +288,45 @@ async def recalculate_all_scrap_length(
         "skipped": skipped,
         "total": len(products),
     }
+
+
+@router.get("/by-cd-prefix/{prefix}")
+async def get_products_by_cd_prefix(
+    prefix: str,
+    status: Optional[str] = Query("active", description="製品ステータス（空文字で全件）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    製品CD の先頭（既定4桁）が一致する製品一覧。
+    納入先名を付与（検査・倉庫の実体選択用）。
+    """
+    prefix_norm = (prefix or "").strip()
+    if not prefix_norm:
+        raise HTTPException(status_code=400, detail="prefix を指定してください")
+    prefix_len = len(prefix_norm)
+
+    q = (
+        select(Product, Destination.destination_name)
+        .outerjoin(Destination, Product.destination_cd == Destination.destination_cd)
+        .where(func.left(Product.product_cd, prefix_len) == prefix_norm)
+        .where(Product.product_cd.isnot(None))
+        .where(Product.product_cd != "")
+    )
+    status_norm = (status or "").strip()
+    if status_norm:
+        q = q.where(Product.status == status_norm)
+    q = q.order_by(Product.product_cd.asc())
+
+    result = await db.execute(q)
+    rows = result.all()
+    list_data = []
+    for product, destination_name in rows:
+        item = _row_to_dict(product)
+        item["destination_name"] = destination_name
+        list_data.append(item)
+
+    return {"success": True, "data": {"list": list_data, "total": len(list_data), "prefix": prefix_norm}}
 
 
 @router.get("/by-destination/{destination_cd}")

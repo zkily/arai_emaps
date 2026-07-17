@@ -34,6 +34,19 @@ router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
 BATCH_UPDATE_LOCK_KEY = "production_summary_batch_update"
 DEFAULT_LOCK_TTL_SECONDS = 300  # 5分で自動解放
 
+
+def _sql_normalize_product_cd(column: str = "target_cd") -> str:
+    """
+    集計キー用：製品CD（target_cd 等）の末尾を '1' にそろえる SQL 式。
+    例: '12345'→'12341', '12342'→'12341'（桁数に依存しない）。
+    """
+    return f"CONCAT(SUBSTRING({column}, 1, LENGTH({column}) - 1), '1')"
+
+
+def _sa_normalize_product_cd(column):
+    """SQLAlchemy 用：製品CD末尾を '1' にそろえる。"""
+    return func.concat(func.substr(column, 1, func.length(column) - 1), "1")
+
 # 繰越クリア対象の全工程カラム（KT13=倉庫, KT15=外注倉庫 を分離）
 CARRY_OVER_COLUMNS = [
     "cutting_carry_over", "chamfering_carry_over", "molding_carry_over", "plating_carry_over",
@@ -2171,10 +2184,9 @@ async def update_production_summarys_from_order_daily(
         today = datetime.utcnow().date()
         recent_start_date = today - _timedelta(days=days - 1)
 
-    # order_daily から集計
+    # order_daily から集計（product_cd 末尾を '1' にそろえてから集計）
     od = OrderDaily
-    # product_cd の末尾を '1' にそろえる
-    normalized_product_cd = func.concat(func.substr(od.product_cd, 1, func.length(od.product_cd) - 1), "1")
+    normalized_product_cd = _sa_normalize_product_cd(od.product_cd)
 
     agg_query = (
         select(
@@ -2311,11 +2323,14 @@ async def update_production_summarys_carry_over(
     """
     stock_transaction_logs の transaction_type='初期' を集計し、
     production_summarys の各工程繰越列に反映する。
+    target_cd は末尾を '1' にそろえてから (product_cd, date, process_cd) で集計する。
     """
     allowed_process = set(PROCESS_CARRY_OVER_MAPPING.keys())
+    # target_cd 末尾を '1' にそろえてから (product_cd, date, process_cd) で集計
+    normalized_product_cd = _sa_normalize_product_cd(StockTransactionLog.target_cd)
     agg_q = (
         select(
-            StockTransactionLog.target_cd.label("product_cd"),
+            normalized_product_cd.label("product_cd"),
             func.date(StockTransactionLog.transaction_time).label("date"),
             StockTransactionLog.process_cd,
             func.sum(StockTransactionLog.quantity).label("quantity"),
@@ -2323,9 +2338,14 @@ async def update_production_summarys_carry_over(
         .where(StockTransactionLog.transaction_type == "初期")
         .where(StockTransactionLog.target_cd.isnot(None))
         .where(StockTransactionLog.target_cd != "")
+        .where(func.length(StockTransactionLog.target_cd) >= 1)
         .where(StockTransactionLog.transaction_time.isnot(None))
         .where(StockTransactionLog.process_cd.in_(allowed_process))
-        .group_by(StockTransactionLog.target_cd, func.date(StockTransactionLog.transaction_time), StockTransactionLog.process_cd)
+        .group_by(
+            normalized_product_cd,
+            func.date(StockTransactionLog.transaction_time),
+            StockTransactionLog.process_cd,
+        )
     )
     agg_result = await db.execute(agg_q)
     carry_over_rows = agg_result.all()
@@ -2458,10 +2478,11 @@ async def update_production_summarys_actual(
         db, ACTUAL_CLEAR_COLUMNS, start_date_str
     )
 
-    # 2) 一般工程：実績+不良 集計（product_cd = 前4桁+'1'）
+    # 2) 一般工程：実績+不良 集計（product_cd = target_cd 末尾を '1' にそろえる）
+    _pcd = _sql_normalize_product_cd("target_cd")
     process_placeholders = ", ".join([":p%d" % i for i in range(len(GENERAL_PROCESS_CDS))])
     general_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                process_cd,
                SUM(quantity) AS quantity
@@ -2470,9 +2491,9 @@ async def update_production_summarys_actual(
           AND process_cd IN ("""
         + process_placeholders
         + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND DATE(transaction_time) >= :start_date
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time), process_cd
+        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
     """)
     try:
         params = {"p%d" % i: c for i, c in enumerate(GENERAL_PROCESS_CDS)}
@@ -2484,14 +2505,14 @@ async def update_production_summarys_actual(
 
     # 3) KT13 製品倉庫：入庫−出庫
     kt13_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                SUM(CASE WHEN transaction_type = '入庫' THEN quantity WHEN transaction_type = '出庫' THEN -quantity ELSE 0 END) AS quantity
         FROM stock_transaction_logs
         WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT13'
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND DATE(transaction_time) >= :start_date
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time)
+        GROUP BY """ + _pcd + """, DATE(transaction_time)
     """)
     try:
         res_kt13 = await db.execute(kt13_sql, {"start_date": start_date_str})
@@ -2501,14 +2522,14 @@ async def update_production_summarys_actual(
 
     # 4) KT15 外注倉庫：入庫−出庫
     kt15_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                SUM(CASE WHEN transaction_type = '入庫' THEN quantity WHEN transaction_type = '出庫' THEN -quantity ELSE 0 END) AS quantity
         FROM stock_transaction_logs
         WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT15'
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND DATE(transaction_time) >= :start_date
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time)
+        GROUP BY """ + _pcd + """, DATE(transaction_time)
     """)
     try:
         res_kt15 = await db.execute(kt15_sql, {"start_date": start_date_str})
@@ -2634,9 +2655,10 @@ async def update_production_summarys_defect(
         db, DEFECT_CLEAR_COLUMNS
     )
 
+    _pcd = _sql_normalize_product_cd("target_cd")
     defect_placeholders = ", ".join([":d%d" % i for i in range(len(DEFECT_PROCESS_CDS))])
     defect_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                process_cd,
                SUM(quantity) AS quantity
@@ -2645,9 +2667,9 @@ async def update_production_summarys_defect(
           AND process_cd IN ("""
         + defect_placeholders
         + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND transaction_time IS NOT NULL
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time), process_cd
+        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
     """)
     try:
         params = {"d%d" % i: c for i, c in enumerate(DEFECT_PROCESS_CDS)}
@@ -2731,9 +2753,10 @@ async def update_production_summarys_scrap(
         db, SCRAP_CLEAR_COLUMNS
     )
 
+    _pcd = _sql_normalize_product_cd("target_cd")
     scrap_placeholders = ", ".join([":s%d" % i for i in range(len(SCRAP_PROCESS_CDS))])
     scrap_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                process_cd,
                SUM(quantity) AS quantity
@@ -2742,9 +2765,9 @@ async def update_production_summarys_scrap(
           AND process_cd IN ("""
         + scrap_placeholders
         + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND transaction_time IS NOT NULL
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time), process_cd
+        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
     """)
     try:
         params = {"s%d" % i: c for i, c in enumerate(SCRAP_PROCESS_CDS)}
@@ -2829,9 +2852,10 @@ async def update_production_summarys_on_hold(
         db, ON_HOLD_CLEAR_COLUMNS
     )
 
+    _pcd = _sql_normalize_product_cd("target_cd")
     on_hold_placeholders = ", ".join([":h%d" % i for i in range(len(ON_HOLD_PROCESS_CDS))])
     on_hold_sql = text("""
-        SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
+        SELECT """ + _pcd + """ AS product_cd,
                DATE(transaction_time) AS date,
                process_cd,
                SUM(quantity) AS quantity
@@ -2840,9 +2864,9 @@ async def update_production_summarys_on_hold(
           AND process_cd IN ("""
         + on_hold_placeholders
         + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 4
+          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
           AND transaction_time IS NOT NULL
-        GROUP BY CONCAT(SUBSTRING(target_cd, 1, 4), '1'), DATE(transaction_time), process_cd
+        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
     """)
     try:
         params = {"h%d" % i: c for i, c in enumerate(ON_HOLD_PROCESS_CDS)}
@@ -3151,6 +3175,7 @@ async def update_production_summarys_plan(
     schedule_details.planned_qty（当日計画数量）のみを集計源とする。production_schedules（product_cd）× 設備
     machines.machine_type が processes と一致する工程名（成型/溶接/切断/面取）に振り分け、
     production_summarys と同日・同製品で INNER JOIN した行のみ日別に SUM して各 *_plan 列へ反映する。
+    product_cd は末尾を '1' にそろえてから突合・集計する（末尾が 1 以外の計画も同一製品へ合算）。
     社内溶接 welding_plan も KT07 の schedule_details.planned_qty 合計のみ。
     続けて actual/plan から actual_plan を更新した後、ルート工程に応じて molding_actual_plan を
     cutting/chamfering/plating/inspection 等の所属工程 plan 列へ反映する（KT01/KT02/KT05/KT09）。
@@ -3169,19 +3194,21 @@ async def update_production_summarys_plan(
     ps_date_filter = " AND ps.date >= :range_start AND ps.date <= :range_end"
     range_params = {"range_start": start_d, "range_end": end_d}
     # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング
+    # product_cd は末尾を '1' にそろえてから production_summarys と突合・集計
+    _pcd_sch = _sql_normalize_product_cd("sch.product_cd")
     agg_sql_sd = text("""
-        SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt, pr.process_name AS process_name,
+        SELECT """ + _pcd_sch + """ AS product_cd, sd.schedule_date AS dt, pr.process_name AS process_name,
                SUM(COALESCE(sd.planned_qty, 0)) AS quantity
         FROM schedule_details sd
         INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
         INNER JOIN machines m ON m.id = sch.line_id
         INNER JOIN processes pr ON m.machine_type IS NOT NULL
           AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
-        INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
+        INNER JOIN production_summarys ps ON """ + _pcd_sch + """ = ps.product_cd AND sd.schedule_date = ps.date
         WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
           AND pr.process_name IN ('成型','溶接','切断','面取')
           AND sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date
-        GROUP BY sch.product_cd, sd.schedule_date, pr.process_name
+        GROUP BY """ + _pcd_sch + """, sd.schedule_date, pr.process_name
     """)
     params = {"start_date": start_d, "end_date": end_d}
     result_sd = await db.execute(agg_sql_sd, params)
@@ -3211,18 +3238,18 @@ async def update_production_summarys_plan(
         # 溶接（社内）は WeldingPlanning（KT07）と同じ工程粒度で上書き集計
         # machine_type と processes を突合し、process_cd='KT07' に一致する日別 planned_qty のみを welding_plan に反映。
         welding_sql_sd = text("""
-            SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt,
+            SELECT """ + _pcd_sch + """ AS product_cd, sd.schedule_date AS dt,
                    SUM(COALESCE(sd.planned_qty, 0)) AS quantity
             FROM schedule_details sd
             INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
             INNER JOIN machines m ON m.id = sch.line_id
             INNER JOIN processes pr ON m.machine_type IS NOT NULL
               AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
-            INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
+            INNER JOIN production_summarys ps ON """ + _pcd_sch + """ = ps.product_cd AND sd.schedule_date = ps.date
             WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
               AND pr.process_cd = 'KT07'
               AND sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date
-            GROUP BY sch.product_cd, sd.schedule_date
+            GROUP BY """ + _pcd_sch + """, sd.schedule_date
         """)
         result_welding = await db.execute(welding_sql_sd, params)
         welding_rows = result_welding.fetchall()
