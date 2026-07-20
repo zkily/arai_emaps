@@ -186,7 +186,7 @@ async def verify_token_and_get_user(
     # ただし、既にログインしている場合は、トークンが一致する必要がある
     if stored_token is not None and stored_token != request_token:
         logger.warning(
-            "[AUTH] 他デバイスログイン検出: ユーザー={}（旧トークン無効）",
+            "[AUTH] 检测到其他设备登录: {}（当前会话已失效）",
             _user_display(user),
         )
 
@@ -448,7 +448,7 @@ async def login(
     client_ip = _client_ip(request) or "-"
     client_label = _client_label(request)
     logger.info(
-        "[AUTH] ログイン成功: ユーザー={} id={} role={} client={} ip={}",
+        "[AUTH] 用户登录: {} | id={} | role={} | client={} | ip={}",
         _user_display(user),
         user.id,
         user.role,
@@ -462,7 +462,7 @@ async def login(
             from app.modules.websocket.api import notify_user_logged_in_elsewhere
             await notify_user_logged_in_elsewhere(user.username, access_token)
             logger.info(
-                "[AUTH] 他デバイスへ強制ログアウト通知: ユーザー={}",
+                "[AUTH] 强制登出通知(其他设备): {}",
                 _user_display(user),
             )
         except Exception as e:
@@ -530,7 +530,7 @@ async def logout(
         await db.rollback()
 
     logger.info(
-        "[AUTH] ログアウト: ユーザー={} id={} client={} ip={}",
+        "[AUTH] 用户退出: {} | id={} | client={} | ip={}",
         _user_display(current_user),
         current_user.id,
         client_label,

@@ -494,7 +494,13 @@ def start_backend(output_buffer: List[str], ssl_args: Optional[List[str]] = None
                         break
                     line = line.rstrip()
                     output_buffer.append(line)
-                    if line and ("ERROR" in line or "WARNING" in line or "Traceback" in line):
+                    # ERROR/WARNING に加え、ログイン・ログアウトの AUTH ログも表示
+                    if line and (
+                        "ERROR" in line
+                        or "WARNING" in line
+                        or "Traceback" in line
+                        or "[AUTH]" in line
+                    ):
                         print(f"[backend] {line}")
         except Exception:
             pass
