@@ -21,6 +21,10 @@ from loguru import logger
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+# 想定内のクライアントエラー（権限なし・未認証・未找到など）は DEBUG に落とし、
+# ログイン/ログアウトの INFO が埋もれないようにする。
+_EXPECTED_CLIENT_STATUSES = frozenset({401, 403, 404})
+
 
 def _payload(code: Any, message: str, details: Any | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {"success": False, "error": {"code": code, "message": message}}
@@ -34,17 +38,35 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        # 401/403/404 系は WARNING、5xx は ERROR
-        log = logger.warning if exc.status_code < 500 else logger.error
-        log(
-            "HTTPException {} {} -> {}",
-            request.method,
-            request.url.path,
-            exc.status_code,
-        )
+        detail = str(exc.detail) if exc.detail else ""
+        if exc.status_code >= 500:
+            logger.error(
+                "HTTPException {} {} -> {} | {}",
+                request.method,
+                request.url.path,
+                exc.status_code,
+                detail or "-",
+            )
+        elif exc.status_code in _EXPECTED_CLIENT_STATUSES:
+            # 権限拒否・トークン失効などは通常運用で頻発するため DEBUG
+            logger.debug(
+                "HTTPException {} {} -> {} | {}",
+                request.method,
+                request.url.path,
+                exc.status_code,
+                detail or "-",
+            )
+        else:
+            logger.warning(
+                "HTTPException {} {} -> {} | {}",
+                request.method,
+                request.url.path,
+                exc.status_code,
+                detail or "-",
+            )
         return JSONResponse(
             status_code=exc.status_code,
-            content=_payload(exc.status_code, str(exc.detail) if exc.detail else "HTTP error"),
+            content=_payload(exc.status_code, detail if detail else "HTTP error"),
             headers=getattr(exc, "headers", None),
         )
 

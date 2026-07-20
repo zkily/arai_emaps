@@ -60,6 +60,8 @@ def _user_display(user: User) -> str:
     return user.username
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# logout 用: トークン欠落/失効でも 401 にせずエンドポイントへ進める
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 # スキーマ定義
@@ -409,6 +411,12 @@ async def login(
     
     # ユーザーが存在しない場合
     if not user:
+        logger.info(
+            "[AUTH] 登录失败: 用户不存在 | username={} | client={} | ip={}",
+            login_data.username,
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ユーザー名またはパスワードが正しくありません",
@@ -417,6 +425,12 @@ async def login(
     
     # アカウントが無効な場合
     if not user.is_active:
+        logger.info(
+            "[AUTH] 登录失败: 账号已停用 | {} | client={} | ip={}",
+            _user_display(user),
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このアカウントは無効化されています",
@@ -424,6 +438,12 @@ async def login(
     
     # パスワードを検証
     if not verify_password(login_data.password, user.hashed_password):
+        logger.info(
+            "[AUTH] 登录失败: 密码错误 | {} | client={} | ip={}",
+            _user_display(user),
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ユーザー名またはパスワードが正しくありません",
@@ -499,43 +519,78 @@ async def login(
     }
 
 
+async def _resolve_logout_user(
+    token: Optional[str],
+    db: AsyncSession,
+) -> Optional[User]:
+    """ログアウト時のユーザー特定。
+
+    有効トークンなら通常検証。失効・他端末ログイン済みでも JWT からユーザーを拾い、
+    ログに「誰が退出したか」を残せるようにする。
+    """
+    if not token:
+        return None
+    try:
+        return await verify_token_and_get_user(token=token, db=db)
+    except HTTPException:
+        payload = decode_access_token(token)
+        username = payload.get("sub") if payload else None
+        if not username:
+            return None
+        return await get_user_by_username(db, username)
+
+
 @router.post("/logout")
 async def logout(
     request: Request,
-    db_and_user: tuple[AsyncSession, User] = Depends(get_db_and_current_user),
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
 ):
-    """ログアウトエンドポイント（同一セッションで last_login_token をクリアして永続化）"""
-    db, current_user = db_and_user
+    """ログアウトエンドポイント。
+
+    トークン無効・欠落でも 401 にせず成功を返す（クライアントの二重ログアウト対策）。
+    特定できた場合は last_login_token をクリアし、ユーザー名を INFO で記録する。
+    """
     client_ip = _client_ip(request) or "-"
     client_label = _client_label(request)
-    # トークンをクリア（ログアウト）
-    current_user.last_login_token = None
-    await db.commit()
+    current_user = await _resolve_logout_user(token, db)
 
-    # 操作ログに記録（遅延 import で循環参照を回避、テーブル未作成時は無視）
-    try:
-        from app.modules.system.settings_models import OperationLog
-        op_log = OperationLog(
-            user_id=current_user.id,
-            username=current_user.username,
-            action="logout",
-            module="auth",
-            ip_address=client_ip if client_ip != "-" else None,
-            user_agent=_user_agent(request) or None,
+    if current_user is not None:
+        # リクエストのトークンが現行セッションならクリア（他端末の有効セッションは壊さない）
+        if token and current_user.last_login_token == token:
+            current_user.last_login_token = None
+            await db.commit()
+
+        try:
+            from app.modules.system.settings_models import OperationLog
+            op_log = OperationLog(
+                user_id=current_user.id,
+                username=current_user.username,
+                action="logout",
+                module="auth",
+                ip_address=client_ip if client_ip != "-" else None,
+                user_agent=_user_agent(request) or None,
+            )
+            db.add(op_log)
+            await db.commit()
+        except Exception as e:
+            logger.warning("操作ログ記録に失敗しました（ログアウトは成功）: {}", e)
+            await db.rollback()
+
+        logger.info(
+            "[AUTH] 用户退出: {} | id={} | client={} | ip={}",
+            _user_display(current_user),
+            current_user.id,
+            client_label,
+            client_ip,
         )
-        db.add(op_log)
-        await db.commit()
-    except Exception as e:
-        logger.warning("操作ログ記録に失敗しました（ログアウトは成功）: {}", e)
-        await db.rollback()
+    else:
+        logger.info(
+            "[AUTH] 用户退出: （令牌无效或已过期） | client={} | ip={}",
+            client_label,
+            client_ip,
+        )
 
-    logger.info(
-        "[AUTH] 用户退出: {} | id={} | client={} | ip={}",
-        _user_display(current_user),
-        current_user.id,
-        client_label,
-        client_ip,
-    )
     return {"message": "ログアウトしました"}
 
 
