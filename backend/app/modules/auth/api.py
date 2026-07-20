@@ -2,12 +2,12 @@
 認証APIエンドポイント
 ログイン、ログアウト、ユーザー情報取得
 """
-import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 from datetime import timedelta
+from loguru import logger
 from app.core.datetime_utils import now_jst
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,8 +16,6 @@ from app.core.config import settings
 from app.core.security import create_access_token, verify_password, get_password_hash, decode_access_token
 from app.core.database import get_db
 from app.modules.auth.models import User
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -37,6 +35,29 @@ def _client_ip(request: Request) -> str:
 
 def _user_agent(request: Request) -> str:
     return (request.headers.get("user-agent") or "")[:500]
+
+
+def _client_label(request: Request) -> str:
+    """ログ用の簡易クライアント種別（Android / iOS / Web 等）"""
+    ua = (_user_agent(request) or "").lower()
+    if not ua:
+        return "unknown"
+    if "android" in ua:
+        return "Android"
+    if "iphone" in ua or "ipad" in ua or "ios" in ua:
+        return "iOS"
+    if "okhttp" in ua:
+        return "Android"
+    if "mozilla" in ua or "chrome" in ua or "safari" in ua or "edge" in ua:
+        return "Web"
+    return ua[:40]
+
+
+def _user_display(user: User) -> str:
+    name = (user.full_name or "").strip()
+    if name:
+        return f"{user.username}（{name}）"
+    return user.username
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -165,7 +186,8 @@ async def verify_token_and_get_user(
     # ただし、既にログインしている場合は、トークンが一致する必要がある
     if stored_token is not None and stored_token != request_token:
         logger.warning(
-            "[SINGLE_DEVICE_MISMATCH] user=%s logged in on another device", user.username
+            "[AUTH] 他デバイスログイン検出: ユーザー={}（旧トークン無効）",
+            _user_display(user),
         )
 
         raise HTTPException(
@@ -422,18 +444,30 @@ async def login(
     user.last_login_at = now_jst()
     await db.commit()
     await db.refresh(user)
-    
-    logger.info("[SINGLE_DEVICE_LOGIN] user=%s logged in", user.username)
+
+    client_ip = _client_ip(request) or "-"
+    client_label = _client_label(request)
+    logger.info(
+        "[AUTH] ログイン成功: ユーザー={} id={} role={} client={} ip={}",
+        _user_display(user),
+        user.id,
+        user.role,
+        client_label,
+        client_ip,
+    )
 
     # WebSocket経由で他のデバイスに通知（既にログインしていた場合）
     if old_token and old_token != access_token:
         try:
             from app.modules.websocket.api import notify_user_logged_in_elsewhere
             await notify_user_logged_in_elsewhere(user.username, access_token)
-            logger.info("[WebSocket] Notified other devices for user %s", user.username)
+            logger.info(
+                "[AUTH] 他デバイスへ強制ログアウト通知: ユーザー={}",
+                _user_display(user),
+            )
         except Exception as e:
-            logger.error("[WebSocket] Failed to notify other devices: %s", e)
-    
+            logger.error("[WebSocket] Failed to notify other devices: {}", e)
+
     # 操作ログに記録（遅延 import で循環参照を回避、テーブル未作成時は無視）
     try:
         from app.modules.system.settings_models import OperationLog
@@ -442,19 +476,19 @@ async def login(
             username=user.username,
             action="login",
             module="auth",
-            ip_address=_client_ip(request) or None,
+            ip_address=client_ip if client_ip != "-" else None,
             user_agent=_user_agent(request) or None,
         )
         db.add(op_log)
         await db.commit()
     except Exception as e:
-        logger.warning("操作ログ記録に失敗しました（ログインは成功）: %s", e)
+        logger.warning("操作ログ記録に失敗しました（ログインは成功）: {}", e)
         await db.rollback()
-    
+
     user_payload = await build_user_auth_payload(db, user)
     if not user_payload.get("is_super_admin") and not user_payload.get("menu_codes"):
         logger.warning(
-            "[MENU_ACCESS] user=%s has no menu_codes — assign user_roles and role menu permissions",
+            "[MENU_ACCESS] user={} has no menu_codes — assign user_roles and role menu permissions",
             user.username,
         )
 
@@ -472,6 +506,8 @@ async def logout(
 ):
     """ログアウトエンドポイント（同一セッションで last_login_token をクリアして永続化）"""
     db, current_user = db_and_user
+    client_ip = _client_ip(request) or "-"
+    client_label = _client_label(request)
     # トークンをクリア（ログアウト）
     current_user.last_login_token = None
     await db.commit()
@@ -484,16 +520,22 @@ async def logout(
             username=current_user.username,
             action="logout",
             module="auth",
-            ip_address=_client_ip(request) or None,
+            ip_address=client_ip if client_ip != "-" else None,
             user_agent=_user_agent(request) or None,
         )
         db.add(op_log)
         await db.commit()
     except Exception as e:
-        logger.warning("操作ログ記録に失敗しました（ログアウトは成功）: %s", e)
+        logger.warning("操作ログ記録に失敗しました（ログアウトは成功）: {}", e)
         await db.rollback()
 
-    logger.info("[SINGLE_DEVICE] user=%s logged out", current_user.username)
+    logger.info(
+        "[AUTH] ログアウト: ユーザー={} id={} client={} ip={}",
+        _user_display(current_user),
+        current_user.id,
+        client_label,
+        client_ip,
+    )
     return {"message": "ログアウトしました"}
 
 
@@ -506,7 +548,7 @@ async def get_current_user(
         db, current_user = db_and_user
         return await build_user_auth_payload(db, current_user)
     except Exception as e:
-        logger.exception("GET /me でエラー: %s", e)
+        logger.exception("GET /me でエラー: {}", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ユーザー情報の取得に失敗しました",
