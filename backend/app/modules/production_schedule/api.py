@@ -494,6 +494,11 @@ def _inspection_mes_column_migration_hint(column: str) -> str:
             f"列 `{column}` が未作成です。"
             "backend/database/migrations/52_inspection_mes_client_lock_activity.sql を実行してください。"
         )
+    if column == "mes_scanned_code":
+        return (
+            f"列 `{column}` が未作成です。"
+            "backend/database/migrations/60_inspection_management_mes_scanned_code.sql を実行してください。"
+        )
     return (
         f"列 `{column}` が未作成です。"
         "backend/database/migrations/09_inspection_management.sql を実行してください。"
@@ -7718,6 +7723,54 @@ class DeleteInspectionNextAssignmentBody(BaseModel):
     inspector_user_id: int
 
 
+class CreateInspectionQrScanBody(BaseModel):
+    production_day: str
+    product_cd: str
+    product_name: str
+    unit_per_box: int = 0
+    box_qty: int = 1
+    piece_qty: Optional[int] = None
+    scanned_code: Optional[str] = None
+    inspection_id: Optional[int] = None
+    inspector_user_id: Optional[int] = None
+    registered_at: Optional[str] = None
+
+
+async def _inspection_qr_scan_table_ready(db: AsyncSession) -> bool:
+    return await _table_has_column(db, "inspection_mes_qr_scan", "id")
+
+
+async def _assert_inspection_qr_scan_table(db: AsyncSession) -> None:
+    if not await _inspection_qr_scan_table_ready(db):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "inspection_mes_qr_scan テーブルが存在しません。"
+                "backend/database/migrations/61_inspection_mes_qr_scan.sql を実行してください"
+            ),
+        )
+
+
+def _normalize_inspection_qr_scan_row(row: dict[str, Any]) -> dict[str, Any]:
+    reg = row.get("registered_at")
+    created = row.get("created_at")
+    pd = row.get("production_day")
+    return {
+        "id": row.get("id"),
+        "inspection_id": row.get("inspection_id"),
+        "production_day": str(pd)[:10] if pd is not None else None,
+        "product_cd": row.get("product_cd"),
+        "product_name": row.get("product_name"),
+        "unit_per_box": int(row.get("unit_per_box") or 0),
+        "box_qty": int(row.get("box_qty") or 0),
+        "piece_qty": int(row.get("piece_qty") or 0),
+        "scanned_code": row.get("scanned_code"),
+        "inspector_user_id": row.get("inspector_user_id"),
+        "registered_at": reg.isoformat(sep=" ") if hasattr(reg, "isoformat") else reg,
+        "created_at": created.isoformat(sep=" ") if hasattr(created, "isoformat") else created,
+    }
+
+
 @router.get("/plan/inspection-management/next-assignments")
 async def get_inspection_next_assignments(
     production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
@@ -7873,6 +7926,140 @@ async def delete_inspection_next_assignment(
     )
     await db.commit()
     return {"success": True, "message": "次製品の指定を解除しました"}
+
+
+@router.post("/plan/inspection-management/qr-scans")
+async def create_inspection_qr_scan(
+    body: CreateInspectionQrScanBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """検査MES：QR読取ログを1件登録（1読取=1箱想定）"""
+    await _assert_inspection_qr_scan_table(db)
+    d = _parse_date_ymd(body.production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+    product_cd = (body.product_cd or "").strip()
+    product_name = (body.product_name or "").strip()
+    if not product_cd:
+        raise HTTPException(status_code=400, detail="製品CDが未設定です")
+    if not product_name:
+        product_name = product_cd
+    unit_per_box = max(0, int(body.unit_per_box or 0))
+    box_qty = max(1, int(body.box_qty or 1))
+    if body.piece_qty is not None:
+        piece_qty = max(0, int(body.piece_qty))
+    else:
+        piece_qty = unit_per_box * box_qty if unit_per_box > 0 else 0
+    scanned_code = (body.scanned_code or "").strip()[:64] or None
+    inspection_id = int(body.inspection_id) if body.inspection_id is not None else None
+    inspector_user_id = (
+        int(body.inspector_user_id)
+        if body.inspector_user_id is not None
+        else getattr(current_user, "id", None)
+    )
+    registered_at = _parse_mes_datetime_to_naive_tokyo(body.registered_at) if body.registered_at else None
+    if registered_at is None:
+        registered_at = datetime.now(_tokyo_tzinfo()).replace(tzinfo=None)
+
+    try:
+        result = await db.execute(
+            text(
+                """
+                INSERT INTO inspection_mes_qr_scan (
+                    inspection_id, production_day, product_cd, product_name,
+                    unit_per_box, box_qty, piece_qty, scanned_code,
+                    inspector_user_id, registered_at
+                ) VALUES (
+                    :inspection_id, :production_day, :product_cd, :product_name,
+                    :unit_per_box, :box_qty, :piece_qty, :scanned_code,
+                    :inspector_user_id, :registered_at
+                )
+                """
+            ),
+            {
+                "inspection_id": inspection_id,
+                "production_day": d,
+                "product_cd": product_cd[:50],
+                "product_name": product_name[:255],
+                "unit_per_box": unit_per_box,
+                "box_qty": box_qty,
+                "piece_qty": piece_qty,
+                "scanned_code": scanned_code,
+                "inspector_user_id": inspector_user_id,
+                "registered_at": registered_at,
+            },
+        )
+        await db.commit()
+        new_id = int(result.lastrowid) if result.lastrowid else None
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    row = None
+    if new_id:
+        fetched = await db.execute(
+            text("SELECT * FROM inspection_mes_qr_scan WHERE id = :id LIMIT 1"),
+            {"id": new_id},
+        )
+        mapped = fetched.mappings().first()
+        if mapped:
+            row = _normalize_inspection_qr_scan_row(dict(mapped))
+    return {"success": True, "data": row, "message": "QR読取を登録しました"}
+
+
+@router.get("/plan/inspection-management/qr-scans/summary")
+async def get_inspection_qr_scan_summary(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    product_cd: Optional[str] = Query(None, description="製品CD"),
+    inspection_id: Optional[int] = Query(None, description="inspection_management.id"),
+    inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査MES：QR読取の箱数・本数合計"""
+    await _assert_inspection_qr_scan_table(db)
+    d = _parse_date_ymd(production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+    where_parts = ["production_day = :production_day"]
+    params: dict[str, Any] = {"production_day": d}
+    product_cd_norm = (product_cd or "").strip()
+    if product_cd_norm:
+        where_parts.append("product_cd = :product_cd")
+        params["product_cd"] = product_cd_norm
+    if inspection_id is not None:
+        where_parts.append("inspection_id = :inspection_id")
+        params["inspection_id"] = int(inspection_id)
+    if inspector_user_id is not None:
+        where_parts.append("inspector_user_id = :inspector_user_id")
+        params["inspector_user_id"] = int(inspector_user_id)
+    sql = f"""
+        SELECT
+            COUNT(*) AS scan_count,
+            COALESCE(SUM(box_qty), 0) AS box_qty_total,
+            COALESCE(SUM(piece_qty), 0) AS piece_qty_total,
+            MAX(unit_per_box) AS unit_per_box
+        FROM inspection_mes_qr_scan
+        WHERE {' AND '.join(where_parts)}
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        row = result.mappings().first() or {}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {
+        "success": True,
+        "data": {
+            "scan_count": int(row.get("scan_count") or 0),
+            "box_qty_total": int(row.get("box_qty_total") or 0),
+            "piece_qty_total": int(row.get("piece_qty_total") or 0),
+            "unit_per_box": int(row.get("unit_per_box") or 0),
+            "production_day": str(d),
+            "product_cd": product_cd_norm or None,
+            "inspection_id": inspection_id,
+        },
+    }
 
 
 @router.get("/plan/inspection-management/productivity-analysis")
@@ -9250,6 +9437,7 @@ class UpdateInspectionManagementBody(BaseModel):
     mes_claim_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
     mes_release_client_lock: Optional[bool] = None
+    mes_scanned_code: Optional[str] = None
     # 通信断など：未完了MESセッションをクリア（確定実績にはしない）
     mes_abandon_in_progress: Optional[bool] = None
     manual_registration: bool = False
@@ -9565,6 +9753,16 @@ async def update_inspection_management(
                     updates.append("defect_qty = :defect_qty")
         except (ValueError, json.JSONDecodeError) as e:
             raise HTTPException(status_code=400, detail=f"日付が不正です: {e}") from e
+
+    if body.mes_scanned_code is not None:
+        if "mes_scanned_code" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_scanned_code"))
+        raw_mc = body.mes_scanned_code.strip() if isinstance(body.mes_scanned_code, str) else ""
+        if raw_mc == "":
+            updates.append("mes_scanned_code = NULL")
+        else:
+            params["mes_scanned_code"] = raw_mc[:512]
+            updates.append("mes_scanned_code = :mes_scanned_code")
 
     mes_control_touched = (
         body.mes_net_production_sec is not None
