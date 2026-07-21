@@ -481,6 +481,7 @@ export default {
     OP_MANUAL_CUTTING: 'Chỉ thị & thực tế cắt & vát mép',
     OP_MANUAL_PLAN_BASELINE: 'Quản lý baseline kế hoạch SX',
     OP_MANUAL_INSPECTION: 'Thu thập thực tế kiểm tra',
+    OP_MANUAL_INSPECTION_ANDROID: 'Thu thập thực tế kiểm tra (Android)',
     OP_MANUAL_INSPECTION_REGISTRATION: 'Đăng ký thực tế kiểm tra',
     OP_MANUAL_INSPECTION_MONITOR: 'Giám sát kiểm tra',
     OP_MANUAL_INSPECTION_PRODUCTIVITY: 'Phân tích năng suất kiểm tra',

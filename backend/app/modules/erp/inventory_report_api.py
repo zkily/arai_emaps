@@ -133,6 +133,10 @@ _SCRAP_PROCESS_DEFS: Tuple[Tuple[str, str, str, Optional[str], str], ...] = (
     ("pre_outsourcing", "外注検査前", "pre_outsourcing_actual", None, "pre_outsourcing_scrap"),
 )
 
+# 在庫報告「大量廃棄・保留品」ブロックへ自動併記する大量不良の閾値（本）
+_BULK_DEFECT_MIN_QTY = 200
+_BULK_DEFECT_CATEGORY = "大量不良"
+
 
 def _month_end(year: int, month: int) -> date:
     return date(year, month, monthrange(year, month)[1])
@@ -420,6 +424,90 @@ async def _month_stocktake_diff(db: AsyncSession, as_of: date) -> Dict[str, Any]
     }
 
 
+async def _large_defect_items_from_production(
+    db: AsyncSession, start_d: date, end_d: date
+) -> List[dict]:
+    """
+    production_summarys から工程別不良本数 > 閾値の行を抽出し、
+    報告区分「大量不良」として一覧化する。
+    """
+    defect_cols = [
+        (label, defect_col)
+        for _key, label, _actual, defect_col, _scrap in _SCRAP_PROCESS_DEFS
+        if defect_col
+    ]
+    if not defect_cols:
+        return []
+
+    or_parts = " OR ".join(
+        f"COALESCE(`{col}`, 0) > :threshold" for _label, col in defect_cols
+    )
+    select_parts = [
+        "date",
+        "product_cd",
+        "product_name",
+        *[f"COALESCE(`{col}`, 0) AS `{col}`" for _label, col in defect_cols],
+    ]
+    sql = (
+        f"SELECT {', '.join(select_parts)} "
+        "FROM production_summarys "
+        "WHERE date >= :start_d AND date <= :end_d "
+        f"AND ({or_parts})"
+    )
+    try:
+        result = await db.execute(
+            text(sql),
+            {
+                "start_d": start_d,
+                "end_d": end_d,
+                "threshold": _BULK_DEFECT_MIN_QTY,
+            },
+        )
+        rows = result.mappings().all()
+    except Exception:
+        logger.exception("大量不良（生産実績）の抽出に失敗（スキップ）")
+        return []
+
+    items: List[dict] = []
+    for row in rows:
+        if not _is_report_product(row.get("product_name")):
+            continue
+        occurred = row.get("date")
+        occurred_s = (
+            occurred.isoformat()
+            if hasattr(occurred, "isoformat")
+            else (str(occurred) if occurred else None)
+        )
+        for label, col in defect_cols:
+            qty = int(_num(row.get(col)))
+            if qty <= _BULK_DEFECT_MIN_QTY:
+                continue
+            items.append(
+                {
+                    "occurred_date": occurred_s,
+                    "report_category": _BULK_DEFECT_CATEGORY,
+                    "process_name": label,
+                    "product_cd": (str(row.get("product_cd") or "").strip() or None),
+                    "product_name": str(row.get("product_name") or "").strip() or "—",
+                    "quantity": qty,
+                    "handling_status": "実績",
+                    "source": "production_summary",
+                }
+            )
+    return items
+
+
+def _bulk_item_dedupe_key(item: dict) -> tuple:
+    return (
+        str(item.get("occurred_date") or ""),
+        str(item.get("report_category") or ""),
+        str(item.get("process_name") or ""),
+        str(item.get("product_cd") or ""),
+        str(item.get("product_name") or ""),
+        int(item.get("quantity") or 0),
+    )
+
+
 async def _bulk_disposal_summary(
     db: AsyncSession, start_d: date, end_d: date
 ) -> Dict[str, Any]:
@@ -434,14 +522,7 @@ async def _bulk_disposal_summary(
         rows = list((await db.execute(q)).scalars().all())
     except Exception:
         logger.exception("大量廃棄・保留品の集計に失敗（スキップ）")
-        return {
-            "count": 0,
-            "total_quantity": 0,
-            "pending_count": 0,
-            "by_category": [],
-            "by_month": [],
-            "items": [],
-        }
+        rows = []
 
     by_cat: Dict[str, Dict[str, int]] = {}
     by_month: Dict[str, Dict[str, int]] = {}
@@ -474,16 +555,42 @@ async def _bulk_disposal_summary(
                 "product_name": r.product_name,
                 "quantity": qty,
                 "handling_status": r.handling_status,
+                "source": "manual",
             }
         )
 
+    # 生産実績から大量不良（>閾値）を併記。手動登録と同一キーは重複除外。
+    existing_keys = {_bulk_item_dedupe_key(it) for it in items}
+    for auto_item in await _large_defect_items_from_production(db, start_d, end_d):
+        key = _bulk_item_dedupe_key(auto_item)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        qty = int(auto_item.get("quantity") or 0)
+        total_qty += qty
+        cat = str(auto_item.get("report_category") or _BULK_DEFECT_CATEGORY)
+        bucket = by_cat.setdefault(cat, {"count": 0, "quantity": 0})
+        bucket["count"] += 1
+        bucket["quantity"] += qty
+        occurred = str(auto_item.get("occurred_date") or "")
+        month_key = occurred[:7] if len(occurred) >= 7 else ""
+        month_bucket = by_month.setdefault(
+            month_key, {"count": 0, "quantity": 0, "pending_count": 0}
+        )
+        month_bucket["count"] += 1
+        month_bucket["quantity"] += qty
+        items.append(auto_item)
+
     return {
-        "count": len(rows),
+        "count": len(items),
         "total_quantity": total_qty,
         "pending_count": pending,
         "by_category": [{"category": k, **v} for k, v in sorted(by_cat.items())],
         "by_month": [{"month": k, **v} for k, v in sorted(by_month.items()) if k],
-        "items": sorted(items, key=lambda x: abs(int(x.get("quantity") or 0)), reverse=True)[:20],
+        "items": sorted(items, key=lambda x: abs(int(x.get("quantity") or 0)), reverse=True)[
+            :50
+        ],
+        "bulk_defect_threshold": _BULK_DEFECT_MIN_QTY,
     }
 
 
@@ -747,7 +854,7 @@ def _build_highlights(
             {
                 "type": "bulk_disposal",
                 "tone": "warn" if bulk.get("pending_count") else "info",
-                "title": "大量廃棄・保留品",
+                "title": "大量廃棄・保留品・大量不良",
                 "text": (
                     f"{bulk.get('count')} 件・合計 {int(bulk.get('total_quantity') or 0):,} 本"
                     f"（未処理 {bulk.get('pending_count')} 件）"

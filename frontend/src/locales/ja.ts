@@ -590,6 +590,7 @@ export default {
     OP_MANUAL_CUTTING: '切断面取 生産指示・実績収集',
     OP_MANUAL_PLAN_BASELINE: '生産計画ベースライン管理',
     OP_MANUAL_INSPECTION: '検査実績収集',
+    OP_MANUAL_INSPECTION_ANDROID: '検査実績収集（Android）',
     OP_MANUAL_INSPECTION_REGISTRATION: '検査実績収集登録',
     OP_MANUAL_INSPECTION_MONITOR: '検査モニタ',
     OP_MANUAL_INSPECTION_PRODUCTIVITY: '検査工程 — 生産性分析',

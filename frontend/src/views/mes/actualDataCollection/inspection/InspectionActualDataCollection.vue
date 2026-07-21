@@ -35,7 +35,8 @@ import {
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
-defineOptions({ name: 'InspectionActualDataCollection' })
+/** keep-alive の include はタブの route.name と一致させる */
+defineOptions({ name: 'MesActualDataCollectionInspection' })
 
 const DEFECT_GRID_COL_W = 118
 const DEFECT_GRID_GAP = 4

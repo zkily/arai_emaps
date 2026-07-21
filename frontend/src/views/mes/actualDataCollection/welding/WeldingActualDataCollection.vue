@@ -37,7 +37,8 @@ import { guardMesOperation } from '@/utils/mesOperationGuard'
 import { efficiencyPerHourFromNetSec } from '@/views/mes/actualCollectionRegistration/shared/registrationListSummary'
 import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
-defineOptions({ name: 'WeldingActualDataCollection' })
+/** keep-alive の include はタブの route.name と一致させる */
+defineOptions({ name: 'MesActualDataCollectionWelding' })
 
 const DEFECT_GRID_COLS = 7
 

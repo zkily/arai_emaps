@@ -17,9 +17,10 @@ from app.modules.erp.bulk_disposal_retention_models import BulkDisposalRetention
 
 router = APIRouter(prefix="/bulk-disposal-retention", tags=["BulkDisposalRetention"])
 
-REPORT_CATEGORIES = ("大量廃棄", "保留品", "その他")
+REPORT_CATEGORIES = ("大量廃棄", "大量不良", "保留品", "その他")
 PROCESS_NAMES = ("切断", "面取", "成型", "メッキ", "溶接", "検査", "その他")
 HANDLING_STATUSES = ("未処理", "処理済")
+BULK_DEFECT_MIN_QTY = 200
 
 
 class BulkDisposalRetentionBase(BaseModel):
@@ -40,6 +41,8 @@ class BulkDisposalRetentionBase(BaseModel):
         if self.report_category == "保留品" and self.handling_status == "未処理":
             if not self.processing_deadline_date:
                 raise ValueError("保留品の場合、期間内処理期限は必須です")
+        if self.report_category == "大量不良" and int(self.quantity or 0) <= BULK_DEFECT_MIN_QTY:
+            raise ValueError(f"大量不良の場合、発生本数は {BULK_DEFECT_MIN_QTY} より大きい値にしてください")
         return self
 
     @field_validator("report_category")

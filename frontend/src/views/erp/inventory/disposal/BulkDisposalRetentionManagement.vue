@@ -667,13 +667,14 @@ import {
 
 const route = useRoute()
 
-const reportCategoryOptions = ref<string[]>(['大量廃棄', '保留品', 'その他'])
+const reportCategoryOptions = ref<string[]>(['大量廃棄', '大量不良', '保留品', 'その他'])
 const processNameOptions = ref<string[]>(['切断', '面取', '成型', 'メッキ', '溶接', '検査', 'その他'])
 const handlingStatusOptions = ref<string[]>(['未処理', '処理済'])
 const productOptions = ref<Array<{ product_cd: string; product_name?: string }>>([])
 
 const categoryChips = [
   { label: '大量廃棄', value: '大量廃棄', key: 'disposal' },
+  { label: '大量不良', value: '大量不良', key: 'defect' },
   { label: '保留品', value: '保留品', key: 'hold' },
   { label: 'その他', value: 'その他', key: 'other' },
 ]
@@ -757,6 +758,8 @@ const editRules: FormRules = {
           callback(new Error('0以上の数値を入力してください'))
         } else if (n > 99999) {
           callback(new Error('5桁以内で入力してください'))
+        } else if (editForm.report_category === '大量不良' && n <= 200) {
+          callback(new Error('大量不良の場合、発生本数は200より大きい値にしてください'))
         } else {
           callback()
         }
@@ -790,6 +793,7 @@ const notifyUserIds = ref<number[]>([])
 
 function categoryKey(cat: string) {
   if (cat === '大量廃棄') return 'disposal'
+  if (cat === '大量不良') return 'defect'
   if (cat === '保留品') return 'hold'
   return 'other'
 }
@@ -818,6 +822,7 @@ function selectReportCategory(item: string) {
   if (item !== '保留品') {
     editForm.processing_deadline_date = null
   }
+  editFormRef.value?.validateField('quantity').catch(() => undefined)
 }
 
 function toggleCategoryChip(value: string) {
@@ -1545,6 +1550,7 @@ onMounted(async () => {
 }
 
 .pill--cat-disposal { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.pill--cat-defect { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
 .pill--cat-hold { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 .pill--cat-other { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 .pill--pending { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; }
@@ -1794,6 +1800,10 @@ onMounted(async () => {
 
 .pick-chip--cat-disposal.pick-chip--active {
   background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.pick-chip--cat-defect.pick-chip--active {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
 }
 
 .pick-chip--cat-hold.pick-chip--active {

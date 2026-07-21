@@ -7585,7 +7585,7 @@ async def get_inspection_management_inspectors(
 
 
 _INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("試作", "サンプル")
-_INSPECTION_SHIAGE_SECTION_NAME = "仕上"
+_INSPECTION_SHIAGE_SECTION_NAME = "仕上課"
 
 
 def _normalize_inspection_next_assignment_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -7609,12 +7609,12 @@ def _normalize_inspection_next_assignment_row(row: dict[str, Any]) -> dict[str, 
 def _validate_inspection_mes_product_cd_name(product_cd: str, product_name: str | None) -> tuple[str, str]:
     cd = (product_cd or "").strip()
     if not cd:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="製品CDを指定してください")
     if not cd.endswith("1"):
-        raise HTTPException(status_code=400, detail="製品CD・製品名を指定してください")
+        raise HTTPException(status_code=400, detail="検査対象の製品CDを指定してください")
     name = (product_name or "").strip() or cd
     if any(kw in name for kw in _INSPECTION_MES_PRODUCT_NAME_EXCLUDES):
-        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+        raise HTTPException(status_code=400, detail="試作・サンプル製品は指定できません")
     return cd, name
 
 
@@ -7632,7 +7632,7 @@ async def _assert_inspection_next_assignment_table(db: AsyncSession) -> None:
 
 async def _assert_active_inspection_inspector_user(db: AsyncSession, inspector_user_id: int) -> None:
     if inspector_user_id <= 0:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="検査員を指定してください")
     sql = """
         SELECT u.id, o.name AS section_name
         FROM users u
@@ -7644,10 +7644,13 @@ async def _assert_active_inspection_inspector_user(db: AsyncSession, inspector_u
         r = await db.execute(text(sql), {"uid": inspector_user_id})
         row = r.mappings().first()
         if not row:
-            raise HTTPException(status_code=400, detail="生産日が空のため翌日を算出できません")
+            raise HTTPException(status_code=400, detail="検査員が見つからないか無効です")
         section = (row.get("section_name") or "").strip()
         if section and section != _INSPECTION_SHIAGE_SECTION_NAME:
-            raise HTTPException(status_code=400, detail="生産日が空のため翌日を算出できません")
+            raise HTTPException(
+                status_code=400,
+                detail=f"検査員は{_INSPECTION_SHIAGE_SECTION_NAME}所属である必要があります",
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -7723,10 +7726,10 @@ async def get_inspection_next_assignments(
         require_menu_code("MES_MONITOR_INSPECTION", "MES_ACTUAL_INSPECTION")
     ),
 ):
-    """面取指示1件を面取ロット一覧へ戻す"""
+    """検査員ごとの次製品割当一覧"""
     d = _parse_date_ymd(production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
     if not await _inspection_next_assignment_table_ready(db):
         return {"success": True, "data": []}
     data = await _query_inspection_next_assignments(db, d)
@@ -7739,10 +7742,10 @@ async def get_my_inspection_next_assignment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_menu_code("MES_ACTUAL_INSPECTION")),
 ):
-    """需求量サマリーと溶接ベース使用量サマリーを1回で返す。"""
+    """ログイン検査員の次製品割当を返す"""
     d = _parse_date_ymd(production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
     uid = _inspection_mes_inspector_user_id_from_user(current_user)
     if uid is None or uid <= 0:
         return {"success": True, "data": None}
@@ -7784,14 +7787,14 @@ async def upsert_inspection_next_assignment(
     current_user: User = Depends(require_mes_operation("edit")),
     _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
 ):
-    """切断指示1件を生産ロットへ戻すリクエスト"""
+    """検査員の次製品割当を保存（upsert）"""
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
     try:
         inspector_id = int(body.inspector_user_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="検査員を指定してください")
     await _assert_inspection_next_assignment_table(db)
     await _assert_active_inspection_inspector_user(db, inspector_id)
     product_cd, product_name = await _resolve_inspection_product_name(
@@ -7799,7 +7802,7 @@ async def upsert_inspection_next_assignment(
     )
     note = (body.note or "").strip() or None
     if note and len(note) > 500:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="備考は500文字以内で入力してください")
     assigner_id = _inspection_mes_inspector_user_id_from_user(current_user)
     sql = """
         INSERT INTO inspection_inspector_next_assignment (
@@ -7842,7 +7845,7 @@ async def upsert_inspection_next_assignment(
     await db.commit()
     rows = await _query_inspection_next_assignments(db, d)
     saved = next((r for r in rows if r.get("inspector_user_id") == inspector_id), None)
-    return {"success": True, "message": "生成順を更新しました"}
+    return {"success": True, "data": saved, "message": "次製品を指定しました"}
 
 
 @router.delete("/plan/inspection-management/next-assignment")
@@ -7852,14 +7855,14 @@ async def delete_inspection_next_assignment(
     current_user: User = Depends(require_mes_operation("edit")),
     _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
 ):
-    """面取ロットのSW工程フラグ更新"""
+    """検査員の次製品割当を削除"""
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
     try:
         inspector_id = int(body.inspector_user_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="検査員を指定してください")
     await _assert_inspection_next_assignment_table(db)
     await db.execute(
         text(
@@ -7869,7 +7872,7 @@ async def delete_inspection_next_assignment(
         {"production_day": d, "inspector_user_id": inspector_id},
     )
     await db.commit()
-    return {"success": True, "message": "面取ロット一覧に戻しました"}
+    return {"success": True, "message": "次製品の指定を解除しました"}
 
 
 @router.get("/plan/inspection-management/productivity-analysis")
@@ -9247,6 +9250,8 @@ class UpdateInspectionManagementBody(BaseModel):
     mes_claim_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
     mes_release_client_lock: Optional[bool] = None
+    # 通信断など：未完了MESセッションをクリア（確定実績にはしない）
+    mes_abandon_in_progress: Optional[bool] = None
     manual_registration: bool = False
 
 
@@ -9262,6 +9267,71 @@ async def update_inspection_management(
     if not im_cols:
         raise HTTPException(status_code=503, detail="cutting_management テーブルが存在しません。") from e
     await _expire_stale_inspection_client_locks(db, im_cols, inspection_id=inspection_id)
+    row_mes = await _fetch_inspection_row_mes_state(db, inspection_id, im_cols)
+    row_started = row_mes.get("mes_production_started_at")
+    row_ended = row_mes.get("mes_production_ended_at")
+    in_progress = _inspection_row_mes_in_progress(row_started, row_ended)
+    force_release = bool(body.mes_force_release)
+    abandon = bool(body.mes_abandon_in_progress)
+    has_client_col = "mes_client_instance_id" in im_cols
+
+    if abandon:
+        if not force_release:
+            raise HTTPException(status_code=400, detail="mes_force_release required")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="進行中の生産セッションがありません")
+        updates: list[str] = []
+        params: dict[str, Any] = {"iid": inspection_id}
+        if "mes_production_started_at" in im_cols:
+            updates.append("mes_production_started_at = NULL")
+        if "mes_production_ended_at" in im_cols:
+            updates.append("mes_production_ended_at = NULL")
+        if "mes_net_production_sec" in im_cols:
+            updates.append("mes_net_production_sec = NULL")
+        if "mes_paused_accum_sec" in im_cols:
+            updates.append("mes_paused_accum_sec = NULL")
+        if "mes_break_sec" in im_cols:
+            updates.append("mes_break_sec = NULL")
+        if "mes_stop_sec" in im_cols:
+            updates.append("mes_stop_sec = NULL")
+        if "mes_shift_sec" in im_cols:
+            updates.append("mes_shift_sec = NULL")
+        if "mes_production_is_paused" in im_cols:
+            updates.append("mes_production_is_paused = NULL")
+        if "mes_inspector_user_id" in im_cols:
+            updates.append("mes_inspector_user_id = NULL")
+        if "mes_defect_by_item" in im_cols:
+            updates.append("mes_defect_by_item = NULL")
+        if "defect_qty" in im_cols:
+            updates.append("defect_qty = 0")
+        updates.append("production_completed_check = 0")
+        if has_client_col:
+            updates.append("mes_client_instance_id = NULL")
+            if _inspection_mes_lock_activity_column(im_cols):
+                updates.append("mes_client_lock_activity_at = NULL")
+        try:
+            await db.execute(
+                text(f"UPDATE inspection_management SET {', '.join(updates)} WHERE id = :iid"),
+                params,
+            )
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        try:
+            pd_row = await db.execute(
+                text("SELECT production_day FROM inspection_management WHERE id = :iid LIMIT 1"),
+                {"iid": inspection_id},
+            )
+            pd_val = pd_row.scalar()
+            if pd_val is not None:
+                from app.modules.websocket.api import notify_mes_inspection_state_change
+
+                await notify_mes_inspection_state_change(str(pd_val), inspection_id)
+        except Exception as ws_exc:
+            logger.warning("[WebSocket] mes_inspection_state broadcast failed: %s", ws_exc)
+        return {"success": True, "message": "未完了セッションを無効化しました"}
+
     if _inspection_mes_row_mutation_requested(body) and not body.manual_registration:
         row_insp = await _fetch_inspection_row_mes_inspector(db, inspection_id, im_cols)
         if body.mes_inspector_user_id is not None:
@@ -9274,18 +9344,12 @@ async def update_inspection_management(
                 _reject_inspection_mes_inspector_not_current_user(current_user, row_insp)
         elif row_insp is not None:
             _reject_inspection_mes_inspector_not_current_user(current_user, row_insp)
-    row_mes = await _fetch_inspection_row_mes_state(db, inspection_id, im_cols)
-    row_started = row_mes.get("mes_production_started_at")
-    row_ended = row_mes.get("mes_production_ended_at")
-    in_progress = _inspection_row_mes_in_progress(row_started, row_ended)
     row_already_completed = _inspection_row_mes_completed(row_started, row_ended)
     client_id = _normalize_mes_client_instance_id(body.mes_client_instance_id)
-    force_release = bool(body.mes_force_release)
     existing_lock = _normalize_mes_client_instance_id(row_mes.get("mes_client_instance_id"))
-    has_client_col = "mes_client_instance_id" in im_cols
 
-    updates: list[str] = []
-    params: dict[str, Any] = {"iid": inspection_id}
+    updates = []
+    params = {"iid": inspection_id}
     mes_state_broadcast = False
 
     if body.mes_release_client_lock:
@@ -9881,6 +9945,8 @@ class UpdateWeldingManagementBody(BaseModel):
     mes_release_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
     manual_registration_note: Optional[str] = None
+    # 通信断など：未完了MESセッションをクリア（確定実績にはしない）
+    mes_abandon_in_progress: Optional[bool] = None
     manual_registration: bool = False
 
 
@@ -9904,9 +9970,53 @@ async def update_welding_management(
     force_release = bool(body.mes_force_release)
     existing_lock = _normalize_mes_client_instance_id(row_mes.get("mes_client_instance_id"))
     has_client_col = "mes_client_instance_id" in wm_cols
+    abandon = bool(body.mes_abandon_in_progress)
 
-    updates: list[str] = []
-    params: dict[str, Any] = {"wid": welding_id}
+    if abandon:
+        if not force_release:
+            raise HTTPException(status_code=400, detail="mes_force_release required")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="進行中の生産セッションがありません")
+        updates: list[str] = []
+        params: dict[str, Any] = {"wid": welding_id}
+        if "mes_production_started_at" in wm_cols:
+            updates.append("mes_production_started_at = NULL")
+        if "mes_production_ended_at" in wm_cols:
+            updates.append("mes_production_ended_at = NULL")
+        if "mes_net_production_sec" in wm_cols:
+            updates.append("mes_net_production_sec = NULL")
+        if "mes_paused_accum_sec" in wm_cols:
+            updates.append("mes_paused_accum_sec = NULL")
+        if "mes_break_sec" in wm_cols:
+            updates.append("mes_break_sec = NULL")
+        if "mes_stop_sec" in wm_cols:
+            updates.append("mes_stop_sec = NULL")
+        if "mes_shift_sec" in wm_cols:
+            updates.append("mes_shift_sec = NULL")
+        if "mes_production_is_paused" in wm_cols:
+            updates.append("mes_production_is_paused = NULL")
+        if "mes_operator_user_id" in wm_cols:
+            updates.append("mes_operator_user_id = NULL")
+        if "mes_defect_by_item" in wm_cols:
+            updates.append("mes_defect_by_item = NULL")
+        if "defect_qty" in wm_cols:
+            updates.append("defect_qty = 0")
+        updates.append("production_completed_check = 0")
+        if has_client_col:
+            updates.append("mes_client_instance_id = NULL")
+        try:
+            await db.execute(
+                text(f"UPDATE welding_management SET {', '.join(updates)} WHERE id = :wid"),
+                params,
+            )
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        return {"success": True, "message": "未完了セッションを無効化しました"}
+
+    updates = []
+    params = {"wid": welding_id}
 
     if body.mes_release_client_lock:
         if not has_client_col:

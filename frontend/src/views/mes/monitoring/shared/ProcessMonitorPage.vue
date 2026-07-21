@@ -84,6 +84,9 @@ const {
   closeNextAssignDialog,
   saveNextAssignment,
   clearNextAssignment,
+  abandonInProgressSession,
+  canAbandonInProgressSession,
+  abandoningPlanId,
   hasNextAssignmentForInspector,
 } = useProcessMonitor(props.processKey)
 
@@ -330,8 +333,20 @@ const nextAssignDialogInspectorUserId = computed(() => {
               'machine-card--' + machine.status,
               {
                 'machine-card--comm-stale': isModernMonitor && machine.commStale,
+                'machine-card--abandonable':
+                  isModernMonitor && canAbandonInProgressSession(machine),
               },
             ]"
+            :title="
+              isModernMonitor && canAbandonInProgressSession(machine)
+                ? 'ダブルクリックで無効化'
+                : undefined
+            "
+            @dblclick.prevent="
+              isModernMonitor && canAbandonInProgressSession(machine)
+                ? abandonInProgressSession(machine)
+                : undefined
+            "
           >
             <div class="machine-card__top">
               <div class="machine-card__top-left">
@@ -408,6 +423,18 @@ const nextAssignDialogInspectorUserId = computed(() => {
                 >
                   通信断
                 </el-tag>
+                <el-button
+                  v-if="isModernMonitor && machine.commStale && machine.id != null"
+                  size="small"
+                  type="danger"
+                  plain
+                  round
+                  class="machine-card__abandon-btn"
+                  :loading="abandoningPlanId === machine.id"
+                  @click.stop="abandonInProgressSession(machine)"
+                >
+                  無効化
+                </el-button>
                 <el-tag size="small" :type="statusTagType(machine.status)" effect="plain" round>
                   <span v-if="machine.status === 'running'" class="machine-card__pulse"></span>
                   {{ statusLabel(machine.status) }}

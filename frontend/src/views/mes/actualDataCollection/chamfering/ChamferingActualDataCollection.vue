@@ -74,7 +74,7 @@ import {
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
-defineOptions({ name: 'ChamferingActualDataCollection' })
+defineOptions({ name: 'MesActualDataCollectionChamfering' })
 
 const { t, locale } = useI18n()
 const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()

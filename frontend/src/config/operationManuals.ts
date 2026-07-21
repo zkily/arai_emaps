@@ -99,11 +99,19 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     category: 'mes',
   },
   {
+    slug: 'inspection-actual-android',
+    menuCode: 'OP_MANUAL_INSPECTION_ANDROID',
+    pageTitle: '検査実績収集（Android）',
+    docFile: 'inspection-actual-android_ja.md',
+    sortOrder: 8,
+    category: 'mes',
+  },
+  {
     slug: 'inspection-actual-registration',
     menuCode: 'OP_MANUAL_INSPECTION_REGISTRATION',
     pageTitle: '検査実績収集登録',
     docFile: 'inspection-actual-registration_ja.md',
-    sortOrder: 8,
+    sortOrder: 9,
     category: 'mes',
   },
   {
@@ -111,7 +119,7 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     menuCode: 'OP_MANUAL_INSPECTION_MONITOR',
     pageTitle: '検査モニタ',
     docFile: 'inspection-monitor_ja.md',
-    sortOrder: 9,
+    sortOrder: 10,
     category: 'mes',
   },
   {
@@ -119,7 +127,7 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     menuCode: 'OP_MANUAL_INSPECTION_PRODUCTIVITY',
     pageTitle: '検査工程 — 生産性分析',
     docFile: 'inspection-productivity_ja.md',
-    sortOrder: 10,
+    sortOrder: 11,
     category: 'mes',
   },
 ]

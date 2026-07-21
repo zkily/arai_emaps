@@ -921,7 +921,7 @@ export function useWeldingMesCollection() {
     if (
       inProgMachine?.product_cd &&
       inProgMachine.id != null &&
-      isPlanLocallyOperated(inProgMachine.id)
+      (isPlanLocallyOperated(inProgMachine.id) || rowMesLockOwner(inProgMachine) === 'mine')
     ) {
       selectedProductCode.value = inProgMachine.product_cd
       activePlanId.value = inProgMachine.id
@@ -932,7 +932,11 @@ export function useWeldingMesCollection() {
     const opId = operatorUserId.value
     if (opId != null) {
       const inProg = findInProgressRowForOperator(opId)
-      if (inProg?.product_cd && inProg.id != null && isPlanLocallyOperated(inProg.id)) {
+      if (
+        inProg?.product_cd &&
+        inProg.id != null &&
+        (isPlanLocallyOperated(inProg.id) || rowMesLockOwner(inProg) === 'mine')
+      ) {
         selectedProductCode.value = inProg.product_cd
         activePlanId.value = inProg.id
         return
@@ -965,7 +969,10 @@ export function useWeldingMesCollection() {
     const opId = operatorUserId.value
     if (opId == null) return
     const row = findInProgressRowForOperator(opId)
-    if (row?.id != null && isRowMesProductionActive(row) && rowMesLockOwner(row) === 'mine') {
+    if (row?.id == null || !isRowMesProductionActive(row)) return
+    const owner = rowMesLockOwner(row)
+    if (owner === 'other') return
+    if (owner === 'mine' || isPlanLocallyOperated(row.id) || canOperatorReclaimRow(row)) {
       markPlanLocallyOperated(row.id)
       syncActivePlanSessionFromRow(row.id)
     }

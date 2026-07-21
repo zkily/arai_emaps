@@ -982,7 +982,11 @@ export function useInspectionMesCollection() {
       return
     }
     const inProg = findInProgressRowForInspector(inspId)
-    if (inProg?.product_cd && inProg.id != null && isPlanLocallyOperated(inProg.id)) {
+    if (
+      inProg?.product_cd &&
+      inProg.id != null &&
+      (isPlanLocallyOperated(inProg.id) || rowMesLockOwner(inProg) === 'mine')
+    ) {
       selectedProductCode.value = inProg.product_cd
       activePlanId.value = inProg.id
       return
@@ -1011,10 +1015,14 @@ export function useInspectionMesCollection() {
 
   /** ページ復帰時：選択中検査員のサーバー在産行を本端末操作対象に復帰 */
   function tryReclaimOperatedPlansOnLoad(): void {
-    const inspId = inspectorUserId.value
+    const inspId = inspectorUserId.value ?? loggedInUserId.value
     if (inspId == null) return
     const row = findInProgressRowForInspector(inspId)
-    if (row?.id != null && isRowMesProductionActive(row) && rowMesLockOwner(row) === 'mine') {
+    if (row?.id == null || !isRowMesProductionActive(row)) return
+    const owner = rowMesLockOwner(row)
+    // 他端末ロックは触らない。mine / unclaimed（同一検査員）は操作対象に戻す
+    if (owner === 'other') return
+    if (owner === 'mine' || isPlanLocallyOperated(row.id) || canInspectorReclaimRow(row)) {
       markPlanLocallyOperated(row.id)
       syncActivePlanSessionFromRow(row.id)
     }

@@ -182,7 +182,8 @@ def apply_manual_replacements(text: str) -> str:
         ('"""inspection_management ????????????users ????"""', '"""inspection_management 一覧（検査員 users を JOIN）"""'),
         ('detail="start_date / end_date ?????"', 'detail="start_date / end_date が不正です"'),
         ('_INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("??", "???")', '_INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("試作", "サンプル")'),
-        ('_INSPECTION_SHIAGE_SECTION_NAME = "???"', '_INSPECTION_SHIAGE_SECTION_NAME = "仕上"'),
+        ('_INSPECTION_SHIAGE_SECTION_NAME = "???"', '_INSPECTION_SHIAGE_SECTION_NAME = "仕上課"'),
+        ('_INSPECTION_SHIAGE_SECTION_NAME = "仕上"', '_INSPECTION_SHIAGE_SECTION_NAME = "仕上課"'),
         (
             'detail="inspection_inspector_next_assignment ????????????backend/database/migrations/48_inspection_inspector_next_assignment.sql ??????????"',
             'detail="inspection_inspector_next_assignment テーブルが存在しません。backend/database/migrations/48_inspection_inspector_next_assignment.sql を実行してください"',

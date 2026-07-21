@@ -1039,3 +1039,70 @@ async def get_menu_tree(
             tree.append(node)
     
     return tree
+
+
+_NAGOYA_LAT = 35.1815
+_NAGOYA_LON = 136.9066
+
+
+def _wmo_weather_code_to_emoji(code: int) -> str:
+    if code == 0:
+        return "☀️"
+    if 1 <= code <= 3:
+        return "⛅"
+    if 4 <= code <= 48:
+        return "🌫️"
+    if 49 <= code <= 57:
+        return "🌦️"
+    if 58 <= code <= 67:
+        return "🌧️"
+    if 68 <= code <= 77:
+        return "❄️"
+    if 78 <= code <= 82:
+        return "🌧️"
+    if 83 <= code <= 86:
+        return "❄️"
+    if 87 <= code <= 99:
+        return "⛈️"
+    return "🌤️"
+
+
+@router.get("/header-weather", summary="ヘッダー用天気（名古屋）")
+async def get_header_weather():
+    """
+    タブレット等の社内 LAN から Open-Meteo へ直接到達できない場合のプロキシ。
+    認証不要（公開気象データ）。
+    """
+    import httpx
+
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={_NAGOYA_LAT}&longitude={_NAGOYA_LON}"
+        "&current=temperature_2m,weather_code&timezone=Asia%2FTokyo"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=6.0)) as client:
+            res = await client.get(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "Smart-EMAPs/1.0 (header-weather)",
+                },
+            )
+            res.raise_for_status()
+            data = res.json()
+        current = data.get("current") or {}
+        temp = current.get("temperature_2m")
+        code = current.get("weather_code")
+        if not isinstance(temp, (int, float)):
+            raise ValueError("temperature missing")
+        weather_code = int(code) if isinstance(code, (int, float)) else 0
+        return {
+            "success": True,
+            "temperature": f"{round(temp)}°C",
+            "emoji": _wmo_weather_code_to_emoji(weather_code),
+            "location": "名古屋",
+        }
+    except Exception as e:
+        logger.warning("header-weather fetch failed: %s", e)
+        raise HTTPException(status_code=502, detail="天気情報の取得に失敗しました") from e

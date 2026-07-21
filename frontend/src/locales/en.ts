@@ -591,6 +591,7 @@ export default {
     OP_MANUAL_CUTTING: 'Cutting & chamfering instruction & actuals',
     OP_MANUAL_PLAN_BASELINE: 'Production plan baseline',
     OP_MANUAL_INSPECTION: 'Inspection actual collection',
+    OP_MANUAL_INSPECTION_ANDROID: 'Inspection actual (Android)',
     OP_MANUAL_INSPECTION_REGISTRATION: 'Inspection actual registration',
     OP_MANUAL_INSPECTION_MONITOR: 'Inspection monitor',
     OP_MANUAL_INSPECTION_PRODUCTIVITY: 'Inspection productivity analysis',

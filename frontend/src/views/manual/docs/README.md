@@ -12,7 +12,8 @@
 | `welding-planning_ja.md` | 溶接工程 計画作成（受注→在庫→計画→指示→実績→日次サイクル） | `../images/WeldingPlanningManual/` |
 | `cutting-instruction_ja.md` | 切断面取 生産指示・実績収集 | `../images/CuttingInstructionManual/` |
 | `plan-baseline_ja.md` | 生産計画ベースライン管理 | `../images/ProductionPlanBaselineManagement/` |
-| `inspection-actual_ja.md` | 検査実績収集 | `../images/InspectionActualDataCollection/` |
+| `inspection-actual_ja.md` | 検査実績収集（Web） | `../images/InspectionActualDataCollection/` |
+| `inspection-actual-android_ja.md` | 検査実績収集（Android アプリ） | `../images/InspectionActualAndroid/` |
 | `inspection-actual-registration_ja.md` | 検査実績収集登録 | `../images/InspectionActualRegistration/` |
 | `inspection-monitor_ja.md` | 検査モニタ | `../images/InspectionMonitor/` |
 | `inspection-productivity_ja.md` | 検査工程 — 生産性分析 | `../images/InspectionProductivity/` |

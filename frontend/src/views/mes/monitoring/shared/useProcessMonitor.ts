@@ -1,6 +1,6 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
 import {
@@ -8,12 +8,14 @@ import {
   fetchInspectionNextAssignments,
   upsertInspectionNextAssignment,
   deleteInspectionNextAssignment,
+  patchInspectionManagement,
   type InspectionManagementListRow,
   type InspectionNextAssignment,
 } from '@/api/inspectionManagement'
 import { getProductList } from '@/api/master/productMaster'
 import {
   fetchWeldingMonitorSummary,
+  patchWeldingManagement,
   type WeldingManagementListRow,
 } from '@/api/weldingManagement'
 import { fetchWeldingMesMachines, type WeldingMesMachine } from '@/api/weldingMesEquipment'
@@ -1029,6 +1031,59 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     }
   }
 
+  const abandoningPlanId = ref<number | null>(null)
+
+  function canAbandonInProgressSession(machine: MachineStatus): boolean {
+    if (machine.id == null) return false
+    return machine.status === 'running' || machine.status === 'paused' || machine.status === 'break'
+  }
+
+  /** 稼働中／一時停止／休憩／通信断の未完了セッションを無効化（確定実績には残さない） */
+  async function abandonInProgressSession(machine: MachineStatus): Promise<void> {
+    if (!canAbandonInProgressSession(machine) || machine.id == null) return
+    const statusText = machine.commStale
+      ? '通信断'
+      : machine.status === 'paused'
+        ? '一時停止'
+        : machine.status === 'break'
+          ? '休憩中'
+          : '稼働中'
+    try {
+      await ElMessageBox.confirm(
+        `「${machine.name}」の${statusText}セッションを無効化しますか？\n未完了のままクリアされ、確定実績には残りません。`,
+        'セッションの無効化',
+        {
+          type: 'warning',
+          confirmButtonText: '無効化',
+          cancelButtonText: 'キャンセル',
+        },
+      )
+    } catch {
+      return
+    }
+    abandoningPlanId.value = machine.id
+    try {
+      const body = {
+        mes_force_release: true,
+        mes_abandon_in_progress: true,
+      }
+      const res =
+        processKey === 'welding'
+          ? await patchWeldingManagement(machine.id, body)
+          : await patchInspectionManagement(machine.id, body)
+      if (!res.success) {
+        ElMessage.error(res.message || '無効化に失敗しました')
+        return
+      }
+      ElMessage.success(res.message || 'セッションを無効化しました')
+      await fetchAll()
+    } catch (e: unknown) {
+      ElMessage.error(extractFetchErrorMessage(e, config.pageTitle))
+    } finally {
+      abandoningPlanId.value = null
+    }
+  }
+
   function hasNextAssignmentForInspector(inspectorUserId: number | null | undefined): boolean {
     return nextAssignmentByInspectorId(inspectorUserId) != null
   }
@@ -1089,6 +1144,9 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     closeNextAssignDialog,
     saveNextAssignment,
     clearNextAssignment,
+    abandonInProgressSession,
+    canAbandonInProgressSession,
+    abandoningPlanId,
     hasNextAssignmentForInspector,
   }
 }

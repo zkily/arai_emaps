@@ -130,6 +130,8 @@ export interface PatchWeldingManagementBody {
   mes_claim_client_lock?: boolean
   mes_release_client_lock?: boolean
   mes_force_release?: boolean
+  /** 通信断など：未完了MESセッションを無効化（確定実績にはしない） */
+  mes_abandon_in_progress?: boolean
   /** 実績収集登録（手動一括登録） */
   manual_registration?: boolean
 }

@@ -714,6 +714,17 @@
 .machine-card__comm-stale-tag {
   flex-shrink: 0;
 }
+.machine-card__abandon-btn {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.machine-card--abandonable {
+  cursor: pointer;
+  user-select: none;
+}
 .kpi-card__icon-wrap--comm-stale { background: linear-gradient(135deg, #f87171, #dc2626); }
 .kpi-card--comm-stale::before { background: linear-gradient(180deg, #f87171, #dc2626); }
 .machine-card__top {

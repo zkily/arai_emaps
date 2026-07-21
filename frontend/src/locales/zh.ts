@@ -589,6 +589,7 @@ export default {
     OP_MANUAL_CUTTING: '切断面取 生产指示与实绩收集',
     OP_MANUAL_PLAN_BASELINE: '生产计划基准线管理',
     OP_MANUAL_INSPECTION: '检查实绩收集',
+    OP_MANUAL_INSPECTION_ANDROID: '检查实绩收集（Android）',
     OP_MANUAL_INSPECTION_REGISTRATION: '检查实绩登记',
     OP_MANUAL_INSPECTION_MONITOR: '检查监控',
     OP_MANUAL_INSPECTION_PRODUCTIVITY: '检查工程 — 生产率分析',

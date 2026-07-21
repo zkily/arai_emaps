@@ -218,7 +218,6 @@
             </div>
             <div class="user-details">
               <span class="username">{{ userDisplayName || t('common.guest') }}</span>
-              <span class="user-role">{{ userRoleDisplay }}</span>
             </div>
             <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
           </div>
@@ -290,7 +289,6 @@ import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
 import { useUserMemos } from '@/composables/useUserMemos'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
-import { displayUserRoleName } from '@/utils/userRoleDisplay'
 import { ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ja'
@@ -345,7 +343,6 @@ const userDisplayName = computed(() => {
 
 const userAvatarLetter = computed(() => avatarLetterFor(userDisplayName.value))
 const userAvatarGradient = computed(() => avatarGradientFor(userDisplayName.value))
-const userRoleDisplay = computed(() => displayUserRoleName(userStore.user, t))
 
 function openManualHome() {
   const resolved = router.resolve({ name: 'ManualHome' })
@@ -1353,17 +1350,6 @@ const handleCommand = async (command: string) => {
   font-size: 12px;
   font-weight: 600;
   color: var(--hdr-text);
-  line-height: 1.2;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-role {
-  display: block;
-  font-size: 9px;
-  color: #c7d2fe;
   line-height: 1.2;
   max-width: 120px;
   overflow: hidden;

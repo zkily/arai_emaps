@@ -166,7 +166,7 @@
         >
           <div class="rpt-kpi__head">
             <span class="rpt-kpi__ico"><el-icon><Bell /></el-icon></span>
-            <div class="rpt-kpi__label">大量廃棄・保留</div>
+            <div class="rpt-kpi__label">大量廃棄・保留・不良</div>
           </div>
           <div class="rpt-kpi__months">
             <div v-for="m in monthlyKpiRows" :key="m.month" class="rpt-kpi__month">
@@ -482,7 +482,7 @@
 
         <section class="rpt-block accent-amber">
           <div class="rpt-block__head">
-            <span class="rpt-block__title"><el-icon><Bell /></el-icon>大量廃棄・保留品（対象期間）</span>
+            <span class="rpt-block__title"><el-icon><Bell /></el-icon>大量廃棄・保留品・大量不良（対象期間）</span>
           </div>
           <el-table
             :data="payload?.bulk_disposal?.items || []"
@@ -658,8 +658,8 @@
         <section class="rpt-help__group">
           <h3 class="rpt-help__group-title hg-rose">その他</h3>
           <dl>
-            <dt>大量廃棄・保留品</dt>
-            <dd>「大量廃棄・保留品管理」に登録された、選択期間内に発生した記録の集計。未処理件数が残っている場合は対応を促します。</dd>
+            <dt>大量廃棄・保留品・大量不良</dt>
+            <dd>「大量廃棄・保留品管理」の登録記録に加え、生産実績で工程別不良本数が 200 本を超える「大量不良」を自動併記します。未処理件数は手動登録の未処理のみを対象とします。</dd>
             <dt>下書き保存／確定保存</dt>
             <dd>集計スナップショット・手動修正・報告メモをまとめて保存します。確定保存は報告版として記録する場合に使用します。</dd>
             <dt>自動分析を挿入</dt>
@@ -903,6 +903,7 @@ function matchRateClass(v: number | null | undefined) {
 function bulkCategoryClass(category: string | null | undefined) {
   const s = String(category || '')
   if (s.includes('廃棄')) return 'bulk-chip--rose'
+  if (s.includes('不良')) return 'bulk-chip--violet'
   if (s.includes('保留')) return 'bulk-chip--amber'
   return 'bulk-chip--slate'
 }
@@ -1708,7 +1709,7 @@ function buildAutoAnalysis(): { summary: string; actions: string } | null {
   const bulk = p.bulk_disposal
   if (bulk?.count) {
     summaryLines.push(
-      `大量廃棄・保留品は ${fmtInt(bulk.count)} 件・合計 ${fmtInt(bulk.total_quantity)} 本` +
+      `大量廃棄・保留品・大量不良は ${fmtInt(bulk.count)} 件・合計 ${fmtInt(bulk.total_quantity)} 本` +
         `（未処理 ${fmtInt(bulk.pending_count)} 件）。`
     )
   }
@@ -2006,7 +2007,7 @@ function onPrint() {
   </section>` : ''}
 
   ${bulkRows ? `<section>
-    <h2>大量廃棄・保留品（対象期間）</h2>
+    <h2>大量廃棄・保留品・大量不良（対象期間）</h2>
     <table>
       <thead><tr>
         <th>発生日</th><th>区分</th><th>工程</th><th>製品</th><th>本数</th><th>状態</th>
@@ -3340,6 +3341,11 @@ onBeforeUnmount(() => {
   color: #b45309;
   background: rgba(245, 158, 11, 0.12);
   border: 1px solid rgba(217, 119, 6, 0.28);
+}
+.bulk-chip--violet {
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(109, 40, 217, 0.28);
 }
 .bulk-chip--slate {
   color: #475569;

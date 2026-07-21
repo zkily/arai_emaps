@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineOptions({ name: 'PlatingActualDataCollection' })
+defineOptions({ name: 'MesActualDataCollectionPlating' })
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineOptions({ name: 'FormingActualDataCollection' })
+defineOptions({ name: 'MesActualDataCollectionForming' })
 </script>
 
 <template>

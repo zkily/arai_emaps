@@ -74,7 +74,7 @@ import {
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
-defineOptions({ name: 'CuttingActualDataCollection' })
+defineOptions({ name: 'MesActualDataCollectionCutting' })
 
 const { t, locale } = useI18n()
 const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()

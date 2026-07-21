@@ -35,7 +35,7 @@ import {
 } from '@/views/mes/actualDataCollection/welding/weldingActualPersist'
 import { formatDateTimeJST, getJSTToday, localeForIntl, parseDateAsJST } from '@/utils/dateFormat'
 
-defineOptions({ name: 'ProductionMonitorDashboard' })
+defineOptions({ name: 'MesProductionMonitor' })
 
 const { locale, t } = useI18n()
 const intlLocale = computed(() => localeForIntl(locale.value as string))
