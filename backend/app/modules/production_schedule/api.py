@@ -8034,16 +8034,85 @@ async def create_inspection_qr_scan(
     return {"success": True, "data": row, "message": "QR読取を登録しました"}
 
 
+@router.get("/plan/inspection-management/qr-scans")
+async def list_inspection_qr_scans(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    product_cd: str = Query(..., description="製品CD"),
+    inspection_id: Optional[int] = Query(None, description="inspection_management.id"),
+    started_at: Optional[str] = Query(None, description="生産開始（registered_at 下限, ISO）"),
+    ended_at: Optional[str] = Query(None, description="生産終了（registered_at 上限, ISO）"),
+    limit: int = Query(500, ge=1, le=2000, description="最大件数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_menu_code("MES_ACTUAL_INSPECTION")),
+):
+    """検査MES：当該製品のQR読取一覧（新しい順）
+
+    inspection_id / 生産開始〜終了（registered_at）で絞り込み可能。
+    """
+    await _assert_inspection_qr_scan_table(db)
+    d = _parse_date_ymd(production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+    product_cd_norm = (product_cd or "").strip()
+    if not product_cd_norm:
+        raise HTTPException(status_code=400, detail="製品CDが未設定です")
+    where_parts = ["production_day = :production_day", "product_cd = :product_cd"]
+    params: dict[str, Any] = {
+        "production_day": d,
+        "product_cd": product_cd_norm,
+        "limit": int(limit),
+    }
+    if inspection_id is not None:
+        where_parts.append("inspection_id = :inspection_id")
+        params["inspection_id"] = int(inspection_id)
+    start_dt = _parse_mes_datetime_to_naive_tokyo(started_at) if started_at else None
+    end_dt = _parse_mes_datetime_to_naive_tokyo(ended_at) if ended_at else None
+    if start_dt is not None:
+        where_parts.append("registered_at >= :started_at")
+        params["started_at"] = start_dt
+    if end_dt is not None:
+        where_parts.append("registered_at <= :ended_at")
+        params["ended_at"] = end_dt
+    sql = f"""
+        SELECT *
+        FROM inspection_mes_qr_scan
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY registered_at DESC, id DESC
+        LIMIT :limit
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = [_normalize_inspection_qr_scan_row(dict(r)) for r in result.mappings().all()]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    box_total = sum(int(r.get("box_qty") or 0) for r in rows)
+    piece_total = sum(int(r.get("piece_qty") or 0) for r in rows)
+    return {
+        "success": True,
+        "data": {
+            "items": rows,
+            "scan_count": len(rows),
+            "box_qty_total": box_total,
+            "piece_qty_total": piece_total,
+            "production_day": str(d),
+            "product_cd": product_cd_norm,
+            "inspection_id": int(inspection_id) if inspection_id is not None else None,
+        },
+    }
+
+
 @router.get("/plan/inspection-management/qr-scans/summary")
 async def get_inspection_qr_scan_summary(
     production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
     product_cd: Optional[str] = Query(None, description="製品CD"),
     inspection_id: Optional[int] = Query(None, description="inspection_management.id"),
     inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
+    started_at: Optional[str] = Query(None, description="生産開始（registered_at 下限, ISO）"),
+    ended_at: Optional[str] = Query(None, description="生産終了（registered_at 上限, ISO）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """検査MES：QR読取の箱数・本数合計"""
+    """検査MES：QR読取の箱数・本数合計（inspection_id / 生産開始〜終了で絞り込み可）"""
     await _assert_inspection_qr_scan_table(db)
     d = _parse_date_ymd(production_day)
     if d is None:
@@ -8060,6 +8129,14 @@ async def get_inspection_qr_scan_summary(
     if inspector_user_id is not None:
         where_parts.append("inspector_user_id = :inspector_user_id")
         params["inspector_user_id"] = int(inspector_user_id)
+    start_dt = _parse_mes_datetime_to_naive_tokyo(started_at) if started_at else None
+    end_dt = _parse_mes_datetime_to_naive_tokyo(ended_at) if ended_at else None
+    if start_dt is not None:
+        where_parts.append("registered_at >= :started_at")
+        params["started_at"] = start_dt
+    if end_dt is not None:
+        where_parts.append("registered_at <= :ended_at")
+        params["ended_at"] = end_dt
     sql = f"""
         SELECT
             COUNT(*) AS scan_count,
@@ -8083,7 +8160,7 @@ async def get_inspection_qr_scan_summary(
             "unit_per_box": int(row.get("unit_per_box") or 0),
             "production_day": str(d),
             "product_cd": product_cd_norm or None,
-            "inspection_id": inspection_id,
+            "inspection_id": int(inspection_id) if inspection_id is not None else None,
         },
     }
 
