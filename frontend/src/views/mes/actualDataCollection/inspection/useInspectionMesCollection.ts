@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createInspectionManagement,
-  deleteInspectionNextAssignment,
+  deleteMyInspectionNextAssignment,
   fetchInspectionManagementList,
   fetchMyInspectionNextAssignment,
   patchInspectionManagement,
@@ -773,7 +773,12 @@ export function useInspectionMesCollection() {
     return byId
   }
 
+  let nextAssignmentAutoClearInFlight = false
+  /** 「選ぶ」後、同期で再表示しない */
+  let suppressNextAssignmentSync = false
+
   async function syncMyNextAssignment(): Promise<void> {
+    if (suppressNextAssignmentSync || nextAssignmentAutoClearInFlight) return
     const day = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
       myNextAssignment.value = null
@@ -799,35 +804,40 @@ export function useInspectionMesCollection() {
     )
   }
 
-  let nextAssignmentAutoClearInFlight = false
-
-  /** 選択製品名が次製品指定と一致したら指定を解除（検査員が指定どおり着手した扱い） */
+  /** 選択製品（CD/名称）が次製品指定と一致したら指定を解除 */
   async function clearMyNextAssignmentIfSelectedProductMatches(code: string): Promise<void> {
     const assignment = myNextAssignment.value
-    if (!assignment || nextAssignmentAutoClearInFlight) return
+    if (!assignment || nextAssignmentAutoClearInFlight || suppressNextAssignmentSync) return
+    const nextCd = (assignment.next_product_cd ?? '').trim()
     const nextName = (assignment.next_product_name ?? '').trim()
-    if (!nextName) return
-    const selectedName = resolveSelectedProductName(code)
-    if (!selectedName || selectedName !== nextName) return
+    const selectedCd = code.trim()
+    const selectedName = resolveSelectedProductName(selectedCd)
+    const matched =
+      (nextCd !== '' && selectedCd !== '' && nextCd === selectedCd) ||
+      (nextName !== '' && selectedName !== '' && nextName === selectedName)
+    if (!matched) return
+    await clearMyNextAssignmentAlways()
+  }
 
-    const inspId = inspectorUserId.value ?? loggedInUserId.value
+  async function clearMyNextAssignmentAlways(): Promise<void> {
+    myNextAssignment.value = null
     const day = (productionDay.value ?? '').trim()
-    if (inspId == null || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return
     if (!navigator.onLine) return
-
+    if (nextAssignmentAutoClearInFlight) return
     nextAssignmentAutoClearInFlight = true
     try {
-      const res = await deleteInspectionNextAssignment({
-        production_day: day,
-        inspector_user_id: inspId,
-      })
-      if (res.success !== false) {
+      const res = await deleteMyInspectionNextAssignment({ production_day: day })
+      if (res.success === false) {
+        /* 表示は消したまま。次回同期で戻る可能性あり */
+      } else {
         myNextAssignment.value = null
       }
     } catch {
-      /* サイレント */
+      /* サイレント：権限・通信失敗時もローカル表示は消す */
     } finally {
       nextAssignmentAutoClearInFlight = false
+      myNextAssignment.value = null
     }
   }
 
@@ -870,7 +880,17 @@ export function useInspectionMesCollection() {
       ElMessage.warning(t('mesInspectionActual.nextAssignmentProductNotFound'))
       return
     }
+    suppressNextAssignmentSync = true
+    myNextAssignment.value = null
     selectedProductCode.value = code
+    void (async () => {
+      try {
+        await clearMyNextAssignmentAlways()
+      } finally {
+        suppressNextAssignmentSync = false
+        myNextAssignment.value = null
+      }
+    })()
   }
 
   async function syncMesStateFromServer(): Promise<void> {

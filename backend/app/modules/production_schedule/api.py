@@ -7833,6 +7833,32 @@ async def get_my_inspection_next_assignment(
     return {"success": True, "data": _normalize_inspection_next_assignment_row(dict(row))}
 
 
+@router.delete("/plan/inspection-management/next-assignment/me")
+async def delete_my_inspection_next_assignment(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_menu_code("MES_ACTUAL_INSPECTION")),
+):
+    """ログイン検査員自身の次製品割当を解除（実績収集の「選ぶ」用）"""
+    d = _parse_date_ymd(production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+    uid = _inspection_mes_inspector_user_id_from_user(current_user)
+    if uid is None or uid <= 0:
+        raise HTTPException(status_code=400, detail="検査員を特定できません")
+    if not await _inspection_next_assignment_table_ready(db):
+        return {"success": True, "message": "次製品の指定を解除しました"}
+    await db.execute(
+        text(
+            "DELETE FROM inspection_inspector_next_assignment "
+            "WHERE production_day = :production_day AND inspector_user_id = :inspector_user_id"
+        ),
+        {"production_day": d, "inspector_user_id": uid},
+    )
+    await db.commit()
+    return {"success": True, "message": "次製品の指定を解除しました"}
+
+
 @router.put("/plan/inspection-management/next-assignment")
 async def upsert_inspection_next_assignment(
     body: UpsertInspectionNextAssignmentBody,

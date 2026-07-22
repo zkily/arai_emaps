@@ -150,6 +150,15 @@ export function deleteInspectionNextAssignment(body: {
   }) as Promise<{ success?: boolean; message?: string }>
 }
 
+/** ログイン検査員自身の次製品指定を解除（実績収集「選ぶ」用） */
+export function deleteMyInspectionNextAssignment(params: {
+  production_day: string
+}): Promise<{ success?: boolean; message?: string }> {
+  return request.delete('/api/plan/inspection-management/next-assignment/me', {
+    params: { production_day: params.production_day },
+  }) as Promise<{ success?: boolean; message?: string }>
+}
+
 export interface CreateInspectionManagementBody {
   production_day: string
   product_cd: string
