@@ -133,6 +133,16 @@ _SCRAP_PROCESS_DEFS: Tuple[Tuple[str, str, str, Optional[str], str], ...] = (
     ("pre_outsourcing", "外注検査前", "pre_outsourcing_actual", None, "pre_outsourcing_scrap"),
 )
 
+# 廃棄率（新）＝廃棄率分析と同じ主ライン（切断～検査）連乗。倉庫・外注等は含めない。
+_MAIN_LINE_PROCESS_KEYS: Tuple[str, ...] = (
+    "cutting",
+    "chamfering",
+    "molding",
+    "plating",
+    "welding",
+    "inspection",
+)
+
 # 在庫報告「大量廃棄・保留品」ブロックへ自動併記する大量不良の閾値（本）
 _BULK_DEFECT_MIN_QTY = 200
 _BULK_DEFECT_CATEGORY = "大量不良"
@@ -281,12 +291,12 @@ async def _month_scrap_metrics(
             sum_parts.append(f"0 AS `{key}_defect`")
         sum_parts.append(f"SUM(COALESCE(`{scrap_col}`, 0)) AS `{key}_scrap`")
 
+    # 廃棄率分析（quality-rate-by-process）と同じ母集団：品名「加工」除外なし
     sql = (
         "SELECT "
         + ", ".join(sum_parts)
         + " FROM production_summarys"
         + " WHERE `date` >= :start_date AND `date` <= :end_date"
-        + " AND COALESCE(`product_name`, '') NOT LIKE :excluded_product_name"
     )
     row = (
         await db.execute(
@@ -294,7 +304,6 @@ async def _month_scrap_metrics(
             {
                 "start_date": start_d,
                 "end_date": end_d,
-                "excluded_product_name": f"%{_EXCLUDED_PRODUCT_NAME_TOKEN}%",
             },
         )
     ).mappings().first()
@@ -335,15 +344,22 @@ async def _month_scrap_metrics(
         total_defect += sd
 
     overall_bad = total_defect + total_scrap
+    main_line_keys = set(_MAIN_LINE_PROCESS_KEYS)
 
-    def rolled_loss_percent(qty_key: str) -> Optional[float]:
+    def rolled_loss_percent(
+        qty_key: str, *, process_keys: Optional[set[str]] = None
+    ) -> Optional[float]:
         """
-        全工程率 = 1 - Π(1 - 工程別率)。
+        連乗ロス率 = 1 - Π(1 - 工程別率)。
+        process_keys 指定時はその工程のみ（廃棄率分析の主ライン連乗と同一）。
         工程実績の単純合算を分母にすると同一品が工程間で重複するため使用しない。
         """
         yield_rate = 1.0
         participating = False
         for process in processes:
+            key = str(process.get("key") or "")
+            if process_keys is not None and key not in process_keys:
+                continue
             actual = int(process.get("sum_actual") or 0)
             if actual <= 0:
                 continue
@@ -351,12 +367,20 @@ async def _month_scrap_metrics(
             process_rate = min(1.0, max(0.0, loss_qty / actual))
             yield_rate *= 1.0 - process_rate
             participating = True
-        return round((1.0 - yield_rate) * 100, 4) if participating else None
+        if not participating:
+            return None
+        # 廃棄率分析（database.api._compute_rolled_main_line_yield_loss）と同じ丸め
+        ry = round(yield_rate, 8)
+        loss = round(1.0 - ry, 8)
+        return round(loss * 100, 4)
 
     overall_defect_rate = rolled_loss_percent("sum_defect")
     overall_scrap_rate = rolled_loss_percent("sum_scrap")
-    overall_quality_loss_rate = rolled_loss_percent("sum_defect_and_scrap")
-    overall_basis = "all_processes_rolled"
+    # 廃棄率（新）：廃棄率分析と同じく主ライン（切断～検査）のみ連乗
+    overall_quality_loss_rate = rolled_loss_percent(
+        "sum_defect_and_scrap", process_keys=main_line_keys
+    )
+    overall_basis = "main_line_rolled"
 
     cutting_actual = _num(row.get("cutting_actual"))
     all_process_loss_rate = (
@@ -375,7 +399,7 @@ async def _month_scrap_metrics(
         "sum_defect": total_defect,
         "sum_defect_and_scrap": overall_bad,
         "sum_cutting_actual": cutting_actual,
-        # rate_percent は既存フロント互換。意味は全工程の廃棄率（連乗）。
+        # rate_percent は既存フロント互換。意味は全工程の廃棄のみ連乗ロス率。
         "rate_percent": overall_scrap_rate,
         "defect_rate_percent": overall_defect_rate,
         "quality_loss_rate_percent": overall_quality_loss_rate,

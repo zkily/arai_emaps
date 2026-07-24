@@ -420,51 +420,54 @@ async function makeQrDataUrl(text: string, px: number): Promise<string> {
   }
 }
 
-/** Code 39（* 始止）— INOAC 背番バーコード用 */
+/**
+ * Code 39 パターン（n=細, w=太、バー/スペース交互・先頭はバー）。
+ * ZXing / JsBarcode / AIM 準拠。チェックデジットは付けない（読取結果＝入力値）。
+ */
 const CODE39_PATTERNS: Record<string, string> = {
-  '0': 'nnnwwnnnn',
+  '0': 'nnnwwnwnn',
   '1': 'wnnwnnnnw',
   '2': 'nnwwnnnnw',
-  '3': 'wnnwwnnnn',
+  '3': 'wnwwnnnnn',
   '4': 'nnnwwnnnw',
   '5': 'wnnwwnnnn',
   '6': 'nnwwwnnnn',
-  '7': 'nnnnwwnnw',
-  '8': 'wnnnwwnnn',
-  '9': 'nnwnwwnnn',
+  '7': 'nnnwnnwnw',
+  '8': 'wnnwnnwnn',
+  '9': 'nnwwnnwnn',
   A: 'wnnnnwnnw',
-  B: 'nnwnnnwnw',
-  C: 'wnwnnnwnn',
-  D: 'nnnnwnwnw',
-  E: 'wnnnwnnnn',
-  F: 'nnnnnwwnw',
-  G: 'nnnwnwnnw',
-  H: 'wnnwnwnnn',
-  I: 'nnwwnwnnn',
-  J: 'nnnnwwnwn',
-  K: 'wnnnnnwnw',
-  L: 'nnwnnwwnn',
-  M: 'wnwnnwwnn',
-  N: 'nnnnnwwnn',
-  O: 'wnnnnwnnn',
-  P: 'nnwnnnwnn',
-  Q: 'wnwnnnnnw',
-  R: 'nnnnwnnnw',
-  S: 'wnnwnnnnn',
-  T: 'nnnwnnnnw',
-  U: 'nnnnnnwwn',
-  V: 'wnnnnnnwn',
-  W: 'nnwnnnnwn',
-  X: 'wnnnnnnwn',
-  Y: 'wnnnnnwnn',
-  Z: 'nnnnwnnwn',
-  '-': 'nnnnnnwnn',
-  '.': 'wnnnnnnwn',
-  ' ': 'nnwnnnnwn',
-  $: 'nnnwnnnwn',
-  '/': 'nwnnnnwnn',
-  '+': 'nnnnnwnwn',
-  '%': 'nnnwnwnnn',
+  B: 'nnwnnwnnw',
+  C: 'wnwnnwnnn',
+  D: 'nnnnwwnnw',
+  E: 'wnnnwwnnn',
+  F: 'nnwnwwnnn',
+  G: 'nnnnnwwnw',
+  H: 'wnnnnwwnn',
+  I: 'nnwnnwwnn',
+  J: 'nnnnwwwnn',
+  K: 'wnnnnnnww',
+  L: 'nnwnnnnww',
+  M: 'wnwnnnnwn',
+  N: 'nnnnwnnww',
+  O: 'wnnnwnnwn',
+  P: 'nnwnwnnwn',
+  Q: 'nnnnnnwww',
+  R: 'wnnnnnwwn',
+  S: 'nnwnnnwwn',
+  T: 'nnnnwnwwn',
+  U: 'wwnnnnnnw',
+  V: 'nwwnnnnnw',
+  W: 'wwwnnnnnn',
+  X: 'nwnnwnnnw',
+  Y: 'wwnnwnnnn',
+  Z: 'nwwnwnnnn',
+  '-': 'nwnnnnwnw',
+  '.': 'wwnnnnwnn',
+  ' ': 'nwwnnnwnn',
+  $: 'nwnwnwnnn',
+  '/': 'nwnwnnnwn',
+  '+': 'nwnnnwnwn',
+  '%': 'nnnwnwnwn',
   '*': 'nwnnwnwnn',
 }
 
@@ -502,6 +505,10 @@ function encodeCode39Modules(encoded: string): number[] {
   return modules
 }
 
+/** Code 39 左右クワイエットゾーン（細バー幅×10、規格最小） */
+const CODE39_QUIET_MODULES = 10
+
+/** Code 39（* 始止、チェックデジットなし）— INOAC 背番バーコード用。読取結果を入力値と一致させる */
 function generateCode39BarcodeSvg(
   raw: string | null | undefined,
   widthPx: number,
@@ -513,10 +520,17 @@ function generateCode39BarcodeSvg(
   }
 
   const encoded = `*${payload}*`
-  const modules = encodeCode39Modules(encoded)
-  if (!modules.length) {
+  const dataModules = encodeCode39Modules(encoded)
+  if (!dataModules.length) {
     return { svg: '', humanReadable: '', payload }
   }
+
+  // 左右に白余白を入れ、外枠・区切り線をバーとして誤読しないようにする
+  const modules = [
+    ...Array(CODE39_QUIET_MODULES).fill(0),
+    ...dataModules,
+    ...Array(CODE39_QUIET_MODULES).fill(0),
+  ]
 
   const moduleW = Math.max(0.8, widthPx / modules.length)
   const viewW = modules.length * moduleW
@@ -531,7 +545,7 @@ function generateCode39BarcodeSvg(
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${barHeightPx}" ` +
-    `viewBox="0 0 ${viewW.toFixed(2)} ${barHeightPx}" preserveAspectRatio="none">${rects.join('')}</svg>`
+    `viewBox="0 0 ${viewW.toFixed(2)} ${barHeightPx}" preserveAspectRatio="none" style="background:#fff">${rects.join('')}</svg>`
 
   return { svg, humanReadable: formatCode39HumanReadable(payload), payload }
 }
@@ -1201,7 +1215,7 @@ function buildPrintStyles(inoac: boolean): string {
   }
   .pul-inoac-head-body-cell--bar {
     vertical-align: top;
-    padding: calc(${INOAC_HEAD_BODY_ROW_EXTRA_PX / 2}px) 0.3mm;
+    padding: calc(${INOAC_HEAD_BODY_ROW_EXTRA_PX / 2}px) 1.6mm calc(${INOAC_HEAD_BODY_ROW_EXTRA_PX / 2}px) 1.2mm;
     margin: 0;
   }
   .pul-inoac-qr {
@@ -1226,13 +1240,26 @@ function buildPrintStyles(inoac: boolean): string {
     overflow: hidden;
     text-align: center;
   }
-  .pul-inoac-barcode { height: 6.5mm; overflow: hidden; margin: 0; }
-  .pul-inoac-barcode svg { width: 100%; height: 100%; display: block; margin: 0; }
+  .pul-inoac-barcode {
+    height: 6.5mm;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    box-sizing: border-box;
+  }
+  .pul-inoac-barcode svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    margin: 0;
+    background: #fff;
+  }
   .pul-inoac-barcode-hr {
     font-size: 6pt;
     font-weight: 600;
     letter-spacing: 0.06em;
-    margin: 0;
+    margin: 0.2mm 0 0;
     line-height: 1;
     white-space: nowrap;
   }

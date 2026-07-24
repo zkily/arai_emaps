@@ -23,7 +23,7 @@ export interface ScrapSeriesPoint {
   month_label: string
   rate_percent: number | null
   defect_rate_percent?: number | null
-  /** 不良＋廃棄の全工程連乗ロス率（品質ロス率） */
+  /** 不良＋廃棄の主ライン（切断～検査）連乗ロス率（廃棄率分析と同一） */
   quality_loss_rate_percent?: number | null
   /** 全工程不良＋廃棄 ÷ 切断工程実績 */
   all_process_loss_rate_percent?: number | null
@@ -71,7 +71,7 @@ export interface MonthlyReportKpi {
   scrap_rate_percent: number | null
   /** 廃棄率（旧）＝全工程不良＋廃棄 ÷ 切断工程実績 */
   all_process_loss_rate_percent?: number | null
-  /** 廃棄率（新）＝全工程不良＋廃棄の連乗ロス率 */
+  /** 廃棄率（新）＝主ライン（切断～検査）不良＋廃棄の連乗ロス率（廃棄率分析と同一） */
   quality_loss_rate_percent?: number | null
   sum_cutting_actual?: number
   defect_rate_percent: number | null
