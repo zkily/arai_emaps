@@ -325,38 +325,41 @@
 
     <div ref="printContentRef" class="print-content-hidden">
       <div class="print-body">
-        <div class="print-header">
-          <div class="print-title-wrap">
-            <span class="print-title-accent" />
-            <h1 class="print-title">出荷不足数一覧</h1>
-            <p class="print-subtitle">検査工程用</p>
-          </div>
-          <div class="print-header-row">
-            <div class="print-period-block">
-              <span class="print-period-dot" />
-              <span class="print-period-label">対象期間</span>
-              <span class="print-period-value">{{ printPeriodFormatted }}</span>
-            </div>
-            <div class="print-summary-box">
-              <span class="print-summary-label">合計</span>
-              <span class="print-summary-item"><em>箱数</em> {{ formatPrintNumber(printTotals.box_quantity) }}</span>
-              <span class="print-summary-item"><em>本数</em> {{ formatPrintNumber(printTotals.units) }}</span>
-            </div>
-          </div>
-        </div>
-
         <template v-for="(group, gIdx) in printDataGroupedByDate" :key="gIdx">
-          <div class="print-date-section">
-            <div class="print-date-heading">
-              <span class="print-date-badge">{{ formatPrintDate(group.date) }}</span>
+          <div
+            class="print-page"
+            :class="{ 'print-page--last': gIdx === printDataGroupedByDate.length - 1 }"
+          >
+            <div class="print-header">
+              <div class="print-title-wrap">
+                <span class="print-title-accent" />
+                <h1 class="print-title">出荷不足数一覧</h1>
+                <p class="print-subtitle">検査工程用</p>
+              </div>
+              <div class="print-header-row">
+                <div class="print-period-block">
+                  <span class="print-period-dot" />
+                  <span class="print-period-label">対象日</span>
+                  <span class="print-period-value">{{ formatPrintDate(group.date) }}</span>
+                </div>
+                <div class="print-summary-box">
+                  <span class="print-summary-label">当日合計</span>
+                  <span class="print-summary-item"
+                    ><em>箱数</em> {{ formatPrintNumber(printDayTotals(group.rows).box_quantity) }}</span
+                  >
+                  <span class="print-summary-item"
+                    ><em>本数</em> {{ formatPrintNumber(printDayTotals(group.rows).units) }}</span
+                  >
+                </div>
+              </div>
             </div>
+
             <div class="print-table-wrap">
               <table class="print-table">
                 <thead>
                   <tr>
                     <th class="print-th">納入先名</th>
                     <th class="print-th">製品名</th>
-                    <th class="print-th">製品種類</th>
                     <th class="print-th">箱種</th>
                     <th class="print-th print-th-num">検査済在庫</th>
                     <th class="print-th print-th-num">箱数</th>
@@ -366,15 +369,69 @@
                 <tbody>
                   <tr v-for="(row, idx) in group.rows" :key="`${gIdx}-${idx}`" class="print-tr">
                     <td class="print-td">{{ row.destination_name || '—' }}</td>
-                    <td class="print-td">{{ row.product_name || '—' }}</td>
-                    <td class="print-td">{{ row.product_type || '—' }}</td>
+                    <td
+                      class="print-td"
+                      :class="{ 'print-td--highlight-product': isPrintHighlightProductName(row.product_name) }"
+                    >
+                      {{ row.product_name || '—' }}
+                    </td>
                     <td class="print-td">{{ row.box_type || '—' }}</td>
-                    <td class="print-td print-td-num">{{ formatPrintInspectionInventory(row.inspection_inventory) }}</td>
-                    <td class="print-td print-td-num">{{ row.box_quantity != null ? formatPrintNumber(row.box_quantity) : '—' }}</td>
+                    <td class="print-td print-td-num">
+                      {{ formatPrintInspectionInventory(row.inspection_inventory) }}
+                    </td>
+                    <td class="print-td print-td-num">
+                      {{ row.box_quantity != null ? formatPrintNumber(row.box_quantity) : '—' }}
+                    </td>
                     <td class="print-td print-td-num">{{ formatPrintNumber(row.units) }}</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <p
+              v-if="getPrintLabelDistinctionNote(group.rows)"
+              class="print-label-distinction-note"
+            >
+              {{ getPrintLabelDistinctionNote(group.rows) }}
+            </p>
+
+            <div class="print-handwriting-section">
+              <div class="print-handwriting-heading">手書き記入欄</div>
+              <div class="print-table-wrap">
+                <table class="print-table print-table--handwriting">
+                  <thead>
+                    <tr>
+                      <th class="print-th">納入先名</th>
+                      <th class="print-th">製品名</th>
+                      <th class="print-th">箱種</th>
+                      <th class="print-th print-th-num">箱数</th>
+                      <th class="print-th print-th-num">本数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, hIdx) in printHandwritingProducts"
+                      :key="`hw-${gIdx}-${hIdx}`"
+                      class="print-tr"
+                    >
+                      <td class="print-td">{{ row.destination_name || '—' }}</td>
+                      <td class="print-td">{{ row.product_name || '—' }}</td>
+                      <td class="print-td">{{ row.box_type || '—' }}</td>
+                      <td class="print-td print-td-handwrite"></td>
+                      <td class="print-td print-td-handwrite"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="print-notes">
+              <div class="print-notes-label">備考</div>
+              <div class="print-notes-box">
+                <div class="print-notes-line"></div>
+                <div class="print-notes-line"></div>
+                <div class="print-notes-line"></div>
+              </div>
             </div>
           </div>
         </template>
@@ -391,7 +448,7 @@ import { OfficeBuilding, MagicStick, Refresh, Setting, Printer } from '@element-
 import { getJSTToday } from '@/utils/dateFormat'
 import request from '@/utils/request'
 import { getWarehouseDailyShortagePrint } from '@/api/shipping/warehouseDailyStock'
-import type { InventoryShortagePrintRow } from '@/api/database'
+import type { InventoryShortageHandwritingRow, InventoryShortagePrintRow } from '@/api/database'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
 
@@ -538,6 +595,7 @@ const syncLoading = ref(false)
 const printShortageLoading = ref(false)
 const printContentRef = ref<HTMLElement | null>(null)
 const printTableData = ref<InventoryShortagePrintRow[]>([])
+const printHandwritingProducts = ref<InventoryShortageHandwritingRow[]>([])
 const tableScrollRef = ref<HTMLElement | null>(null)
 const tableBodyHeight = ref(320)
 let tableResizeObserver: ResizeObserver | null = null
@@ -679,30 +737,32 @@ const printDataGroupedByDate = computed(() => {
   return sorted.map(([date, rows]) => ({ date, rows }))
 })
 
-const printPeriodFormatted = computed(() => {
-  const list = printTableData.value
-  const fmt = (s: string) => {
-    if (!s || s.length < 10) return s
-    const [y, m, d] = [s.slice(0, 4), s.slice(5, 7), s.slice(8, 10)]
-    return `${y}年${m}月${d}日`
-  }
-  if (!list.length) return '—'
-  const dates = [...new Set(list.map((row) => row.date).filter(Boolean))] as string[]
-  if (dates.length === 0) return '—'
-  dates.sort()
-  return `${fmt(dates[0])} ～ ${fmt(dates[dates.length - 1])}（土日除く）`
-})
-
-const printTotals = computed(() => {
-  const list = printTableData.value
+function printDayTotals(rows: InventoryShortagePrintRow[]) {
   let boxSum = 0
   let unitsSum = 0
-  for (const row of list) {
+  for (const row of rows) {
     if (row.box_quantity != null && typeof row.box_quantity === 'number') boxSum += row.box_quantity
     unitsSum += Number(row.units) || 0
   }
   return { box_quantity: boxSum, units: unitsSum }
-})
+}
+
+/** 印刷上段表：他納入先出荷を含む製品名（太字赤） */
+const PRINT_HIGHLIGHT_PRODUCT_NAMES = ['400B FR', '164B FR'] as const
+
+function isPrintHighlightProductName(name: string | null | undefined): boolean {
+  const n = (name || '').trim()
+  return (PRINT_HIGHLIGHT_PRODUCT_NAMES as readonly string[]).includes(n)
+}
+
+/** 当日データに該当製品がある場合、表下に注記を返す */
+function getPrintLabelDistinctionNote(rows: InventoryShortagePrintRow[]): string {
+  const found = PRINT_HIGHLIGHT_PRODUCT_NAMES.filter((name) =>
+    rows.some((r) => (r.product_name || '').trim() === name)
+  )
+  if (!found.length) return ''
+  return `※${found.join('、')} の不足には他納入先出荷を含む（製品名ラベル区別）`
+}
 
 function formatPrintDate(dateStr: string): string {
   if (!dateStr || dateStr.length < 10) return dateStr
@@ -763,10 +823,22 @@ async function handleShortageIssuePrint() {
       endDate,
       productCd: (filterProductCd.value || '').trim() || undefined,
     })
-    const raw = res?.data ?? res
-    const list = Array.isArray(raw) ? raw : raw?.data ?? []
+    // API: { success, data: rows[], handwriting_products: [...] }
+    const list: InventoryShortagePrintRow[] = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : []
+    const handwriting: InventoryShortageHandwritingRow[] = Array.isArray(res?.handwriting_products)
+      ? res.handwriting_products
+      : Array.isArray(res?.data?.handwriting_products)
+        ? res.data.handwriting_products
+        : []
     const weekdaysOnly = list.filter((row: InventoryShortagePrintRow) => isPrintWeekday(row.date || ''))
     printTableData.value = weekdaysOnly
+    printHandwritingProducts.value = handwriting
     if (weekdaysOnly.length === 0) {
       ElMessage.warning(t('shipping.warehouseDaily.shortagePrintNoWeekdayData'))
       return
@@ -1393,7 +1465,7 @@ watch(loading, (v) => {
   vertical-align: middle;
 }
 
-/* ---------- 不足数発行：印刷用（画面上は非表示、在庫不足画面と同様） ---------- */
+/* ---------- 不足数発行：印刷用（画面上は非表示、日付ごとに1ページ） ---------- */
 .print-content-hidden {
   position: absolute;
   left: -9999px;
@@ -1408,15 +1480,30 @@ watch(loading, (v) => {
 }
 
 .print-body {
-  padding: 14px 20px 12px;
+  padding: 0;
   font-size: 12px;
   min-height: 100%;
 }
 
+.print-page {
+  padding: 14px 20px 12px;
+  box-sizing: border-box;
+  page-break-after: always;
+  break-after: page;
+  display: flex;
+  flex-direction: column;
+  min-height: 270mm;
+}
+
+.print-page--last {
+  page-break-after: auto;
+  break-after: auto;
+}
+
 .print-header {
   text-align: center;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #e2e8f0;
   position: relative;
 }
@@ -1506,28 +1593,6 @@ watch(loading, (v) => {
   color: #000;
 }
 
-.print-date-section {
-  margin-bottom: 12px;
-  page-break-inside: avoid;
-  break-inside: avoid;
-}
-
-.print-date-heading {
-  margin: 0 0 6px 0;
-}
-
-.print-date-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 10px;
-  color: #4338ca;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  border: 1px solid #c7d2fe;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
-}
-
 .print-table-wrap {
   border-radius: 8px;
   overflow: hidden;
@@ -1543,7 +1608,7 @@ watch(loading, (v) => {
 
 .print-th {
   padding: 6px 10px;
-  text-align: left;
+  text-align: center;
   font-weight: 600;
   font-size: 10px;
   text-transform: uppercase;
@@ -1555,7 +1620,7 @@ watch(loading, (v) => {
 }
 
 .print-th-num {
-  text-align: right;
+  text-align: center;
   min-width: 64px;
 }
 
@@ -1568,6 +1633,9 @@ watch(loading, (v) => {
   border: 1px solid #e2e8f0;
   border-top: none;
   color: #000;
+  height: 26px;
+  line-height: 1.35;
+  box-sizing: border-box;
 }
 
 .print-td-num {
@@ -1575,6 +1643,27 @@ watch(loading, (v) => {
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: #000;
+}
+
+.print-td-handwrite {
+  min-height: 26px;
+  height: 26px;
+  min-width: 56px;
+  background: #fff;
+}
+
+.print-td--highlight-product {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.print-label-distinction-note {
+  margin: 8px 0 0 0;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  line-height: 1.4;
 }
 
 .print-summary-box {
@@ -1607,6 +1696,55 @@ watch(loading, (v) => {
   margin-right: 4px;
 }
 
+.print-handwriting-section {
+  margin-top: 14px;
+}
+
+.print-handwriting-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #000;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.04em;
+}
+
+.print-table--handwriting .print-td-handwrite {
+  border-bottom: 1px solid #94a3b8;
+}
+
+.print-notes {
+  margin-top: auto;
+  padding-top: 14px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.print-notes-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+}
+
+.print-notes-box {
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  background: #fff;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.print-notes-line {
+  height: 26px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.print-notes-line:last-child {
+  border-bottom: none;
+}
+
 @media print {
   .print-content-hidden {
     position: static;
@@ -1616,23 +1754,26 @@ watch(loading, (v) => {
     left: 0;
   }
 
-  .print-body {
+  .print-page {
     padding: 12px 16px 10px;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-page--last {
+    page-break-after: auto;
+    break-after: auto;
   }
 
   .print-title {
     font-size: 20px;
   }
 
-  .print-date-section {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-
   .print-title-accent,
   .print-period-block,
-  .print-date-badge,
-  .print-summary-box {
+  .print-summary-box,
+  .print-td--highlight-product,
+  .print-label-distinction-note {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

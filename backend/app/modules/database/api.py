@@ -27,6 +27,7 @@ from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, ProductRouteStep, Destination
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+from app.modules.shipping.shortage_print_handwriting import fetch_handwriting_product_rows
 
 router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
 
@@ -228,7 +229,10 @@ PLAN_PROCESS_MAPPING = {
     "面取": "chamfering_plan",
 }
 # 計画データ更新前クリア用（_plan + _actual_plan）
+# plating_plan / inspection_plan も対象（ルート振り分け前に残値を消す）
 PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + [
+    "plating_plan",
+    "inspection_plan",
     "sw_plan",
     "outsourced_plating_plan",
     "outsourced_welding_plan",
@@ -1752,7 +1756,8 @@ async def get_inventory_shortage_print(
                 "units": units,
                 "box_quantity": box_quantity,
             })
-        return {"data": out}
+        handwriting_products = await fetch_handwriting_product_rows(db)
+        return {"data": out, "handwriting_products": handwriting_products}
     except HTTPException:
         raise
     except Exception as e:
@@ -3180,6 +3185,7 @@ async def update_production_summarys_plan(
     続けて actual/plan から actual_plan を更新した後、ルート工程に応じて molding_actual_plan を
     cutting/chamfering/plating/inspection 等の所属工程 plan 列へ反映する（KT01/KT02/KT05/KT09）。
     startDate（未指定時は当月月初 JST）～+5ヶ月のみ対象。それより前の月の計画列は変更しない。
+    更新前に同期間の _plan / _actual_plan 列を 0 にクリアしてから再集計する（削除済み計画の残値防止）。
     """
     start_time = time.perf_counter()
     if body and body.startDate and body.startDate.strip():
@@ -3193,6 +3199,15 @@ async def update_production_summarys_plan(
     date_filter = " AND date >= :range_start AND date <= :range_end"
     ps_date_filter = " AND ps.date >= :range_start AND ps.date <= :range_end"
     range_params = {"range_start": start_d, "range_end": end_d}
+
+    # 0) 対象期間の計画列を先にクリア（schedule に無い日・品番の旧値が残らないようにする）
+    set_parts = ", ".join([f"`{col}` = 0" for col in PLAN_AND_ACTUAL_PLAN_FIELDS_TO_CLEAR])
+    await db.execute(
+        text(
+            f"UPDATE production_summarys SET {set_parts} WHERE date >= :start_date AND date <= :end_date"
+        ),
+        {"start_date": start_d, "end_date": end_d},
+    )
     # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング
     # product_cd は末尾を '1' にそろえてから production_summarys と突合・集計
     _pcd_sch = _sql_normalize_product_cd("sch.product_cd")

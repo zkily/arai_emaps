@@ -735,7 +735,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初（JST）～+5ヶ月の plan 列のみを更新します。それより前の月の計画データは変更しません（事前クリアは行いません）。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan、検査(KT09)→inspection_plan。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初（JST）～+5ヶ月の plan / actual_plan 列を先に 0 クリアしてから再集計します。それより前の月の計画データは変更しません。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan、検査(KT09)→inspection_plan。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>
@@ -3473,13 +3473,13 @@ const confirmUpdatePlan = async () => {
   showProgressDialog.value = true
   progressPercentage.value = 0
   progressStatus.value = ''
-  progressText.value = '計画データを取得中...'
+  progressText.value = '計画列をクリア中（当月月初～+5ヶ月）...'
   let progressTimer: ReturnType<typeof setInterval> | null = null
   try {
     progressTimer = setInterval(() => {
       if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
     }, 200)
-    progressText.value = '計画データを更新中...'
+    progressText.value = '計画列をクリア後、計画データを再集計中...'
     const res = await updateProductionSummarysPlan(startDate)
     if (progressTimer) clearInterval(progressTimer)
     progressTimer = null

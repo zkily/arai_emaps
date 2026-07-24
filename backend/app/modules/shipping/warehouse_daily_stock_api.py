@@ -26,6 +26,7 @@ from app.modules.auth.models import User
 from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Destination, Product
 from app.modules.shipping.warehouse_daily_stock_model import ShippingWarehouseDailyStock
+from app.modules.shipping.shortage_print_handwriting import fetch_handwriting_product_rows
 
 logger = logging.getLogger(__name__)
 
@@ -339,7 +340,8 @@ async def get_warehouse_daily_shortage_print(
                     "box_quantity": box_quantity,
                 }
             )
-        return {"success": True, "data": out}
+        handwriting_products = await fetch_handwriting_product_rows(db)
+        return {"success": True, "data": out, "handwriting_products": handwriting_products}
     except HTTPException:
         raise
     except Exception as e:

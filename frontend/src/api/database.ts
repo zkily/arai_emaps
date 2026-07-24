@@ -329,9 +329,24 @@ export interface InventoryShortagePrintRow {
   box_quantity: number | null
 }
 
+/** 印刷ページ下部：手書き用固定製品行（箱数・本数は空） */
+export interface InventoryShortageHandwritingRow {
+  destination_name: string
+  product_name: string
+  product_type: string
+  box_type: string
+  box_quantity: number | null
+  units: number | null
+}
+
+export interface InventoryShortagePrintResponse {
+  data: InventoryShortagePrintRow[]
+  handwriting_products?: InventoryShortageHandwritingRow[]
+}
+
 /** 在庫不足一覧印刷用（products・destinations ジョイン済み） */
 export function getInventoryShortagePrint(params: InventoryShortagePrintParams) {
-  return request.get<{ data: InventoryShortagePrintRow[] }>(`${BASE}/inventory-shortage-print`, { params })
+  return request.get<InventoryShortagePrintResponse>(`${BASE}/inventory-shortage-print`, { params })
 }
 
 export interface WarehouseNegativeTodayRow {
@@ -489,7 +504,7 @@ export function clearProductionSummarysWeldingPlan(startDate: string) {
   )
 }
 
-/** 計画データ更新：schedule_details 等から各工程 *_plan と actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象（過去月は変更しない・事前クリアなし） */
+/** 計画データ更新：先に startDate～+5ヶ月の _plan/_actual_plan を 0 クリアし、schedule_details 等から再集計。過去月は変更しない */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }

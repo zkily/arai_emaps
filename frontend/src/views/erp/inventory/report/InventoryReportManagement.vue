@@ -111,39 +111,39 @@
         <div class="rpt-kpi__card theme-defect">
           <div class="rpt-kpi__head">
             <span class="rpt-kpi__ico"><el-icon><WarningFilled /></el-icon></span>
-            <div class="rpt-kpi__label">不良率（全工程）</div>
+            <div class="rpt-kpi__label">廃棄率（新）</div>
           </div>
           <div class="rpt-kpi__months">
             <div v-for="m in monthlyKpiRows" :key="m.month" class="rpt-kpi__month">
               <span>{{ m.month_label }}</span>
-              <strong>{{ fmtPct(m.defect_rate_percent) }}</strong>
-              <small>連乘損失率</small>
+              <strong>{{ fmtPct(m.quality_loss_rate_percent) }}</strong>
+              <small>連乗損失率</small>
             </div>
           </div>
         </div>
         <div class="rpt-kpi__card theme-scrap">
           <div class="rpt-kpi__head">
             <span class="rpt-kpi__ico"><el-icon><Delete /></el-icon></span>
-            <div class="rpt-kpi__label">廃棄率（全工程）</div>
+            <div class="rpt-kpi__label">廃棄率（旧）</div>
           </div>
           <div class="rpt-kpi__months">
             <div v-for="m in monthlyKpiRows" :key="m.month" class="rpt-kpi__month">
               <span>{{ m.month_label }}</span>
-              <strong>{{ fmtPct(m.scrap_rate_percent) }}</strong>
-              <small>連乘損失率</small>
+              <strong>{{ fmtPct(m.all_process_loss_rate_percent) }}</strong>
+              <small>不良+廃棄÷切断実績</small>
             </div>
           </div>
         </div>
         <div class="rpt-kpi__card theme-qty">
           <div class="rpt-kpi__head">
             <span class="rpt-kpi__ico"><el-icon><Histogram /></el-icon></span>
-            <div class="rpt-kpi__label">不良／廃棄本数</div>
+            <div class="rpt-kpi__label">廃棄本数</div>
           </div>
           <div class="rpt-kpi__months">
             <div v-for="m in monthlyKpiRows" :key="m.month" class="rpt-kpi__month">
               <span>{{ m.month_label }}</span>
-              <strong>{{ fmtInt(m.defect_qty) }} / {{ fmtInt(m.scrap_qty) }}</strong>
-              <small>不良 / 廃棄</small>
+              <strong>{{ fmtInt(m.loss_qty) }}</strong>
+              <small>不良+廃棄</small>
             </div>
           </div>
         </div>
@@ -243,14 +243,14 @@
         <div class="rpt-chart-card accent-rose">
           <div class="rpt-chart-card__title">
             <el-icon><TrendCharts /></el-icon>
-            不良率・廃棄率推移
+            廃棄率（新・旧）推移
           </div>
           <div ref="scrapRateChartRef" class="rpt-chart-host" />
         </div>
         <div class="rpt-chart-card accent-amber">
           <div class="rpt-chart-card__title">
             <el-icon><Histogram /></el-icon>
-            不良・廃棄本数（月別）
+            廃棄本数（月別）
           </div>
           <div ref="scrapQtyChartRef" class="rpt-chart-host" />
         </div>
@@ -267,8 +267,8 @@
         <div class="rpt-edit-launcher__info">
           <span class="rpt-edit-launcher__icon"><el-icon><EditPen /></el-icon></span>
           <span class="rpt-edit-launcher__text">
-            <strong>廃棄率・不良本数・廃棄本数（手動修正）</strong>
-            <small>報告用の数値を月別に上書きできます。修正はグラフへ即時反映されます。</small>
+            <strong>廃棄率・廃棄本数（手動修正）</strong>
+            <small>報告用の廃棄率（旧）と廃棄本数（不良＋廃棄）を月別に上書きできます。修正はグラフへ即時反映されます。</small>
           </span>
         </div>
         <div class="rpt-edit-launcher__actions">
@@ -292,8 +292,8 @@
           <div class="rpt-edit-dialog__head">
             <span class="rpt-edit-dialog__icon"><el-icon><EditPen /></el-icon></span>
             <span class="rpt-edit-dialog__titles">
-              <strong>廃棄率・不良本数・廃棄本数（手動修正）</strong>
-              <small>計算値をベースに、報告用の値を月別に修正できます</small>
+              <strong>廃棄率・廃棄本数（手動修正）</strong>
+              <small>計算値をベースに、報告用の廃棄率（旧）と廃棄本数を月別に修正できます</small>
             </span>
           </div>
         </template>
@@ -303,58 +303,42 @@
               <span class="rpt-edit-table__month">{{ row.month_label }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="廃棄率(%)" align="center">
+          <el-table-column label="廃棄率（旧）(%)" align="center">
             <el-table-column label="計算値" width="104" align="right" class-name="col-calc">
-              <template #default="{ row }">{{ fmtPct(row.calc_rate) }}</template>
+              <template #default="{ row }">{{ fmtPct(row.calc_rate_old) }}</template>
             </el-table-column>
             <el-table-column label="報告用" width="148" align="right" class-name="col-edit">
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.edit_rate"
+                  v-model="row.edit_rate_old"
                   size="small"
                   :step="0.01"
                   :precision="2"
                   controls-position="right"
                   class="rpt-num"
-                  :class="{ 'is-modified': row.edit_rate !== row.calc_rate }"
+                  :class="{ 'is-modified': row.edit_rate_old !== row.calc_rate_old }"
                   @change="onScrapEdit"
                 />
               </template>
             </el-table-column>
           </el-table-column>
-          <el-table-column label="不良本数" align="center">
-            <el-table-column label="計算値" width="104" align="right" class-name="col-calc">
-              <template #default="{ row }">{{ fmtInt(row.calc_defect) }}</template>
-            </el-table-column>
-            <el-table-column label="報告用" width="148" align="right" class-name="col-edit">
-              <template #default="{ row }">
-                <el-input-number
-                  v-model="row.edit_defect"
-                  size="small"
-                  :step="1"
-                  :precision="0"
-                  controls-position="right"
-                  class="rpt-num"
-                  :class="{ 'is-modified': row.edit_defect !== row.calc_defect }"
-                  @change="onScrapEdit"
-                />
-              </template>
-            </el-table-column>
+          <el-table-column label="廃棄率（新）(%)" width="104" align="right" class-name="col-calc">
+            <template #default="{ row }">{{ fmtPct(row.calc_rate_new) }}</template>
           </el-table-column>
           <el-table-column label="廃棄本数" align="center">
             <el-table-column label="計算値" width="104" align="right" class-name="col-calc">
-              <template #default="{ row }">{{ fmtInt(row.calc_scrap) }}</template>
+              <template #default="{ row }">{{ fmtInt(row.calc_loss_qty) }}</template>
             </el-table-column>
             <el-table-column label="報告用" width="148" align="right" class-name="col-edit">
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.edit_scrap"
+                  v-model="row.edit_loss_qty"
                   size="small"
                   :step="1"
                   :precision="0"
                   controls-position="right"
                   class="rpt-num"
-                  :class="{ 'is-modified': row.edit_scrap !== row.calc_scrap }"
+                  :class="{ 'is-modified': row.edit_loss_qty !== row.calc_loss_qty }"
                   @change="onScrapEdit"
                 />
               </template>
@@ -620,18 +604,22 @@
         <section class="rpt-help__group">
           <h3 class="rpt-help__group-title hg-amber">品質指標</h3>
           <dl>
-            <dt>不良率／廃棄率（全工程）</dt>
+            <dt>廃棄率（新）</dt>
             <dd>
-              工程実績を単純合算すると同一製品が工程間で重複するため、<b>全工程の連乗方式</b>で算出します。
-              <code>全工程率 = 1 − Π(1 − 工程別率)</code>、工程別率＝その工程の不良（または廃棄）本数 ÷ 実績本数。
+              全工程の不良＋廃棄本数を使い、<b>全工程の連乗方式</b>で算出します。
+              <code>廃棄率（新）＝ 1 − Π(1 − 工程別率)</code>、工程別率＝その工程の（不良＋廃棄）本数 ÷ 実績本数。
               実績が0の工程は計算から除外します。
             </dd>
-            <dt>品質ロス率（不良＋廃棄）</dt>
-            <dd>不良＋廃棄の合計本数を使い、同じ連乗方式で算出した総合損失率。不良率と廃棄率の単純合計より正確です。</dd>
-            <dt>不良本数・廃棄本数</dt>
-            <dd>全工程の不良・廃棄本数の合計。「手動修正」で報告用の値に上書きでき、グラフ・KPI・印刷へ即時反映されます（計算値も保持されます）。</dd>
+            <dt>廃棄率（旧）</dt>
+            <dd>
+              全工程の不良本数＋廃棄本数の合計を、<b>切断工程の月次実績本数</b>で除して算出します。
+              <code>廃棄率（旧）＝（全工程不良＋廃棄）÷ 切断工程実績 × 100</code>。
+              切断実績が0の月は表示しません（—）。
+            </dd>
+            <dt>廃棄本数</dt>
+            <dd>全工程の不良＋廃棄本数の合計。「手動修正」で報告用の値に上書きでき、グラフ・KPI・印刷へ即時反映されます（計算値も保持されます）。</dd>
             <dt>目安 2%</dt>
-            <dd>廃棄率の管理目安ライン。超過した月は自動分析・ハイライトで注意喚起されます。</dd>
+            <dd>廃棄率（旧）の管理目安ライン。超過した月は自動分析・ハイライトで注意喚起されます。</dd>
           </dl>
         </section>
 
@@ -759,12 +747,12 @@ const notes = ref('')
 type ScrapEditRow = {
   month: string
   month_label: string
-  calc_rate: number | null
-  calc_defect: number
-  calc_scrap: number
-  edit_rate: number | null
-  edit_defect: number
-  edit_scrap: number
+  calc_rate_old: number | null
+  calc_rate_new: number | null
+  calc_loss_qty: number
+  edit_rate_old: number | null
+  edit_loss_qty: number
+  cutting_actual: number
   note: string
 }
 const scrapEditRows = ref<ScrapEditRow[]>([])
@@ -777,6 +765,33 @@ let invChart: ECharts | null = null
 let scrapRateChart: ECharts | null = null
 let scrapQtyChart: ECharts | null = null
 let diffChart: ECharts | null = null
+
+function calcAllProcessLossRatePercent(
+  defectQty: number,
+  scrapQty: number,
+  cuttingActual: number,
+  fallback: number | null | undefined,
+): number | null {
+  if (cuttingActual > 0) {
+    return Math.round(((defectQty + scrapQty) / cuttingActual) * 10000) / 100
+  }
+  return fallback ?? null
+}
+
+function resolveOldScrapRatePercent(
+  edit: ScrapEditRow | undefined,
+  lossQty: number,
+  cuttingActual: number,
+  fallback: number | null | undefined,
+): number | null {
+  const rateManuallyChanged =
+    !!edit && edit.edit_rate_old != null && edit.edit_rate_old !== edit.calc_rate_old
+  const lossManuallyChanged = !!edit && edit.edit_loss_qty !== edit.calc_loss_qty
+  if (rateManuallyChanged && !lossManuallyChanged) {
+    return edit!.edit_rate_old
+  }
+  return calcAllProcessLossRatePercent(lossQty, 0, cuttingActual, fallback)
+}
 
 const monthlyKpiRows = computed<MonthlyReportKpi[]>(() => {
   const report = payload.value
@@ -794,6 +809,17 @@ const monthlyKpiRows = computed<MonthlyReportKpi[]>(() => {
       String(item.occurred_date || '').startsWith(inv.month)
     )
     const legacyBulk = report.bulk_disposal?.by_month?.find((r) => r.month === inv.month)
+    const lossQty =
+      edit?.edit_loss_qty ??
+      base?.loss_qty ??
+      qualitySeries?.sum_defect_and_scrap ??
+      Number(base?.defect_qty || 0) + Number(base?.scrap_qty || 0)
+    const cuttingActual =
+      base?.sum_cutting_actual ??
+      qualitySeries?.sum_cutting_actual ??
+      qualitySeries?.processes?.find((p) => p.key === 'cutting')?.sum_actual ??
+      edit?.cutting_actual ??
+      0
 
     return {
       month: inv.month,
@@ -801,11 +827,21 @@ const monthlyKpiRows = computed<MonthlyReportKpi[]>(() => {
       closing_wip_qty: base?.closing_wip_qty ?? inv.wip_qty,
       closing_product_qty: base?.closing_product_qty ?? inv.product_qty,
       closing_total_qty: base?.closing_total_qty ?? inv.total_qty,
-      scrap_rate_percent: edit?.edit_rate ?? base?.scrap_rate_percent ?? null,
+      scrap_rate_percent: edit?.edit_rate_old ?? base?.scrap_rate_percent ?? null,
+      all_process_loss_rate_percent: resolveOldScrapRatePercent(
+        edit,
+        lossQty,
+        cuttingActual,
+        base?.all_process_loss_rate_percent ?? qualitySeries?.all_process_loss_rate_percent,
+      ),
+      quality_loss_rate_percent:
+        base?.quality_loss_rate_percent ?? qualitySeries?.quality_loss_rate_percent ?? null,
+      sum_cutting_actual: cuttingActual,
       defect_rate_percent:
         base?.defect_rate_percent ?? qualitySeries?.defect_rate_percent ?? null,
-      defect_qty: edit?.edit_defect ?? base?.defect_qty ?? 0,
-      scrap_qty: edit?.edit_scrap ?? base?.scrap_qty ?? 0,
+      defect_qty: lossQty,
+      scrap_qty: 0,
+      loss_qty: lossQty,
       match_rate:
         base?.match_rate ?? Number(legacyMonth?.stocktake_diff?.kpi?.match_rate || 0),
       diff_abs:
@@ -968,18 +1004,24 @@ function syncScrapEditRows() {
   const series = payload.value?.scrap_series || []
   scrapEditRows.value = series.map((s) => {
     const ov = scrapOverrides.value[s.month]
-    // 旧保存レポートは sum_defect 未保持のため、不良＋廃棄から復元する。
-    const calcDefect =
-      s.sum_defect ?? Math.max(0, Number(s.sum_defect_and_scrap || 0) - Number(s.sum_scrap || 0))
+    const calcLossQty = Number(s.sum_defect_and_scrap || 0)
+    const calcRateOld = s.all_process_loss_rate_percent ?? null
+    const calcRateNew = s.quality_loss_rate_percent ?? null
+    const cuttingActual =
+      s.sum_cutting_actual ?? s.processes?.find((p) => p.key === 'cutting')?.sum_actual ?? 0
+    const overrideLossQty =
+      ov?.sum_defect != null || ov?.sum_scrap != null
+        ? Number(ov?.sum_defect || 0) + Number(ov?.sum_scrap || 0)
+        : null
     return {
       month: s.month,
       month_label: s.month_label,
-      calc_rate: s.rate_percent,
-      calc_defect: calcDefect,
-      calc_scrap: s.sum_scrap,
-      edit_rate: ov?.rate_percent != null ? ov.rate_percent : s.rate_percent,
-      edit_defect: ov?.sum_defect != null ? Number(ov.sum_defect) : calcDefect,
-      edit_scrap: ov?.sum_scrap != null ? Number(ov.sum_scrap) : s.sum_scrap,
+      calc_rate_old: calcRateOld,
+      calc_rate_new: calcRateNew,
+      calc_loss_qty: calcLossQty,
+      edit_rate_old: ov?.rate_percent != null ? ov.rate_percent : calcRateOld,
+      edit_loss_qty: overrideLossQty ?? calcLossQty,
+      cutting_actual: cuttingActual,
       note: ov?.note || '',
     }
   })
@@ -989,14 +1031,14 @@ function onScrapEdit() {
   const next: ScrapOverrides = {}
   for (const r of scrapEditRows.value) {
     const base = payload.value?.scrap_series.find((s) => s.month === r.month)
-    const rateChanged = r.edit_rate !== base?.rate_percent
-    const defectChanged = r.edit_defect !== base?.sum_defect
-    const scrapChanged = r.edit_scrap !== base?.sum_scrap
-    if (rateChanged || defectChanged || scrapChanged || r.note) {
+    const baseLossQty = Number(base?.sum_defect_and_scrap || 0)
+    const rateChanged = r.edit_rate_old !== base?.all_process_loss_rate_percent
+    const lossChanged = r.edit_loss_qty !== baseLossQty
+    if (rateChanged || lossChanged || r.note) {
       next[r.month] = {
-        rate_percent: r.edit_rate,
-        sum_defect: r.edit_defect,
-        sum_scrap: r.edit_scrap,
+        rate_percent: r.edit_rate_old,
+        sum_defect: r.edit_loss_qty,
+        sum_scrap: 0,
         note: r.note || undefined,
       }
     }
@@ -1160,18 +1202,10 @@ function renderCharts() {
     })
   }
 
-  const scrapLabels = scrapEditRows.value.map((r) => r.month_label)
-  const scrapRates = scrapEditRows.value.map((r) => r.edit_rate)
-  const defectQtys = scrapEditRows.value.map((r) => r.edit_defect)
-  const scrapQtys = scrapEditRows.value.map((r) => r.edit_scrap)
-  const defectRates = scrapEditRows.value.map((r) => {
-    const hit = payload.value?.scrap_series.find((s) => s.month === r.month)
-    return hit?.defect_rate_percent ?? null
-  })
-  const qualityLossRates = scrapEditRows.value.map((r) => {
-    const hit = payload.value?.scrap_series.find((s) => s.month === r.month)
-    return hit?.quality_loss_rate_percent ?? null
-  })
+  const scrapLabels = monthlyKpiRows.value.map((m) => m.month_label)
+  const scrapRatesOld = monthlyKpiRows.value.map((m) => m.all_process_loss_rate_percent)
+  const scrapRatesNew = monthlyKpiRows.value.map((m) => m.quality_loss_rate_percent)
+  const lossQtys = monthlyKpiRows.value.map((m) => m.loss_qty ?? 0)
 
   if (scrapRateChartRef.value) {
     if (!scrapRateChart) scrapRateChart = echarts.init(scrapRateChartRef.value)
@@ -1194,7 +1228,7 @@ function renderCharts() {
         valueFormatter: (v: unknown) => (v == null ? '-' : `${Number(v).toFixed(2)}%`),
       },
       legend: {
-        data: ['ロス率（不良＋廃棄）', '不良率', '廃棄率'],
+        data: ['廃棄率（新）', '廃棄率（旧）'],
         top: 0,
         itemWidth: 18,
         itemHeight: 4,
@@ -1220,10 +1254,10 @@ function renderCharts() {
       animationEasing: 'cubicOut',
       series: [
         {
-          name: 'ロス率（不良＋廃棄）',
+          name: '廃棄率（新）',
           type: 'line',
           smooth: true,
-          data: qualityLossRates,
+          data: scrapRatesNew,
           symbol: 'diamond',
           symbolSize: 11,
           lineStyle: {
@@ -1240,35 +1274,10 @@ function renderCharts() {
           emphasis: { focus: 'series', scale: 1.4 },
         },
         {
-          name: '不良率',
+          name: '廃棄率（旧）',
           type: 'line',
           smooth: true,
-          data: defectRates,
-          symbol: 'circle',
-          symbolSize: 9,
-          lineStyle: {
-            width: 3,
-            color: '#f59e0b',
-            shadowColor: 'rgba(245, 158, 11, 0.35)',
-            shadowBlur: 8,
-            shadowOffsetY: 4,
-          },
-          itemStyle: { color: '#f59e0b', borderColor: '#fff', borderWidth: 2 },
-          label: { ...pctLabel, position: 'top', distance: 8, color: '#b45309' },
-          labelLayout: { hideOverlap: true },
-          emphasis: { focus: 'series', scale: 1.4 },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(245,158,11,0.18)' },
-              { offset: 1, color: 'rgba(245,158,11,0.02)' },
-            ]),
-          },
-        },
-        {
-          name: '廃棄率',
-          type: 'line',
-          smooth: true,
-          data: scrapRates,
+          data: scrapRatesOld,
           symbol: 'circle',
           symbolSize: 9,
           lineStyle: {
@@ -1300,9 +1309,6 @@ function renderCharts() {
 
   if (scrapQtyChartRef.value) {
     if (!scrapQtyChart) scrapQtyChart = echarts.init(scrapQtyChartRef.value)
-    const lossTotals = scrapEditRows.value.map(
-      (r) => Number(r.edit_defect || 0) + Number(r.edit_scrap || 0),
-    )
     scrapQtyChart.setOption({
       tooltip: {
         trigger: 'axis',
@@ -1316,7 +1322,7 @@ function renderCharts() {
         valueFormatter: (v: unknown) => `${Number(v ?? 0).toLocaleString()} 本`,
       },
       legend: {
-        data: ['不良本数', '廃棄本数'],
+        data: ['廃棄本数'],
         top: 0,
         itemWidth: 14,
         itemHeight: 9,
@@ -1345,46 +1351,12 @@ function renderCharts() {
       animationEasing: 'elasticOut',
       series: [
         {
-          name: '不良本数',
-          type: 'bar',
-          stack: 'quality-loss',
-          barMaxWidth: 64,
-          data: defectQtys,
-          itemStyle: {
-            borderRadius: [0, 0, 4, 4],
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#fbbf24' },
-              { offset: 1, color: '#d97706' },
-            ]),
-            shadowColor: 'rgba(217, 119, 6, 0.28)',
-            shadowBlur: 8,
-            shadowOffsetY: 3,
-          },
-          emphasis: {
-            focus: 'series',
-            itemStyle: { shadowBlur: 14, shadowColor: 'rgba(217, 119, 6, 0.45)' },
-          },
-          label: {
-            show: true,
-            position: 'inside',
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 700,
-            textShadowColor: 'rgba(15, 23, 42, 0.35)',
-            textShadowBlur: 4,
-            formatter: ({ value }: { value: number }) =>
-              Number(value) > 0 ? Number(value).toLocaleString() : '',
-          },
-          animationDelay: (idx: number) => idx * 120,
-        },
-        {
           name: '廃棄本数',
           type: 'bar',
-          stack: 'quality-loss',
           barMaxWidth: 64,
-          data: scrapQtys,
+          data: lossQtys,
           itemStyle: {
-            borderRadius: [6, 6, 0, 0],
+            borderRadius: [6, 6, 4, 4],
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: '#fb7185' },
               { offset: 1, color: '#e11d48' },
@@ -1399,37 +1371,15 @@ function renderCharts() {
           },
           label: {
             show: true,
-            position: 'inside',
-            color: '#fff',
-            fontSize: 11,
-            fontWeight: 700,
-            textShadowColor: 'rgba(15, 23, 42, 0.35)',
-            textShadowBlur: 4,
-            formatter: ({ value }: { value: number }) =>
-              Number(value) > 0 ? Number(value).toLocaleString() : '',
-          },
-          animationDelay: (idx: number) => idx * 120 + 60,
-        },
-        {
-          // 合計ラベル用の透明系列（積み上げ最上部に合計値を表示）
-          name: '合計',
-          type: 'bar',
-          stack: 'quality-loss',
-          barMaxWidth: 64,
-          data: lossTotals.map(() => 0),
-          itemStyle: { color: 'transparent' },
-          tooltip: { show: false },
-          silent: true,
-          label: {
-            show: true,
             position: 'top',
             distance: 6,
             color: '#9f1239',
             fontSize: 12,
             fontWeight: 800,
-            formatter: ({ dataIndex }: { dataIndex: number }) =>
-              `計 ${Number(lossTotals[dataIndex] ?? 0).toLocaleString()}`,
+            formatter: ({ value }: { value: number }) =>
+              Number(value) > 0 ? Number(value).toLocaleString() : '',
           },
+          animationDelay: (idx: number) => idx * 120,
         },
       ],
     })
@@ -1660,28 +1610,29 @@ function buildAutoAnalysis(): { summary: string; actions: string } | null {
     summaryLines.push(s)
   }
 
-  // 品質（不良・廃棄）
-  const rows = scrapEditRows.value
+  // 品質（不良＋廃棄）
+  const rows = monthlyKpiRows.value
   if (rows.length) {
-    const scrapVals = rows.filter((r) => r.edit_rate != null)
-    const scrapPeak = scrapVals.length
-      ? scrapVals.reduce((a, b) => (Number(b.edit_rate) > Number(a.edit_rate) ? b : a))
-      : null
-    const totalDefect = rows.reduce((sum, r) => sum + Number(r.edit_defect || 0), 0)
-    const totalScrap = rows.reduce((sum, r) => sum + Number(r.edit_scrap || 0), 0)
-    const defectSeries = (p.scrap_series || []).filter((s) => s.defect_rate_percent != null)
-    const defectPeak = defectSeries.length
-      ? defectSeries.reduce((a, b) =>
-          Number(b.defect_rate_percent) > Number(a.defect_rate_percent) ? b : a
+    const oldRateVals = rows.filter((r) => r.all_process_loss_rate_percent != null)
+    const oldRatePeak = oldRateVals.length
+      ? oldRateVals.reduce((a, b) =>
+          Number(b.all_process_loss_rate_percent) > Number(a.all_process_loss_rate_percent) ? b : a
         )
       : null
-    let s = `品質面では不良本数 ${fmtInt(totalDefect)} 本・廃棄本数 ${fmtInt(totalScrap)} 本。`
-    if (defectPeak) {
-      s += `不良率のピークは${defectPeak.month_label}の ${fmtPct(defectPeak.defect_rate_percent)}。`
+    const newRateVals = rows.filter((r) => r.quality_loss_rate_percent != null)
+    const newRatePeak = newRateVals.length
+      ? newRateVals.reduce((a, b) =>
+          Number(b.quality_loss_rate_percent) > Number(a.quality_loss_rate_percent) ? b : a
+        )
+      : null
+    const totalLoss = rows.reduce((sum, r) => sum + Number(r.loss_qty || 0), 0)
+    let s = `品質面では廃棄本数（不良＋廃棄）合計 ${fmtInt(totalLoss)} 本。`
+    if (newRatePeak) {
+      s += `廃棄率（新）のピークは${newRatePeak.month_label}の ${fmtPct(newRatePeak.quality_loss_rate_percent)}。`
     }
-    if (scrapPeak) {
-      s += `廃棄率のピークは${scrapPeak.month_label}の ${fmtPct(scrapPeak.edit_rate)}${
-        Number(scrapPeak.edit_rate) >= 2 ? '（目安2%超過）' : ''
+    if (oldRatePeak) {
+      s += `廃棄率（旧）のピークは${oldRatePeak.month_label}の ${fmtPct(oldRatePeak.all_process_loss_rate_percent)}${
+        Number(oldRatePeak.all_process_loss_rate_percent) >= 2 ? '（目安2%超過）' : ''
       }。`
     }
     summaryLines.push(s)
@@ -1716,9 +1667,13 @@ function buildAutoAnalysis(): { summary: string; actions: string } | null {
 
   // 改善アクション（データ条件に応じて提案）
   const actions: string[] = []
-  const scrapOver2 = rows.filter((r) => Number(r.edit_rate || 0) >= 2).map((r) => r.month_label)
+  const scrapOver2 = rows
+    .filter((r) => Number(r.all_process_loss_rate_percent || 0) >= 2)
+    .map((r) => r.month_label)
   if (scrapOver2.length) {
-    actions.push(`廃棄率が目安2%を超過（${scrapOver2.join('・')}）→ 工程別の廃棄要因を分析し削減策を立案`)
+    actions.push(
+      `廃棄率（旧）が目安2%を超過（${scrapOver2.join('・')}）→ 工程別の廃棄要因を分析し削減策を立案`
+    )
   }
   if (Number(p.kpi.avg_match_rate) < 95) {
     actions.push('棚卸一致率が95%未満 → 差異上位品目を対象に棚卸精度・記帳タイミングを調査')
@@ -1785,10 +1740,9 @@ function onPrint() {
         <td class="r">${fmtInt(m.closing_wip_qty)}</td>
         <td class="r">${fmtInt(m.closing_product_qty)}</td>
         <td class="r">${fmtInt(m.closing_total_qty)}</td>
-        <td class="r">${fmtPct(m.defect_rate_percent)}</td>
-        <td class="r">${fmtPct(m.scrap_rate_percent)}</td>
-        <td class="r">${fmtInt(m.defect_qty)}</td>
-        <td class="r">${fmtInt(m.scrap_qty)}</td>
+        <td class="r">${fmtPct(m.quality_loss_rate_percent)}</td>
+        <td class="r">${fmtPct(m.all_process_loss_rate_percent)}</td>
+        <td class="r">${fmtInt(m.loss_qty)}</td>
         <td class="r">${fmtPct(m.match_rate)}</td>
         <td class="r">${fmtInt(m.diff_abs)}</td>
       </tr>`
@@ -1803,12 +1757,11 @@ function onPrint() {
     .map(
       (r) => `<tr>
         <td class="c">${esc(r.month_label)}</td>
-        <td class="r">${fmtPct(r.calc_rate)}</td>
-        <td class="r">${fmtPct(r.edit_rate)}</td>
-        <td class="r">${fmtInt(r.calc_defect)}</td>
-        <td class="r">${fmtInt(r.edit_defect)}</td>
-        <td class="r">${fmtInt(r.calc_scrap)}</td>
-        <td class="r">${fmtInt(r.edit_scrap)}</td>
+        <td class="r">${fmtPct(r.calc_rate_old)}</td>
+        <td class="r">${fmtPct(r.edit_rate_old)}</td>
+        <td class="r">${fmtPct(r.calc_rate_new)}</td>
+        <td class="r">${fmtInt(r.calc_loss_qty)}</td>
+        <td class="r">${fmtInt(r.edit_loss_qty)}</td>
         <td>${esc(r.note)}</td>
       </tr>`
     )
@@ -1952,7 +1905,7 @@ function onPrint() {
     <table>
       <thead><tr>
         <th>月</th><th>期末仕掛品</th><th>期末製品</th><th>期末合計</th>
-        <th>不良率</th><th>廃棄率</th><th>不良本数</th><th>廃棄本数</th>
+        <th>廃棄率（新）</th><th>廃棄率（旧）</th><th>廃棄本数</th>
         <th>棚卸一致率</th><th>差異絶対値</th>
       </tr></thead>
       <tbody>${kpiRows}</tbody>
@@ -1966,21 +1919,21 @@ function onPrint() {
     <h2>グラフ</h2>
     <div class="charts">
       ${chartImg(invChart, '月末在庫（仕掛品・製品）')}
-      ${chartImg(scrapRateChart, '不良率・廃棄率推移')}
-      ${chartImg(scrapQtyChart, '不良・廃棄本数（月別）')}
+      ${chartImg(scrapRateChart, '廃棄率（新・旧）推移')}
+      ${chartImg(scrapQtyChart, '廃棄本数（月別）')}
       ${chartImg(diffChart, '棚卸差異（月別×工程）')}
     </div>
   </section>
 
   <section>
-    <h2>廃棄率・不良本数・廃棄本数（報告用）</h2>
+    <h2>廃棄率・廃棄本数（報告用）</h2>
     <table>
       <thead><tr>
         <th rowspan="2">月</th>
-        <th colspan="2">廃棄率(%)</th><th colspan="2">不良本数</th><th colspan="2">廃棄本数</th>
+        <th colspan="2">廃棄率（旧）(%)</th><th>廃棄率（新）(%)</th><th colspan="2">廃棄本数</th>
         <th rowspan="2">コメント</th>
       </tr><tr>
-        <th>計算値</th><th>報告用</th><th>計算値</th><th>報告用</th><th>計算値</th><th>報告用</th>
+        <th>計算値</th><th>報告用</th><th>計算値</th><th>計算値</th><th>報告用</th>
       </tr></thead>
       <tbody>${scrapRows}</tbody>
     </table>

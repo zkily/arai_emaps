@@ -25,9 +25,12 @@ export interface ScrapSeriesPoint {
   defect_rate_percent?: number | null
   /** 不良＋廃棄の全工程連乗ロス率（品質ロス率） */
   quality_loss_rate_percent?: number | null
+  /** 全工程不良＋廃棄 ÷ 切断工程実績 */
+  all_process_loss_rate_percent?: number | null
   sum_defect: number
   sum_scrap: number
   sum_defect_and_scrap: number
+  sum_cutting_actual?: number
   rate_basis?: string
   processes?: Array<{
     key: string
@@ -66,9 +69,16 @@ export interface MonthlyReportKpi {
   closing_product_qty: number
   closing_total_qty: number
   scrap_rate_percent: number | null
+  /** 廃棄率（旧）＝全工程不良＋廃棄 ÷ 切断工程実績 */
+  all_process_loss_rate_percent?: number | null
+  /** 廃棄率（新）＝全工程不良＋廃棄の連乗ロス率 */
+  quality_loss_rate_percent?: number | null
+  sum_cutting_actual?: number
   defect_rate_percent: number | null
   defect_qty: number
   scrap_qty: number
+  /** 不良＋廃棄本数合計 */
+  loss_qty?: number
   match_rate: number
   diff_abs: number
   bulk_disposal_count: number

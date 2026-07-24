@@ -358,16 +358,28 @@ async def _month_scrap_metrics(
     overall_quality_loss_rate = rolled_loss_percent("sum_defect_and_scrap")
     overall_basis = "all_processes_rolled"
 
+    cutting_actual = _num(row.get("cutting_actual"))
+    all_process_loss_rate = (
+        round(overall_bad / cutting_actual, 6) if cutting_actual > 0 else None
+    )
+    all_process_loss_rate_percent = (
+        round(all_process_loss_rate * 100, 4)
+        if all_process_loss_rate is not None
+        else None
+    )
+
     return {
         "start_date": str(start_d),
         "end_date": str(end_d),
         "sum_scrap": total_scrap,
         "sum_defect": total_defect,
         "sum_defect_and_scrap": overall_bad,
-        # rate_percent は既存フロント互換。意味は全工程の廃棄率。
+        "sum_cutting_actual": cutting_actual,
+        # rate_percent は既存フロント互換。意味は全工程の廃棄率（連乗）。
         "rate_percent": overall_scrap_rate,
         "defect_rate_percent": overall_defect_rate,
         "quality_loss_rate_percent": overall_quality_loss_rate,
+        "all_process_loss_rate_percent": all_process_loss_rate_percent,
         "rate_basis": overall_basis,
         "processes": processes,
     }
@@ -647,9 +659,11 @@ async def _build_quarter_payload(db: AsyncSession, fiscal_year: int, quarter: in
                 "rate_percent": scrap["rate_percent"],
                 "defect_rate_percent": scrap["defect_rate_percent"],
                 "quality_loss_rate_percent": scrap["quality_loss_rate_percent"],
+                "all_process_loss_rate_percent": scrap["all_process_loss_rate_percent"],
                 "sum_defect": scrap["sum_defect"],
                 "sum_scrap": scrap["sum_scrap"],
                 "sum_defect_and_scrap": scrap["sum_defect_and_scrap"],
+                "sum_cutting_actual": scrap["sum_cutting_actual"],
                 "rate_basis": scrap["rate_basis"],
                 "processes": scrap["processes"],
             }
@@ -689,9 +703,13 @@ async def _build_quarter_payload(db: AsyncSession, fiscal_year: int, quarter: in
                 "closing_product_qty": int(inv.get("product_qty") or 0),
                 "closing_total_qty": int(inv.get("total_qty") or 0),
                 "scrap_rate_percent": scrap.get("rate_percent"),
+                "all_process_loss_rate_percent": scrap.get("all_process_loss_rate_percent"),
+                "quality_loss_rate_percent": scrap.get("quality_loss_rate_percent"),
+                "sum_cutting_actual": int(scrap.get("sum_cutting_actual") or 0),
                 "defect_rate_percent": scrap.get("defect_rate_percent"),
                 "defect_qty": int(scrap.get("sum_defect") or 0),
                 "scrap_qty": int(scrap.get("sum_scrap") or 0),
+                "loss_qty": int(scrap.get("sum_defect_and_scrap") or 0),
                 "match_rate": _fnum(diff_kpi.get("match_rate")),
                 "diff_abs": abs(int(diff_kpi.get("diff_qty_total") or 0)),
                 "bulk_disposal_count": int(month_bulk.get("count") or 0),
@@ -798,31 +816,31 @@ def _build_highlights(
             }
         )
     if scrap_series:
-        defect_rates = [
+        quality_rates = [
             (
                 s.get("month_label"),
-                s.get("defect_rate_percent"),
-                s.get("sum_defect"),
+                s.get("quality_loss_rate_percent"),
+                s.get("sum_defect_and_scrap"),
             )
             for s in scrap_series
         ]
-        defect_peak = max(defect_rates, key=lambda x: (x[1] is not None, x[1] or 0))
-        if defect_peak[1] is not None:
+        quality_peak = max(quality_rates, key=lambda x: (x[1] is not None, x[1] or 0))
+        if quality_peak[1] is not None:
             highlights.append(
                 {
                     "type": "defect_peak",
-                    "tone": "warn" if (defect_peak[1] or 0) >= 2 else "info",
-                    "title": "不良率ピーク月",
+                    "tone": "warn" if (quality_peak[1] or 0) >= 2 else "info",
+                    "title": "廃棄率（新）ピーク月",
                     "text": (
-                        f"{defect_peak[0]} の不良率 {defect_peak[1]:.2f}%"
-                        f"（不良本数 {int(defect_peak[2] or 0):,} 本）"
+                        f"{quality_peak[0]} の廃棄率（新） {quality_peak[1]:.2f}%"
+                        f"（不良＋廃棄 {int(quality_peak[2] or 0):,} 本）"
                     ),
                 }
             )
         rates = [
             (
                 s.get("month_label"),
-                s.get("rate_percent"),
+                s.get("all_process_loss_rate_percent"),
                 s.get("sum_defect"),
                 s.get("sum_scrap"),
             )
@@ -834,10 +852,10 @@ def _build_highlights(
                 {
                     "type": "scrap_peak",
                     "tone": "warn" if (peak[1] or 0) >= 2 else "info",
-                    "title": "廃棄率ピーク月",
+                    "title": "廃棄率（旧）ピーク月",
                     "text": (
-                        f"{peak[0]} の廃棄率 {peak[1]:.2f}%"
-                        f"（不良 {int(peak[2] or 0):,} 本 / 廃棄 {int(peak[3] or 0):,} 本）"
+                        f"{peak[0]} の廃棄率（旧） {peak[1]:.2f}%"
+                        f"（不良＋廃棄 {int((peak[2] or 0) + (peak[3] or 0)):,} 本）"
                     ),
                 }
             )
