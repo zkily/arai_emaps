@@ -57,10 +57,16 @@ const INOAC_HIST_BLANK_EXTRA_PX = 25
 const INOAC_HEAD_BODY_ROW_EXTRA_PX = 20
 /** 加工履歴上部に溜まっていた余白を QR 行へ寄せる（ラベル高さに対する比率） */
 const INOAC_HEAD_BODY_ABSORB_RATIO = 0.11
+/** INOAC ヘッダ列幅：工場用QR 22%×0.9 / 背番号 28%×1.1 / 品名は残分 */
+const INOAC_HEAD_QR_COL_RATIO = 0.198
+const INOAC_HEAD_BACK_COL_RATIO = 0.308
+const INOAC_HEAD_NAME_COL_RATIO = Number(
+  (1 - INOAC_HEAD_QR_COL_RATIO - INOAC_HEAD_BACK_COL_RATIO).toFixed(3)
+)
 /** INOAC 品名（製品用製品名）：基準30px・1行内で自動縮小 */
 const INOAC_PRODUCT_FONT_BASE = 30
 const INOAC_PRODUCT_FONT_MIN = 8
-const INOAC_PRODUCT_NAME_COL_RATIO = 0.5
+const INOAC_PRODUCT_NAME_COL_RATIO = INOAC_HEAD_NAME_COL_RATIO
 const INOAC_PRODUCT_CELL_PAD_H_MM = 0.3
 const INOAC_PRODUCT_LINE_HEIGHT = 1.1
 const INOAC_PRODUCT_LINE_HEIGHT_TRIM_PX = 1
@@ -670,11 +676,14 @@ async function buildInoacLabelHtml(
   const mfgHtml = DEFAULT_MANUFACTURER_LINES.map(
     (line) => `<div class="pul-inoac-mfg-line">${escapeHtml(line)}</div>`
   ).join('')
-  const barW = Math.round(((wMm * 0.22) / 25.4) * 96)
+  const barW = Math.round(((wMm * INOAC_HEAD_BACK_COL_RATIO) / 25.4) * 96)
   const barH = Math.round(((hMm * 0.1) / 25.4) * 96)
   const barcodeData = generateCode39BarcodeSvg(input.barcode_no, barW, barH)
   const barcodeDisplay = escapeHtml(inoacBarcodeDisplayText(input, barcodeData.payload))
   const barcodeHuman = escapeHtml(barcodeData.humanReadable)
+  const headQrColPct = `${(INOAC_HEAD_QR_COL_RATIO * 100).toFixed(1)}%`
+  const headNameColPct = `${(INOAC_HEAD_NAME_COL_RATIO * 100).toFixed(1)}%`
+  const headBackColPct = `${(INOAC_HEAD_BACK_COL_RATIO * 100).toFixed(1)}%`
 
   const historyNumCells = [1, 2, 3, 4, 5]
     .map((n) => `<td class="pul-inoac-hist-num-cell">${n}</td>`)
@@ -696,9 +705,9 @@ async function buildInoacLabelHtml(
         <td colspan="4" class="pul-inoac-head-wrap">
           <table class="pul-inoac-head-table" cellspacing="0" cellpadding="0">
             <colgroup>
-              <col style="width:22%" />
-              <col style="width:50%" />
-              <col style="width:28%" />
+              <col style="width:${headQrColPct}" />
+              <col style="width:${headNameColPct}" />
+              <col style="width:${headBackColPct}" />
             </colgroup>
             <tr class="pul-inoac-head-lbl-row">
               <td class="pul-inoac-head-lbl-cell">工場用 QRコード</td>
