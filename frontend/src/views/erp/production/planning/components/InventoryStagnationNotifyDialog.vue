@@ -15,7 +15,7 @@
         </div>
         <div class="snd-header__text">
           <h3 class="snd-header__title">在庫停滞アラート送信</h3>
-          <p class="snd-header__sub">工程別にメール・LINE で停滞在庫を通知します</p>
+          <p class="snd-header__sub">工程別にメール で停滞在庫を通知します</p>
         </div>
       </div>
     </template>
@@ -187,7 +187,7 @@
           @click="handleSend"
         >
           <el-icon v-if="!sending" class="snd-footer__send-icon"><Promotion /></el-icon>
-          メール・LINE送信
+          メール送信
         </el-button>
       </div>
     </template>

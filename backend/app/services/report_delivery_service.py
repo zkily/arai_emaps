@@ -176,8 +176,8 @@ async def send_report(
     line_enabled = bool(setting.line_enabled)
     if not email_enabled and not line_enabled:
         if is_auto:
-            return {"success": True, "status": "skipped_channels", "message": "メール・LINE が無効です"}
-        raise HTTPException(status_code=400, detail="メール・LINE いずれの通知も有効ではありません")
+            return {"success": True, "status": "skipped_channels", "message": "メール が無効です"}
+        raise HTTPException(status_code=400, detail="メール いずれの通知も有効ではありません")
 
     generator = get_generator(report_code)
     run = run_date or now_jst().date()

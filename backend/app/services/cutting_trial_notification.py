@@ -220,7 +220,7 @@ async def send_cutting_trial_notification(
     email_enabled = bool(setting.email_enabled)
     line_enabled = bool(setting.line_enabled)
     if not email_enabled and not line_enabled:
-        raise HTTPException(status_code=400, detail="メール・LINE いずれの通知も有効ではありません")
+        raise HTTPException(status_code=400, detail="メール いずれの通知も有効ではありません")
 
     rows = await _fetch_trial_rows(db, prod_day)
     if not rows:

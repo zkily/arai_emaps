@@ -45,6 +45,7 @@ class CapacityItem(BaseModel):
     standard_rate: int = 0
     shift_label: Optional[str] = None
     working_days: int = 0
+    utilization_rate_pct: float = 96
     daily_regular_hours: int = 0
     sort_order: int = 0
 

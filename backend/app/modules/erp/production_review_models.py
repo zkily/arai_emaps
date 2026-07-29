@@ -1,5 +1,5 @@
 """生産検討会資料（月次 PPT）モデル"""
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -36,6 +36,9 @@ class ProductionReviewCapacity(Base):
     standard_rate = Column(Integer, nullable=False, default=0, comment="標準能率 本/H")
     shift_label = Column(String(20), nullable=True, comment="標準稼働直")
     working_days = Column(Integer, nullable=False, default=0, comment="稼働日数（0=対象月カレンダー）")
+    utilization_rate_pct = Column(
+        Numeric(5, 2), nullable=False, default=96, comment="稼働率(%) 定時H計算用"
+    )
     daily_regular_hours = Column(Integer, nullable=False, default=0, comment="日当たり定時H")
     sort_order = Column(Integer, nullable=False, default=0, comment="表示順")
     created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")

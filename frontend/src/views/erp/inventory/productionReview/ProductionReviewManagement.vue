@@ -601,7 +601,7 @@
                 stripe
                 :row-class-name="inventoryRowClassName"
               >
-                <el-table-column label="工程名" min-width="150" fixed>
+                <el-table-column label="工程名" min-width="128" fixed>
                   <template #default="{ row }">
                     <div class="pr-inv-name-cell">
                       <span class="pr-inv-name-cell__name">{{ row.name }}</span>
@@ -611,7 +611,7 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月在庫(千本)" min-width="140" align="center" class-name="col-prev">
+                <el-table-column label="前月在庫(千本)" min-width="112" align="center" class-name="col-prev">
                   <template #default="{ row }">
                     <input
                       v-if="isInvEditable(row) && isInvEditing(row.key, 'prev_inventory_th')"
@@ -633,7 +633,7 @@
                     <span v-else class="pr-inv-val pr-inv-val--prev pr-inv-val--parent">{{ fmtNum(row.prev_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月補正率" min-width="100" align="center" class-name="col-prev">
+                <el-table-column label="前月在庫率" min-width="88" align="center" class-name="col-prev">
                   <template #default="{ row }">
                     <span
                       class="pr-inv-rate pr-inv-rate--prev pr-inv-rate--adj"
@@ -641,7 +641,7 @@
                     >{{ fmtRate(row.prev_rate_adj ?? row.prev_rate) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月在庫日数" min-width="110" align="center" class-name="col-prev">
+                <el-table-column label="前月在庫日数" min-width="96" align="center" class-name="col-prev">
                   <template #default="{ row }">
                     <span
                       class="pr-inv-days pr-inv-days--prev"
@@ -649,7 +649,7 @@
                     >{{ fmtDays(row.prev_days) }}<small>日</small></span>
                   </template>
                 </el-table-column>
-                <el-table-column min-width="150" align="center" class-name="col-curr">
+                <el-table-column min-width="120" align="center" class-name="col-curr">
                   <template #header>
                     <span
                       class="pr-inv-col-hdr pr-inv-col-hdr--clickable"
@@ -680,7 +680,7 @@
                     <span v-else class="pr-inv-val pr-inv-val--curr pr-inv-val--parent">{{ fmtNum(row.curr_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="当月補正率" min-width="108" align="center" class-name="col-curr">
+                <el-table-column label="当月在庫率" min-width="88" align="center" class-name="col-curr">
                   <template #default="{ row }">
                     <span
                       class="pr-inv-rate pr-inv-rate--curr pr-inv-rate--adj"
@@ -688,7 +688,7 @@
                     >{{ fmtRate(row.curr_rate_adj ?? row.curr_rate) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="当月在庫日数" min-width="110" align="center" class-name="col-curr">
+                <el-table-column label="当月在庫日数" min-width="96" align="center" class-name="col-curr">
                   <template #default="{ row }">
                     <span
                       class="pr-inv-days"
@@ -696,7 +696,7 @@
                     >{{ fmtDays(row.curr_days) }}<small>日</small></span>
                   </template>
                 </el-table-column>
-                <el-table-column label="増減(千本)" min-width="110" align="center">
+                <el-table-column label="増減(千本)" min-width="96" align="center">
                   <template #default="{ row }">
                     <span :class="deltaClass(row.delta_th)">{{ fmtDelta(row.delta_th) }}</span>
                   </template>
@@ -772,7 +772,7 @@
                   @click="showLoadCapacityCols = !showLoadCapacityCols"
                 >
                   <span class="pr-col-toggle__indicator" />
-                  設備・能率・直・稼働日・月間最大
+                  設備・能率・稼働日・定時H・所要H
                 </button>
                 <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog">
                   <el-icon><Setting /></el-icon>
@@ -795,10 +795,13 @@
             </div>
 
             <div class="pr-kpi-grid pr-kpi-grid--load">
-              <div class="pr-kpi pr-kpi--blue">
-                <span class="pr-kpi__label">計画合計</span>
-                <strong class="pr-kpi__value">{{ fmtNum(part02LoadMeta.totalPlan) }}<small>千本</small></strong>
-                <span class="pr-kpi__hint">{{ payload.part02.load_plan.rows?.length || 0 }} 工程</span>
+              <div
+                class="pr-kpi"
+                :class="part02LoadMeta.bottleneckRate >= 100 ? 'pr-kpi--red' : part02LoadMeta.bottleneckRate >= 90 ? 'pr-kpi--orange' : 'pr-kpi--blue'"
+              >
+                <span class="pr-kpi__label">ボトルネック</span>
+                <strong class="pr-kpi__value pr-kpi__value--name">{{ part02LoadMeta.bottleneckName }}</strong>
+                <span class="pr-kpi__hint">負荷率 {{ part02LoadMeta.bottleneckRate }}%</span>
               </div>
               <div class="pr-kpi pr-kpi--indigo">
                 <span class="pr-kpi__label">平均負荷率</span>
@@ -813,7 +816,7 @@
               <div class="pr-kpi" :class="part02LoadMeta.overload > 0 ? 'pr-kpi--red' : 'pr-kpi--slate'">
                 <span class="pr-kpi__label">100%超</span>
                 <strong class="pr-kpi__value">{{ part02LoadMeta.overload }}<small>工程</small></strong>
-                <span class="pr-kpi__hint">{{ part02LoadMeta.overload ? '残業・外注等を検討' : '該当なし' }}</span>
+                <span class="pr-kpi__hint">{{ part02LoadMeta.overload ? '残業を検討' : '該当なし' }}</span>
               </div>
               <div class="pr-kpi" :class="part02LoadMeta.tight > 0 ? 'pr-kpi--orange' : 'pr-kpi--blue'">
                 <span class="pr-kpi__label">90%以上</span>
@@ -837,13 +840,13 @@
               <span class="pr-load-formula__sep">|</span>
               負荷率 = 所要H ÷ 定時H × 100
               <span class="pr-load-formula__sep">|</span>
-              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 96%（人員は 人数 × 7.6H × 稼働日 × 96%）
+              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 稼働率（人員は 人数 × 7.6H × 稼働日 × 稼働率）
               <span class="pr-load-formula__sep">|</span>
               所要H = 計画(本) ÷ 能率(本/H)
               <span class="pr-load-formula__sep">|</span>
               日均H = 所要H ÷ 稼働日 ÷ 設備数
               <span class="pr-load-formula__sep">|</span>
-              月間最大 = 設備×能率×24H×稼働日×96%
+              設備稼働率 = 所要H ÷ (設備数×暦日×24H)×100（検査除外）
             </p>
 
             <div class="pr-table-wrap pr-table-wrap--performance">
@@ -883,19 +886,26 @@
                     <span class="pr-perf-val">{{ fmtNum(row.daily_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="定時H" min-width="72" align="center">
+                <el-table-column label="直" min-width="64" align="center">
                   <template #default="{ row }">
-                    <span class="pr-perf-reg">{{ row.regular_hours }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="所要H" min-width="72" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-perf-prod">{{ row.required_hours }}</span>
+                    <span
+                      class="pr-shift-badge"
+                      :class="shiftBadgeClass(row.shift_label)"
+                    >{{ row.shift_label || '—' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="負荷率" min-width="92" align="center">
                   <template #default="{ row }">
                     <span :class="loadRateClass(row.load_rate_pct)">{{ row.load_rate_pct }}%</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="設備稼働率" min-width="96" align="center">
+                  <template #default="{ row }">
+                    <span
+                      v-if="row.process_cd !== 'inspection' && row.equipment_utilization_pct != null"
+                      class="pr-perf-val pr-perf-val--util"
+                    >{{ row.equipment_utilization_pct }}%</span>
+                    <span v-else class="pr-perf-val pr-perf-val--muted">—</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="日均H" min-width="80" align="center">
@@ -913,19 +923,19 @@
                     <span class="pr-load-cap-val pr-load-cap-val--num">{{ row.standard_rate || '—' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column v-if="showLoadCapacityCols" label="直" min-width="56" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-load-cap-val">{{ row.shift_label || '—' }}</span>
-                  </template>
-                </el-table-column>
                 <el-table-column v-if="showLoadCapacityCols" label="稼働日" min-width="72" align="center">
                   <template #default="{ row }">
                     <span class="pr-perf-val">{{ row.working_days }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column v-if="showLoadCapacityCols" label="月間最大(千本)" min-width="100" align="center">
+                <el-table-column v-if="showLoadCapacityCols" label="定時H" min-width="72" align="center">
                   <template #default="{ row }">
-                    <span class="pr-perf-val pr-perf-val--cap">{{ fmtNum(row.max_monthly_th) }}</span>
+                    <span class="pr-perf-reg">{{ row.regular_hours }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column v-if="showLoadCapacityCols" label="所要H" min-width="72" align="center">
+                  <template #default="{ row }">
+                    <span class="pr-perf-prod">{{ row.required_hours }}</span>
                   </template>
                 </el-table-column>
               </el-table>
@@ -1015,7 +1025,7 @@
                     <span class="pr-inv-val pr-inv-val--prev">{{ fmtNum(row.prev_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月補正率" min-width="100" align="center" class-name="col-prev">
+                <el-table-column label="前月在庫率" min-width="100" align="center" class-name="col-prev">
                   <template #default="{ row }">
                     <span class="pr-inv-rate pr-inv-rate--prev pr-inv-rate--adj">{{ fmtRate(row.prev_rate_adj ?? row.prev_rate) }}</span>
                   </template>
@@ -1108,7 +1118,7 @@
                   @click="showLoadCapacityCols = !showLoadCapacityCols"
                 >
                   <span class="pr-col-toggle__indicator" />
-                  設備・能率・直・稼働日・月間最大
+                  設備・能率・稼働日・定時H・所要H
                 </button>
                 <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog">
                   <el-icon><Setting /></el-icon>
@@ -1131,10 +1141,13 @@
             </div>
 
             <div class="pr-kpi-grid pr-kpi-grid--load">
-              <div class="pr-kpi pr-kpi--blue">
-                <span class="pr-kpi__label">計画合計</span>
-                <strong class="pr-kpi__value">{{ fmtNum(part03LoadMeta.totalPlan) }}<small>千本</small></strong>
-                <span class="pr-kpi__hint">{{ payload.part03.load_plan.rows?.length || 0 }} 工程</span>
+              <div
+                class="pr-kpi"
+                :class="part03LoadMeta.bottleneckRate >= 100 ? 'pr-kpi--red' : part03LoadMeta.bottleneckRate >= 90 ? 'pr-kpi--orange' : 'pr-kpi--blue'"
+              >
+                <span class="pr-kpi__label">ボトルネック</span>
+                <strong class="pr-kpi__value pr-kpi__value--name">{{ part03LoadMeta.bottleneckName }}</strong>
+                <span class="pr-kpi__hint">負荷率 {{ part03LoadMeta.bottleneckRate }}%</span>
               </div>
               <div class="pr-kpi pr-kpi--indigo">
                 <span class="pr-kpi__label">平均負荷率</span>
@@ -1173,13 +1186,13 @@
               <span class="pr-load-formula__sep">|</span>
               負荷率 = 所要H ÷ 定時H × 100
               <span class="pr-load-formula__sep">|</span>
-              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 96%（人員は 人数 × 7.6H × 稼働日 × 96%）
+              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 稼働率（人員は 人数 × 7.6H × 稼働日 × 稼働率）
               <span class="pr-load-formula__sep">|</span>
               所要H = 計画(本) ÷ 能率(本/H)
               <span class="pr-load-formula__sep">|</span>
               日均H = 所要H ÷ 稼働日 ÷ 設備数
               <span class="pr-load-formula__sep">|</span>
-              月間最大 = 設備×能率×24H×稼働日×96%
+              設備稼働率 = 所要H ÷ (設備数×暦日×24H)×100（検査除外）
             </p>
 
             <div class="pr-table-wrap pr-table-wrap--performance">
@@ -1219,19 +1232,26 @@
                     <span class="pr-perf-val">{{ fmtNum(row.daily_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="定時H" min-width="72" align="center">
+                <el-table-column label="直" min-width="64" align="center">
                   <template #default="{ row }">
-                    <span class="pr-perf-reg">{{ row.regular_hours }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="所要H" min-width="72" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-perf-prod">{{ row.required_hours }}</span>
+                    <span
+                      class="pr-shift-badge"
+                      :class="shiftBadgeClass(row.shift_label)"
+                    >{{ row.shift_label || '—' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="負荷率" min-width="92" align="center">
                   <template #default="{ row }">
                     <span :class="loadRateClass(row.load_rate_pct)">{{ row.load_rate_pct }}%</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="設備稼働率" min-width="96" align="center">
+                  <template #default="{ row }">
+                    <span
+                      v-if="row.process_cd !== 'inspection' && row.equipment_utilization_pct != null"
+                      class="pr-perf-val pr-perf-val--util"
+                    >{{ row.equipment_utilization_pct }}%</span>
+                    <span v-else class="pr-perf-val pr-perf-val--muted">—</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="日均H" min-width="80" align="center">
@@ -1249,19 +1269,19 @@
                     <span class="pr-load-cap-val pr-load-cap-val--num">{{ row.standard_rate || '—' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column v-if="showLoadCapacityCols" label="直" min-width="56" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-load-cap-val">{{ row.shift_label || '—' }}</span>
-                  </template>
-                </el-table-column>
                 <el-table-column v-if="showLoadCapacityCols" label="稼働日" min-width="72" align="center">
                   <template #default="{ row }">
                     <span class="pr-perf-val">{{ row.working_days }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column v-if="showLoadCapacityCols" label="月間最大(千本)" min-width="100" align="center">
+                <el-table-column v-if="showLoadCapacityCols" label="定時H" min-width="72" align="center">
                   <template #default="{ row }">
-                    <span class="pr-perf-val pr-perf-val--cap">{{ fmtNum(row.max_monthly_th) }}</span>
+                    <span class="pr-perf-reg">{{ row.regular_hours }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column v-if="showLoadCapacityCols" label="所要H" min-width="72" align="center">
+                  <template #default="{ row }">
+                    <span class="pr-perf-prod">{{ row.required_hours }}</span>
                   </template>
                 </el-table-column>
               </el-table>
@@ -1334,6 +1354,19 @@
             <el-input v-model="row.shift_label" size="small" />
           </template>
         </el-table-column>
+        <el-table-column label="稼働率%" width="90">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.utilization_rate_pct"
+              :controls="false"
+              :min="0.01"
+              :max="100"
+              :precision="2"
+              size="small"
+              class="pr-num"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="日定時H" width="90">
           <template #default="{ row }">
             <el-input-number v-model="row.daily_regular_hours" :controls="false" size="small" class="pr-num" />
@@ -1348,7 +1381,7 @@
 
     <el-dialog
       v-model="loadCapacityVisible"
-      width="720px"
+      width="820px"
       class="pr-dialog pr-dialog--load-cap"
       :show-close="false"
       destroy-on-close
@@ -1380,12 +1413,13 @@
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--rate">能率 本/H</span>
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--shift">稼働直</span>
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--wd">稼働日</span>
+          <span class="pr-lcap-legend__chip pr-lcap-legend__chip--util">稼働率 %</span>
         </div>
 
         <div class="pr-lcap-formula">
-          <span>定時H = 設備×直×7.6×稼働日×96%／人員=人数×7.6×稼働日×96%</span>
+          <span>定時H = 設備×直×7.6×稼働日×稼働率／人員=人数×7.6×稼働日×稼働率</span>
           <span class="pr-lcap-formula__dot">·</span>
-          <span>月間最大 = 設備×能率×24×稼働日×96%</span>
+          <span>設備稼働率 = 所要H÷(設備×暦日×24)×100（検査除外）</span>
           <span class="pr-lcap-formula__dot">·</span>
           <span>所要H = 計画÷能率</span>
           <span class="pr-lcap-formula__dot">·</span>
@@ -1433,13 +1467,25 @@
                   class="pr-lcap-field__num"
                 />
               </label>
+              <label class="pr-lcap-field">
+                <span class="pr-lcap-field__label">稼働率%</span>
+                <el-input-number
+                  v-model="row.utilization_rate_pct"
+                  :controls="false"
+                  :min="0.01"
+                  :max="100"
+                  :precision="2"
+                  size="small"
+                  class="pr-lcap-field__num"
+                />
+              </label>
             </div>
           </div>
         </div>
 
         <p class="pr-lcap-tip">
           <el-icon :size="13"><QuestionFilled /></el-icon>
-          稼働日 0 = 対象月カレンダー。全工程の定時Hは稼働率96%で算出。保存後に再計算します。
+          稼働日 0 = 対象月カレンダー。稼働率は工程別に保存し定時Hに反映（未設定時は96%）。保存後に再計算します。
         </p>
       </div>
 
@@ -1853,6 +1899,15 @@ function loadRowClassName({ row }: { row: LoadPlanRow }): string {
   return LOAD_ROW_CLASS[row.process_cd] || ''
 }
 
+function shiftBadgeClass(shiftLabel?: string): string {
+  const m = (shiftLabel || '').match(/(\d+)/)
+  const n = m ? Number(m[1]) : 0
+  if (n >= 3) return 'pr-shift-badge--3'
+  if (n === 2) return 'pr-shift-badge--2'
+  if (n === 1) return 'pr-shift-badge--1'
+  return 'pr-shift-badge--empty'
+}
+
 const LOAD_CAPACITY_CARD_CLASS: Record<string, string> = {
   cutting: 'pr-lcap-card--cutting',
   chamfering: 'pr-lcap-card--chamfering',
@@ -1877,13 +1932,26 @@ function computeLoadPlanMeta(rows: LoadPlanRow[]) {
   const maxRate = rates.length ? Math.max(...rates) : 0
   const overload = list.filter((r) => (r.load_rate_pct || 0) >= 100).length
   const tight = list.filter((r) => (r.load_rate_pct || 0) >= 90 && (r.load_rate_pct || 0) < 100).length
+  const light = list.filter((r) => (r.load_rate_pct || 0) > 0 && (r.load_rate_pct || 0) <= 60).length
   const avgRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) : 0
-  const totalPlan = list.reduce((sum, r) => sum + (Number(r.plan_th) || 0), 0)
-  return { maxRate, overload, tight, avgRate, totalPlan }
+  const bottleneck = list.reduce<LoadPlanRow | null>((best, r) => {
+    const rate = Number(r.load_rate_pct) || 0
+    if (!best || rate > (Number(best.load_rate_pct) || 0)) return r
+    return best
+  }, null)
+  return {
+    maxRate,
+    overload,
+    tight,
+    light,
+    avgRate,
+    bottleneckName: bottleneck?.process_name || '—',
+    bottleneckRate: Number(bottleneck?.load_rate_pct) || 0,
+  }
 }
 
 const LOAD_PLAN_HOURS_PER_SHIFT = 7.6
-const LOAD_PLAN_UTILIZATION_RATE = 0.96
+const LOAD_PLAN_DEFAULT_UTILIZATION_PCT = 96
 const LOAD_PLAN_MAX_HOURS_PER_DAY = 24
 
 type LoadPlanPart = 'part02' | 'part03'
@@ -1904,27 +1972,50 @@ function isLoadPersonnel(label: string): boolean {
   return (label || '').includes('人')
 }
 
-function calcLoadDailyRegularHours(equipment: string, shift: string): number {
+function normalizeUtilizationRatePct(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return LOAD_PLAN_DEFAULT_UTILIZATION_PCT
+  if (n > 100) return 100
+  return Math.round(n * 100) / 100
+}
+
+function calcLoadDailyRegularHours(equipment: string, shift: string, utilizationRatePct?: number): number {
   const equip = parseLoadEquipCount(equipment)
   if (equip <= 0) return 0
   const shifts = parseLoadShiftCount(shift) || 1
+  const util = normalizeUtilizationRatePct(utilizationRatePct) / 100
   if (isLoadPersonnel(equipment)) {
-    return Math.round(equip * LOAD_PLAN_HOURS_PER_SHIFT * LOAD_PLAN_UTILIZATION_RATE * 100) / 100
+    return Math.round(equip * LOAD_PLAN_HOURS_PER_SHIFT * util * 100) / 100
   }
-  return Math.round(equip * shifts * LOAD_PLAN_HOURS_PER_SHIFT * LOAD_PLAN_UTILIZATION_RATE * 100) / 100
+  return Math.round(equip * shifts * LOAD_PLAN_HOURS_PER_SHIFT * util * 100) / 100
 }
 
-function recomputeLoadPlanRow(row: LoadPlanRow) {
+function loadPlanCalendarDays(part: LoadPlanPart): number {
+  const lp = part === 'part02' ? payload.value?.part02?.load_plan : payload.value?.part03?.load_plan
+  if (lp?.calendar_days && Number(lp.calendar_days) > 0) return Number(lp.calendar_days)
+  const monthStr = lp?.month || ''
+  const m = monthStr.match(/^(\d{4})-(\d{2})$/)
+  if (!m) return 0
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  return new Date(y, mo, 0).getDate()
+}
+
+function recomputeLoadPlanRow(row: LoadPlanRow, part: LoadPlanPart) {
   const planTh = Math.round((Number(row.plan_th) || 0) * 10) / 10
   const wd = Number(row.working_days) || 0
   const stdRate = Number(row.standard_rate) || 0
   const equipment = row.equipment_label || ''
   const equipCount = parseLoadEquipCount(equipment)
+  const calDays = Number(row.calendar_days) || loadPlanCalendarDays(part)
 
   row.plan_th = planTh
+  row.calendar_days = calDays
   row.daily_th = wd > 0 ? Math.round((planTh / wd) * 10) / 10 : 0
 
-  const dailyReg = Math.round(calcLoadDailyRegularHours(equipment, row.shift_label || ''))
+  const utilPct = normalizeUtilizationRatePct(row.utilization_rate_pct)
+  row.utilization_rate_pct = utilPct
+  const dailyReg = Math.round(calcLoadDailyRegularHours(equipment, row.shift_label || '', utilPct))
   row.regular_hours = wd > 0 ? Math.round(dailyReg * wd) : 0
 
   const planUnits = planTh * 1000
@@ -1935,15 +2026,14 @@ function recomputeLoadPlanRow(row: LoadPlanRow) {
       ? Math.round((row.required_hours / wd / equipCount) * 10) / 10
       : 0
 
-  if (equipCount > 0 && stdRate > 0 && wd > 0) {
-    const monthlyUnits =
-      equipCount * stdRate * LOAD_PLAN_MAX_HOURS_PER_DAY * wd * LOAD_PLAN_UTILIZATION_RATE
-    row.max_monthly_th = Math.round((monthlyUnits / 1000) * 10) / 10
-    row.plan_vs_max_monthly_pct =
-      row.max_monthly_th > 0 ? Math.round((planTh / row.max_monthly_th) * 100) : 0
+  if (row.process_cd === 'inspection') {
+    row.equipment_utilization_pct = null
   } else {
-    row.max_monthly_th = 0
-    row.plan_vs_max_monthly_pct = 0
+    const denom = equipCount * calDays * LOAD_PLAN_MAX_HOURS_PER_DAY
+    row.equipment_utilization_pct =
+      denom > 0 && row.required_hours > 0
+        ? Math.round((row.required_hours / denom) * 1000) / 10
+        : null
   }
 }
 
@@ -1982,7 +2072,7 @@ function commitLoadPlanEdit() {
   if (row) {
     const n = Number(loadPlanEditDraft.value)
     row.plan_th = Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
-    recomputeLoadPlanRow(row)
+    recomputeLoadPlanRow(row, part)
   }
   cancelLoadPlanEdit()
 }
@@ -3058,7 +3148,10 @@ async function openCapacityDialog() {
   capacityVisible.value = true
   try {
     const res = await fetchCapacity()
-    capacityRows.value = (res.data || []).map((r) => ({ ...r }))
+    capacityRows.value = (res.data || []).map((r) => ({
+      ...r,
+      utilization_rate_pct: normalizeUtilizationRatePct(r.utilization_rate_pct),
+    }))
   } catch {
     ElMessage.error('工程能力の読込に失敗しました')
   }
@@ -3090,6 +3183,7 @@ function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
       return {
         ...saved,
         working_days: Number(saved.working_days) > 0 ? Number(saved.working_days) : monthWd,
+        utilization_rate_pct: normalizeUtilizationRatePct(saved.utilization_rate_pct),
       }
     }
     const fromRow = payloadByCd[cd]
@@ -3100,6 +3194,7 @@ function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
       standard_rate: Number(fromRow?.standard_rate) || 0,
       shift_label: fromRow?.shift_label || '',
       working_days: Number(fromRow?.working_days) || monthWd,
+      utilization_rate_pct: normalizeUtilizationRatePct(fromRow?.utilization_rate_pct),
       daily_regular_hours: 8,
       sort_order: idx + 1,
     }
@@ -3629,6 +3724,48 @@ watch(
   color: #1d4ed8;
   font-weight: 800;
 }
+
+.pr-shift-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.pr-shift-badge--1 {
+  color: #0369a1;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-color: #7dd3fc;
+  box-shadow: 0 2px 6px rgb(14 165 233 / 16%);
+}
+.pr-shift-badge--2 {
+  color: #1d4ed8;
+  background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+  border-color: #60a5fa;
+  box-shadow: 0 2px 8px rgb(37 99 235 / 18%);
+}
+.pr-shift-badge--3 {
+  color: #6d28d9;
+  background: linear-gradient(135deg, #ede9fe 0%, #c4b5fd 100%);
+  border-color: #a78bfa;
+  box-shadow: 0 2px 8px rgb(109 40 217 / 18%);
+}
+.pr-shift-badge--empty {
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  font-weight: 600;
+}
 .pr-load-cap-dialog__hint {
   margin: 0 0 12px;
   font-size: 13px;
@@ -3764,8 +3901,12 @@ watch(
   color: #be185d;
 }
 .pr-lcap-legend__chip--wd {
-  background: #d1fae5;
+  background: #ecfdf5;
   color: #047857;
+}
+.pr-lcap-legend__chip--util {
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .pr-lcap-formula {
@@ -3838,7 +3979,7 @@ watch(
 }
 .pr-lcap-card__grid {
   display: grid;
-  grid-template-columns: 1.4fr 0.9fr 0.7fr 0.7fr;
+  grid-template-columns: 1.3fr 0.8fr 0.65fr 0.7fr 0.75fr;
   gap: 6px;
   min-width: 0;
 }
@@ -4278,6 +4419,16 @@ watch(
   color: #6d28d9;
   font-weight: 800;
 }
+.pr-perf-val--util {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: #0f766e;
+  font-weight: 800;
+}
+.pr-perf-val--muted {
+  color: #94a3b8;
+  font-weight: 600;
+}
 .pr-perf-val--editable {
   padding: 2px 6px;
   border-radius: 6px;
@@ -4312,14 +4463,18 @@ watch(
   font-size: 15px;
   padding: 4px 10px;
 }
+.pr-card--inventory {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
 .pr-card--inventory .pr-card__head h2 {
-  font-size: 18px;
+  font-size: 17px;
   margin: 0;
 }
 .pr-inv-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 .pr-inv-help-btn {
@@ -4359,37 +4514,39 @@ watch(
 .pr-inv-name-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  line-height: 1.25;
-  padding: 2px 0;
+  gap: 1px;
+  line-height: 1.2;
+  padding: 0;
 }
 .pr-inv-name-cell__name {
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: #0f172a;
 }
 .pr-inv-name-cell__std {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 600;
   color: #64748b;
 }
 .pr-card__head--inventory {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px 12px;
+  gap: 6px 10px;
+  margin-bottom: 10px;
 }
 .pr-inv-forecast-line {
   margin: 0;
   margin-left: auto;
-  font-size: 14px;
+  font-size: 13px;
   color: #475569;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
   text-align: right;
 }
 .pr-inv-forecast-line strong {
   color: #0f766e;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   margin: 0 2px;
 }
@@ -4411,16 +4568,16 @@ watch(
 .pr-inv-kpi {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0 0 14px;
+  gap: 8px;
+  margin: 0 0 10px;
 }
 .pr-inv-kpi__card {
   position: relative;
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #f0fdfa, #ffffff);
   border: 1px solid #99f6e4;
-  box-shadow: 0 4px 14px rgb(20 184 166 / 8%);
+  box-shadow: 0 3px 10px rgb(20 184 166 / 8%);
 }
 .pr-inv-kpi__card--product.is-danger {
   border-color: #fca5a5;
@@ -4443,11 +4600,11 @@ watch(
   color: #64748b;
 }
 .pr-inv-kpi__value {
-  margin: 6px 0 4px;
-  font-size: 22px;
+  margin: 2px 0 2px;
+  font-size: 24px;
   font-weight: 800;
   color: #0f766e;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .pr-inv-kpi__value small {
   margin-left: 4px;
@@ -4542,14 +4699,17 @@ watch(
   font-weight: 800;
 }
 .pr-inv-days {
-  font-size: 15px;
+  display: inline-block;
+  font-size: 17px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
   color: #0f766e;
+  line-height: 1.2;
 }
 .pr-inv-days small {
   margin-left: 1px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
 }
 .pr-inv-rate--adj.is-danger,
 .pr-inv-days.is-danger {
@@ -4590,18 +4750,30 @@ watch(
 .pr-table-wrap--inventory {
   border-color: #99f6e4;
   box-shadow:
-    0 4px 24px rgb(20 184 166 / 12%),
+    0 4px 18px rgb(20 184 166 / 10%),
     inset 0 1px 0 rgb(255 255 255 / 90%);
 }
 .pr-table--inventory {
   --el-table-border-color: #ccfbf1;
 }
-.pr-table--inventory :deep(.el-table__header th) {
+.pr-table--performance.pr-table--inventory :deep(.el-table__header th) {
   background: linear-gradient(180deg, #ccfbf1 0%, #f0fdfa 100%) !important;
   color: #115e59;
+  font-size: 13px !important;
+  font-weight: 800;
+  padding: 8px 6px !important;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
 }
-.pr-table--inventory :deep(.el-table__body td:first-child) {
+.pr-table--performance.pr-table--inventory :deep(.el-table__body td) {
+  padding: 7px 6px !important;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.pr-table--performance.pr-table--inventory :deep(.el-table__body td:first-child) {
   border-right: 1px solid #99f6e4 !important;
+  padding-left: 8px !important;
+  font-size: 15px;
 }
 .pr-table--inventory :deep(.el-table__row--striped td.el-table__cell) {
   background: #f0fdfa;
@@ -4615,22 +4787,31 @@ watch(
 .pr-table--inventory :deep(.el-table__fixed-column--left) {
   box-shadow: 4px 0 12px rgb(20 184 166 / 8%);
 }
+.pr-table--inventory :deep(.el-table__placeholder),
+.pr-table--inventory :deep(.el-table__indent) {
+  width: 12px !important;
+  padding-left: 0 !important;
+}
 .pr-inv-val {
+  display: inline-block;
   font-weight: 800;
-  font-size: 16px;
-  letter-spacing: 0.02em;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
 }
 .pr-inv-val--prev {
-  color: #64748b;
+  color: #475569;
+  font-size: 17px;
 }
 .pr-inv-val--curr {
   color: #0d9488;
-  font-size: 17px;
+  font-size: 19px;
 }
 .pr-inv-val--editable {
   display: inline-block;
-  min-width: 4.5em;
-  padding: 2px 6px;
+  min-width: 3.6em;
+  padding: 1px 4px;
   border-radius: 6px;
   cursor: text;
   transition: background 0.15s ease, box-shadow 0.15s ease;
@@ -4640,11 +4821,11 @@ watch(
   box-shadow: inset 0 0 0 1px rgb(20 184 166 / 28%);
 }
 .pr-inv-edit-input {
-  width: 88px;
-  padding: 4px 6px;
+  width: 84px;
+  padding: 3px 5px;
   border: 1px solid #5eead4;
-  border-radius: 8px;
-  font-size: 16px;
+  border-radius: 7px;
+  font-size: 17px;
   font-weight: 800;
   text-align: center;
   outline: none;
@@ -4659,16 +4840,26 @@ watch(
   color: #0f766e;
 }
 .pr-inv-rate {
-  font-weight: 700;
-  font-size: 15px;
+  display: inline-block;
+  font-weight: 800;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
 }
 .pr-inv-rate--prev {
-  color: #64748b;
+  color: #475569;
+  font-size: 16px;
 }
 .pr-inv-rate--curr {
   color: #0f766e;
+  font-size: 18px;
+  font-weight: 800;
+}
+.pr-table--inventory .pr-delta {
   font-size: 16px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
 }
 .pr-table--inventory :deep(.col-prev) {
   background: rgb(248 250 252 / 55%) !important;
@@ -4748,6 +4939,13 @@ watch(
   font-size: 22px;
   font-weight: 800;
   line-height: 1.1;
+}
+.pr-kpi__value--name {
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .pr-kpi__value small {
   font-size: 13px;

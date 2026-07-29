@@ -318,7 +318,7 @@
 
             <el-icon><Promotion /></el-icon>
 
-            メール・LINE送信
+            メール送信
 
           </el-button>
 

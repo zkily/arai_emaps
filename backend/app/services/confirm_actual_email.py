@@ -257,7 +257,7 @@ async def send_confirm_actual_email(
     email_enabled = bool(setting.email_enabled)
     line_enabled = bool(setting.line_enabled)
     if not email_enabled and not line_enabled:
-        raise HTTPException(status_code=400, detail="メール・LINE いずれの通知も有効ではありません")
+        raise HTTPException(status_code=400, detail="メール いずれの通知も有効ではありません")
 
     smtp = await load_smtp_config(db) if email_enabled else None
     line_cfg = await load_line_config(db) if line_enabled else None

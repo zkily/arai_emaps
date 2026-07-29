@@ -1,4 +1,4 @@
--- 在庫停滞アラート通知（工程別メール・LINE 扇出）
+-- 在庫停滞アラート通知（工程別メール 扇出）
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

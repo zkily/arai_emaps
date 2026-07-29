@@ -3,7 +3,7 @@
     <div class="recipient-settings__intro">
       <el-icon class="recipient-settings__intro-icon"><InfoFilled /></el-icon>
       <p class="recipient-settings__hint">
-        工程ごとにメール・LINE の送信先を設定します。空欄（全工程）の受信者は全工程のアラートにも含まれます。
+        工程ごとにメール の送信先を設定します。空欄（全工程）の受信者は全工程のアラートにも含まれます。
       </p>
     </div>
 

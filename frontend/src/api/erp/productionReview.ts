@@ -18,6 +18,8 @@ export interface CapacityRow {
   standard_rate: number
   shift_label?: string
   working_days?: number
+  /** 稼働率(%) 定時H計算用。未設定時は 96 */
+  utilization_rate_pct?: number
   daily_regular_hours: number
   sort_order?: number
 }
@@ -48,10 +50,12 @@ export interface LoadPlanRow {
   load_rate_pct: number
   daily_operation_hours: number
   working_days: number
-  /** 月間最大生産量（千本）= 設備×能率×24H×稼働日×96% */
-  max_monthly_th?: number
-  /** 月計画 ÷ 月間最大 × 100 */
-  plan_vs_max_monthly_pct?: number
+  /** 稼働率(%) 定時H計算用 */
+  utilization_rate_pct?: number
+  /** 月の暦日数（設備稼働率の分母用） */
+  calendar_days?: number
+  /** 設備稼働率(%) = 所要H ÷ (設備数×暦日×24H)×100。検査は null */
+  equipment_utilization_pct?: number | null
 }
 
 export interface InventoryRow {
@@ -176,7 +180,9 @@ export interface ProductionReviewData {
     subtitle?: string
     load_plan: {
       month_label: string
+      month?: string
       working_days: number
+      calendar_days?: number
       forecast_th: number
       daily_forecast_th: number
       rows: LoadPlanRow[]

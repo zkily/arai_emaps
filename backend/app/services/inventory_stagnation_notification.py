@@ -1,4 +1,4 @@
-"""在庫停滞アラート通知（工程別メール・LINE 扇出）"""
+"""在庫停滞アラート通知（工程別メール 扇出）"""
 from __future__ import annotations
 
 import asyncio
@@ -338,8 +338,8 @@ async def send_inventory_stagnation_notification(
     line_enabled = bool(setting.line_enabled)
     if not email_enabled and not line_enabled:
         if is_auto:
-            return {"success": True, "status": "skipped_channels", "message": "メール・LINE が無効です"}
-        raise HTTPException(status_code=400, detail="メール・LINE いずれの通知も有効ではありません")
+            return {"success": True, "status": "skipped_channels", "message": "メール が無効です"}
+        raise HTTPException(status_code=400, detail="メール いずれの通知も有効ではありません")
 
     meta = await fetch_inventory_stagnation_hits(
         db,

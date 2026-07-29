@@ -1426,9 +1426,9 @@
             </div>
           </div>
 
-          <!-- 右：メール・LINE送信 -->
+          <!-- 右：メール送信 -->
           <div class="confirm-actual-result-right">
-            <div class="confirm-actual-result-right-title">メール・LINE送信</div>
+            <div class="confirm-actual-result-right-title">メール送信</div>
 
             <div v-if="confirmActualEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
               送信先を読み込み中…
@@ -1458,7 +1458,7 @@
                 :disabled="!confirmActualCanSend || confirmActualResultCount <= 0"
                 @click="sendConfirmActualEmail"
               >
-                メール・LINE送信
+                メール送信
               </el-button>
             </div>
 
@@ -1511,7 +1511,7 @@
                     :disabled="!confirmTrialCanSend || confirmTrialItems.length <= 0"
                     @click="sendConfirmTrialEmail"
                   >
-                    試作メール・LINE送信
+                    試作メール送信
                   </el-button>
                 </div>
               </template>
@@ -1659,7 +1659,7 @@
       </template>
     </el-dialog>
 
-    <!-- 実績確定 メール・LINE送信確認 -->
+    <!-- 実績確定 メール送信確認 -->
     <el-dialog
       v-model="confirmActualSendDialogVisible"
       width="520px"
@@ -1675,7 +1675,7 @@
           </div>
           <div class="asc-header-text">
             <span class="asc-title">メール送信確認</span>
-            <span class="asc-subtitle">実績確定結果をメール・LINEで通知します</span>
+            <span class="asc-subtitle">実績確定結果をメールで通知します</span>
           </div>
         </div>
       </template>

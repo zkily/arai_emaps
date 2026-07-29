@@ -154,7 +154,7 @@
       <div class="nc-panel__head">
         <h2 class="nc-panel__title">
           メール受信者
-          <span class="nc-panel__sub">ユーザ・ロール・メール・LINE 送信先</span>
+          <span class="nc-panel__sub">ユーザ・ロール・メール 送信先</span>
         </h2>
         <div class="nc-panel__actions">
           <el-select v-model="recipientEventFilter" clearable placeholder="イベント絞込" style="width: 180px" size="small">

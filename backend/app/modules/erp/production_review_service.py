@@ -110,6 +110,9 @@ _PLAN_COL_BY_CD: Dict[str, str] = {
     "welding_sp": "welding_plan",
 }
 
+# 溶接SP：製品名が該当するものの welding_plan を集計（それ以外は通常溶接）
+_WELDING_SP_PRODUCT_NAMES: Tuple[str, ...] = ("CH2 RR", "FE-7")
+
 
 def _parse_month(target_month: str) -> Tuple[int, int]:
     parts = target_month.strip().split("-")
@@ -171,6 +174,36 @@ async def _sum_column(
         "FROM production_summarys WHERE `date` BETWEEN :start AND :end"
     )
     row = (await db.execute(sql, {"start": start_d, "end": end_d})).mappings().first()
+    return int(row["total"] or 0) if row else 0
+
+
+async def _sum_welding_plan_split(
+    db: AsyncSession,
+    start_d: date,
+    end_d: date,
+    *,
+    for_sp: bool,
+) -> int:
+    """溶接計画を製品名で分割。
+
+    for_sp=True  → 製品名 IN (CH2 RR, FE-7)
+    for_sp=False → 上記以外（TRIM 後の完全一致）
+    """
+    names = list(_WELDING_SP_PRODUCT_NAMES)
+    placeholders = ", ".join(f":n{i}" for i in range(len(names)))
+    op = "IN" if for_sp else "NOT IN"
+    # NULL / 空文字は通常溶接側に含める
+    null_clause = "" if for_sp else " OR TRIM(COALESCE(product_name, '')) = ''"
+    sql = text(
+        "SELECT COALESCE(SUM(`welding_plan`), 0) AS total "
+        "FROM production_summarys "
+        "WHERE `date` BETWEEN :start AND :end "
+        f"AND (TRIM(COALESCE(product_name, '')) {op} ({placeholders}){null_clause})"
+    )
+    params: Dict[str, Any] = {"start": start_d, "end": end_d}
+    for i, name in enumerate(names):
+        params[f"n{i}"] = name
+    row = (await db.execute(sql, params)).mappings().first()
     return int(row["total"] or 0) if row else 0
 
 
@@ -403,6 +436,22 @@ async def _scrap_month_entry(db: AsyncSession, year: int, month: int) -> Dict[st
     }
 
 
+_DEFAULT_UTILIZATION_RATE_PCT = 96.0  # 定時H用稼働率(%)のデフォルト
+
+
+def _normalize_utilization_rate_pct(value: Any) -> float:
+    """稼働率(%)を 0〜100 に正規化。未設定時は 96。"""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return float(_DEFAULT_UTILIZATION_RATE_PCT)
+    if n <= 0:
+        return float(_DEFAULT_UTILIZATION_RATE_PCT)
+    if n > 100:
+        return 100.0
+    return round(n, 2)
+
+
 async def get_capacity_rows(db: AsyncSession) -> List[Dict[str, Any]]:
     rows = list(
         (
@@ -423,6 +472,9 @@ async def get_capacity_rows(db: AsyncSession) -> List[Dict[str, Any]]:
                 "standard_rate": int(r.standard_rate or 0),
                 "shift_label": r.shift_label or "",
                 "working_days": int(getattr(r, "working_days", 0) or 0),
+                "utilization_rate_pct": _normalize_utilization_rate_pct(
+                    getattr(r, "utilization_rate_pct", None)
+                ),
                 "daily_regular_hours": int(r.daily_regular_hours or 0),
                 "sort_order": int(r.sort_order or 0),
             }
@@ -441,16 +493,22 @@ async def upsert_capacity_rows(db: AsyncSession, items: List[Dict[str, Any]]) ->
                 select(ProductionReviewCapacity).where(ProductionReviewCapacity.process_cd == cd)
             )
         ).scalar_one_or_none()
+        util_pct = _normalize_utilization_rate_pct(it.get("utilization_rate_pct"))
         payload = {
             "process_name": str(it.get("process_name") or cd),
             "equipment_label": str(it.get("equipment_label") or ""),
             "standard_rate": int(it.get("standard_rate") or 0),
             "shift_label": str(it.get("shift_label") or ""),
             "working_days": max(0, min(31, int(it.get("working_days") or 0))),
+            "utilization_rate_pct": util_pct,
             "daily_regular_hours": int(it.get("daily_regular_hours") or 0),
             "sort_order": int(it.get("sort_order") or 0),
         }
-        computed_daily = _calc_daily_regular_hours(payload["equipment_label"], payload["shift_label"])
+        computed_daily = _calc_daily_regular_hours(
+            payload["equipment_label"],
+            payload["shift_label"],
+            util_pct,
+        )
         if computed_daily > 0:
             payload["daily_regular_hours"] = int(round(computed_daily))
         if row:
@@ -990,8 +1048,7 @@ async def _build_inventory_table(
 
 
 _HOURS_PER_SHIFT = 7.6
-_EQUIPMENT_UTILIZATION_RATE = 0.96  # 設備・人員共通稼働率
-_MAX_HOURS_PER_DAY = 24  # 理論最大キャパシティ用（月間最大生産量）
+_MAX_HOURS_PER_DAY = 24  # 設備稼働率の分母（暦日×24H）
 
 
 def _parse_equipment_count(equipment_label: str) -> float:
@@ -1015,45 +1072,41 @@ def _is_personnel_equipment(equipment_label: str) -> bool:
     return "人" in (equipment_label or "")
 
 
-def _calc_daily_regular_hours(equipment_label: str, shift_label: str) -> float:
-    """日当たり定時H = 設備数 × 直数 × 7.6H × 稼働率96%（人員は 人数 × 7.6H × 96%）。"""
+def _calc_daily_regular_hours(
+    equipment_label: str,
+    shift_label: str,
+    utilization_rate_pct: Any = None,
+) -> float:
+    """日当たり定時H = 設備数 × 直数 × 7.6H × 稼働率（人員は 人数 × 7.6H × 稼働率）。"""
     equip = _parse_equipment_count(equipment_label)
     if equip <= 0:
         return 0.0
     shifts = _parse_shift_count(shift_label) or 1
+    util = _normalize_utilization_rate_pct(utilization_rate_pct) / 100.0
     if _is_personnel_equipment(equipment_label):
-        return round(equip * _HOURS_PER_SHIFT * _EQUIPMENT_UTILIZATION_RATE, 2)
-    return round(equip * shifts * _HOURS_PER_SHIFT * _EQUIPMENT_UTILIZATION_RATE, 2)
+        return round(equip * _HOURS_PER_SHIFT * util, 2)
+    return round(equip * shifts * _HOURS_PER_SHIFT * util, 2)
 
 
-def _calc_capacity_metrics(
+def _calc_equipment_utilization_pct(
     *,
+    process_cd: str,
     equipment_label: str,
-    standard_rate: int,
-    plan_th: float,
-    working_days: int,
-) -> Dict[str, Any]:
-    """理論キャパシティ指標（設備・能率・当月稼働日から自動算出）。
+    required_hours: int,
+    calendar_days: int,
+) -> Optional[float]:
+    """設備稼働率(%) = 所要H ÷ (設備数 × 月の暦日数 × 24H) × 100。
 
-    月間最大生産量 = 設備数 × 能率 × 24H × 稼働日 × 96%（千本）
+    検査工程は対象外（None）。
     """
+    if process_cd == "inspection":
+        return None
     equip = _parse_equipment_count(equipment_label)
-    rate = int(standard_rate or 0)
-    wd = int(working_days or 0)
-    if equip <= 0 or rate <= 0 or wd <= 0:
-        return {
-            "max_monthly_th": 0.0,
-            "plan_vs_max_monthly_pct": 0,
-        }
-    monthly_units = equip * rate * _MAX_HOURS_PER_DAY * wd * _EQUIPMENT_UTILIZATION_RATE
-    max_monthly_th = round(monthly_units / 1000, 1)
-    plan_vs_max = (
-        int(round(float(plan_th or 0) / max_monthly_th * 100)) if max_monthly_th > 0 else 0
-    )
-    return {
-        "max_monthly_th": max_monthly_th,
-        "plan_vs_max_monthly_pct": plan_vs_max,
-    }
+    days = int(calendar_days or 0)
+    denom = equip * days * _MAX_HOURS_PER_DAY
+    if denom <= 0 or required_hours <= 0:
+        return None
+    return round(required_hours / denom * 100, 1)
 
 
 def _calc_load_row(
@@ -1062,6 +1115,7 @@ def _calc_load_row(
     process_name: str,
     plan_th: float,
     working_days: int,
+    calendar_days: int,
     capacity: Dict[str, Any],
     overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -1069,11 +1123,17 @@ def _calc_load_row(
     equipment = str(ov.get("equipment_label") or capacity.get("equipment_label") or "")
     std_rate = int(ov.get("standard_rate") or capacity.get("standard_rate") or 0)
     shift = str(ov.get("shift_label") or capacity.get("shift_label") or "")
-    daily_reg_computed = _calc_daily_regular_hours(equipment, shift)
+    util_pct = _normalize_utilization_rate_pct(
+        ov.get("utilization_rate_pct")
+        if ov.get("utilization_rate_pct") is not None
+        else capacity.get("utilization_rate_pct")
+    )
+    daily_reg_computed = _calc_daily_regular_hours(equipment, shift, util_pct)
     daily_reg_fallback = int(ov.get("daily_regular_hours") or capacity.get("daily_regular_hours") or 0)
     daily_reg = int(round(daily_reg_computed)) if daily_reg_computed > 0 else daily_reg_fallback
     cap_wd = int(capacity.get("working_days") or 0)
     wd = int(ov.get("working_days") or 0) or cap_wd or int(working_days or 0)
+    cal_days = int(calendar_days or 0)
     daily_th = round(plan_th / wd, 1) if wd > 0 else 0.0
     regular_hours = int(round(daily_reg * wd)) if wd > 0 else 0
     plan_units = plan_th * 1000
@@ -1084,12 +1144,6 @@ def _calc_load_row(
         daily_operation = round(required_hours / wd / equip_count, 1)
     else:
         daily_operation = 0.0
-    metrics = _calc_capacity_metrics(
-        equipment_label=equipment,
-        standard_rate=std_rate,
-        plan_th=plan_th,
-        working_days=wd,
-    )
     return {
         "process_cd": process_cd,
         "process_name": process_name,
@@ -1103,7 +1157,14 @@ def _calc_load_row(
         "load_rate_pct": load_rate,
         "daily_operation_hours": daily_operation,
         "working_days": wd,
-        **metrics,
+        "calendar_days": cal_days,
+        "utilization_rate_pct": util_pct,
+        "equipment_utilization_pct": _calc_equipment_utilization_pct(
+            process_cd=process_cd,
+            equipment_label=equipment,
+            required_hours=required_hours,
+            calendar_days=cal_days,
+        ),
     }
 
 
@@ -1111,11 +1172,16 @@ def _recompute_load_row_dict(row: Dict[str, Any], plan_th: Optional[float] = Non
     """負荷計画行の plan_th 変更後、派生項目を再計算する。"""
     pt = round(float(plan_th if plan_th is not None else row.get("plan_th") or 0), 1)
     wd = int(row.get("working_days") or 0)
+    cal_days = int(row.get("calendar_days") or 0)
+    if cal_days <= 0:
+        # 互換：旧データに暦日が無い場合は稼働日を流用しない（計算不能なら0）
+        cal_days = 0
     cap = {
         "equipment_label": row.get("equipment_label") or "",
         "standard_rate": int(row.get("standard_rate") or 0),
         "shift_label": row.get("shift_label") or "",
         "working_days": wd,
+        "utilization_rate_pct": row.get("utilization_rate_pct"),
         "daily_regular_hours": 0,
     }
     return _calc_load_row(
@@ -1123,6 +1189,7 @@ def _recompute_load_row_dict(row: Dict[str, Any], plan_th: Optional[float] = Non
         process_name=str(row.get("process_name") or ""),
         plan_th=pt,
         working_days=wd,
+        calendar_days=cal_days,
         capacity=cap,
     )
 
@@ -1136,6 +1203,7 @@ async def _build_load_plan(
 ) -> Dict[str, Any]:
     start_d, end_d = _month_range(year, month)
     month_wd = await _working_days(db, year, month)
+    calendar_days = monthrange(year, month)[1]
     forecast = await _forecast_units(db, year, month)
     cap_map = {c["process_cd"]: c for c in capacities}
     ov_all = overrides or {}
@@ -1145,7 +1213,9 @@ async def _build_load_plan(
         cap = cap_map.get(cd, {"process_name": cd, "process_cd": cd})
         plan_col = _PLAN_COL_BY_CD.get(cd)
         if cd == "welding_sp":
-            plan_qty = int(await _sum_column(db, "welding_plan", start_d, end_d) * 0.3)
+            plan_qty = await _sum_welding_plan_split(db, start_d, end_d, for_sp=True)
+        elif cd == "welding":
+            plan_qty = await _sum_welding_plan_split(db, start_d, end_d, for_sp=False)
         elif plan_col:
             plan_qty = await _sum_column(db, plan_col, start_d, end_d)
         else:
@@ -1156,6 +1226,7 @@ async def _build_load_plan(
                 process_name=str(cap.get("process_name") or cd),
                 plan_th=_thousands(plan_qty),
                 working_days=month_wd,
+                calendar_days=calendar_days,
                 capacity=cap,
                 overrides=(ov_all.get("processes") or {}).get(cd),
             )
@@ -1165,6 +1236,7 @@ async def _build_load_plan(
         "month": f"{year:04d}-{month:02d}",
         "month_label": _month_label(year, month),
         "working_days": month_wd,
+        "calendar_days": calendar_days,
         "forecast_th": _thousands(forecast),
         "daily_forecast_th": round(_thousands(forecast) / month_wd, 1) if month_wd > 0 else 0.0,
         "rows": rows,

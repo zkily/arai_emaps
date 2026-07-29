@@ -237,7 +237,7 @@ def _build_inventory_slide(prs: Presentation, inv: Dict[str, Any], title_suffix:
         f"{inv.get('curr_forecast_label', '')}出荷内示：{_fmt_th(inv.get('curr_forecast_th'))} 千本"
     )
     _add_textbox(slide, Inches(0.8), Inches(0.95), Inches(11), Inches(0.3), header_line, font_size=11)
-    header = ["工程名", "前月在庫高(千本)", "前月補正率", "当月在庫高(千本)", "当月補正率", "増減(千本)"]
+    header = ["工程名", "前月在庫高(千本)", "前月在庫率", "当月在庫高(千本)", "当月在庫率", "増減(千本)"]
     body = [header]
     for row in inv.get("rows") or []:
         body.append(
@@ -311,11 +311,12 @@ def _build_load_plan_slide(prs: Presentation, load_plan: Dict[str, Any]) -> None
         if int(row.get("load_rate_pct") or 0) < 90:
             continue
         daily_th = row.get("daily_th")
-        max_monthly = row.get("max_monthly_th")
+        max_util = row.get("equipment_utilization_pct")
+        util_txt = f"／設備稼働率{max_util}%" if max_util is not None else ""
         text = (
             f"{row.get('process_name')}（負荷率：{row.get('load_rate_pct')}%）"
             f" 日当たり{daily_th}千本"
-            f"／月間最大{_fmt_th(max_monthly)}千本"
+            f"{util_txt}"
         )
         _add_textbox(slide, Inches(0.6), Inches(y), Inches(12.2), Inches(0.35), text, font_size=9)
         y += 0.32

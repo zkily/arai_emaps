@@ -1346,7 +1346,7 @@ async def send_inventory_stagnation_notification_api(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_aps_operation("export")),
 ):
-    """在庫停滞アラートを工程別にメール・LINE 送信"""
+    """在庫停滞アラートを工程別にメール 送信"""
     from app.services.inventory_stagnation_notification import (
         send_inventory_stagnation_notification,
     )
