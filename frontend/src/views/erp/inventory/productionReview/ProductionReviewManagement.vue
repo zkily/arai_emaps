@@ -763,7 +763,67 @@
 
           <section class="pr-card pr-card--blue pr-card--performance pr-card--load-plan">
             <div class="pr-card__head pr-card__head--performance">
-              <h2>{{ payload.part02.load_plan.month_label }} 生産計画・負荷率</h2>
+              <div class="pr-load-title">
+                <h2>{{ payload.part02.load_plan.month_label }} 生産計画・負荷率</h2>
+                <el-popover
+                  placement="bottom-start"
+                  :width="480"
+                  trigger="click"
+                  popper-class="pr-load-help-popper"
+                >
+                  <template #reference>
+                    <button type="button" class="pr-load-help-btn" title="負荷率の見方・計算式">
+                      <el-icon :size="18"><QuestionFilled /></el-icon>
+                    </button>
+                  </template>
+                  <div class="pr-load-help">
+                    <h4>負荷率の見方</h4>
+                    <div class="pr-load-help__legend">
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--overload">100%超</span>
+                        要対策
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--tight">90%以上</span>
+                        逼迫
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--ok">60〜90%</span>
+                        適正
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--light">60%以下</span>
+                        余裕
+                      </span>
+                    </div>
+                    <h4>計算式</h4>
+                    <ul>
+                      <li>
+                        <strong>負荷率</strong>
+                        <code>所要H ÷ 定時H × 100</code>
+                      </li>
+                      <li>
+                        <strong>定時H</strong>
+                        <code>設備数 × 直数 × 7.6H × 稼働日 × 稼働率</code>
+                        <span class="pr-load-help__note">人員は 人数 × 7.6H × 稼働日 × 稼働率</span>
+                      </li>
+                      <li>
+                        <strong>所要H</strong>
+                        <code>計画(本) ÷ 能率(本/H)</code>
+                      </li>
+                      <li>
+                        <strong>日均H</strong>
+                        <code>所要H ÷ 稼働日 ÷ 設備数</code>
+                      </li>
+                      <li>
+                        <strong>設備稼働率</strong>
+                        <code>所要H ÷ (設備数 × 暦日 × 24H) × 100</code>
+                        <span class="pr-load-help__note">検査除外</span>
+                      </li>
+                    </ul>
+                  </div>
+                </el-popover>
+              </div>
               <div class="pr-load-cap-actions">
                 <button
                   type="button"
@@ -824,30 +884,6 @@
                 <span class="pr-kpi__hint">逼迫ライン</span>
               </div>
             </div>
-
-            <p class="pr-load-formula">
-              <span class="pr-load-formula__tag pr-load-formula__tag--overload">100%超</span>
-              要対策
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--tight">90%以上</span>
-              逼迫
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--ok">60〜90%</span>
-              適正
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--light">60%以下</span>
-              余裕
-              <span class="pr-load-formula__sep">|</span>
-              負荷率 = 所要H ÷ 定時H × 100
-              <span class="pr-load-formula__sep">|</span>
-              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 稼働率（人員は 人数 × 7.6H × 稼働日 × 稼働率）
-              <span class="pr-load-formula__sep">|</span>
-              所要H = 計画(本) ÷ 能率(本/H)
-              <span class="pr-load-formula__sep">|</span>
-              日均H = 所要H ÷ 稼働日 ÷ 設備数
-              <span class="pr-load-formula__sep">|</span>
-              設備稼働率 = 所要H ÷ (設備数×暦日×24H)×100（検査除外）
-            </p>
 
             <div class="pr-table-wrap pr-table-wrap--performance">
               <el-table
@@ -1109,7 +1145,67 @@
 
           <section class="pr-card pr-card--blue pr-card--performance pr-card--load-plan">
             <div class="pr-card__head pr-card__head--performance">
-              <h2>{{ payload.part03.load_plan.month_label }} 生産計画・負荷率</h2>
+              <div class="pr-load-title">
+                <h2>{{ payload.part03.load_plan.month_label }} 生産計画・負荷率</h2>
+                <el-popover
+                  placement="bottom-start"
+                  :width="480"
+                  trigger="click"
+                  popper-class="pr-load-help-popper"
+                >
+                  <template #reference>
+                    <button type="button" class="pr-load-help-btn" title="負荷率の見方・計算式">
+                      <el-icon :size="18"><QuestionFilled /></el-icon>
+                    </button>
+                  </template>
+                  <div class="pr-load-help">
+                    <h4>負荷率の見方</h4>
+                    <div class="pr-load-help__legend">
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--overload">100%超</span>
+                        要対策
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--tight">90%以上</span>
+                        逼迫
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--ok">60〜90%</span>
+                        適正
+                      </span>
+                      <span class="pr-load-help__item">
+                        <span class="pr-load-formula__tag pr-load-formula__tag--light">60%以下</span>
+                        余裕
+                      </span>
+                    </div>
+                    <h4>計算式</h4>
+                    <ul>
+                      <li>
+                        <strong>負荷率</strong>
+                        <code>所要H ÷ 定時H × 100</code>
+                      </li>
+                      <li>
+                        <strong>定時H</strong>
+                        <code>設備数 × 直数 × 7.6H × 稼働日 × 稼働率</code>
+                        <span class="pr-load-help__note">人員は 人数 × 7.6H × 稼働日 × 稼働率</span>
+                      </li>
+                      <li>
+                        <strong>所要H</strong>
+                        <code>計画(本) ÷ 能率(本/H)</code>
+                      </li>
+                      <li>
+                        <strong>日均H</strong>
+                        <code>所要H ÷ 稼働日 ÷ 設備数</code>
+                      </li>
+                      <li>
+                        <strong>設備稼働率</strong>
+                        <code>所要H ÷ (設備数 × 暦日 × 24H) × 100</code>
+                        <span class="pr-load-help__note">検査除外</span>
+                      </li>
+                    </ul>
+                  </div>
+                </el-popover>
+              </div>
               <div class="pr-load-cap-actions">
                 <button
                   type="button"
@@ -1170,30 +1266,6 @@
                 <span class="pr-kpi__hint">逼迫ライン</span>
               </div>
             </div>
-
-            <p class="pr-load-formula">
-              <span class="pr-load-formula__tag pr-load-formula__tag--overload">100%超</span>
-              要対策
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--tight">90%以上</span>
-              逼迫
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--ok">60〜90%</span>
-              適正
-              <span class="pr-load-formula__sep">|</span>
-              <span class="pr-load-formula__tag pr-load-formula__tag--light">60%以下</span>
-              余裕
-              <span class="pr-load-formula__sep">|</span>
-              負荷率 = 所要H ÷ 定時H × 100
-              <span class="pr-load-formula__sep">|</span>
-              定時H = 設備数 × 直数 × 7.6H × 稼働日 × 稼働率（人員は 人数 × 7.6H × 稼働日 × 稼働率）
-              <span class="pr-load-formula__sep">|</span>
-              所要H = 計画(本) ÷ 能率(本/H)
-              <span class="pr-load-formula__sep">|</span>
-              日均H = 所要H ÷ 稼働日 ÷ 設備数
-              <span class="pr-load-formula__sep">|</span>
-              設備稼働率 = 所要H ÷ (設備数×暦日×24H)×100（検査除外）
-            </p>
 
             <div class="pr-table-wrap pr-table-wrap--performance">
               <el-table
@@ -4114,45 +4186,30 @@ watch(
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
-.pr-load-formula {
-  display: flex;
-  flex-wrap: wrap;
+.pr-load-title {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #eff6ff;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.pr-load-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border: 1px solid #bfdbfe;
-  font-size: 12px;
-  color: #1e3a8a;
-  line-height: 1.5;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eff6ff, #ffffff);
+  color: #2563eb;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(59 130 246 / 12%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.pr-load-formula__sep {
-  color: #93c5fd;
-}
-.pr-load-formula__tag {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 800;
-}
-.pr-load-formula__tag--overload {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-.pr-load-formula__tag--tight {
-  background: #ffedd5;
-  color: #c2410c;
-}
-.pr-load-formula__tag--ok {
+.pr-load-help-btn:hover {
+  transform: translateY(-1px);
   background: #dbeafe;
-  color: #1d4ed8;
-}
-.pr-load-formula__tag--light {
-  background: #d1fae5;
-  color: #047857;
+  box-shadow: 0 4px 12px rgb(59 130 246 / 18%);
 }
 
 .pr-table--load :deep(.el-table__header th) {
@@ -6132,5 +6189,82 @@ watch(
 }
 .pr-inv-help-popper .pr-inv-help__example b {
   color: #0f766e;
+}
+
+.pr-load-help-popper.el-popover {
+  padding: 14px 16px;
+}
+.pr-load-help-popper .pr-load-help h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+.pr-load-help-popper .pr-load-help .pr-load-help__legend + h4,
+.pr-load-help-popper .pr-load-help ul + h4 {
+  margin-top: 14px;
+}
+.pr-load-help-popper .pr-load-help__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.pr-load-help-popper .pr-load-help__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.pr-load-help-popper .pr-load-formula__tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.pr-load-help-popper .pr-load-formula__tag--overload {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.pr-load-help-popper .pr-load-formula__tag--tight {
+  background: #ffedd5;
+  color: #c2410c;
+}
+.pr-load-help-popper .pr-load-formula__tag--ok {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.pr-load-help-popper .pr-load-formula__tag--light {
+  background: #d1fae5;
+  color: #047857;
+}
+.pr-load-help-popper .pr-load-help ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.pr-load-help-popper .pr-load-help li {
+  margin-bottom: 8px;
+}
+.pr-load-help-popper .pr-load-help code {
+  display: block;
+  margin-top: 2px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+.pr-load-help-popper .pr-load-help__note {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #64748b;
 }
 </style>

@@ -903,6 +903,7 @@
                   <div class="cutting-mgmt-th">カ無</div>
                   <div class="cutting-mgmt-th">生産順</div>
                   <div class="cutting-mgmt-th">生産時間</div>
+                  <div class="cutting-mgmt-th">備考</div>
                   <div class="cutting-mgmt-th cutting-mgmt-th-actions">操作</div>
                 </div>
               </div>
@@ -982,6 +983,7 @@
                   </div>
                   <div class="cutting-mgmt-td">{{ row.production_sequence ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_time ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.remarks ?? '-' }}</div>
                   <div class="cutting-mgmt-td cutting-mgmt-td-actions">
                     <el-button
                       v-if="(row.actual_production_quantity ?? 0) > 0"
@@ -9987,8 +9989,7 @@ async function issueChamferingInstructionSheet() {
           <td>${noCountDisplay}</td>
           <td></td>
           <td></td>
-          <td></td>
-          <td></td>
+          <td>${escapeHtml(r.remarks ?? '')}</td>
         </tr>`
       }).join('')
       pages.push(`
@@ -10001,7 +10002,7 @@ async function issueChamferingInstructionSheet() {
           <div class="instruction-sheet-table-wrap">
             <table class="instruction-sheet-table chamfering-sheet-table">
               <thead><tr>
-                <th>CD</th><th>ライン</th><th>成型予定日</th><th>製品名</th><th>順位</th><th>計画</th><th>実績</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
+                <th>CD</th><th>ライン</th><th>成型予定日</th><th>製品名</th><th>順位</th><th>計画</th><th>実績</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>備考</th>
               </tr></thead>
               <tbody>${trs}</tbody>
             </table>
@@ -10037,12 +10038,11 @@ async function issueChamferingInstructionSheet() {
       .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 5%; }
       .chamfering-sheet-table th:nth-child(9), .chamfering-sheet-table td:nth-child(9) { width: 8%; }
       .chamfering-sheet-table th:nth-child(10), .chamfering-sheet-table td:nth-child(10) { width: 8%; }
-      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 5%; }
-      .chamfering-sheet-table th:nth-child(12), .chamfering-sheet-table td:nth-child(12) { width: 5%; }
+      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 10%; }
       .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
       .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 11px; }
       .instruction-sheet-table td { font-size: 14px; }
-      .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(4) { font-size: 14px; text-align: left; }
+      .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(4), .chamfering-sheet-table td:nth-child(11) { font-size: 14px; text-align: left; }
       .forming-date-red { color: #990000; }
       .forming-date-light-red { color: #cc0000; }
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
@@ -11143,9 +11143,9 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 面取指示-今日：13列（CD, ライン, 成型生産予定日, 生産日, 面取機, 製品名, 生産数, 不良, 完了, カ無, 生産順, 生産時間, 操作） */
+/* 面取指示-今日：14列（CD, ライン, 成型生産予定日, 生産日, 面取機, 製品名, 生産数, 不良, 完了, カ無, 生産順, 生産時間, 備考, 操作） */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
-  min-width: 744px;
+  min-width: 819px;
 }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(1),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
@@ -11188,7 +11188,9 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 56px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) { flex: 0 0 110px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) { flex: 0 0 75px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(14),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(14) { flex: 0 0 110px; }
 
 /* 面取指示-翌日：8列（CD, 生産日, 面取機, 製品名, 生産数, 不良, 生産順, 生産時間） */
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-tr {
@@ -11222,21 +11224,21 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 面取指示-今日：生産数(7)、不良(8)、完了(9)、カ無(10)、生産順(11)、生産時間(12)、操作(13) 居中 */
+/* 面取指示-今日：生産数(7)、不良(8)、完了(9)、カ無(10)、生産順(11)、生産時間(12)、操作(14) 居中（備考13は左寄せ） */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(14),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) {
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(14) {
   justify-content: center;
   text-align: center;
 }
@@ -11486,11 +11488,13 @@ onUnmounted(() => {
   justify-content: center;
   text-align: center;
 }
-/* 面取指示-今日：左: 面取機(5), 製品名(6)；右: 生産数(7)；中: 其余 */
+/* 面取指示-今日：左: 面取機(5), 製品名(6), 備考(13)；右: 生産数(7)；中: 其余 */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6) {
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) {
   justify-content: flex-start;
   text-align: left;
 }
