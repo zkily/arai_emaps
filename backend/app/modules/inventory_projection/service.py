@@ -107,22 +107,38 @@ GROUP_NEXT_USAGE_LABEL: dict[str, str] = {
     # 切断: 成型実績があれば実績、なければ成型計画
     "cutting": "次工程使用（成型計画）",
     "molding": "次工程移動",
-    "plating_inhouse": "次工程移動（溶接・検査）",
-    "plating_outsource": "次工程移動（溶接・検査）",
+    "plating_inhouse": "次工程移動",
+    "plating_outsource": "次工程移動",
     "welding_inhouse": "次工程移動（検査）",
     "welding_outsource": "次工程移動（外注メッキ）",
     "inspection": "次工程使用（倉庫）",
     "warehouse": "社内倉庫出荷",
 }
 
-# 成型の次工程移動を工程別に分割（日次で成型実績>0なら実績、なければ計画をルート去向で按分。4行合計＝成型実績or計画）
+# 成型の次工程移動を工程別に分割（日次で成型実績>0なら実績、なければ計画をルート去向で按分。行合計＝成型実績or計画）
 MOLDING_NEXT_USAGE_BRANCHES: tuple[tuple[str, str], ...] = (
     ("plating", "社内メッキ"),
     ("outsourced_plating", "外注メッキ"),
     ("welding", "溶接"),
     ("outsourced_welding", "外注溶接"),
+    ("inspection", "検査"),
 )
 MOLDING_NEXT_USAGE_KEYS = frozenset(pk for pk, _ in MOLDING_NEXT_USAGE_BRANCHES)
+
+# 社内メッキの次工程移動を溶接／検査に分割（合計＝社内メッキ実績 or 計画）
+PLATING_INHOUSE_NEXT_USAGE_BRANCHES: tuple[tuple[str, str], ...] = (
+    ("welding", "溶接"),
+    ("inspection", "検査"),
+)
+PLATING_INHOUSE_NEXT_USAGE_KEYS = frozenset(pk for pk, _ in PLATING_INHOUSE_NEXT_USAGE_BRANCHES)
+
+# 外注メッキの次工程移動:
+#   検査 = 検査工程ルート製品、外注検査 = 外注倉庫ルート製品（合計＝外注メッキ実績 or 計画）
+PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES: tuple[tuple[str, str], ...] = (
+    ("inspection", "検査"),
+    ("outsourced_warehouse", "外注検査"),
+)
+PLATING_OUTSOURCE_NEXT_USAGE_KEYS = frozenset(pk for pk, _ in PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES)
 
 # 成型の次工程使用。各行＝「成型の次工程がその工程」の製品だけを合算（工程全体の実績/計画ではない）
 MOLDING_NEXT_CONSUME_LABEL = "次工程使用"
@@ -449,36 +465,37 @@ def _use_actual_on(ds: str, process_key: str, cutoff: dict[str, Optional[str]]) 
     return last is not None and ds <= last
 
 
-def _finalize_molding_next_move(
+def _finalize_next_move_by_branch(
     display_dates: list[str],
     group_actual: dict[str, int],
     group_plan: dict[str, int],
     branch_actual: dict[str, dict[str, int]],
     branch_plan: dict[str, dict[str, int]],
     cutoff: dict[str, Optional[str]],
+    *,
+    process_key: str,
+    branches: tuple[tuple[str, str], ...],
+    fallback_pk: str,
 ) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
-    """成型次工程移動を確定する。
+    """工程の次工程移動を分岐先別に確定する。
 
-    日次ルール: 成型実績最終日以前は実績で按分、以降は計画で按分。
-    4 行合計は必ずその日の成型実績（または成型計画）と一致させる。
+    日次ルール: 当該工程の実績最終日以前は実績で按分、以降は計画で按分。
+    分岐行合計は必ずその日の工程実績（または計画）と一致させる。
     """
-    branch_out: dict[str, dict[str, int]] = {
-        pk: _empty_daily(display_dates) for pk, _ in MOLDING_NEXT_USAGE_BRANCHES
-    }
+    branch_out: dict[str, dict[str, int]] = {pk: _empty_daily(display_dates) for pk, _ in branches}
     total_out = _empty_daily(display_dates)
     for ds in display_dates:
         act = int(group_actual.get(ds, 0) or 0)
         plan = int(group_plan.get(ds, 0) or 0)
-        use_actual = _use_actual_on(ds, "molding", cutoff)
+        use_actual = _use_actual_on(ds, process_key, cutoff)
         base = act if use_actual else plan
         src = branch_actual if use_actual else branch_plan
-        parts = {pk: int(src[pk].get(ds, 0) or 0) for pk, _ in MOLDING_NEXT_USAGE_BRANCHES}
+        parts = {pk: int(src[pk].get(ds, 0) or 0) for pk, _ in branches}
         raw_sum = sum(parts.values())
         if base <= 0:
             continue
         if raw_sum <= 0:
-            # 去向が取れない場合は社内メッキへ寄せて合計一致を保つ
-            branch_out["plating"][ds] = base
+            branch_out[fallback_pk][ds] = base
             total_out[ds] = base
             continue
         if raw_sum == base:
@@ -486,7 +503,6 @@ def _finalize_molding_next_move(
                 branch_out[pk][ds] = v
             total_out[ds] = base
             continue
-        # 検査など 4 工程外の差分を含め、比率で再配分して合計＝成型実績/計画
         allocated = 0
         ordered = sorted(parts.items(), key=lambda x: -x[1])
         for i, (pk, v) in enumerate(ordered):
@@ -496,13 +512,34 @@ def _finalize_molding_next_move(
                 qty = int(round(base * v / raw_sum))
                 allocated += qty
             branch_out[pk][ds] = max(0, qty)
-        # 丸め誤差の最終補正
-        diff = base - sum(branch_out[pk][ds] for pk, _ in MOLDING_NEXT_USAGE_BRANCHES)
+        diff = base - sum(branch_out[pk][ds] for pk, _ in branches)
         if diff != 0:
             top_pk = ordered[0][0]
             branch_out[top_pk][ds] = max(0, branch_out[top_pk][ds] + diff)
         total_out[ds] = base
     return branch_out, total_out
+
+
+def _finalize_molding_next_move(
+    display_dates: list[str],
+    group_actual: dict[str, int],
+    group_plan: dict[str, int],
+    branch_actual: dict[str, dict[str, int]],
+    branch_plan: dict[str, dict[str, int]],
+    cutoff: dict[str, Optional[str]],
+) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
+    """成型次工程移動を確定する（分岐合計＝成型実績 or 計画）。"""
+    return _finalize_next_move_by_branch(
+        display_dates,
+        group_actual,
+        group_plan,
+        branch_actual,
+        branch_plan,
+        cutoff,
+        process_key="molding",
+        branches=MOLDING_NEXT_USAGE_BRANCHES,
+        fallback_pk="plating",
+    )
 
 
 def _sum_metric_qty(row: dict[str, Any], process_keys: tuple[str, ...], *, kind: str) -> int:
@@ -717,6 +754,21 @@ def _compute_effective_plans(
     return eff_map, applied
 
 
+def _plating_outsource_next_branch(sequence: list[str]) -> Optional[str]:
+    """外注メッキ次工程移動の分岐先。
+
+    - 外注倉庫ルート製品 → 外注検査
+    - 検査ルート製品 → 検査
+    """
+    if "outsourced_plating" not in sequence:
+        return None
+    if "outsourced_warehouse" in sequence:
+        return "outsourced_warehouse"
+    if "inspection" in sequence:
+        return "inspection"
+    return None
+
+
 def _warehouse_prev_plan_key(sequence: list[str]) -> Optional[str]:
     """倉庫直前で計画列を持つ工程 key（倉庫入庫 = その工程の生産とみなす）。"""
     if "warehouse" not in sequence:
@@ -876,6 +928,20 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
     # 成型次工程使用: ルート上「成型の次＝当該工程」の製品のみ、下流工程の生産数量を合算
     molding_consume_by_branch: dict[str, dict[str, int]] = {
         pk: _empty_daily(display_dates) for pk, _ in MOLDING_NEXT_USAGE_BRANCHES
+    }
+    # 社内メッキグループ: 次工程移動を溶接／検査に分割
+    plating_inhouse_branch_actual: dict[str, dict[str, int]] = {
+        pk: _empty_daily(display_dates) for pk, _ in PLATING_INHOUSE_NEXT_USAGE_BRANCHES
+    }
+    plating_inhouse_branch_plan: dict[str, dict[str, int]] = {
+        pk: _empty_daily(display_dates) for pk, _ in PLATING_INHOUSE_NEXT_USAGE_BRANCHES
+    }
+    # 外注メッキグループ: 次工程移動を検査／外注検査に分割
+    plating_outsource_branch_actual: dict[str, dict[str, int]] = {
+        pk: _empty_daily(display_dates) for pk, _ in PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES
+    }
+    plating_outsource_branch_plan: dict[str, dict[str, int]] = {
+        pk: _empty_daily(display_dates) for pk, _ in PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES
     }
     # 倉庫グループ内訳: 外注倉庫出荷 = 外注倉庫ルート製品の内示合計
     outsourced_warehouse_shipment_daily: dict[str, int] = _empty_daily(display_dates)
@@ -1045,6 +1111,21 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
                         molding_consume_by_branch[m_next][ds] += _resolve_day_production_qty(
                             row, m_next, eff, ds=ds, cutoff=actual_cutoff
                         )
+                elif key == "plating_inhouse":
+                    # 社内メッキ次工程移動: 溶接／検査へ去向別に集計（後段で確定）
+                    if p_next and p_next in PLATING_INHOUSE_NEXT_USAGE_KEYS:
+                        plating_inhouse_branch_actual[p_next][ds] += _num(row, "plating_actual")
+                        plating_inhouse_branch_plan[p_next][ds] += _plan_qty(row, "plating", eff)
+                elif key == "plating_outsource":
+                    # 外注メッキ次工程移動: 検査／外注検査（製品の所属工程で分岐）
+                    op_branch = _plating_outsource_next_branch(sequence)
+                    if op_branch and op_branch in PLATING_OUTSOURCE_NEXT_USAGE_KEYS:
+                        plating_outsource_branch_actual[op_branch][ds] += _num(
+                            row, "outsourced_plating_actual"
+                        )
+                        plating_outsource_branch_plan[op_branch][ds] += _plan_qty(
+                            row, "outsourced_plating", eff
+                        )
                 else:
                     next_pk = group_next_pk.get(key)
                     if next_pk:
@@ -1078,7 +1159,7 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
     for key in product_detail:
         product_detail[key].sort(key=lambda x: -abs(x.get("month_end", 0)))
 
-    # 成型次工程移動: 実績最終日以前は実績、以降は計画。4行合計＝成型実績 or 成型計画
+    # 成型次工程移動: 実績最終日以前は実績、以降は計画。行合計＝成型実績 or 成型計画
     molding_next_usage_by_branch, molding_next_total = _finalize_molding_next_move(
         display_dates,
         group_actual_daily["molding"],
@@ -1089,7 +1170,35 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
     )
     group_next_usage_daily["molding"] = molding_next_total
 
-    # 成型次工程使用親行 = 4 子行の合計（いずれも成型ルート去向でフィルタ済み）
+    # 社内メッキ次工程移動: 溶接／検査。合計＝社内メッキ実績 or 計画
+    plating_inhouse_next_by_branch, plating_inhouse_next_total = _finalize_next_move_by_branch(
+        display_dates,
+        group_actual_daily["plating_inhouse"],
+        group_plan_daily["plating_inhouse"],
+        plating_inhouse_branch_actual,
+        plating_inhouse_branch_plan,
+        actual_cutoff,
+        process_key="plating",
+        branches=PLATING_INHOUSE_NEXT_USAGE_BRANCHES,
+        fallback_pk="welding",
+    )
+    group_next_usage_daily["plating_inhouse"] = plating_inhouse_next_total
+
+    # 外注メッキ次工程移動: 検査／外注検査。合計＝外注メッキ実績 or 計画
+    plating_outsource_next_by_branch, plating_outsource_next_total = _finalize_next_move_by_branch(
+        display_dates,
+        group_actual_daily["plating_outsource"],
+        group_plan_daily["plating_outsource"],
+        plating_outsource_branch_actual,
+        plating_outsource_branch_plan,
+        actual_cutoff,
+        process_key="outsourced_plating",
+        branches=PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES,
+        fallback_pk="inspection",
+    )
+    group_next_usage_daily["plating_outsource"] = plating_outsource_next_total
+
+    # 成型次工程使用親行 = 子行の合計（いずれも成型ルート去向でフィルタ済み）
     molding_consume_daily: dict[str, int] = _empty_daily(display_dates)
     for pk, _label in MOLDING_NEXT_USAGE_BRANCHES:
         for ds in display_dates:
@@ -1129,7 +1238,29 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
                         for pk, label in MOLDING_NEXT_USAGE_BRANCHES
                     ]
                     if key == "molding"
-                    else None
+                    else (
+                        [
+                            {
+                                "key": pk,
+                                "label": label,
+                                "daily": plating_inhouse_next_by_branch[pk],
+                            }
+                            for pk, label in PLATING_INHOUSE_NEXT_USAGE_BRANCHES
+                        ]
+                        if key == "plating_inhouse"
+                        else (
+                            [
+                                {
+                                    "key": pk,
+                                    "label": label,
+                                    "daily": plating_outsource_next_by_branch[pk],
+                                }
+                                for pk, label in PLATING_OUTSOURCE_NEXT_USAGE_BRANCHES
+                            ]
+                            if key == "plating_outsource"
+                            else None
+                        )
+                    )
                 ),
                 "next_consume_daily": molding_consume_daily if key == "molding" else None,
                 "next_consume_label": MOLDING_NEXT_CONSUME_LABEL if key == "molding" else None,

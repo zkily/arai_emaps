@@ -34,7 +34,7 @@ export interface ProjectionGroup {
   next_consume_daily?: Record<string, number> | null
   /** 次工程使用の行ラベル */
   next_consume_label?: string | null
-  /** 次工程使用の分割行（社内メッキ／外注メッキ／溶接／外注溶接） */
+  /** 次工程使用の分割行（社内メッキ／外注メッキ／溶接／外注溶接／検査） */
   next_consume_rows?: Array<{
     key: string
     label: string

@@ -27,7 +27,7 @@
                 当日より後の日付は、実績データがあっても実績 0 として扱います。
               </p>
               <p>
-                計画行はダブルクリックで修正できます。成型の次工程移動／使用は親行をクリックすると内訳を開閉します。
+                計画行はダブルクリックで修正できます。成型・社内／外注メッキの次工程移動、および成型の次工程使用は親行をクリックすると内訳を開閉します。
               </p>
               <div v-if="branchSummary" class="help-meta">{{ branchSummary }}</div>
               <div v-if="cutoffSummary" class="help-meta">実績最終日: {{ cutoffSummary }}</div>
