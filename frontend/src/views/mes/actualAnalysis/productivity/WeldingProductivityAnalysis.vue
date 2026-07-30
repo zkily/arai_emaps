@@ -716,6 +716,8 @@ function buildProductOperatorRankingFromSessions(
   >()
 
   for (const s of sessions) {
+    const actualQty = Number(s.actual_production_quantity ?? 0)
+    if (actualQty <= 0) continue
     const productCd = (s.product_cd ?? '').trim() || 'unknown'
     const productName = (s.product_name ?? '').trim() || productCd
     if (!productMap.has(productCd)) {
@@ -728,7 +730,7 @@ function buildProductOperatorRankingFromSessions(
       })
     }
     const prod = productMap.get(productCd)!
-    prod.sum_actual_qty += Number(s.actual_production_quantity ?? 0)
+    prod.sum_actual_qty += actualQty
     prod.session_count += 1
 
     const operatorId = s.mes_operator_user_id
@@ -747,7 +749,7 @@ function buildProductOperatorRankingFromSessions(
     }
     const op = prod.operators.get(operatorKey)!
     op.session_count = (op.session_count ?? 0) + 1
-    op.sum_actual_qty = (op.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    op.sum_actual_qty = (op.sum_actual_qty ?? 0) + actualQty
     op.sum_defect_qty = (op.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     op.sum_net_production_sec = (op.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
   }
@@ -1037,6 +1039,8 @@ function buildOperatorProductRows(
     const opKey = s.mes_operator_user_id != null ? String(s.mes_operator_user_id) : 'none'
     if (opKey !== operatorKey) continue
 
+    const actualQty = Number(s.actual_production_quantity ?? 0)
+    if (actualQty <= 0) continue
     if (!map.has(productCd)) {
       map.set(productCd, {
         product_cd: productCd,
@@ -1049,7 +1053,7 @@ function buildOperatorProductRows(
     }
     const prod = map.get(productCd)!
     prod.session_count = (prod.session_count ?? 0) + 1
-    prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + actualQty
     prod.sum_defect_qty = (prod.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     prod.sum_net_production_sec =
       (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? s.mes_net_production_sec ?? 0)

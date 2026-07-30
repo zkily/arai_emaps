@@ -157,8 +157,8 @@ def _build_performance_slide(prs: Presentation, performance: Dict[str, Any]) -> 
         "実績",
         "対実見",
         "対計画",
-        "前月生産性",
-        "当月生産性",
+        "前月時間当たり能率",
+        "当月時間当たり能率",
         "増減",
     ]
     body = [header]

@@ -1051,6 +1051,8 @@ function buildProductInspectorRankingFromSessions(
   >()
 
   for (const s of sessions) {
+    const actualQty = Number(s.actual_production_quantity ?? 0)
+    if (actualQty <= 0) continue
     const productCd = (s.product_cd ?? '').trim() || 'unknown'
     const productName = (s.product_name ?? '').trim() || productCd
     if (!productMap.has(productCd)) {
@@ -1063,7 +1065,7 @@ function buildProductInspectorRankingFromSessions(
       })
     }
     const prod = productMap.get(productCd)!
-    prod.sum_actual_qty += Number(s.actual_production_quantity ?? 0)
+    prod.sum_actual_qty += actualQty
     prod.session_count += 1
 
     const inspId = s.mes_inspector_user_id
@@ -1082,7 +1084,7 @@ function buildProductInspectorRankingFromSessions(
     }
     const inv = prod.inspectors.get(inspKey)!
     inv.session_count = (inv.session_count ?? 0) + 1
-    inv.sum_actual_qty = (inv.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    inv.sum_actual_qty = (inv.sum_actual_qty ?? 0) + actualQty
     inv.sum_defect_qty = (inv.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     inv.sum_net_production_sec = (inv.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
   }
@@ -1352,6 +1354,8 @@ function buildInspectorAvgRankBySessions(
   for (const s of sessions) {
     const productCd = (s.product_cd ?? '').trim()
     if (!productCd || !includeProduct(productCd)) continue
+    const actualQty = Number(s.actual_production_quantity ?? 0)
+    if (actualQty <= 0) continue
 
     const inspId = s.mes_inspector_user_id
     const inspKey = inspId != null ? String(inspId) : 'none'
@@ -1369,7 +1373,7 @@ function buildInspectorAvgRankBySessions(
     }
     const inv = map.get(inspKey)!
     inv.session_count = (inv.session_count ?? 0) + 1
-    inv.sum_actual_qty = (inv.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    inv.sum_actual_qty = (inv.sum_actual_qty ?? 0) + actualQty
     inv.sum_defect_qty = (inv.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     inv.sum_net_production_sec = (inv.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
   }
@@ -1430,6 +1434,8 @@ function buildInspectorProductRows(
 
     const inspKey = s.mes_inspector_user_id != null ? String(s.mes_inspector_user_id) : 'none'
     if (inspKey !== inspectorKey) continue
+    const actualQty = Number(s.actual_production_quantity ?? 0)
+    if (actualQty <= 0) continue
 
     if (!map.has(productCd)) {
       map.set(productCd, {
@@ -1443,7 +1449,7 @@ function buildInspectorProductRows(
     }
     const prod = map.get(productCd)!
     prod.session_count = (prod.session_count ?? 0) + 1
-    prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + actualQty
     prod.sum_defect_qty = (prod.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
     prod.sum_net_production_sec = (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? 0)
   }

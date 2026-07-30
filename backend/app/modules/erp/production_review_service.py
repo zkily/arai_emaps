@@ -437,6 +437,7 @@ async def _scrap_month_entry(db: AsyncSession, year: int, month: int) -> Dict[st
 
 
 _DEFAULT_UTILIZATION_RATE_PCT = 96.0  # 定時H用稼働率(%)のデフォルト
+_DEFAULT_PLAN_ADJUST_RATE_PCT = 100.0  # 計画調整率(%)のデフォルト
 
 
 def _normalize_utilization_rate_pct(value: Any) -> float:
@@ -450,6 +451,25 @@ def _normalize_utilization_rate_pct(value: Any) -> float:
     if n > 100:
         return 100.0
     return round(n, 2)
+
+
+def _normalize_plan_adjust_rate_pct(value: Any) -> float:
+    """計画調整率(%)を正規化。未設定・不正時は 100。0 以上を許容。"""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return float(_DEFAULT_PLAN_ADJUST_RATE_PCT)
+    if n < 0:
+        return float(_DEFAULT_PLAN_ADJUST_RATE_PCT)
+    if n > 999.99:
+        return 999.99
+    return round(n, 2)
+
+
+def _apply_plan_adjust_rate(base_plan_th: float, plan_adjust_rate_pct: Any) -> float:
+    """表示用計画(千本) = 元計画 × 調整率(%) ÷ 100。"""
+    rate = _normalize_plan_adjust_rate_pct(plan_adjust_rate_pct)
+    return round(float(base_plan_th or 0) * rate / 100.0, 1)
 
 
 async def get_capacity_rows(db: AsyncSession) -> List[Dict[str, Any]]:
@@ -475,6 +495,9 @@ async def get_capacity_rows(db: AsyncSession) -> List[Dict[str, Any]]:
                 "utilization_rate_pct": _normalize_utilization_rate_pct(
                     getattr(r, "utilization_rate_pct", None)
                 ),
+                "plan_adjust_rate_pct": _normalize_plan_adjust_rate_pct(
+                    getattr(r, "plan_adjust_rate_pct", None)
+                ),
                 "daily_regular_hours": int(r.daily_regular_hours or 0),
                 "sort_order": int(r.sort_order or 0),
             }
@@ -494,6 +517,7 @@ async def upsert_capacity_rows(db: AsyncSession, items: List[Dict[str, Any]]) ->
             )
         ).scalar_one_or_none()
         util_pct = _normalize_utilization_rate_pct(it.get("utilization_rate_pct"))
+        adjust_pct = _normalize_plan_adjust_rate_pct(it.get("plan_adjust_rate_pct"))
         payload = {
             "process_name": str(it.get("process_name") or cd),
             "equipment_label": str(it.get("equipment_label") or ""),
@@ -501,6 +525,7 @@ async def upsert_capacity_rows(db: AsyncSession, items: List[Dict[str, Any]]) ->
             "shift_label": str(it.get("shift_label") or ""),
             "working_days": max(0, min(31, int(it.get("working_days") or 0))),
             "utilization_rate_pct": util_pct,
+            "plan_adjust_rate_pct": adjust_pct,
             "daily_regular_hours": int(it.get("daily_regular_hours") or 0),
             "sort_order": int(it.get("sort_order") or 0),
         }
@@ -1040,6 +1065,7 @@ async def _build_inventory_table(
         "process_target_days": dict(_PROCESS_TARGET_DAYS),
         "product_level": product_level,
         "curr_inventory_as_of": None,
+        "prev_inventory_as_of": None,
         "rows": rows,
         "comments": [],
     }
@@ -1118,6 +1144,7 @@ def _calc_load_row(
     calendar_days: int,
     capacity: Dict[str, Any],
     overrides: Optional[Dict[str, Any]] = None,
+    base_plan_th: Optional[float] = None,
 ) -> Dict[str, Any]:
     ov = overrides or {}
     equipment = str(ov.get("equipment_label") or capacity.get("equipment_label") or "")
@@ -1128,15 +1155,26 @@ def _calc_load_row(
         if ov.get("utilization_rate_pct") is not None
         else capacity.get("utilization_rate_pct")
     )
+    adjust_pct = _normalize_plan_adjust_rate_pct(
+        ov.get("plan_adjust_rate_pct")
+        if ov.get("plan_adjust_rate_pct") is not None
+        else capacity.get("plan_adjust_rate_pct")
+    )
     daily_reg_computed = _calc_daily_regular_hours(equipment, shift, util_pct)
     daily_reg_fallback = int(ov.get("daily_regular_hours") or capacity.get("daily_regular_hours") or 0)
     daily_reg = int(round(daily_reg_computed)) if daily_reg_computed > 0 else daily_reg_fallback
     cap_wd = int(capacity.get("working_days") or 0)
     wd = int(ov.get("working_days") or 0) or cap_wd or int(working_days or 0)
     cal_days = int(calendar_days or 0)
-    daily_th = round(plan_th / wd, 1) if wd > 0 else 0.0
+    pt = round(float(plan_th or 0), 1)
+    base_pt = (
+        round(float(base_plan_th), 1)
+        if base_plan_th is not None
+        else round(float(ov.get("base_plan_th") or capacity.get("base_plan_th") or pt), 1)
+    )
+    daily_th = round(pt / wd, 1) if wd > 0 else 0.0
     regular_hours = int(round(daily_reg * wd)) if wd > 0 else 0
-    plan_units = plan_th * 1000
+    plan_units = pt * 1000
     required_hours = int(round(plan_units / std_rate)) if std_rate > 0 else 0
     load_rate = int(round(required_hours / regular_hours * 100)) if regular_hours > 0 else 0
     equip_count = _parse_equipment_count(equipment)
@@ -1147,7 +1185,9 @@ def _calc_load_row(
     return {
         "process_cd": process_cd,
         "process_name": process_name,
-        "plan_th": plan_th,
+        "base_plan_th": base_pt,
+        "plan_adjust_rate_pct": adjust_pct,
+        "plan_th": pt,
         "daily_th": daily_th,
         "equipment_label": equipment,
         "standard_rate": std_rate,
@@ -1176,12 +1216,14 @@ def _recompute_load_row_dict(row: Dict[str, Any], plan_th: Optional[float] = Non
     if cal_days <= 0:
         # 互換：旧データに暦日が無い場合は稼働日を流用しない（計算不能なら0）
         cal_days = 0
+    base_pt = row.get("base_plan_th")
     cap = {
         "equipment_label": row.get("equipment_label") or "",
         "standard_rate": int(row.get("standard_rate") or 0),
         "shift_label": row.get("shift_label") or "",
         "working_days": wd,
         "utilization_rate_pct": row.get("utilization_rate_pct"),
+        "plan_adjust_rate_pct": row.get("plan_adjust_rate_pct"),
         "daily_regular_hours": 0,
     }
     return _calc_load_row(
@@ -1191,6 +1233,7 @@ def _recompute_load_row_dict(row: Dict[str, Any], plan_th: Optional[float] = Non
         working_days=wd,
         calendar_days=cal_days,
         capacity=cap,
+        base_plan_th=float(base_pt) if base_pt is not None else pt,
     )
 
 
@@ -1220,15 +1263,18 @@ async def _build_load_plan(
             plan_qty = await _sum_column(db, plan_col, start_d, end_d)
         else:
             plan_qty = 0
+        base_plan_th = _thousands(plan_qty)
+        plan_th = _apply_plan_adjust_rate(base_plan_th, cap.get("plan_adjust_rate_pct"))
         rows.append(
             _calc_load_row(
                 process_cd=cd,
                 process_name=str(cap.get("process_name") or cd),
-                plan_th=_thousands(plan_qty),
+                plan_th=plan_th,
                 working_days=month_wd,
                 calendar_days=calendar_days,
                 capacity=cap,
                 overrides=(ov_all.get("processes") or {}).get(cd),
+                base_plan_th=base_plan_th,
             )
         )
 
@@ -1315,9 +1361,9 @@ def _generate_performance_comments(perf: Dict[str, Any]) -> List[str]:
         elif d >= 3:
             prod_up.append(f"{name} {_fmt_signed_pt(d, 1)}")
     if prod_down:
-        comments.append("生産性低下（前月比）：" + "、".join(prod_down[:4]) + "。")
+        comments.append("時間当たり能率低下（前月比）：" + "、".join(prod_down[:4]) + "。")
     if prod_up:
-        comments.append("生産性改善（前月比）：" + "、".join(prod_up[:4]) + "。")
+        comments.append("時間当たり能率改善（前月比）：" + "、".join(prod_up[:4]) + "。")
 
     if len(comments) == 1:
         comments.append("各工程とも計画との大きな乖離は見られません。")
@@ -1671,8 +1717,22 @@ def merge_preserve_editable(
             ex_rows = {r.get("process_cd"): r for r in (ex.get("load_plan") or {}).get("rows") or []}
             for row in mg.get("load_plan", {}).get("rows") or []:
                 prev = ex_rows.get(row.get("process_cd"), {})
-                if prev.get("plan_th") is not None:
-                    row.update(_recompute_load_row_dict(row, float(prev["plan_th"])))
+                if prev.get("plan_th") is None:
+                    continue
+                prev_plan = float(prev["plan_th"])
+                prev_base = prev.get("base_plan_th")
+                # 手改検知: 旧表示計画が「元計画×旧調整率」と一致しなければ手改として保持
+                if prev_base is not None:
+                    expected = _apply_plan_adjust_rate(
+                        float(prev_base), prev.get("plan_adjust_rate_pct")
+                    )
+                    if abs(prev_plan - expected) > 0.051:
+                        updated = _recompute_load_row_dict(row, prev_plan)
+                        updated["base_plan_th"] = round(float(prev_base), 1)
+                        row.update(updated)
+                else:
+                    # 旧データ互換: base が無い場合は従来どおり plan_th を保持
+                    row.update(_recompute_load_row_dict(row, prev_plan))
             if not (ex.get("load_plan") or {}).get("comments"):
                 mg["load_plan"]["comments"] = _generate_load_plan_comments(mg["load_plan"])
             if section == "part02" and ex.get("inventory_forecast"):

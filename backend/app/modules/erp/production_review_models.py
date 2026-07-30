@@ -39,6 +39,9 @@ class ProductionReviewCapacity(Base):
     utilization_rate_pct = Column(
         Numeric(5, 2), nullable=False, default=96, comment="稼働率(%) 定時H計算用"
     )
+    plan_adjust_rate_pct = Column(
+        Numeric(8, 2), nullable=False, default=100, comment="計画調整率(%) 計画(千本)×調整率"
+    )
     daily_regular_hours = Column(Integer, nullable=False, default=0, comment="日当たり定時H")
     sort_order = Column(Integer, nullable=False, default=0, comment="表示順")
     created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")

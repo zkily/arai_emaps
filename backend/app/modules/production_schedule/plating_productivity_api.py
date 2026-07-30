@@ -244,7 +244,8 @@ def register_routes(router: APIRouter) -> None:
                 net_sec=net_sec,
                 completed_count=1,
             )
-            summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
+            if actual_qty > 0:
+                summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
 
             if day_key:
                 if day_key not in daily_map:

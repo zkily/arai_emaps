@@ -20,6 +20,8 @@ export interface CapacityRow {
   working_days?: number
   /** 稼働率(%) 定時H計算用。未設定時は 96 */
   utilization_rate_pct?: number
+  /** 計画調整率(%)。表示計画 = 元計画 × 調整率 ÷ 100。未設定時は 100 */
+  plan_adjust_rate_pct?: number
   daily_regular_hours: number
   sort_order?: number
 }
@@ -40,6 +42,10 @@ export interface PerformanceRow {
 export interface LoadPlanRow {
   process_cd: string
   process_name: string
+  /** 元計画(千本)。調整率適用前 */
+  base_plan_th?: number
+  /** 計画調整率(%) */
+  plan_adjust_rate_pct?: number
   plan_th: number
   daily_th: number
   equipment_label: string
@@ -102,6 +108,8 @@ export interface InventorySection {
   product_level?: 'danger' | 'ok' | 'high' | string
   /** 当月在庫の基準日（YYYY-MM-DD）。未設定時は月末在庫 */
   curr_inventory_as_of?: string | null
+  /** 前月在庫の基準日（YYYY-MM-DD）。在庫予測テーブル用。未設定時は前月末在庫 */
+  prev_inventory_as_of?: string | null
   rows: InventoryRow[]
   comments?: string[]
 }
@@ -280,6 +288,35 @@ export function fetchWorkingDays(year: number): Promise<{
     success: boolean
     data: { year: number; items: WorkingDaysMonthItem[] }
   }>
+}
+
+export interface EfficiencyTrendSeries {
+  process_cd: string
+  process_name: string
+  values: Array<number | null>
+}
+
+export interface EfficiencyTrendData {
+  start_month: string
+  end_month: string
+  months: string[]
+  month_labels: string[]
+  processes: Array<{ process_cd: string; process_name: string }>
+  series: EfficiencyTrendSeries[]
+}
+
+export function fetchEfficiencyTrend(params: {
+  start_month: string
+  end_month: string
+  processes?: string[]
+}): Promise<{ success: boolean; data: EfficiencyTrendData }> {
+  return request.get(`${BASE}/efficiency-trend`, {
+    params: {
+      start_month: params.start_month,
+      end_month: params.end_month,
+      processes: params.processes?.length ? params.processes.join(',') : undefined,
+    },
+  }) as unknown as Promise<{ success: boolean; data: EfficiencyTrendData }>
 }
 
 export function fetchInventoryByDate(date: string): Promise<{

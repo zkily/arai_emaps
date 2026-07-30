@@ -93,6 +93,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', icon: 'Calendar', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_PROCESS_MACHINE_PLAN', name: '工程别设备别计划', icon: 'Grid', path: '/erp/production/process-machine-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.6 },
   { code: 'ERP_PRODUCTION_FORMING_DAILY_PLAN', name: '成型計画試算', icon: 'TrendCharts', path: '/erp/production/forming-daily-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.5 },
+  { code: 'ERP_PRODUCTION_INVENTORY_PROJECTION', name: '月末在庫予測', icon: 'DataLine', path: '/erp/production/inventory-projection', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.55 },
   { code: 'ERP_PRODUCTION_LOT_FORECAST_ATTRIBUTION', name: '生産ロット進捗管理', icon: 'Calendar', path: '/erp/production/lot-forecast-attribution', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.7 },
   { code: 'ERP_PRODUCTION_REQUIREMENTS', name: '生産需要量', icon: 'TrendCharts', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION', sortOrder: 5.7 },
   { code: 'ERP_PRODUCTION_MAT_REQ', name: '材料需要量', icon: 'Collection', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 1 },

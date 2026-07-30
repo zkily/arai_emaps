@@ -46,6 +46,7 @@ class CapacityItem(BaseModel):
     shift_label: Optional[str] = None
     working_days: int = 0
     utilization_rate_pct: float = 96
+    plan_adjust_rate_pct: float = 100
     daily_regular_hours: int = 0
     sort_order: int = 0
 
@@ -238,6 +239,32 @@ async def put_working_days(
         "data": data,
         "message": f"{len(body.items)}件の稼働日を保存しました",
     }
+
+
+@router.get("/efficiency-trend")
+async def get_efficiency_trend(
+    start_month: str,
+    end_month: str,
+    processes: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """工程別・月次の時間当たり能率推移（折線チャート用）。"""
+    from app.modules.erp.production_review_productivity import get_process_efficiency_trend
+
+    start = _validate_month(start_month)
+    end = _validate_month(end_month)
+    keys = None
+    if processes and str(processes).strip():
+        keys = [p.strip() for p in str(processes).split(",") if p.strip()]
+    try:
+        data = await get_process_efficiency_trend(db, start, end, keys)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("時間当たり能率推移の集計に失敗")
+        raise HTTPException(status_code=500, detail=f"集計に失敗しました: {exc}") from exc
+    return {"success": True, "data": data}
 
 
 @router.get("/{month}")

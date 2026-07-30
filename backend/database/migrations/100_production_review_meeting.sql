@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS `production_review_capacity` (
   `shift_label` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '標準稼働直',
   `working_days` int NOT NULL DEFAULT 0 COMMENT '稼働日数（0=対象月カレンダー）',
   `utilization_rate_pct` decimal(5, 2) NOT NULL DEFAULT 96.00 COMMENT '稼働率(%) 定時H計算用',
+  `plan_adjust_rate_pct` decimal(8, 2) NOT NULL DEFAULT 100.00 COMMENT '計画調整率(%) 計画(千本)×調整率',
   `daily_regular_hours` int NOT NULL DEFAULT 0 COMMENT '日当たり定時H',
   `sort_order` int NOT NULL DEFAULT 0 COMMENT '表示順',
   `created_at` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '作成日時',

@@ -1,9 +1,12 @@
-"""生産検討会資料向け：生産性分析と同口径の月次総合能率（本/時）"""
+"""生産検討会資料向け：生産性分析と同口径の月次総合能率（本/時）
+
+総合能率 = Σ実績数量 ÷ Σ正味稼働時間。実績数量が無い行・日は分子・分母とも含めない。
+"""
 from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,10 +76,11 @@ async def _aggregate_indicator_month(
     for row in rows:
         item = normalize_fn(dict(row))
         actual_qty = int(item.get("actual_quantity") or 0)
+        # 実績なしの行は総合能率に含めない（時間も除外）
+        if actual_qty <= 0:
+            continue
         defect_qty = int(item.get("quantity_variance") or item.get("defect_quantity") or 0)
         net_sec = work_sec_fn(item)
-        if actual_qty <= 0 and net_sec <= 0:
-            continue
         _merge_inspection_productivity_bucket(
             bucket,
             actual_qty=actual_qty,
@@ -126,10 +130,10 @@ async def _aggregate_inspection_month(db: AsyncSession, year: int, month: int) -
     for row in rows:
         item = _normalize_inspection_mgmt_row(dict(row))
         actual_qty = int(item.get("actual_production_quantity") or 0)
+        if actual_qty <= 0:
+            continue
         defect_qty = int(item.get("defect_qty") or 0)
         net_sec = _inspection_row_net_production_sec(item)
-        if actual_qty <= 0 and net_sec <= 0:
-            continue
         _merge_inspection_productivity_bucket(
             bucket,
             actual_qty=actual_qty,
@@ -179,10 +183,10 @@ async def _aggregate_welding_month(db: AsyncSession, year: int, month: int) -> O
     for row in rows:
         item = dict(row)
         actual_qty = int(item.get("actual_production_quantity") or 0)
+        if actual_qty <= 0:
+            continue
         defect_qty = int(item.get("defect_qty") or 0)
         net_sec = _welding_row_net_production_sec(item)
-        if actual_qty <= 0 and net_sec <= 0:
-            continue
         _merge_inspection_productivity_bucket(
             bucket,
             actual_qty=actual_qty,
@@ -224,3 +228,90 @@ async def get_process_monthly_efficiency_map(
     for key in keys:
         out[key] = await get_process_monthly_efficiency(db, key, year, month)
     return out
+
+
+_PROCESS_EFFICIENCY_KEYS: Tuple[str, ...] = (
+    "cutting",
+    "molding",
+    "plating",
+    "welding",
+    "inspection",
+)
+_PROCESS_EFFICIENCY_NAMES: Dict[str, str] = {
+    "cutting": "切断",
+    "molding": "成型",
+    "plating": "メッキ",
+    "welding": "溶接",
+    "inspection": "検査",
+}
+
+
+def _parse_ym(ym: str) -> Tuple[int, int]:
+    parts = str(ym or "").strip().split("-")
+    if len(parts) != 2:
+        raise ValueError("month は YYYY-MM 形式で指定してください")
+    y, m = int(parts[0]), int(parts[1])
+    if m < 1 or m > 12:
+        raise ValueError("month は YYYY-MM 形式で指定してください")
+    return y, m
+
+
+def _ym_label(year: int, month: int) -> str:
+    return f"{year}年{month}月"
+
+
+def _iter_months(start_y: int, start_m: int, end_y: int, end_m: int) -> List[Tuple[int, int]]:
+    start_i = start_y * 12 + (start_m - 1)
+    end_i = end_y * 12 + (end_m - 1)
+    if end_i < start_i:
+        raise ValueError("終了月は開始月以降を指定してください")
+    if end_i - start_i > 23:
+        raise ValueError("期間は最大24ヶ月までです")
+    return [(i // 12, i % 12 + 1) for i in range(start_i, end_i + 1)]
+
+
+async def get_process_efficiency_trend(
+    db: AsyncSession,
+    start_month: str,
+    end_month: str,
+    process_keys: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """工程別・月次の時間当たり能率推移（本/時・個/時）。"""
+    sy, sm = _parse_ym(start_month)
+    ey, em = _parse_ym(end_month)
+    months = _iter_months(sy, sm, ey, em)
+
+    selected = [
+        k
+        for k in (process_keys or list(_PROCESS_EFFICIENCY_KEYS))
+        if k in _PROCESS_EFFICIENCY_NAMES
+    ]
+    if not selected:
+        selected = list(_PROCESS_EFFICIENCY_KEYS)
+
+    series_values: Dict[str, List[Optional[int]]] = {k: [] for k in selected}
+    month_keys: List[str] = []
+    month_labels: List[str] = []
+    for y, m in months:
+        month_keys.append(f"{y:04d}-{m:02d}")
+        month_labels.append(_ym_label(y, m))
+        for key in selected:
+            series_values[key].append(await get_process_monthly_efficiency(db, key, y, m))
+
+    return {
+        "start_month": f"{sy:04d}-{sm:02d}",
+        "end_month": f"{ey:04d}-{em:02d}",
+        "months": month_keys,
+        "month_labels": month_labels,
+        "processes": [
+            {"process_cd": k, "process_name": _PROCESS_EFFICIENCY_NAMES[k]} for k in selected
+        ],
+        "series": [
+            {
+                "process_cd": k,
+                "process_name": _PROCESS_EFFICIENCY_NAMES[k],
+                "values": series_values[k],
+            }
+            for k in selected
+        ],
+    }

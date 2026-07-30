@@ -8,55 +8,96 @@
 
     <header class="pr-toolbar pr-glass pr-animate-in">
       <div class="pr-brand">
-        <div class="pr-brand__icon">
+        <div class="pr-brand__icon" aria-hidden="true">
           <el-icon :size="22"><Document /></el-icon>
         </div>
-        <div>
+        <div class="pr-brand__text">
           <h1>生産検討会資料</h1>
-          <p>{{ meetingLabel }} · PART 01〜03</p>
+          <p>
+            <span class="pr-brand__badge">{{ meetingLabel }}</span>
+            <span class="pr-brand__sep">·</span>
+            PART 01〜03
+          </p>
         </div>
       </div>
 
       <div class="pr-controls">
-        <el-date-picker
-          v-model="targetMonth"
-          type="month"
-          value-format="YYYY-MM"
-          format="YYYY年M月"
-          placeholder="対象月"
-          size="small"
-          class="pr-month"
-          @change="onMonthChange"
-        />
-        <el-tag v-if="recordStatus" :type="recordStatus === 'final' ? 'success' : 'info'" size="small" effect="dark" round>
-          {{ recordStatus === 'final' ? '確定' : '下書き' }}
-        </el-tag>
-        <el-tag v-if="dataSource" size="small" :type="dataSource === 'saved' ? 'warning' : 'primary'" effect="plain" round>
-          {{ dataSource === 'saved' ? '保存済' : '自動集計' }}
-        </el-tag>
+        <div class="pr-controls__panel">
+          <el-date-picker
+            v-model="targetMonth"
+            type="month"
+            value-format="YYYY-MM"
+            format="YYYY年M月"
+            placeholder="対象月"
+            size="default"
+            class="pr-month"
+            @change="onMonthChange"
+          />
+          <span
+            v-if="recordStatus"
+            class="pr-status"
+            :class="recordStatus === 'final' ? 'pr-status--final' : 'pr-status--draft'"
+          >
+            <span class="pr-status__dot" />
+            {{ recordStatus === 'final' ? '確定' : '下書き' }}
+          </span>
+          <span
+            v-if="dataSource"
+            class="pr-status"
+            :class="dataSource === 'saved' ? 'pr-status--saved' : 'pr-status--live'"
+          >
+            <span class="pr-status__dot" />
+            {{ dataSource === 'saved' ? '保存済' : '自動集計' }}
+          </span>
+        </div>
       </div>
 
       <div class="pr-actions">
-        <el-button size="small" :loading="loading" round @click="openCapacityDialog">
+        <button
+          type="button"
+          class="pr-action-btn pr-action-btn--ghost"
+          :disabled="loading"
+          @click="openCapacityDialog"
+        >
           <el-icon><Setting /></el-icon>
-          工程能力
-        </el-button>
-        <el-button size="small" :loading="loading" :disabled="!payload" round @click="onRecalculate">
+          <span>工程能力</span>
+        </button>
+        <button
+          type="button"
+          class="pr-action-btn pr-action-btn--ghost pr-action-btn--refresh"
+          :disabled="loading || !payload"
+          @click="onRecalculate"
+        >
           <el-icon><Refresh /></el-icon>
-          再計算
-        </el-button>
-        <el-button size="small" type="warning" :disabled="!payload" round @click="onSave('draft')">
+          <span>再計算</span>
+        </button>
+        <button
+          type="button"
+          class="pr-action-btn pr-action-btn--warn"
+          :disabled="!payload"
+          @click="onSave('draft')"
+        >
           <el-icon><EditPen /></el-icon>
-          下書き保存
-        </el-button>
-        <el-button size="small" type="primary" :disabled="!payload" round @click="onSave('final')">
+          <span>下書き保存</span>
+        </button>
+        <button
+          type="button"
+          class="pr-action-btn pr-action-btn--primary"
+          :disabled="!payload"
+          @click="onSave('final')"
+        >
           <el-icon><CircleCheck /></el-icon>
-          確定保存
-        </el-button>
-        <el-button size="small" type="success" :disabled="!payload" :loading="pptLoading" round @click="onDownloadPpt">
+          <span>確定保存</span>
+        </button>
+        <button
+          type="button"
+          class="pr-action-btn pr-action-btn--success"
+          :disabled="!payload || pptLoading"
+          @click="onDownloadPpt"
+        >
           <el-icon><Download /></el-icon>
-          PPT生成
-        </el-button>
+          <span>{{ pptLoading ? '生成中…' : 'PPT生成' }}</span>
+        </button>
       </div>
     </header>
 
@@ -104,6 +145,10 @@
                 >
                   <span class="pr-col-toggle__indicator" />
                   実績(千本) · 対計画
+                </button>
+                <button type="button" class="pr-eff-trend-btn" @click="openEfficiencyTrendDialog">
+                  <el-icon :size="15"><TrendCharts /></el-icon>
+                  時間当たり能率推移
                 </button>
               </div>
             </div>
@@ -189,7 +234,7 @@
                     <span :class="deltaClass(row.vs_plan_th)">{{ fmtDelta(row.vs_plan_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月生産性" min-width="120" align="center">
+                <el-table-column label="前月時間当たり能率" min-width="140" align="center">
                   <template #default="{ row }">
                     <span v-if="row.key === 'shipping'" class="pr-perf-muted">—</span>
                     <template v-else>
@@ -213,7 +258,7 @@
                     </template>
                   </template>
                 </el-table-column>
-                <el-table-column label="当月生産性" min-width="120" align="center">
+                <el-table-column label="当月時間当たり能率" min-width="140" align="center">
                   <template #default="{ row }">
                     <span v-if="row.key === 'shipping'" class="pr-perf-muted">—</span>
                     <template v-else>
@@ -413,29 +458,6 @@
                 <span class="pr-month-card__rate-old">{{ scrapRate(m, 'old') }}<small>%</small></span>
                 <span class="pr-month-card__loss">{{ fmtInt(scrapLossQty(m)) }}<small>本</small></span>
               </div>
-            </div>
-
-            <div v-if="scrapMeta.monthly.length" class="pr-table-wrap pr-scrap-table-wrap">
-              <el-table :data="scrapMeta.monthly" border size="small" class="pr-table pr-table--modern pr-table--scrap" stripe>
-                <el-table-column prop="month" label="月" width="64" align="center">
-                  <template #default="{ row }">{{ row.month }}月</template>
-                </el-table-column>
-                <el-table-column label="廃棄率（新）(%)" min-width="120" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-scrap-val pr-scrap-val--new">{{ scrapRate(row, 'new') }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="廃棄率（旧）(%)" min-width="120" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-scrap-val pr-scrap-val--old">{{ scrapRate(row, 'old') }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="廃棄本数(本)" min-width="120" align="center">
-                  <template #default="{ row }">
-                    <span class="pr-scrap-val pr-scrap-val--qty">{{ fmtInt(scrapLossQty(row)) }}</span>
-                  </template>
-                </el-table-column>
-              </el-table>
             </div>
 
             <div class="pr-perf-comment pr-perf-comment--scrap">
@@ -808,6 +830,10 @@
                         <span class="pr-load-help__note">人員は 人数 × 7.6H × 稼働日 × 稼働率</span>
                       </li>
                       <li>
+                        <strong>計画(千本)</strong>
+                        <code>元計画 × 計画調整率% ÷ 100</code>
+                      </li>
+                      <li>
                         <strong>所要H</strong>
                         <code>計画(本) ÷ 能率(本/H)</code>
                       </li>
@@ -840,7 +866,7 @@
                 </el-button>
               </div>
               <p class="pr-load-summary-line">
-                月次稼働日
+                出荷対象日
                 <strong>{{ payload.part02.load_plan.working_days }}</strong>
                 日
                 <span class="pr-inv-forecast-sep">|</span>
@@ -1056,7 +1082,16 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月在庫(千本)" min-width="120" align="center" class-name="col-prev">
+                <el-table-column min-width="120" align="center" class-name="col-prev">
+                  <template #header>
+                    <span
+                      class="pr-inv-col-hdr pr-inv-col-hdr--clickable"
+                      title="ダブルクリックで在庫基準日を選択"
+                      @dblclick.stop="openFcPrevInvDateDialog"
+                    >
+                      {{ fcPrevInventoryHeaderLabel }}
+                    </span>
+                  </template>
                   <template #default="{ row }">
                     <span class="pr-inv-val pr-inv-val--prev">{{ fmtNum(row.prev_inventory_th) }}</span>
                   </template>
@@ -1069,12 +1104,22 @@
                 <el-table-column label="予測在庫(千本)" min-width="130" align="center" class-name="col-curr">
                   <template #default="{ row }">
                     <input
-                      v-if="isForecastInvEditable(row)"
-                      v-model.number="row.curr_inventory_th"
+                      v-if="isForecastInvEditable(row) && isFcInvEditing(row.key)"
+                      class="pr-inv-edit-input pr-inv-edit-input--curr pr-inv-edit-input--fc"
                       type="number"
                       step="0.1"
-                      class="pr-inv-edit-input pr-inv-edit-input--curr"
+                      v-model.number="fcInvEditDraft"
+                      @blur="commitFcInvEdit"
+                      @keydown.enter.prevent="commitFcInvEdit"
+                      @keydown.esc.prevent="cancelFcInvEdit"
+                      @click.stop
                     />
+                    <span
+                      v-else-if="isForecastInvEditable(row)"
+                      class="pr-inv-val pr-inv-val--curr pr-inv-val--editable"
+                      title="ダブルクリックで編集"
+                      @dblclick.stop="startFcInvEdit(row)"
+                    >{{ fmtNum(row.curr_inventory_th) }}</span>
                     <span v-else class="pr-inv-val pr-inv-val--curr pr-inv-val--parent">{{ fmtNum(row.curr_inventory_th) }}</span>
                   </template>
                 </el-table-column>
@@ -1188,6 +1233,10 @@
                         <strong>定時H</strong>
                         <code>設備数 × 直数 × 7.6H × 稼働日 × 稼働率</code>
                         <span class="pr-load-help__note">人員は 人数 × 7.6H × 稼働日 × 稼働率</span>
+                      </li>
+                      <li>
+                        <strong>計画(千本)</strong>
+                        <code>元計画 × 計画調整率% ÷ 100</code>
                       </li>
                       <li>
                         <strong>所要H</strong>
@@ -1408,6 +1457,105 @@
       </el-tabs>
     </div>
 
+    <el-dialog
+      v-model="effTrendVisible"
+      width="920px"
+      class="pr-dialog pr-dialog--eff-trend"
+      :show-close="false"
+      destroy-on-close
+      align-center
+      @closed="onEffTrendClosed"
+    >
+      <template #header>
+        <div class="pr-eff-header">
+          <div class="pr-eff-header__main">
+            <span class="pr-eff-header__icon" aria-hidden="true">
+              <el-icon :size="18"><TrendCharts /></el-icon>
+            </span>
+            <div class="pr-eff-header__text">
+              <h3 class="pr-eff-header__title">時間当たり能率推移</h3>
+              <p class="pr-eff-header__sub">工程別・月次（本/時・個/時） · 実績なし月は除外相当で —</p>
+            </div>
+          </div>
+          <button type="button" class="pr-eff-header__close" aria-label="閉じる" @click="effTrendVisible = false">
+            <el-icon :size="16"><Close /></el-icon>
+          </button>
+        </div>
+      </template>
+
+      <div class="pr-eff-body" v-loading="effTrendLoading">
+        <div class="pr-eff-filters">
+          <div class="pr-eff-filters__range">
+            <span class="pr-eff-filters__label">期間</span>
+            <el-date-picker
+              v-model="effTrendStart"
+              type="month"
+              value-format="YYYY-MM"
+              format="YYYY年M月"
+              size="small"
+              class="pr-eff-month"
+              :clearable="false"
+            />
+            <span class="pr-eff-filters__tilde">〜</span>
+            <el-date-picker
+              v-model="effTrendEnd"
+              type="month"
+              value-format="YYYY-MM"
+              format="YYYY年M月"
+              size="small"
+              class="pr-eff-month"
+              :clearable="false"
+            />
+            <el-button size="small" type="primary" round :loading="effTrendLoading" @click="loadEfficiencyTrend">
+              表示更新
+            </el-button>
+          </div>
+          <div class="pr-eff-filters__procs">
+            <button
+              v-for="p in EFF_TREND_PROCESSES"
+              :key="p.cd"
+              type="button"
+              class="pr-eff-proc-chip"
+                  :class="[`pr-eff-proc-chip--${p.cd}`, { 'is-on': effTrendSelectedSet.has(p.cd) }]"
+              @click="toggleEffTrendProcess(p.cd)"
+            >
+              <i class="pr-eff-proc-chip__dot" />
+              {{ p.name }}
+            </button>
+          </div>
+        </div>
+
+        <div class="pr-eff-chart-card">
+          <div class="pr-eff-chart-card__meta">
+            <span>{{ effTrendMetaLabel }}</span>
+            <span class="pr-eff-chart-card__hint">クリックで工程の表示切替</span>
+          </div>
+          <div ref="effTrendChartRef" class="pr-eff-chart" />
+          <el-empty
+            v-if="!effTrendLoading && !effTrendData?.series?.length"
+            description="表示データがありません"
+            :image-size="72"
+          />
+        </div>
+
+        <div v-if="effTrendLatestCards.length" class="pr-eff-latest">
+          <div
+            v-for="card in effTrendLatestCards"
+            :key="card.cd"
+            class="pr-eff-latest__card"
+            :class="`pr-eff-latest__card--${card.cd}`"
+          >
+            <span class="pr-eff-latest__name">{{ card.name }}</span>
+            <strong class="pr-eff-latest__val">
+              {{ card.value == null ? '—' : card.value }}
+              <small v-if="card.value != null">本/時</small>
+            </strong>
+            <span class="pr-eff-latest__month">{{ card.monthLabel }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
     <el-dialog v-model="capacityVisible" title="工程能力パラメータ" width="880px" class="pr-dialog">
       <el-table :data="capacityRows" border size="small">
         <el-table-column prop="process_name" label="工程" width="90" />
@@ -1439,6 +1587,19 @@
             />
           </template>
         </el-table-column>
+        <el-table-column label="計画調整率%" width="100">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.plan_adjust_rate_pct"
+              :controls="false"
+              :min="0"
+              :max="999.99"
+              :precision="2"
+              size="small"
+              class="pr-num"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="日定時H" width="90">
           <template #default="{ row }">
             <el-input-number v-model="row.daily_regular_hours" :controls="false" size="small" class="pr-num" />
@@ -1453,7 +1614,7 @@
 
     <el-dialog
       v-model="loadCapacityVisible"
-      width="820px"
+      width="920px"
       class="pr-dialog pr-dialog--load-cap"
       :show-close="false"
       destroy-on-close
@@ -1486,12 +1647,13 @@
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--shift">稼働直</span>
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--wd">稼働日</span>
           <span class="pr-lcap-legend__chip pr-lcap-legend__chip--util">稼働率 %</span>
+          <span class="pr-lcap-legend__chip pr-lcap-legend__chip--adj">計画調整率 %</span>
         </div>
 
         <div class="pr-lcap-formula">
           <span>定時H = 設備×直×7.6×稼働日×稼働率／人員=人数×7.6×稼働日×稼働率</span>
           <span class="pr-lcap-formula__dot">·</span>
-          <span>設備稼働率 = 所要H÷(設備×暦日×24)×100（検査除外）</span>
+          <span>計画(千本) = 元計画 × 計画調整率%</span>
           <span class="pr-lcap-formula__dot">·</span>
           <span>所要H = 計画÷能率</span>
           <span class="pr-lcap-formula__dot">·</span>
@@ -1551,13 +1713,25 @@
                   class="pr-lcap-field__num"
                 />
               </label>
+              <label class="pr-lcap-field">
+                <span class="pr-lcap-field__label">計画調整率%</span>
+                <el-input-number
+                  v-model="row.plan_adjust_rate_pct"
+                  :controls="false"
+                  :min="0"
+                  :max="999.99"
+                  :precision="2"
+                  size="small"
+                  class="pr-lcap-field__num"
+                />
+              </label>
             </div>
           </div>
         </div>
 
         <p class="pr-lcap-tip">
           <el-icon :size="13"><QuestionFilled /></el-icon>
-          稼働日 0 = 対象月カレンダー。稼働率は工程別に保存し定時Hに反映（未設定時は96%）。保存後に再計算します。
+          稼働日 0 = 対象月カレンダー。計画調整率は計画(千本)=元計画×調整率%（未設定時は100%）。保存後に再計算します。
         </p>
       </div>
 
@@ -1609,6 +1783,27 @@
       <template #footer>
         <el-button @click="currInvDateDialogVisible = false">キャンセル</el-button>
         <el-button type="primary" :loading="currInvDateLoading" @click="applyCurrInventoryByDate">反映</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="fcPrevInvDateDialogVisible"
+      title="前月在庫の基準日"
+      width="420px"
+      class="pr-dialog"
+      destroy-on-close
+    >
+      <p class="pr-inv-date-dialog__hint">選択した日付の在庫を「前月在庫」に反映します。</p>
+      <el-date-picker
+        v-model="fcPrevInvDateDraft"
+        type="date"
+        value-format="YYYY-MM-DD"
+        placeholder="日付を選択"
+        style="width: 100%"
+      />
+      <template #footer>
+        <el-button @click="fcPrevInvDateDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" :loading="fcPrevInvDateLoading" @click="applyFcPrevInventoryByDate">反映</el-button>
       </template>
     </el-dialog>
 
@@ -1683,7 +1878,7 @@
                           ? '例：仕掛品在庫は前月比 +12.5 千本'
                           : commentDialogKind === 'load_plan'
                             ? '例：切断は負荷率 105%、残業対応を検討'
-                            : '例：切断は計画比 △12.5 千本、生産性 +3'
+                            : '例：切断は計画比 △12.5 千本、時間当たり能率 +3'
                     "
                   />
                 </div>
@@ -1788,6 +1983,7 @@ import * as echarts from 'echarts'
 import {
   downloadMeetingPptx,
   fetchCapacity,
+  fetchEfficiencyTrend,
   fetchMeeting,
   fetchSavedMonths,
   generateComments,
@@ -1799,7 +1995,9 @@ import {
   fetchInventoryByDate,
   type CapacityRow,
   type CommentGenerateKind,
+  type EfficiencyTrendData,
   type InventoryRow,
+  type InventorySection,
   type LoadPlanRow,
   type PerformanceRow,
   type ProductionReviewData,
@@ -1874,6 +2072,229 @@ const scrapRangeFrom = ref<string>('')
 const scrapRangeTo = ref<string>('')
 const scrapChartRef = ref<HTMLElement | null>(null)
 let scrapChart: echarts.ECharts | null = null
+
+const EFF_TREND_PROCESSES = [
+  { cd: 'cutting', name: '切断', color: '#2563eb' },
+  { cd: 'molding', name: '成型', color: '#7c3aed' },
+  { cd: 'plating', name: 'メッキ', color: '#0891b2' },
+  { cd: 'welding', name: '溶接', color: '#ea580c' },
+  { cd: 'inspection', name: '検査', color: '#059669' },
+] as const
+
+const EFF_TREND_COLOR: Record<string, string> = Object.fromEntries(
+  EFF_TREND_PROCESSES.map((p) => [p.cd, p.color]),
+)
+
+const effTrendVisible = ref(false)
+const effTrendLoading = ref(false)
+const effTrendStart = ref('')
+const effTrendEnd = ref('')
+const effTrendSelected = ref<string[]>(EFF_TREND_PROCESSES.map((p) => p.cd))
+const effTrendData = ref<EfficiencyTrendData | null>(null)
+const effTrendChartRef = ref<HTMLElement | null>(null)
+let effTrendChart: echarts.ECharts | null = null
+
+const effTrendSelectedSet = computed(() => new Set(effTrendSelected.value))
+
+const effTrendMetaLabel = computed(() => {
+  const d = effTrendData.value
+  if (!d?.months?.length) return '期間を選択して表示更新'
+  return `${d.month_labels[0] ?? d.start_month} 〜 ${d.month_labels[d.month_labels.length - 1] ?? d.end_month}`
+})
+
+const effTrendLatestCards = computed(() => {
+  const d = effTrendData.value
+  if (!d?.series?.length) return []
+  const lastIdx = d.months.length - 1
+  const monthLabel = d.month_labels[lastIdx] || d.months[lastIdx] || ''
+  const selected = effTrendSelectedSet.value
+  return d.series
+    .filter((s) => selected.has(s.process_cd))
+    .map((s) => ({
+      cd: s.process_cd,
+      name: s.process_name,
+      value: s.values[lastIdx] ?? null,
+      monthLabel,
+    }))
+})
+
+function shiftYm(ym: string, delta: number): string {
+  const [ys, ms] = ym.split('-')
+  const y = Number(ys)
+  const m = Number(ms)
+  if (!y || !m) return ym
+  const idx = y * 12 + (m - 1) + delta
+  const ny = Math.floor(idx / 12)
+  const nm = (idx % 12) + 1
+  return `${ny}-${String(nm).padStart(2, '0')}`
+}
+
+function defaultEffTrendRange() {
+  const perf = payload.value?.part01?.performance as { month?: string } | undefined
+  const end =
+    perf?.month && /^\d{4}-\d{2}$/.test(perf.month)
+      ? perf.month
+      : targetMonth.value
+        ? shiftYm(targetMonth.value, -1)
+        : ''
+  if (!end) {
+    const now = new Date()
+    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    effTrendEnd.value = cur
+    effTrendStart.value = shiftYm(cur, -11)
+    return
+  }
+  effTrendEnd.value = end
+  effTrendStart.value = shiftYm(end, -11)
+}
+
+function toggleEffTrendProcess(cd: string) {
+  const cur = [...effTrendSelected.value]
+  const idx = cur.indexOf(cd)
+  if (idx >= 0) {
+    if (cur.length <= 1) return
+    cur.splice(idx, 1)
+  } else {
+    cur.push(cd)
+  }
+  effTrendSelected.value = cur
+  renderEffTrendChart()
+}
+
+function disposeEffTrendChart() {
+  effTrendChart?.dispose()
+  effTrendChart = null
+}
+
+function onEffTrendClosed() {
+  disposeEffTrendChart()
+}
+
+function renderEffTrendChart() {
+  const el = effTrendChartRef.value
+  const d = effTrendData.value
+  if (!el || !d?.months?.length) {
+    disposeEffTrendChart()
+    return
+  }
+  if (!effTrendChart) {
+    effTrendChart = echarts.init(el)
+  }
+  const selected = effTrendSelectedSet.value
+  const series = d.series
+    .filter((s) => selected.has(s.process_cd))
+    .map((s) => ({
+      name: s.process_name,
+      type: 'line' as const,
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 8,
+      showSymbol: true,
+      connectNulls: false,
+      data: s.values.map((v) => (v == null ? null : Number(v))),
+      label: {
+        show: true,
+        position: 'top' as const,
+        distance: 6,
+        fontSize: 11,
+        fontWeight: 700 as const,
+        color: EFF_TREND_COLOR[s.process_cd] || '#334155',
+        formatter: (params: { value?: number | null }) =>
+          params.value == null || Number.isNaN(Number(params.value)) ? '' : String(params.value),
+      },
+      lineStyle: { width: 3, color: EFF_TREND_COLOR[s.process_cd] || '#64748b' },
+      itemStyle: {
+        color: EFF_TREND_COLOR[s.process_cd] || '#64748b',
+        borderWidth: 2,
+        borderColor: '#fff',
+      },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: `${EFF_TREND_COLOR[s.process_cd] || '#64748b'}33` },
+          { offset: 1, color: `${EFF_TREND_COLOR[s.process_cd] || '#64748b'}05` },
+        ]),
+      },
+      emphasis: {
+        focus: 'series' as const,
+        label: { show: true, fontSize: 12, fontWeight: 800 as const },
+      },
+    }))
+
+  effTrendChart.setOption(
+    {
+      color: EFF_TREND_PROCESSES.map((p) => p.color),
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderWidth: 0,
+        padding: [10, 14],
+        textStyle: { color: '#f8fafc', fontSize: 12 },
+        valueFormatter: (v: unknown) => (v == null || Number.isNaN(Number(v)) ? '—' : `${v} 本/時`),
+      },
+      legend: {
+        top: 4,
+        right: 8,
+        icon: 'roundRect',
+        itemWidth: 12,
+        itemHeight: 8,
+        textStyle: { color: '#64748b', fontWeight: 700, fontSize: 11 },
+      },
+      grid: { left: 48, right: 24, top: 48, bottom: 36 },
+      xAxis: {
+        type: 'category',
+        data: d.month_labels.map((lb, i) => lb.replace(/年/, '/').replace(/月/, '') || d.months[i]),
+        boundaryGap: false,
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
+        axisLabel: { color: '#64748b', fontWeight: 600, fontSize: 11 },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        name: '本/時',
+        nameTextStyle: { color: '#94a3b8', fontSize: 11, padding: [0, 0, 0, 8] },
+        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.25)', type: 'dashed' } },
+        axisLabel: { color: '#64748b', fontWeight: 600 },
+      },
+      series,
+    },
+    true,
+  )
+  effTrendChart.resize()
+}
+
+async function loadEfficiencyTrend() {
+  if (!effTrendStart.value || !effTrendEnd.value) {
+    ElMessage.warning('開始月と終了月を指定してください')
+    return
+  }
+  if (effTrendStart.value > effTrendEnd.value) {
+    ElMessage.warning('終了月は開始月以降を指定してください')
+    return
+  }
+  effTrendLoading.value = true
+  try {
+    const res = await fetchEfficiencyTrend({
+      start_month: effTrendStart.value,
+      end_month: effTrendEnd.value,
+    })
+    effTrendData.value = res.data
+    await nextTick()
+    renderEffTrendChart()
+  } catch {
+    ElMessage.error('時間当たり能率推移の取得に失敗しました')
+  } finally {
+    effTrendLoading.value = false
+  }
+}
+
+async function openEfficiencyTrendDialog() {
+  defaultEffTrendRange()
+  effTrendSelected.value = EFF_TREND_PROCESSES.map((p) => p.cd)
+  effTrendVisible.value = true
+  await nextTick()
+  await loadEfficiencyTrend()
+}
 
 function scrapMonthKey(m: { year: number; month: number }): string {
   return `${m.year}-${String(m.month).padStart(2, '0')}`
@@ -2024,6 +2445,7 @@ function computeLoadPlanMeta(rows: LoadPlanRow[]) {
 
 const LOAD_PLAN_HOURS_PER_SHIFT = 7.6
 const LOAD_PLAN_DEFAULT_UTILIZATION_PCT = 96
+const LOAD_PLAN_DEFAULT_ADJUST_PCT = 100
 const LOAD_PLAN_MAX_HOURS_PER_DAY = 24
 
 type LoadPlanPart = 'part02' | 'part03'
@@ -2048,6 +2470,13 @@ function normalizeUtilizationRatePct(value: unknown): number {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return LOAD_PLAN_DEFAULT_UTILIZATION_PCT
   if (n > 100) return 100
+  return Math.round(n * 100) / 100
+}
+
+function normalizePlanAdjustRatePct(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return LOAD_PLAN_DEFAULT_ADJUST_PCT
+  if (n > 999.99) return 999.99
   return Math.round(n * 100) / 100
 }
 
@@ -2087,6 +2516,7 @@ function recomputeLoadPlanRow(row: LoadPlanRow, part: LoadPlanPart) {
 
   const utilPct = normalizeUtilizationRatePct(row.utilization_rate_pct)
   row.utilization_rate_pct = utilPct
+  row.plan_adjust_rate_pct = normalizePlanAdjustRatePct(row.plan_adjust_rate_pct)
   const dailyReg = Math.round(calcLoadDailyRegularHours(equipment, row.shift_label || '', utilPct))
   row.regular_hours = wd > 0 ? Math.round(dailyReg * wd) : 0
 
@@ -2150,7 +2580,67 @@ function commitLoadPlanEdit() {
 }
 
 function isForecastInvEditable(row: InventoryRow): boolean {
-  return !row.children?.length
+  return !(row.children && row.children.length) && !INV_PARENT_KEYS.has(row.key)
+}
+
+const fcInvEditKey = ref<string | null>(null)
+const fcInvEditDraft = ref<number | null>(null)
+
+function isFcInvEditing(key: string) {
+  return fcInvEditKey.value === key
+}
+
+function startFcInvEdit(row: InventoryRow) {
+  if (!isForecastInvEditable(row)) return
+  cancelInvEdit()
+  fcInvEditKey.value = row.key
+  fcInvEditDraft.value = Number(row.curr_inventory_th ?? 0)
+  nextTick(() => {
+    const el = document.querySelector('.pr-inv-edit-input--fc') as HTMLInputElement | null
+    el?.focus()
+    el?.select()
+  })
+}
+
+function cancelFcInvEdit() {
+  fcInvEditKey.value = null
+  fcInvEditDraft.value = null
+}
+
+function findFcInvRowByKey(key: string): InventoryRow | null {
+  const rows = payload.value?.part02?.inventory_forecast?.rows || []
+  for (const row of rows) {
+    if (row.key === key) return row
+    const child = row.children?.find((c) => c.key === key)
+    if (child) return child
+  }
+  return null
+}
+
+function findFcInvParentOf(key: string): InventoryRow | null {
+  const rows = payload.value?.part02?.inventory_forecast?.rows || []
+  return rows.find((r) => r.children?.some((c) => c.key === key)) || null
+}
+
+function commitFcInvEdit() {
+  const inv = payload.value?.part02?.inventory_forecast
+  if (!fcInvEditKey.value || !inv) {
+    cancelFcInvEdit()
+    return
+  }
+  const key = fcInvEditKey.value
+  const row = findFcInvRowByKey(key)
+  if (row) {
+    const n = Number(fcInvEditDraft.value)
+    row.curr_inventory_th = Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
+    recomputeInvDerived(row, inv)
+    const parent = findFcInvParentOf(key)
+    if (parent) {
+      refreshInvParentFromChildren(parent, inv)
+    }
+    refreshWipTotalFromProcesses(inv)
+  }
+  cancelFcInvEdit()
 }
 
 const part02LoadCommentsDisplay = computed(() =>
@@ -2639,14 +3129,42 @@ const invEditDraft = ref<number | null>(null)
 const currInvDateDialogVisible = ref(false)
 const currInvDateDraft = ref<string>('')
 const currInvDateLoading = ref(false)
+const fcPrevInvDateDialogVisible = ref(false)
+const fcPrevInvDateDraft = ref<string>('')
+const fcPrevInvDateLoading = ref(false)
 
-const currInventoryHeaderLabel = computed(() => {
-  const asOf = payload.value?.part01?.inventory?.curr_inventory_as_of
-  if (!asOf) return '当月在庫(千本)'
+function formatInvAsOfHeader(prefix: string, asOf?: string | null) {
+  if (!asOf) return `${prefix}(千本)`
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(asOf)
-  if (!m) return `当月在庫 ${asOf}(千本)`
-  return `当月在庫 ${Number(m[2])}/${Number(m[3])}(千本)`
-})
+  if (!m) return `${prefix} ${asOf}(千本)`
+  return `${prefix} ${Number(m[2])}/${Number(m[3])}(千本)`
+}
+
+const currInventoryHeaderLabel = computed(() =>
+  formatInvAsOfHeader('当月在庫', payload.value?.part01?.inventory?.curr_inventory_as_of),
+)
+
+const fcPrevInventoryHeaderLabel = computed(() =>
+  formatInvAsOfHeader('前月在庫', payload.value?.part02?.inventory_forecast?.prev_inventory_as_of),
+)
+
+function defaultInventoryMonthEndDate(inv: InventorySection): string {
+  const label = inv.inventory_month_label || ''
+  const lm = /(\d{4})年(\d{1,2})月/.exec(label)
+  if (lm) {
+    const yy = Number(lm[1])
+    const mm = Number(lm[2])
+    const last = new Date(yy, mm, 0)
+    return `${yy}-${String(mm).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
+  }
+  const y = inv.curr_forecast_year
+  const m = inv.curr_forecast_month
+  if (y && m) {
+    const d = new Date(Number(y), Number(m) - 1, 0)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  return ''
+}
 
 function openCurrInvDateDialog() {
   const inv = payload.value?.part01?.inventory
@@ -2654,25 +3172,59 @@ function openCurrInvDateDialog() {
     ElMessage.warning('在庫データがありません')
     return
   }
-  currInvDateDraft.value = inv.curr_inventory_as_of || ''
-  if (!currInvDateDraft.value) {
-    const y = inv.curr_forecast_year
-    const m = inv.curr_forecast_month
-    // 在庫月は内示月の前月＝inventory 対象月。タイトルの inventory_month_label から推定できない場合は今日
+  currInvDateDraft.value = inv.curr_inventory_as_of || defaultInventoryMonthEndDate(inv)
+  currInvDateDialogVisible.value = true
+}
+
+function openFcPrevInvDateDialog() {
+  const inv = payload.value?.part02?.inventory_forecast
+  if (!inv) {
+    ElMessage.warning('在庫予測データがありません')
+    return
+  }
+  // 前月在庫のデフォルトは在庫月（inventory_month_label）の前月末
+  fcPrevInvDateDraft.value = inv.prev_inventory_as_of || ''
+  if (!fcPrevInvDateDraft.value) {
     const label = inv.inventory_month_label || ''
     const lm = /(\d{4})年(\d{1,2})月/.exec(label)
     if (lm) {
-      const yy = Number(lm[1])
-      const mm = Number(lm[2])
-      const last = new Date(yy, mm, 0)
-      currInvDateDraft.value = `${yy}-${String(mm).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
-    } else if (y && m) {
-      // fallback: 内示前月の末日
-      const d = new Date(Number(y), Number(m) - 1, 0)
-      currInvDateDraft.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const d = new Date(Number(lm[1]), Number(lm[2]) - 1, 0)
+      fcPrevInvDateDraft.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    } else {
+      const end = defaultInventoryMonthEndDate(inv)
+      if (end) {
+        const [yy, mm] = end.split('-').map(Number)
+        const d = new Date(yy, mm - 1, 0)
+        fcPrevInvDateDraft.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
     }
   }
-  currInvDateDialogVisible.value = true
+  fcPrevInvDateDialogVisible.value = true
+}
+
+async function applyInventoryQtyByDate(
+  inv: InventorySection,
+  dateStr: string,
+  field: 'prev_inventory_th' | 'curr_inventory_th',
+) {
+  const res = await fetchInventoryByDate(dateStr)
+  const qty = res.data?.quantities_th || {}
+  for (const row of inv.rows) {
+    if (row.children?.length) {
+      for (const child of row.children) {
+        if (qty[child.key] != null) {
+          child[field] = Math.round(Number(qty[child.key]) * 10) / 10
+          recomputeInvDerived(child, inv)
+        }
+      }
+      refreshInvParentFromChildren(row, inv)
+    } else if (row.key !== 'wip_total' && qty[row.key] != null) {
+      row[field] = Math.round(Number(qty[row.key]) * 10) / 10
+      recomputeInvDerived(row, inv)
+    }
+  }
+  refreshWipTotalFromProcesses(inv)
+  return res
 }
 
 async function applyCurrInventoryByDate() {
@@ -2685,23 +3237,7 @@ async function applyCurrInventoryByDate() {
   }
   currInvDateLoading.value = true
   try {
-    const res = await fetchInventoryByDate(dateStr)
-    const qty = res.data?.quantities_th || {}
-    for (const row of inv.rows) {
-      if (row.children?.length) {
-        for (const child of row.children) {
-          if (qty[child.key] != null) {
-            child.curr_inventory_th = Math.round(Number(qty[child.key]) * 10) / 10
-            recomputeInvDerived(child)
-          }
-        }
-        refreshInvParentFromChildren(row)
-      } else if (row.key !== 'wip_total' && qty[row.key] != null) {
-        row.curr_inventory_th = Math.round(Number(qty[row.key]) * 10) / 10
-        recomputeInvDerived(row)
-      }
-    }
-    refreshWipTotalFromProcesses()
+    const res = await applyInventoryQtyByDate(inv, dateStr, 'curr_inventory_th')
     inv.curr_inventory_as_of = res.data?.date || dateStr
     refreshInventoryProductLevel()
     currInvDateDialogVisible.value = false
@@ -2710,6 +3246,27 @@ async function applyCurrInventoryByDate() {
     ElMessage.error((e as Error)?.message || '在庫の取得に失敗しました')
   } finally {
     currInvDateLoading.value = false
+  }
+}
+
+async function applyFcPrevInventoryByDate() {
+  const inv = payload.value?.part02?.inventory_forecast
+  if (!inv?.rows) return
+  const dateStr = (fcPrevInvDateDraft.value || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    ElMessage.warning('日付を選択してください')
+    return
+  }
+  fcPrevInvDateLoading.value = true
+  try {
+    const res = await applyInventoryQtyByDate(inv, dateStr, 'prev_inventory_th')
+    inv.prev_inventory_as_of = res.data?.date || dateStr
+    fcPrevInvDateDialogVisible.value = false
+    ElMessage.success(`${res.data?.date_label || dateStr} の在庫を前月在庫に反映しました`)
+  } catch (e) {
+    ElMessage.error((e as Error)?.message || '在庫の取得に失敗しました')
+  } finally {
+    fcPrevInvDateLoading.value = false
   }
 }
 
@@ -2723,10 +3280,11 @@ function isInvEditing(key: string, field: InvEditField) {
 
 function startInvEdit(row: InventoryRow, field: InvEditField) {
   if (!isInvEditable(row)) return
+  cancelFcInvEdit()
   invEditCell.value = { key: row.key, field }
   invEditDraft.value = Number(row[field] ?? 0)
   nextTick(() => {
-    const el = document.querySelector('.pr-inv-edit-input') as HTMLInputElement | null
+    const el = document.querySelector('.pr-inv-edit-input:not(.pr-inv-edit-input--fc)') as HTMLInputElement | null
     el?.focus()
     el?.select()
   })
@@ -2752,8 +3310,8 @@ function findInvParentOf(key: string): InventoryRow | null {
   return rows.find((r) => r.children?.some((c) => c.key === key)) || null
 }
 
-function recomputeInvDerived(row: InventoryRow) {
-  const inv = payload.value?.part01?.inventory
+function recomputeInvDerived(row: InventoryRow, invSection?: InventorySection | null) {
+  const inv = invSection ?? payload.value?.part01?.inventory
   if (!inv) return
   const prevF = Number(row.prev_forecast_th ?? inv.prev_forecast_th) || 0
   const currF = Number(row.curr_forecast_th ?? inv.curr_forecast_th) || 0
@@ -2776,7 +3334,7 @@ function recomputeInvDerived(row: InventoryRow) {
   row.delta_th = Math.round((row.curr_inventory_th - row.prev_inventory_th) * 10) / 10
 }
 
-function refreshInvParentFromChildren(parent: InventoryRow) {
+function refreshInvParentFromChildren(parent: InventoryRow, invSection?: InventorySection | null) {
   if (!parent.children?.length) return
   parent.prev_inventory_th =
     Math.round(parent.children.reduce((s, r) => s + Number(r.prev_inventory_th || 0), 0) * 10) / 10
@@ -2790,11 +3348,11 @@ function refreshInvParentFromChildren(parent: InventoryRow) {
     Math.round(parent.children.reduce((s, r) => s + Number(r.prev_forecast_adj_th || 0), 0) * 10) / 10
   parent.curr_forecast_adj_th =
     Math.round(parent.children.reduce((s, r) => s + Number(r.curr_forecast_adj_th || 0), 0) * 10) / 10
-  recomputeInvDerived(parent)
+  recomputeInvDerived(parent, invSection)
 }
 
-function refreshWipTotalFromProcesses() {
-  const inv = payload.value?.part01?.inventory
+function refreshWipTotalFromProcesses(invSection?: InventorySection | null) {
+  const inv = invSection ?? payload.value?.part01?.inventory
   if (!inv?.rows) return
   const tops = inv.rows.filter((r) => WIP_TOP_KEYS.has(r.key))
   const wip = inv.rows.find((r) => r.key === 'wip_total')
@@ -2808,7 +3366,7 @@ function refreshWipTotalFromProcesses() {
   wip.curr_forecast_th = Number(inv.curr_forecast_th) || 0
   wip.prev_forecast_adj_th = Number(inv.prev_forecast_adj_th ?? inv.prev_forecast_th) || 0
   wip.curr_forecast_adj_th = Number(inv.curr_forecast_adj_th ?? inv.curr_forecast_th) || 0
-  recomputeInvDerived(wip)
+  recomputeInvDerived(wip, inv)
 }
 
 function commitInvEdit() {
@@ -3125,6 +3683,7 @@ function scheduleScrapChart() {
 
 function onWindowResize() {
   scrapChart?.resize()
+  effTrendChart?.resize()
 }
 
 async function loadSavedList() {
@@ -3223,6 +3782,7 @@ async function openCapacityDialog() {
     capacityRows.value = (res.data || []).map((r) => ({
       ...r,
       utilization_rate_pct: normalizeUtilizationRatePct(r.utilization_rate_pct),
+      plan_adjust_rate_pct: normalizePlanAdjustRatePct(r.plan_adjust_rate_pct),
     }))
   } catch {
     ElMessage.error('工程能力の読込に失敗しました')
@@ -3256,6 +3816,7 @@ function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
         ...saved,
         working_days: Number(saved.working_days) > 0 ? Number(saved.working_days) : monthWd,
         utilization_rate_pct: normalizeUtilizationRatePct(saved.utilization_rate_pct),
+        plan_adjust_rate_pct: normalizePlanAdjustRatePct(saved.plan_adjust_rate_pct),
       }
     }
     const fromRow = payloadByCd[cd]
@@ -3267,6 +3828,7 @@ function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
       shift_label: fromRow?.shift_label || '',
       working_days: Number(fromRow?.working_days) || monthWd,
       utilization_rate_pct: normalizeUtilizationRatePct(fromRow?.utilization_rate_pct),
+      plan_adjust_rate_pct: normalizePlanAdjustRatePct(fromRow?.plan_adjust_rate_pct),
       daily_regular_hours: 8,
       sort_order: idx + 1,
     }
@@ -3407,6 +3969,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
   disposeScrapChart()
+  disposeEffTrendChart()
 })
 
 watch(
@@ -3503,52 +4066,321 @@ watch(
 .pr-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px 18px;
+  gap: 16px 20px;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-radius: 16px;
+  padding: 14px 18px 14px 16px;
+  border-radius: 18px;
   margin-bottom: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 55%, rgba(239, 246, 255, 0.9) 100%);
+  border: 1px solid rgba(191, 219, 254, 0.55);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 -1px 0 rgb(148 163 184 / 8%) inset,
+    0 10px 28px rgb(15 23 42 / 8%),
+    0 2px 6px rgb(37 99 235 / 6%);
+  overflow: hidden;
+}
+.pr-toolbar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #3b82f6, #0ea5e9 45%, #6366f1);
+  box-shadow: 2px 0 10px rgb(59 130 246 / 25%);
 }
 
 .pr-brand {
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 .pr-brand__icon {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 48%, #1d4ed8 100%);
   color: #fff;
-  box-shadow: 0 8px 20px rgb(59 130 246 / 35%);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 45%) inset,
+    0 8px 18px rgb(37 99 235 / 38%),
+    0 2px 4px rgb(30 64 175 / 25%);
+  flex-shrink: 0;
+}
+.pr-brand__icon::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 13px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  pointer-events: none;
+}
+.pr-brand__text {
+  min-width: 0;
 }
 .pr-brand h1 {
   margin: 0;
   font-size: 19px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: #0f172a;
+  line-height: 1.2;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 80%);
 }
 .pr-brand p {
-  margin: 3px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 0;
   font-size: 12px;
+  font-weight: 600;
   color: #64748b;
+  line-height: 1.2;
+}
+.pr-brand__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eff6ff, #dbeafe);
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: 0 1px 2px rgb(37 99 235 / 10%);
+}
+.pr-brand__sep {
+  color: #cbd5e1;
+  font-weight: 400;
 }
 
-.pr-controls,
+.pr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+.pr-controls__panel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 95%), rgb(248 250 252 / 92%));
+  border: 1px solid rgb(226 232 240 / 95%);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 4px 12px rgb(15 23 42 / 6%);
+}
+.pr-month {
+  width: 158px;
+}
+.pr-month :deep(.el-input__wrapper) {
+  min-height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow:
+    0 0 0 1px #cbd5e1 inset,
+    0 2px 4px rgb(15 23 42 / 4%) !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.pr-month :deep(.el-input__wrapper:hover),
+.pr-month :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #60a5fa inset,
+    0 0 0 3px rgb(59 130 246 / 15%),
+    0 2px 6px rgb(37 99 235 / 10%) !important;
+}
+.pr-month :deep(.el-input__inner) {
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  border: 1px solid transparent;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 35%) inset,
+    0 3px 8px rgb(15 23 42 / 10%);
+}
+.pr-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 45%);
+}
+.pr-status--draft {
+  background: linear-gradient(180deg, #64748b, #475569);
+  color: #fff;
+  border-color: #334155;
+}
+.pr-status--draft .pr-status__dot {
+  background: #fbbf24;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 25%), 0 0 8px rgb(251 191 36 / 70%);
+}
+.pr-status--final {
+  background: linear-gradient(180deg, #34d399, #059669);
+  color: #fff;
+  border-color: #047857;
+}
+.pr-status--final .pr-status__dot {
+  background: #ecfdf5;
+}
+.pr-status--live {
+  background: linear-gradient(180deg, #eff6ff, #dbeafe);
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 80%) inset,
+    0 3px 8px rgb(37 99 235 / 12%);
+}
+.pr-status--live .pr-status__dot {
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgb(219 234 254), 0 0 8px rgb(59 130 246 / 55%);
+}
+.pr-status--saved {
+  background: linear-gradient(180deg, #fff7ed, #ffedd5);
+  color: #c2410c;
+  border-color: #fdba74;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 80%) inset,
+    0 3px 8px rgb(234 88 12 / 12%);
+}
+.pr-status--saved .pr-status__dot {
+  background: #f97316;
+}
+
 .pr-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
 }
-.pr-month {
-  width: 150px;
+.pr-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.18s ease,
+    background 0.18s ease;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 40%) inset,
+    0 4px 10px rgb(15 23 42 / 10%);
+}
+.pr-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+.pr-action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 25%) inset,
+    0 2px 4px rgb(15 23 42 / 12%);
+}
+.pr-action-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.15);
+}
+.pr-action-btn .el-icon {
+  font-size: 14px;
+}
+.pr-action-btn--ghost {
+  background: linear-gradient(180deg, #ffffff, #f1f5f9);
+  color: #334155;
+  border-color: #cbd5e1;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 3px 8px rgb(15 23 42 / 7%);
+}
+.pr-action-btn--ghost:hover:not(:disabled) {
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 95%) inset,
+    0 6px 14px rgb(15 23 42 / 10%);
+}
+.pr-action-btn--refresh:hover:not(:disabled) {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: linear-gradient(180deg, #eff6ff, #e0f2fe);
+}
+.pr-action-btn--warn {
+  background: linear-gradient(180deg, #fb923c 0%, #f97316 45%, #ea580c 100%);
+  color: #fff;
+  border-color: #c2410c;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 35%) inset,
+    0 6px 14px rgb(234 88 12 / 32%),
+    0 2px 4px rgb(154 52 18 / 18%);
+}
+.pr-action-btn--warn:hover:not(:disabled) {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 40%) inset,
+    0 8px 18px rgb(234 88 12 / 40%);
+}
+.pr-action-btn--primary {
+  background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 42%, #2563eb 100%);
+  color: #fff;
+  border-color: #1d4ed8;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 35%) inset,
+    0 6px 14px rgb(37 99 235 / 34%),
+    0 2px 4px rgb(30 64 175 / 18%);
+}
+.pr-action-btn--primary:hover:not(:disabled) {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 40%) inset,
+    0 8px 18px rgb(37 99 235 / 42%);
+}
+.pr-action-btn--success {
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 42%, #16a34a 100%);
+  color: #fff;
+  border-color: #15803d;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 35%) inset,
+    0 6px 14px rgb(22 163 74 / 32%),
+    0 2px 4px rgb(21 128 61 / 18%);
+}
+.pr-action-btn--success:hover:not(:disabled) {
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 40%) inset,
+    0 8px 18px rgb(22 163 74 / 40%);
 }
 
 .pr-saved {
@@ -3721,6 +4553,29 @@ watch(
   background: #3b82f6;
   box-shadow: 0 0 0 3px rgb(59 130 246 / 25%);
 }
+.pr-eff-trend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #a5b4fc;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 80%) inset,
+    0 4px 12px rgb(79 70 229 / 16%);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.pr-eff-trend-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 90%) inset,
+    0 6px 16px rgb(79 70 229 / 22%);
+}
 .pr-card--orange {
   border-top: 3px solid #f97316;
   animation-delay: 0.06s;
@@ -3873,6 +4728,244 @@ watch(
   background: #f8fafc;
 }
 
+.pr-dialog--eff-trend :deep(.el-dialog) {
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 40%);
+  box-shadow: 0 24px 64px rgb(15 23 42 / 22%);
+}
+.pr-dialog--eff-trend :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 0;
+}
+.pr-dialog--eff-trend :deep(.el-dialog__body) {
+  padding: 0;
+}
+.pr-eff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 45%, #6366f1 100%);
+  color: #fff;
+}
+.pr-eff-header__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.pr-eff-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 16%);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 25%) inset;
+}
+.pr-eff-header__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.pr-eff-header__sub {
+  margin: 3px 0 0;
+  font-size: 11px;
+  opacity: 0.82;
+  font-weight: 600;
+}
+.pr-eff-header__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+  cursor: pointer;
+}
+.pr-eff-header__close:hover {
+  background: rgb(255 255 255 / 24%);
+}
+.pr-eff-body {
+  padding: 14px 16px 18px;
+  min-height: 420px;
+}
+.pr-eff-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pr-eff-filters__range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fff, #f8fafc);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 0 #fff inset, 0 4px 12px rgb(15 23 42 / 5%);
+}
+.pr-eff-filters__label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+.pr-eff-filters__tilde {
+  color: #94a3b8;
+  font-weight: 700;
+}
+.pr-eff-month {
+  width: 140px;
+}
+.pr-eff-filters__procs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pr-eff-proc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  opacity: 0.55;
+}
+.pr-eff-proc-chip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pr-eff-proc-chip.is-on {
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 10%);
+}
+.pr-eff-proc-chip--cutting.is-on {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #eff6ff, #dbeafe);
+}
+.pr-eff-proc-chip--molding.is-on {
+  color: #6d28d9;
+  border-color: #c4b5fd;
+  background: linear-gradient(180deg, #f5f3ff, #ede9fe);
+}
+.pr-eff-proc-chip--plating.is-on {
+  color: #0e7490;
+  border-color: #67e8f9;
+  background: linear-gradient(180deg, #ecfeff, #cffafe);
+}
+.pr-eff-proc-chip--welding.is-on {
+  color: #c2410c;
+  border-color: #fdba74;
+  background: linear-gradient(180deg, #fff7ed, #ffedd5);
+}
+.pr-eff-proc-chip--inspection.is-on {
+  color: #047857;
+  border-color: #6ee7b7;
+  background: linear-gradient(180deg, #ecfdf5, #d1fae5);
+}
+.pr-eff-chart-card {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
+  padding: 10px 10px 6px;
+  overflow: hidden;
+}
+.pr-eff-chart-card__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+}
+.pr-eff-chart-card__hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pr-eff-chart {
+  width: 100%;
+  height: 340px;
+}
+.pr-eff-latest {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.pr-eff-latest__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+}
+.pr-eff-latest__name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+}
+.pr-eff-latest__val {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.pr-eff-latest__val small {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.pr-eff-latest__month {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.pr-eff-latest__card--cutting {
+  border-left: 3px solid #2563eb;
+}
+.pr-eff-latest__card--molding {
+  border-left: 3px solid #7c3aed;
+}
+.pr-eff-latest__card--plating {
+  border-left: 3px solid #0891b2;
+}
+.pr-eff-latest__card--welding {
+  border-left: 3px solid #ea580c;
+}
+.pr-eff-latest__card--inspection {
+  border-left: 3px solid #059669;
+}
+
 .pr-lcap-header {
   display: flex;
   align-items: center;
@@ -3980,6 +5073,10 @@ watch(
   background: #ffedd5;
   color: #c2410c;
 }
+.pr-lcap-legend__chip--adj {
+  background: #e0e7ff;
+  color: #3730a3;
+}
 
 .pr-lcap-formula {
   display: flex;
@@ -4051,7 +5148,7 @@ watch(
 }
 .pr-lcap-card__grid {
   display: grid;
-  grid-template-columns: 1.3fr 0.8fr 0.65fr 0.7fr 0.75fr;
+  grid-template-columns: 1.2fr 0.7fr 0.55fr 0.6fr 0.7fr 0.85fr;
   gap: 6px;
   min-width: 0;
 }
@@ -6058,14 +7155,21 @@ watch(
     padding: 12px 12px 28px;
   }
   .pr-toolbar {
-    padding: 14px;
+    padding: 12px 12px 12px 14px;
   }
   .pr-brand h1 {
     font-size: 16px;
   }
-  .pr-actions,
-  .pr-controls {
+  .pr-controls,
+  .pr-actions {
     width: 100%;
+    justify-content: flex-start;
+  }
+  .pr-controls__panel {
+    width: 100%;
+  }
+  .pr-action-btn {
+    flex: 1 1 auto;
   }
   .pr-tabs :deep(.el-tabs__content) {
     padding: 6px 8px 16px;

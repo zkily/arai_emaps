@@ -602,11 +602,18 @@ def _merge_inspection_productivity_bucket(
     session_count: int = 1,
     completed_count: int = 0,
 ) -> None:
+    """生産性バケットへ加算。
+
+    実績数量が無い行は総合能率・生産合計・稼働時間に含めない
+   （実績なし日／行の時間で能率が歪まないようにする）。
+    """
+    if int(actual_qty or 0) <= 0:
+        return
     bucket["session_count"] = int(bucket.get("session_count") or 0) + session_count
     bucket["completed_session_count"] = int(bucket.get("completed_session_count") or 0) + completed_count
     bucket["sum_actual_qty"] = int(bucket.get("sum_actual_qty") or 0) + actual_qty
     bucket["sum_defect_qty"] = int(bucket.get("sum_defect_qty") or 0) + defect_qty
-    bucket["sum_net_production_sec"] = int(bucket.get("sum_net_production_sec") or 0) + net_sec
+    bucket["sum_net_production_sec"] = int(bucket.get("sum_net_production_sec") or 0) + max(0, int(net_sec or 0))
 
 
 def _finalize_inspection_productivity_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
@@ -8296,7 +8303,8 @@ async def get_inspection_productivity_analysis(
             net_sec=net_sec,
             completed_count=completed_inc,
         )
-        summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
+        if actual_qty > 0:
+            summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
 
         if day_key:
             if day_key not in daily_map:
@@ -10790,7 +10798,8 @@ async def get_welding_productivity_analysis(
             net_sec=net_sec,
             completed_count=completed_inc,
         )
-        summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
+        if actual_qty > 0:
+            summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
 
         if day_key:
             if day_key not in daily_map:

@@ -33,6 +33,7 @@ from app.modules import (
     machine_work_time_config,
     production_schedule,
     plan_baseline,
+    inventory_projection,
     outsourcing,
     material,
     material_data_generation,
@@ -388,6 +389,7 @@ app.include_router(excel_monitor.router, prefix="/api/excel-monitor", tags=["Exc
 app.include_router(machine_work_time_config.router, prefix="/api/machine-work-time-config", tags=["設備運行時間設定"])
 app.include_router(production_schedule.router, prefix="/api", tags=["生産状況・スケジュール"])
 app.include_router(plan_baseline.router, prefix="/api/plan-baseline", tags=["生産計画ベースライン"])
+app.include_router(inventory_projection.router, prefix="/api/inventory-projection", tags=["月末在庫予測"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI助手"])
 app.include_router(reports.router, prefix="/api/reports", tags=["レポート配信"])
 app.include_router(fin.router, prefix="/api/fin", tags=["FIN 経理・原価・人事"])
