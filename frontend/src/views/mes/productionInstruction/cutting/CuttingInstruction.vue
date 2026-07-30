@@ -10043,6 +10043,7 @@ async function issueChamferingInstructionSheet() {
       .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 11px; }
       .instruction-sheet-table td { font-size: 14px; }
       .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(4), .chamfering-sheet-table td:nth-child(11) { font-size: 14px; text-align: left; }
+      .chamfering-sheet-table td:nth-child(11) { color: #cc0000; }
       .forming-date-red { color: #990000; }
       .forming-date-light-red { color: #cc0000; }
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }

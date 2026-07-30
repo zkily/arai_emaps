@@ -21,6 +21,8 @@
     在庫(d) = 繰越(d) + 当工程生産(d) - 下流工程生産(d) + 在庫(d-1)
 倉庫のみ出荷（社内倉庫ルート製品の内示＝社内倉庫出荷）を差し引く。
 倉庫在庫行 = 社内倉庫在庫 + 検査在庫（外注倉庫は含めない。社内倉庫ルート製品のみ）。
+外注メッキ在庫（予測区間）:
+    繰越 + 外注溶接生産(実績→計画) + 成型次工程移動(外注メッキ) − 外注メッキ生産(実績→計画) + 前日在庫
 
 工程フローは製品ごとの product_route_steps を優先する（例）:
   成型の次 → 社内メッキ / 外注メッキ / 溶接 / 外注溶接 / 検査 …
@@ -726,6 +728,31 @@ def _warehouse_prev_plan_key(sequence: list[str]) -> Optional[str]:
     return None
 
 
+def _outsourced_plating_inventory_closed(
+    row: dict[str, Any],
+    sequence: list[str],
+    m_next: Optional[str],
+    overrides: dict[str, int],
+    prev_inv: dict[str, int],
+) -> int:
+    """外注メッキ在庫の閉形式。
+
+    繰越 + 外注溶接生産(実績/計画) + 成型次工程移動(外注メッキ)
+      − 外注メッキ生産(実績/計画) + 前日在庫
+    """
+    carry = _num(row, "outsourced_plating_carry_over") + _num(row, "pre_outsourcing_carry_over")
+    weld_in = 0
+    if "outsourced_welding" in sequence and "outsourced_plating" in sequence:
+        if sequence.index("outsourced_welding") < sequence.index("outsourced_plating"):
+            weld_in = int(overrides.get("outsourced_welding", 0) or 0)
+    mold_in = int(overrides.get("molding", 0) or 0) if m_next == "outsourced_plating" else 0
+    plate_out = int(overrides.get("outsourced_plating", 0) or 0)
+    prev_op = int(prev_inv.get("outsourced_plating", 0) or 0) + int(
+        prev_inv.get("pre_outsourcing", 0) or 0
+    )
+    return carry + weld_in + mold_in - plate_out + prev_op
+
+
 async def compute_projection(db: AsyncSession, year_month: str, base_date: date) -> dict[str, Any]:
     """月末在庫予測の全量計算（サマリ + 製品別明細）。"""
     year, month = parse_year_month(year_month)
@@ -934,6 +961,16 @@ async def compute_projection(db: AsyncSession, year_month: str, base_date: date)
                 ship = _num(row, "forecast_quantity") or forecast_by_date.get(ds, 0)
                 if ship:
                     updates["warehouse_inventory"] -= int(ship or 0)
+
+            # 外注メッキ在庫: 繰越+外注溶接+成型次工程移動(外注メッキ)−外注メッキ+前日在庫
+            if "outsourced_plating" in sequence_set:
+                op_inv = _outsourced_plating_inventory_closed(
+                    row, sequence, m_next, overrides, prev_inv
+                )
+                updates["outsourced_plating_inventory"] = op_inv
+                # グループ合算の二重計上を避ける（閉形式に集約）
+                if "pre_outsourcing" in sequence_set:
+                    updates["pre_outsourcing_inventory"] = 0
 
             inv_by_col: dict[str, int] = {}
             for c in all_inv_cols:
