@@ -338,6 +338,7 @@ export default {
     ERP_SHIPPING: 'Quản lý xuất hàng',
     ERP_SHIPPING_HOME: 'Trang chủ xuất hàng',
     ERP_SHIPPING_LIST: 'Tạo bảng cấu thành xuất hàng',
+    ERP_SHIPPING_PALLET_COUNT: 'Quản lý số pallet xuất hàng',
     ERP_SHIPPING_REPORT: 'Quản lý báo cáo xuất hàng',
     ERP_SHIPPING_OVERVIEW: 'Phát hành bảng kế hoạch xuất hàng',
     ERP_SHIPPING_CONFIRM: 'Danh sách xác nhận xuất hàng',

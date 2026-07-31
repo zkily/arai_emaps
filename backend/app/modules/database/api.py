@@ -3183,7 +3183,9 @@ async def update_production_summarys_plan(
     product_cd は末尾を '1' にそろえてから突合・集計する（末尾が 1 以外の計画も同一製品へ合算）。
     社内溶接 welding_plan も KT07 の schedule_details.planned_qty 合計のみ。
     続けて actual/plan から actual_plan を更新した後、ルート工程に応じて molding_actual_plan を
-    cutting/chamfering/plating/inspection 等の所属工程 plan 列へ反映する（KT01/KT02/KT05/KT09）。
+    cutting/chamfering/plating（KT01/KT02/KT05）の所属工程 plan 列へ反映する。
+    検査（KT09）・外注メッキ（KT06）・外注溶接（KT08）・外注倉庫（KT15/KT10）は
+    成型計画ではなく、当該ルートに属する行の内示数 forecast_quantity を各 plan 列に反映する。
     startDate（未指定時は当月月初 JST）～+5ヶ月のみ対象。それより前の月の計画列は変更しない。
     更新前に同期間の _plan / _actual_plan 列を 0 にクリアしてから再集計する（削除済み計画の残値防止）。
     """
@@ -3359,43 +3361,60 @@ async def update_production_summarys_plan(
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
-    # 検査工程（KT09）を持つルートのみ inspection_plan を molding_actual_plan で更新
+    # 検査・外注メッキ・外注溶接・外注倉庫：成型計画ではなく、当該工程ルートの内示数を plan に反映
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT09'
-            SET ps.inspection_plan = ps.molding_actual_plan
+            SET ps.inspection_plan = COALESCE(ps.forecast_quantity, 0)
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
-    # 外注メッキ工程（KT06）を持つルートのみ outsourced_plating_plan を molding_plan で更新
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT06'
-            SET ps.outsourced_plating_plan = ps.molding_plan
+            SET ps.outsourced_plating_plan = COALESCE(ps.forecast_quantity, 0)
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
-    # 外注溶接工程（KT08）を持つルートのみ outsourced_welding_plan を molding_plan で更新
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT08'
-            SET ps.outsourced_welding_plan = ps.molding_plan
+            SET ps.outsourced_welding_plan = COALESCE(ps.forecast_quantity, 0)
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
-    # 外注倉庫工程（KT15／KT10 は繰越・在庫と同様のマスタ差異）を持つルートのみ outsourced_warehouse_plan を molding_plan で更新
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd
               AND prs.process_cd IN ('KT15', 'KT10')
-            SET ps.outsourced_warehouse_plan = ps.molding_plan
+            SET ps.outsourced_warehouse_plan = COALESCE(ps.forecast_quantity, 0)
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
+    # 内示由来の plan 反映後に actual_plan を再計算（実績優先・計画で補完）
+    for actual_col, plan_col, target_col in (
+        ("inspection_actual", "inspection_plan", "inspection_actual_plan"),
+        ("outsourced_plating_actual", "outsourced_plating_plan", "outsourced_plating_actual_plan"),
+        ("outsourced_welding_actual", "outsourced_welding_plan", "outsourced_welding_actual_plan"),
+    ):
+        await db.execute(
+            text(
+                f"UPDATE production_summarys SET {target_col} = {actual_col} "
+                f"WHERE {actual_col} IS NOT NULL" + date_filter
+            ),
+            range_params,
+        )
+        await db.execute(
+            text(
+                f"UPDATE production_summarys SET {target_col} = {plan_col} "
+                f"WHERE ({target_col} IS NULL OR {target_col} = 0) AND {plan_col} IS NOT NULL" + date_filter
+            ),
+            range_params,
+        )
     # sw_machine が設定されている製品の行のみ sw_plan を molding_actual_plan で更新
     await db.execute(
         text("""

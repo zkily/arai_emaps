@@ -735,7 +735,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初（JST）～+5ヶ月の plan / actual_plan 列を先に 0 クリアしてから再集計します。それより前の月の計画データは変更しません。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan、検査(KT09)→inspection_plan。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初（JST）～+5ヶ月の plan / actual_plan 列を先に 0 クリアしてから再集計します。それより前の月の計画データは変更しません。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan。検査(KT09)・外注メッキ(KT06)・外注溶接(KT08)・外注倉庫(KT15/KT10)は成型計画ではなく、当該工程を持つルート行の内示数（forecast_quantity）を各 plan 列に反映します。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>

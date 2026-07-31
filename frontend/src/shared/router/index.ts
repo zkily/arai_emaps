@@ -229,6 +229,7 @@ const routes: RouteRecordRaw[] = [
       // ========== ERP - 出荷管理 (Shipping Management) ==========
       { path: 'erp/shipping', name: 'ShippingHome', component: () => import('@/views/erp/shipping/ShippingHome.vue'), meta: { title: '出荷管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/list', name: 'Shipping', component: () => import('@/views/erp/shipping/ShippingList.vue'), meta: { title: '出荷構成表管理', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/pallet-count', name: 'ShippingPalletCount', component: () => import('@/views/erp/shipping/ShippingPalletCount.vue'), meta: { title: '出荷パレット数管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/report', name: 'ShippingReport', component: () => import('@/views/erp/shipping/ShippingReportPage.vue'), meta: { title: '出荷報告書管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/overview', name: 'ShippingOverview', component: () => import('@/views/erp/shipping/ShippingOverview.vue'), meta: { title: '出荷予定表発行', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/confirm', name: 'ShippingListPage', component: () => import('@/views/erp/shipping/ShippingListPage.vue'), meta: { title: '出荷確認リスト', group: '出荷管理', requiresAuth: true } },

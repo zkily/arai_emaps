@@ -447,6 +447,7 @@ export default {
     ERP_SHIPPING: '出荷管理',
     ERP_SHIPPING_HOME: '出荷ホーム',
     ERP_SHIPPING_LIST: '出荷構成表管理',
+    ERP_SHIPPING_PALLET_COUNT: '出荷パレット数管理',
     ERP_SHIPPING_REPORT: '出荷報告書管理',
     ERP_SHIPPING_OVERVIEW: '出荷予定表発行',
     ERP_SHIPPING_CONFIRM: '出荷確認リスト',

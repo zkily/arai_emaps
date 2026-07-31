@@ -71,6 +71,13 @@ export interface ProjectionSummaryData {
     molding_next: Record<string, number>
     plating_next: Record<string, number>
   }
+  /** 在庫推移（前工程在庫起点。成型／メッキ／溶接／検査） */
+  inventory_trend_rows?: Array<{
+    key: string
+    label: string
+    daily: Record<string, number>
+    month_end: number
+  }>
 }
 
 export interface ProjectionDetailRow {

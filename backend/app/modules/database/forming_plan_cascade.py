@@ -94,12 +94,13 @@ def apply_molding_cascade_to_row(
 ) -> None:
     """
     按 update-plan 规则，以 molding_plan / molding_actual_plan 为基准更新 row 内各 *_plan。
-    plating / welding / inspection 保持 row 原值（来自 DB / APS）。
+    plating / welding 保持 row 原值（来自 DB / APS）。
+    検査・外注メッキ・外注溶接・外注倉庫は内示数（forecast_quantity）を用いる。
     """
     compute_actual_plans(row)
 
-    molding_plan = _num(row, "molding_plan")
     molding_actual_plan = _num(row, "molding_actual_plan")
+    forecast_qty = _num(row, "forecast_quantity")
 
     if KT_CUTTING in route_process_cds:
         row["cutting_plan"] = molding_actual_plan
@@ -107,12 +108,25 @@ def apply_molding_cascade_to_row(
         row["chamfering_plan"] = molding_actual_plan
     if has_sw_machine:
         row["sw_plan"] = molding_actual_plan
+    if KT_INSPECTION in route_process_cds:
+        row["inspection_plan"] = forecast_qty
     if KT_OUTSOURCED_PLATING in route_process_cds:
-        row["outsourced_plating_plan"] = molding_plan
+        row["outsourced_plating_plan"] = forecast_qty
     if KT_OUTSOURCED_WELDING in route_process_cds:
-        row["outsourced_welding_plan"] = molding_plan
+        row["outsourced_welding_plan"] = forecast_qty
     if route_process_cds & KT_OUTSOURCED_WAREHOUSE:
-        row["outsourced_warehouse_plan"] = molding_plan
+        row["outsourced_warehouse_plan"] = forecast_qty
+
+    # 内示由来 plan 変更後、actual_plan を再計算（実績優先・計画で補完）
+    if KT_INSPECTION in route_process_cds:
+        actual = _num(row, "inspection_actual")
+        row["inspection_actual_plan"] = actual if actual else _num(row, "inspection_plan")
+    if KT_OUTSOURCED_PLATING in route_process_cds:
+        actual = _num(row, "outsourced_plating_actual")
+        row["outsourced_plating_actual_plan"] = actual if actual else _num(row, "outsourced_plating_plan")
+    if KT_OUTSOURCED_WELDING in route_process_cds:
+        actual = _num(row, "outsourced_welding_actual")
+        row["outsourced_welding_actual_plan"] = actual if actual else _num(row, "outsourced_welding_plan")
 
 
 def molding_derived_plan_for_process(

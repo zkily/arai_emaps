@@ -5,35 +5,88 @@
       <div class="toolbar">
         <div class="toolbar-left">
           <span class="page-title">月末在庫予測</span>
-          <el-popover placement="bottom-start" :width="560" trigger="click">
+          <el-popover placement="bottom-start" :width="640" trigger="click">
             <template #reference>
               <button class="help-button" type="button" aria-label="計算ルールを表示">?</button>
             </template>
             <div class="help-content">
-              <div class="help-title">計算・表示ルール</div>
-              <p>
-                基準日以前は実績在庫、翌日以降は「繰越 + 生産数量 −
-                下流工程生産」で予測します（倉庫は出荷を差し引き）。
+              <div class="help-title">
+                <span class="help-title-icon">ƒ</span>
+                <span>計算・表示ルール</span>
+              </div>
+              <p class="help-intro">
+                基準日以前は実績在庫、翌日以降は下記の閉形式で予測します。生産数量は工程別の実績最終日以前は実績、翌日以降は計画（手動修正優先）です。当日より後の日付の実績は 0 として扱います。
+                手動計画があり次工程移動が複数分岐する工程では、直近 30
+                日の実績去向平均比（数量加重）で手動合計を各分岐へ配分します。
               </p>
-              <p>
-                社内メッキ在庫・検査在庫は、製品ルート上の前工程在庫の合計です。
-                倉庫在庫は社内倉庫在庫＋検査在庫です（外注倉庫は含めず、社内倉庫ルート製品のみ）。
-                予測区間の出庫は社内倉庫出荷（内示）のみ差し引きます。
-                外注メッキ在庫（予測）は「繰越＋外注溶接生産＋成型次工程移動（外注メッキ）−外注メッキ生産＋前日在庫」です。
-                社内倉庫出荷／外注倉庫出荷は、それぞれルートに社内倉庫／外注倉庫を持つ製品の内示合計です。
+              <div class="help-section help-section-inventory">
+                <div class="help-subtitle">
+                  <span class="help-subtitle-dot"></span>
+                  工程在庫（予測区間）
+                </div>
+                <ul class="help-formula-list">
+                <li>
+                  <strong>切断</strong> = 繰越 + 切断生産 − 次工程使用（成型計画） + 前日在庫
+                </li>
+                <li>
+                  <strong>成型</strong> = 繰越 + 成型生産 − 次工程使用（社内メッキ・外注メッキ・溶接・外注溶接・検査）
+                  + 前日在庫
+                </li>
+                <li>
+                  <strong>社内メッキ</strong> = 繰越 + 社内メッキ生産 − 次工程使用（溶接・検査） + 前日在庫
+                </li>
+                <li>
+                  <strong>外注メッキ</strong> = 繰越 + 外注メッキ生産 − 次工程使用（検査・外注検査） +
+                  前日在庫
+                </li>
+                <li>
+                  <strong>溶接</strong> = 繰越 + 溶接生産 − 次工程使用（検査・社内メッキ・外注メッキ） +
+                  前日在庫
+                </li>
+                <li>
+                  <strong>外注溶接</strong> = 繰越 + 外注溶接生産 − 次工程使用（外注メッキ） + 前日在庫
+                </li>
+                <li>
+                  <strong>検査</strong> = 繰越 + 検査生産 − 次工程使用（倉庫） + 前日在庫
+                </li>
+                <li>
+                  <strong>倉庫</strong> = 繰越（検査・倉庫） + 検査生産 − 社内倉庫出荷 + 前日在庫
+                </li>
+                </ul>
+                <p class="help-note">
+                  基準日以前の倉庫在庫は社内倉庫在庫＋検査在庫（外注倉庫は含めず、社内倉庫ルート製品のみ）です。社内倉庫出荷／外注倉庫出荷は、それぞれルートに社内倉庫／外注倉庫を持つ製品の内示合計です。
+                </p>
+              </div>
+              <div class="help-section help-section-trend">
+                <div class="help-subtitle">
+                  <span class="help-subtitle-dot"></span>
+                  在庫推移（予測区間・前工程在庫起点）
+                </div>
+                <ul class="help-formula-list">
+                <li>
+                  <strong>成型在庫</strong> = 繰越（前工程） + 切断生産 − 成型生産 + 前日在庫
+                </li>
+                <li>
+                  <strong>メッキ在庫</strong> = 繰越（前工程） + 成型の次工程移動（社内メッキ） +
+                  溶接の次工程移動（社内メッキ） − 社内メッキ生産 + 前日在庫
+                </li>
+                <li>
+                  <strong>溶接在庫</strong> = 繰越（前工程） + 成型の次工程移動（溶接） +
+                  社内メッキの次工程移動（溶接） − 溶接生産 + 前日在庫
+                </li>
+                <li>
+                  <strong>検査在庫</strong> = 繰越（前工程） + 社内メッキの次工程移動（検査） +
+                  外注メッキの次工程移動（検査） + 成型の次工程移動（検査） +
+                  溶接の次工程移動（検査） − 検査生産 + 前日在庫
+                </li>
+                </ul>
+              </div>
+              <p class="help-operation">
+                計画行はダブルクリックで修正できます。次工程移動／次工程使用／在庫推移の親行をクリックすると内訳を開閉します。
               </p>
-              <p>
-                生産数量は工程別の実績最終日以前は実績、翌日以降は計画（手動修正優先）を採用します。
-                当日より後の日付は、実績データがあっても実績 0 として扱います。
-              </p>
-              <p>
-                計画行はダブルクリックで修正できます。成型・社内／外注メッキの次工程移動、および成型の次工程使用は親行をクリックすると内訳を開閉します。
-              </p>
-              <div v-if="branchSummary" class="help-meta">{{ branchSummary }}</div>
-              <div v-if="cutoffSummary" class="help-meta">実績最終日: {{ cutoffSummary }}</div>
             </div>
           </el-popover>
-          <el-tag v-if="summary" size="small" type="info">
+          <el-tag v-if="summary" size="small" class="product-count-tag" effect="plain">
             対象製品 {{ summary.product_count }} 件
           </el-tag>
         </div>
@@ -61,18 +114,22 @@
       </div>
     </el-card>
 
-    <!-- KPI カード -->
+    <!-- KPI カード（検査は倉庫に含むため非表示） -->
     <div v-if="summary" class="kpi-row">
       <div
-        v-for="g in summary.groups"
+        v-for="g in kpiGroups"
         :key="g.key"
         class="kpi-card"
         :class="{ negative: g.month_end < 0 }"
         :style="{ '--group-color': GROUP_COLORS[g.key] || '#409eff' }"
         @click="openDetail(g)"
       >
+        <div class="kpi-glow"></div>
         <div class="kpi-accent"></div>
-        <div class="kpi-name">{{ g.name }}</div>
+        <div class="kpi-top">
+          <span class="kpi-dot"></span>
+          <div class="kpi-name">{{ g.name }}</div>
+        </div>
         <div class="kpi-value">
           {{ formatQty(g.month_end) }}
           <span class="kpi-unit">本</span>
@@ -86,28 +143,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 推移チャート -->
-    <el-card v-loading="loading" class="chart-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <div class="card-title-wrap">
-            <span class="card-title">工程別在庫推移（日別）</span>
-            <el-popover placement="bottom" :width="330" trigger="click">
-              <template #reference>
-                <button class="help-button small" type="button" aria-label="グラフ説明を表示">
-                  ?
-                </button>
-              </template>
-              実線は日別在庫、青い網掛け範囲は予測期間です。
-              <span v-if="summary">予測開始日: {{ summary.projection_start }}</span>
-            </el-popover>
-          </div>
-          <span class="header-chip">全工程</span>
-        </div>
-      </template>
-      <div ref="chartRef" class="chart-container"></div>
-    </el-card>
 
     <!-- 在庫マトリクス（日別 / 月別） -->
     <el-card v-loading="loading || monthlyLoading" class="matrix-card" shadow="never">
@@ -182,20 +217,32 @@
               <span v-else class="checkbox-placeholder"></span>
               <span
                 :class="{
-                  'process-header': row.metric === 'header',
-                  'process-metric': row.metric !== 'header' && row.key !== '__demand__',
+                  'process-header': row.metric === 'header' || row.metric === 'trend_parent',
+                  'process-metric':
+                    row.metric !== 'header' &&
+                    row.metric !== 'trend_parent' &&
+                    row.key !== '__demand__',
                   'process-link':
                     row.metric === 'header' ||
                     row.metric === 'next_usage_parent' ||
-                    row.metric === 'next_consume_parent',
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent',
                   'next-parent-label':
-                    row.metric === 'next_usage_parent' || row.metric === 'next_consume_parent',
+                    row.metric === 'next_usage_parent' ||
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent',
                   'next-child-label':
-                    row.metric === 'next_usage_child' || row.metric === 'next_consume_child',
+                    row.metric === 'next_usage_child' ||
+                    row.metric === 'next_consume_child' ||
+                    row.metric === 'trend_child',
                 }"
               >
                 <span
-                  v-if="row.metric === 'next_usage_parent' || row.metric === 'next_consume_parent'"
+                  v-if="
+                    row.metric === 'next_usage_parent' ||
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent'
+                  "
                   class="expand-icon"
                 >
                   {{ row.expanded ? '▼' : '▶' }}
@@ -210,18 +257,7 @@
             <span
               v-if="showsRowTotal(row)"
               class="row-total"
-              :class="{
-                negative: matrixRowTotal(row) < 0,
-                'metric-plan': row.metric === 'plan',
-                'metric-actual': row.metric === 'actual',
-                'metric-next':
-                  row.metric === 'next_usage' ||
-                  row.metric === 'next_usage_parent' ||
-                  row.metric === 'next_usage_child' ||
-                  row.metric === 'next_consume_parent' ||
-                  row.metric === 'next_consume_child' ||
-                  row.metric === 'outsourced_shipment',
-              }"
+              :class="matrixMetricClass(row, matrixRowTotal(row) < 0)"
             >
               {{ formatQty(matrixRowTotal(row)) }}
             </span>
@@ -240,20 +276,13 @@
           <template #default="{ row }">
             <span
               v-if="row.metric !== 'header'"
-              :class="{
-                projected: isProjected(ds) && row.metric === 'inventory',
-                negative: (row.daily[ds] ?? 0) < 0,
-                'metric-plan': row.metric === 'plan',
-                'metric-actual': row.metric === 'actual',
-                'metric-next':
-                  row.metric === 'next_usage' ||
-                  row.metric === 'next_usage_parent' ||
-                  row.metric === 'next_usage_child' ||
-                  row.metric === 'next_consume_parent' ||
-                  row.metric === 'next_consume_child' ||
-                  row.metric === 'outsourced_shipment',
-                'plan-overridden': row.metric === 'plan' && row.overrides?.[ds] != null,
-              }"
+              :class="[
+                matrixMetricClass(row, (row.daily[ds] ?? 0) < 0),
+                {
+                  projected: isProjected(ds) && isInventoryMetric(row),
+                  'plan-overridden': row.metric === 'plan' && row.overrides?.[ds] != null,
+                },
+              ]"
             >
               {{ formatQty(row.daily[ds] ?? 0) }}
             </span>
@@ -286,20 +315,32 @@
               <span v-else class="checkbox-placeholder"></span>
               <span
                 :class="{
-                  'process-header': row.metric === 'header',
-                  'process-metric': row.metric !== 'header' && row.key !== '__demand__',
+                  'process-header': row.metric === 'header' || row.metric === 'trend_parent',
+                  'process-metric':
+                    row.metric !== 'header' &&
+                    row.metric !== 'trend_parent' &&
+                    row.key !== '__demand__',
                   'process-link':
                     row.metric === 'header' ||
                     row.metric === 'next_usage_parent' ||
-                    row.metric === 'next_consume_parent',
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent',
                   'next-parent-label':
-                    row.metric === 'next_usage_parent' || row.metric === 'next_consume_parent',
+                    row.metric === 'next_usage_parent' ||
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent',
                   'next-child-label':
-                    row.metric === 'next_usage_child' || row.metric === 'next_consume_child',
+                    row.metric === 'next_usage_child' ||
+                    row.metric === 'next_consume_child' ||
+                    row.metric === 'trend_child',
                 }"
               >
                 <span
-                  v-if="row.metric === 'next_usage_parent' || row.metric === 'next_consume_parent'"
+                  v-if="
+                    row.metric === 'next_usage_parent' ||
+                    row.metric === 'next_consume_parent' ||
+                    row.metric === 'trend_parent'
+                  "
                   class="expand-icon"
                 >
                   {{ row.expanded ? '▼' : '▶' }}
@@ -314,18 +355,7 @@
             <span
               v-if="showsRowTotal(row)"
               class="row-total"
-              :class="{
-                negative: matrixRowTotal(row) < 0,
-                'metric-plan': row.metric === 'plan',
-                'metric-actual': row.metric === 'actual',
-                'metric-next':
-                  row.metric === 'next_usage' ||
-                  row.metric === 'next_usage_parent' ||
-                  row.metric === 'next_usage_child' ||
-                  row.metric === 'next_consume_parent' ||
-                  row.metric === 'next_consume_child' ||
-                  row.metric === 'outsourced_shipment',
-              }"
+              :class="matrixMetricClass(row, matrixRowTotal(row) < 0)"
             >
               {{ formatQty(matrixRowTotal(row)) }}
             </span>
@@ -344,20 +374,13 @@
           <template #default="{ row }">
             <span
               v-if="row.metric !== 'header'"
-              :class="{
-                projected: ym === targetMonth && row.metric === 'inventory',
-                negative: (row.daily[ym] ?? 0) < 0,
-                'metric-plan': row.metric === 'plan',
-                'metric-actual': row.metric === 'actual',
-                'metric-next':
-                  row.metric === 'next_usage' ||
-                  row.metric === 'next_usage_parent' ||
-                  row.metric === 'next_usage_child' ||
-                  row.metric === 'next_consume_parent' ||
-                  row.metric === 'next_consume_child' ||
-                  row.metric === 'outsourced_shipment',
-                'plan-overridden': row.metric === 'plan' && row.overrides?.[ym] != null,
-              }"
+              :class="[
+                matrixMetricClass(row, (row.daily[ym] ?? 0) < 0),
+                {
+                  projected: ym === targetMonth && isInventoryMetric(row),
+                  'plan-overridden': row.metric === 'plan' && row.overrides?.[ym] != null,
+                },
+              ]"
             >
               {{ formatQty(row.daily[ym] ?? 0) }}
             </span>
@@ -455,6 +478,8 @@
     >
       <div class="plan-edit-hint">
         手動値は当日の生計画構成比で製品別に比例配分されます。修正はこの工程の計画のみに適用され、他工程（下流を含む）の計画は自動計画のままです。
+        次工程移動が複数分岐する工程では、手動計画合計を直近 30
+        日の実績去向の平均比（数量加重）で各分岐へ配分します。
         実績最終日以前の日は実績が採用されるため手動値は反映されません。生計画合計が 0
         の日は比例配分できないため手動値は無効です。 本画面専用の修正で、production_summarys
         は変更しません。
@@ -531,6 +556,8 @@ import {
   type ProjectionSummaryData,
 } from '@/api/erp/inventoryProjection'
 
+type InventoryTrendRow = NonNullable<ProjectionSummaryData['inventory_trend_rows']>[number]
+
 function todayIso(): string {
   const d = new Date()
   const m = `${d.getMonth() + 1}`.padStart(2, '0')
@@ -544,12 +571,16 @@ const loading = ref(false)
 const monthlyLoading = ref(false)
 const summary = ref<ProjectionSummaryData | null>(null)
 const matrixTab = ref<'daily' | 'monthly'>('daily')
+
+/** KPI カード用（検査は倉庫在庫に含むため除外） */
+const kpiGroups = computed(() =>
+  (summary.value?.groups || []).filter((g) => g.key !== 'inspection'),
+)
 const MONTHLY_RANGE = 6
 const monthlyByYm = ref<Record<string, ProjectionGroup[]>>({})
+const monthlyTrendByYm = ref<Record<string, InventoryTrendRow[]>>({})
 const monthlyMonths = ref<string[]>([])
 
-const chartRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
 const matrixChartRef = ref<HTMLDivElement | null>(null)
 let matrixChart: echarts.ECharts | null = null
 const MATRIX_CHART_MAX_SERIES = 8
@@ -562,15 +593,18 @@ const detailGroupKey = ref('')
 const detailRows = ref<ProjectionDetailRow[]>([])
 const detailDates = ref<string[]>([])
 
+/** 工程グループ色（KPI・表アクセント・チャートで共通） */
 const GROUP_COLORS: Record<string, string> = {
-  cutting: '#5470c6',
-  molding: '#91cc75',
-  plating_inhouse: '#fac858',
-  plating_outsource: '#ee6666',
-  welding_inhouse: '#73c0de',
-  welding_outsource: '#fc8452',
-  inspection: '#3ba272',
-  warehouse: '#9a60b4',
+  cutting: '#4f6bd8',
+  molding: '#4caf50',
+  plating_inhouse: '#e6a23c',
+  plating_outsource: '#f05656',
+  welding_inhouse: '#3aa0c4',
+  welding_outsource: '#f07a3a',
+  inspection: '#2f9e78',
+  warehouse: '#8b5bb5',
+  inventory_trend: '#2563eb',
+  __demand__: '#64748b',
 }
 
 const PROCESS_KEY_LABELS: Record<string, string> = {
@@ -603,14 +637,16 @@ interface MatrixRow {
     | 'next_consume_parent'
     | 'next_consume_child'
     | 'outsourced_shipment'
+    | 'trend_parent'
+    | 'trend_child'
     | 'demand'
   daily: Record<string, number>
   expanded?: boolean
   branchKey?: string
   /** 計画行のみ: 手動修正が適用された日 → 手動値（セル強調用） */
   overrides?: Record<string, number>
-  /** 展開親行の種別（move / consume） */
-  expandKind?: 'move' | 'consume'
+  /** 展開親行の種別（move / consume / trend） */
+  expandKind?: 'move' | 'consume' | 'trend'
 }
 
 function matrixRowId(row: MatrixRow): string {
@@ -618,7 +654,7 @@ function matrixRowId(row: MatrixRow): string {
 }
 
 function isChartSelectable(row: MatrixRow): boolean {
-  return row.metric !== 'header'
+  return row.metric !== 'header' && row.metric !== 'trend_parent'
 }
 
 function isMatrixRowSelected(row: MatrixRow): boolean {
@@ -642,10 +678,10 @@ function clearMatrixChartRows() {
   selectedMatrixRowIds.value = []
 }
 
-/** 次工程移動／使用の展開状態（`${groupKey}:${kind}` → 開いているか） */
+/** 次工程移動／使用／在庫推移の展開状態（`${groupKey}:${kind}` → 開いているか） */
 const nextExpandState = ref<Record<string, boolean>>({})
 
-function expandKey(groupKey: string, kind: 'move' | 'consume'): string {
+function expandKey(groupKey: string, kind: 'move' | 'consume' | 'trend'): string {
   return `${groupKey}:${kind}`
 }
 
@@ -655,7 +691,12 @@ function sumDaily(daily: Record<string, number> | undefined | null): number {
 }
 
 function showsRowTotal(row: MatrixRow): boolean {
-  return row.metric !== 'header' && row.metric !== 'inventory'
+  return (
+    row.metric !== 'header' &&
+    row.metric !== 'inventory' &&
+    row.metric !== 'trend_parent' &&
+    row.metric !== 'trend_child'
+  )
 }
 
 function matrixRowTotal(row: MatrixRow): number {
@@ -663,7 +704,38 @@ function matrixRowTotal(row: MatrixRow): number {
   return sumDaily(row.daily)
 }
 
-function buildMatrixRowsFromGroups(groups: ProjectionGroup[]): MatrixRow[] {
+function appendInventoryTrendRows(
+  rows: MatrixRow[],
+  trendRows: InventoryTrendRow[] | undefined | null,
+): void {
+  if (!trendRows?.length) return
+  const trendKey = 'inventory_trend'
+  const k = expandKey(trendKey, 'trend')
+  const expanded = nextExpandState.value[k] ?? true
+  rows.push({
+    key: trendKey,
+    name: '在庫推移',
+    metric: 'trend_parent',
+    daily: {},
+    expanded,
+    expandKind: 'trend',
+  })
+  if (!expanded) return
+  for (const r of trendRows) {
+    rows.push({
+      key: r.key,
+      name: `　${r.label}`,
+      metric: 'trend_child',
+      daily: r.daily || {},
+      branchKey: r.key,
+    })
+  }
+}
+
+function buildMatrixRowsFromGroups(
+  groups: ProjectionGroup[],
+  trendRows?: InventoryTrendRow[] | null,
+): MatrixRow[] {
   const rows: MatrixRow[] = []
   for (const g of groups) {
     rows.push({
@@ -757,6 +829,7 @@ function buildMatrixRowsFromGroups(groups: ProjectionGroup[]): MatrixRow[] {
       }
     }
   }
+  appendInventoryTrendRows(rows, trendRows)
   return rows
 }
 
@@ -791,7 +864,7 @@ function monthEndBaseDate(ym: string): string {
 
 const matrixRows = computed((): MatrixRow[] => {
   if (!summary.value) return []
-  return buildMatrixRowsFromGroups(summary.value.groups)
+  return buildMatrixRowsFromGroups(summary.value.groups, summary.value.inventory_trend_rows)
 })
 
 const monthlyMatrixRows = computed((): MatrixRow[] => {
@@ -801,9 +874,13 @@ const monthlyMatrixRows = computed((): MatrixRow[] => {
     monthlyByYm.value[monthlyMonths.value[monthlyMonths.value.length - 1]] ||
     summary.value?.groups
   if (!templateGroups?.length) return []
+  const templateTrend =
+    monthlyTrendByYm.value[targetMonth.value] ||
+    summary.value?.inventory_trend_rows ||
+    monthlyTrendByYm.value[monthlyMonths.value[monthlyMonths.value.length - 1]]
 
   // 行構造は対象月（なければ最新月）を基準に作り、各月の値を daily[ym] に載せる
-  const baseRows = buildMatrixRowsFromGroups(templateGroups)
+  const baseRows = buildMatrixRowsFromGroups(templateGroups, templateTrend)
   return baseRows.map((row) => {
     const daily: Record<string, number> = {}
     const overrides: Record<string, number> = {}
@@ -811,6 +888,15 @@ const monthlyMatrixRows = computed((): MatrixRow[] => {
       const groups = monthlyByYm.value[ym]
       if (!groups) {
         daily[ym] = 0
+        continue
+      }
+      if (row.metric === 'trend_parent') {
+        daily[ym] = 0
+        continue
+      }
+      if (row.metric === 'trend_child') {
+        const trend = monthlyTrendByYm.value[ym]?.find((r) => r.key === row.branchKey)
+        daily[ym] = trend?.month_end ?? 0
         continue
       }
       const g = groups.find((x) => x.key === row.key)
@@ -865,32 +951,6 @@ const chartCategories = computed(() =>
   matrixTab.value === 'monthly' ? monthlyMonths.value : summary.value?.dates || [],
 )
 
-const branchSummary = computed(() => {
-  const stats = summary.value?.route_branch_stats
-  if (!stats) return ''
-  const fmt = (m: Record<string, number>) =>
-    Object.entries(m)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, n]) => `${PROCESS_KEY_LABELS[k] || k} ${n}件`)
-      .join(' / ')
-  const parts: string[] = []
-  if (Object.keys(stats.molding_next || {}).length) {
-    parts.push(`成型の次工程: ${fmt(stats.molding_next)}`)
-  }
-  if (Object.keys(stats.plating_next || {}).length) {
-    parts.push(`社内メッキの次工程: ${fmt(stats.plating_next)}`)
-  }
-  return parts.join('　｜　')
-})
-
-const cutoffSummary = computed(() => {
-  const cutoff = summary.value?.actual_cutoff
-  if (!cutoff) return ''
-  return Object.entries(cutoff)
-    .map(([k, ds]) => `${PROCESS_KEY_LABELS[k] || k} ${ds.slice(5)}`)
-    .join(' / ')
-})
-
 function nextProcessLabel(row: ProjectionDetailRow): string {
   // 明細ダイアログは工程グループ単位なので、該当グループの下流を優先表示
   if (detailGroupKey.value === 'molding' && row.molding_next) {
@@ -916,10 +976,36 @@ function formatQty(v: number): string {
   return (v ?? 0).toLocaleString()
 }
 
+function isInventoryMetric(row: MatrixRow): boolean {
+  return row.metric === 'inventory' || row.metric === 'trend_child'
+}
+
+function isNextMetric(row: MatrixRow): boolean {
+  return (
+    row.metric === 'next_usage' ||
+    row.metric === 'next_usage_parent' ||
+    row.metric === 'next_usage_child' ||
+    row.metric === 'next_consume_parent' ||
+    row.metric === 'next_consume_child' ||
+    row.metric === 'outsourced_shipment'
+  )
+}
+
+/** 図例（在庫=青 / 計画=緑 / 実績=灰 / 次工程=橙）と数値色を揃える */
+function matrixMetricClass(row: MatrixRow, isNegative = false): Record<string, boolean> {
+  return {
+    negative: isNegative,
+    'metric-inventory': isInventoryMetric(row),
+    'metric-plan': row.metric === 'plan',
+    'metric-actual': row.metric === 'actual',
+    'metric-next': isNextMetric(row),
+  }
+}
+
 function matrixRowClass({ row }: { row: MatrixRow }): string {
   const classes = [`group-${row.key}`]
   if (row.metric === 'header') classes.push('group-header-row')
-  if (row.metric === 'inventory') classes.push('inventory-row')
+  if (isInventoryMetric(row)) classes.push('inventory-row')
   if (row.metric === 'plan') classes.push('plan-row')
   if (row.metric === 'actual') classes.push('actual-row')
   if (row.metric === 'next_usage' || row.metric === 'next_usage_parent') {
@@ -929,12 +1015,15 @@ function matrixRowClass({ row }: { row: MatrixRow }): string {
   if (row.metric === 'next_consume_parent') classes.push('next-consume-row')
   if (row.metric === 'next_consume_child') classes.push('next-consume-child-row')
   if (row.metric === 'outsourced_shipment') classes.push('next-usage-row')
+  if (row.metric === 'trend_parent') classes.push('trend-parent-row')
   return classes.join(' ')
 }
 
 function onMatrixRowClick(row: MatrixRow) {
   if (
-    (row.metric !== 'next_usage_parent' && row.metric !== 'next_consume_parent') ||
+    (row.metric !== 'next_usage_parent' &&
+      row.metric !== 'next_consume_parent' &&
+      row.metric !== 'trend_parent') ||
     !row.key ||
     !row.expandKind
   ) {
@@ -943,17 +1032,19 @@ function onMatrixRowClick(row: MatrixRow) {
   const k = expandKey(row.key, row.expandKind)
   nextExpandState.value = {
     ...nextExpandState.value,
-    [k]: !nextExpandState.value[k],
+    [k]: !(nextExpandState.value[k] ?? row.metric === 'trend_parent'),
   }
 }
 
 function onMatrixRowDblClick(row: MatrixRow) {
-  if (!row.key || row.key === '__demand__') return
+  if (!row.key || row.key === '__demand__' || row.key === 'inventory_trend') return
   if (
     row.metric === 'next_usage_parent' ||
     row.metric === 'next_usage_child' ||
     row.metric === 'next_consume_parent' ||
-    row.metric === 'next_consume_child'
+    row.metric === 'next_consume_child' ||
+    row.metric === 'trend_parent' ||
+    row.metric === 'trend_child'
   ) {
     return
   }
@@ -967,12 +1058,14 @@ function onMatrixRowDblClick(row: MatrixRow) {
 }
 
 function onMonthlyMatrixRowDblClick(row: MatrixRow) {
-  if (!row.key || row.key === '__demand__') return
+  if (!row.key || row.key === '__demand__' || row.key === 'inventory_trend') return
   if (
     row.metric === 'next_usage_parent' ||
     row.metric === 'next_usage_child' ||
     row.metric === 'next_consume_parent' ||
-    row.metric === 'next_consume_child'
+    row.metric === 'next_consume_child' ||
+    row.metric === 'trend_parent' ||
+    row.metric === 'trend_child'
   ) {
     return
   }
@@ -1051,14 +1144,22 @@ async function loadMonthlySummaries(force = false) {
           base_date: ym === targetMonth.value ? baseDate.value : monthEndBaseDate(ym),
           force: force && ym === targetMonth.value,
         })
-        return [ym, res.data.groups] as const
+        return [ym, res.data.groups, res.data.inventory_trend_rows || []] as const
       }),
     )
     const next: Record<string, ProjectionGroup[]> = {}
-    for (const [ym, groups] of results) next[ym] = groups
+    const nextTrend: Record<string, InventoryTrendRow[]> = {}
+    for (const [ym, groups, trend] of results) {
+      next[ym] = groups
+      nextTrend[ym] = trend
+    }
     // 対象月は最新の summary を優先
     if (summary.value?.groups?.length) next[targetMonth.value] = summary.value.groups
+    if (summary.value?.inventory_trend_rows?.length) {
+      nextTrend[targetMonth.value] = summary.value.inventory_trend_rows
+    }
     monthlyByYm.value = next
+    monthlyTrendByYm.value = nextTrend
   } catch (e: any) {
     const msg = e?.response?.data?.detail || e?.message || '月別データの読み込みに失敗しました'
     ElMessage.error(msg)
@@ -1084,10 +1185,17 @@ function syncMatrixRowSelection() {
   const validIds = new Set(rows.filter(isChartSelectable).map(matrixRowId))
   selectedMatrixRowIds.value = selectedMatrixRowIds.value.filter((id) => validIds.has(id))
   if (selectedMatrixRowIds.value.length === 0) {
-    selectedMatrixRowIds.value = rows
-      .filter((row) => row.metric === 'inventory')
-      .slice(0, 3)
+    // デフォルト: 在庫推移の子行（成型／メッキ／溶接／検査）
+    const trendIds = rows
+      .filter((row) => row.metric === 'trend_child')
       .map(matrixRowId)
+      .slice(0, MATRIX_CHART_MAX_SERIES)
+    selectedMatrixRowIds.value = trendIds.length
+      ? trendIds
+      : rows
+          .filter((row) => row.metric === 'inventory')
+          .slice(0, 3)
+          .map(matrixRowId)
   }
 }
 
@@ -1106,12 +1214,17 @@ async function load(force = false) {
         [targetMonth.value]: summary.value.groups,
       }
     }
+    if (summary.value?.inventory_trend_rows?.length) {
+      monthlyTrendByYm.value = {
+        ...monthlyTrendByYm.value,
+        [targetMonth.value]: summary.value.inventory_trend_rows,
+      }
+    }
     syncMatrixRowSelection()
     if (matrixTab.value === 'monthly') {
       await loadMonthlySummaries(force)
     }
     await nextTick()
-    renderChart()
     renderMatrixChart()
   } catch (e: any) {
     const msg = e?.response?.data?.detail || e?.message || '読み込みに失敗しました'
@@ -1119,67 +1232,6 @@ async function load(force = false) {
   } finally {
     loading.value = false
   }
-}
-
-function renderChart() {
-  if (!chartRef.value || !summary.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-  }
-  const s = summary.value
-  const projStartIdx = s.dates.findIndex((d) => d >= s.projection_start)
-  const series = s.groups.map((g) => ({
-    name: g.name,
-    type: 'line' as const,
-    smooth: false,
-    symbol: 'circle',
-    symbolSize: 4,
-    data: s.dates.map((ds) => g.daily[ds] ?? 0),
-    itemStyle: { color: GROUP_COLORS[g.key] },
-    lineStyle: { color: GROUP_COLORS[g.key], width: 2 },
-  }))
-  const markArea =
-    projStartIdx >= 0
-      ? {
-          silent: true,
-          itemStyle: { color: 'rgba(64, 158, 255, 0.07)' },
-          data: [[{ xAxis: s.dates[projStartIdx] }, { xAxis: s.dates[s.dates.length - 1] }]],
-        }
-      : undefined
-  if (series.length > 0 && markArea) {
-    ;(series[0] as any).markArea = markArea
-    ;(series[0] as any).markLine = {
-      silent: true,
-      symbol: 'none',
-      lineStyle: { color: '#909399', type: 'dashed' },
-      label: { formatter: '基準日', position: 'insideEndTop' },
-      data: [{ xAxis: s.base_date }],
-    }
-  }
-  chart.setOption(
-    {
-      tooltip: {
-        trigger: 'axis',
-        valueFormatter: (v: number) => (v ?? 0).toLocaleString() + ' 本',
-      },
-      legend: { top: 0, type: 'scroll' },
-      grid: { left: 70, right: 24, top: 36, bottom: 28 },
-      xAxis: {
-        type: 'category',
-        data: s.dates,
-        axisLabel: {
-          formatter: (v: string) => `${Number(v.slice(8, 10))}`,
-        },
-      },
-      yAxis: {
-        type: 'value',
-        name: '在庫（本）',
-        axisLabel: { formatter: (v: number) => v.toLocaleString() },
-      },
-      series,
-    },
-    true,
-  )
 }
 
 const MATRIX_METRIC_COLORS: Partial<Record<MatrixRow['metric'], string>> = {
@@ -1192,12 +1244,17 @@ const MATRIX_METRIC_COLORS: Partial<Record<MatrixRow['metric'], string>> = {
   next_consume_parent: '#8b5cf6',
   next_consume_child: '#a78bfa',
   outsourced_shipment: '#c026d3',
+  trend_child: '#2563eb',
   demand: '#ef4444',
 }
 
 function matrixSeriesColor(row: MatrixRow, index: number): string {
-  const groupColor = GROUP_COLORS[row.key]
-  if (row.metric === 'inventory' && groupColor) return groupColor
+  // 在庫は図例どおり青系。複数行比較時は工程色で差を付ける
+  if (isInventoryMetric(row)) {
+    const selectedInv = selectedMatrixRows.value.filter(isInventoryMetric)
+    if (selectedInv.length <= 1) return MATRIX_METRIC_COLORS.inventory || '#2563eb'
+    return GROUP_COLORS[row.key] || MATRIX_METRIC_COLORS.inventory || '#2563eb'
+  }
   const base = MATRIX_METRIC_COLORS[row.metric]
   if (base) return base
   const fallback = ['#2563eb', '#16a34a', '#f59e0b', '#8b5cf6', '#0891b2', '#e11d48']
@@ -1243,8 +1300,11 @@ function renderMatrixChart() {
       itemStyle: { color },
       lineStyle: {
         color,
-        width: row.metric === 'inventory' ? 3 : 2,
+        width: row.metric === 'inventory' || row.metric === 'trend_child' ? 3.2 : 2.2,
         type: row.metric === 'actual' ? ('dashed' as const) : ('solid' as const),
+        shadowColor: `${color}40`,
+        shadowBlur: 8,
+        shadowOffsetY: 3,
       },
       label: {
         show: true,
@@ -1256,11 +1316,11 @@ function renderMatrixChart() {
         formatter: (params: { value?: number }) => formatSenbon(Number(params.value ?? 0)),
       },
       areaStyle:
-        seriesCount === 1 && row.metric === 'inventory'
+        seriesCount === 1 && (row.metric === 'inventory' || row.metric === 'trend_child')
           ? {
               color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: `${color}30` },
-                { offset: 1, color: `${color}02` },
+                { offset: 0, color: `${color}38` },
+                { offset: 1, color: `${color}03` },
               ]),
             }
           : undefined,
@@ -1349,7 +1409,6 @@ async function openDetail(g: ProjectionGroup | { key: string; name: string }) {
 }
 
 function onResize() {
-  chart?.resize()
   matrixChart?.resize()
 }
 
@@ -1373,8 +1432,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
-  chart?.dispose()
-  chart = null
   matrixChart?.dispose()
   matrixChart = null
 })
@@ -1382,29 +1439,48 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .inventory-projection-page {
+  --surface: #ffffff;
+  --ink: #152033;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --plan: #16a34a;
+  --actual: #64748b;
+  --next: #d97706;
+  --inv: #2563eb;
+  --consume: #7c3aed;
   min-height: 100%;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   background:
-    radial-gradient(circle at 8% 0%, rgba(59, 130, 246, 0.09), transparent 28%),
-    radial-gradient(circle at 92% 6%, rgba(139, 92, 246, 0.07), transparent 25%), #f6f8fc;
+    radial-gradient(ellipse 55% 40% at 6% -8%, rgba(79, 107, 216, 0.14), transparent 55%),
+    radial-gradient(ellipse 45% 35% at 96% 0%, rgba(139, 91, 181, 0.1), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 50% 100%, rgba(46, 158, 120, 0.06), transparent 45%),
+    linear-gradient(180deg, #eef2f8 0%, #f5f7fb 48%, #f8fafc 100%);
 }
 
 :deep(.el-card) {
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 14px;
-  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.055);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 28px rgba(15, 23, 42, 0.06),
+    0 2px 6px rgba(15, 23, 42, 0.03);
 }
 
 :deep(.el-card__header) {
   padding: 15px 18px;
   border-bottom-color: #eef2f7;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border-radius: 16px 16px 0 0;
 }
 
 .toolbar-card {
-  background: linear-gradient(115deg, #ffffff 0%, #f8fbff 62%, #f5f3ff 100%);
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.96) 58%, rgba(245, 243, 255, 0.94) 100%);
+  backdrop-filter: blur(8px);
 }
 
 :deep(.toolbar-card .el-card__body) {
@@ -1416,20 +1492,30 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 21px;
-  font-weight: 750;
-  letter-spacing: 0.02em;
-  color: #172033;
+  font-size: 22px;
+  font-weight: 780;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.product-count-tag {
+  border-color: #bfdbfe !important;
+  background: linear-gradient(180deg, #eff6ff, #dbeafe) !important;
+  color: #1d4ed8 !important;
+  font-weight: 650;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
 }
 
 .help-button {
@@ -1464,64 +1550,193 @@ onBeforeUnmount(() => {
 
 .help-content {
   color: #475569;
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 12.5px;
+  line-height: 1.65;
 }
 
 .help-content p {
-  margin: 5px 0;
+  margin: 0 0 10px;
 }
 
 .help-content.compact p {
-  margin: 2px 0;
+  margin: 0 0 6px;
 }
 
 .help-title {
-  margin-bottom: 7px;
-  color: #172033;
-  font-size: 14px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dbeafe;
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
 }
 
-.help-meta {
-  margin-top: 8px;
+.help-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #fff;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+}
+
+.help-intro {
+  padding: 9px 11px;
+  border: 1px solid #dbeafe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #334155;
+}
+
+.help-section {
+  margin-top: 11px;
+  padding: 10px 11px 7px;
+  border: 1px solid;
+  border-radius: 10px;
+}
+
+.help-section-inventory {
+  border-color: #d1fae5;
+  background: #f0fdf4;
+}
+
+.help-section-trend {
+  border-color: #ede9fe;
+  background: #f5f3ff;
+}
+
+.help-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  font-size: 12.5px;
+  font-weight: 750;
+  color: #1e293b;
+}
+
+.help-subtitle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.13);
+}
+
+.help-section-trend .help-subtitle-dot {
+  background: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.13);
+}
+
+.help-formula-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.help-formula-list li {
+  position: relative;
+  margin-bottom: 5px;
+  padding: 5px 8px 5px 11px;
+  border-left: 3px solid #86efac;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.help-section-trend .help-formula-list li {
+  border-left-color: #c4b5fd;
+}
+
+.help-formula-list strong {
+  display: inline-block;
+  min-width: 74px;
+  color: #047857;
+}
+
+.help-section-trend .help-formula-list strong {
+  color: #6d28d9;
+}
+
+.help-note {
+  margin: 8px 0 2px !important;
   padding: 7px 9px;
   border-radius: 7px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 12px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 11.5px;
+}
+
+.help-operation {
+  margin: 11px 0 0 !important;
+  padding: 8px 10px;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 7px 7px 0;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.85);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .toolbar-right .label {
-  font-size: 13px;
-  color: #606266;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--muted);
 }
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 12px;
 }
 
 .kpi-card {
   position: relative;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e8edf5;
-  border-radius: 13px;
+  isolation: isolate;
+  background:
+    linear-gradient(165deg, color-mix(in srgb, var(--group-color) 8%, #fff) 0%, #fff 42%, #fff 100%);
+  border: 1px solid color-mix(in srgb, var(--group-color) 22%, #e8edf5);
+  border-radius: 14px;
   padding: 14px 14px 12px;
   cursor: pointer;
-  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 8px 20px color-mix(in srgb, var(--group-color) 12%, transparent),
+    0 3px 8px rgba(15, 23, 42, 0.04);
   transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.kpi-glow {
+  position: absolute;
+  top: -40%;
+  right: -20%;
+  width: 70%;
+  height: 90%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--group-color) 28%, transparent), transparent 68%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .kpi-accent {
@@ -1529,56 +1744,105 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--group-color),
+    color-mix(in srgb, var(--group-color) 55%, #fff)
+  );
+  z-index: 1;
+}
+
+.kpi-accent::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  height: 100vh;
   background: var(--group-color);
+  box-shadow: 2px 0 10px color-mix(in srgb, var(--group-color) 35%, transparent);
+}
+
+.kpi-top,
+.kpi-value,
+.kpi-sub {
+  position: relative;
+  z-index: 1;
+}
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.kpi-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group-color);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--group-color) 18%, transparent),
+    0 2px 6px color-mix(in srgb, var(--group-color) 45%, transparent);
 }
 
 .kpi-card:hover {
-  border-color: color-mix(in srgb, var(--group-color) 45%, #fff);
-  box-shadow: 0 11px 24px rgba(15, 23, 42, 0.1);
-  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--group-color) 55%, #fff);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 16px 32px color-mix(in srgb, var(--group-color) 22%, transparent),
+    0 6px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-4px) scale(1.01);
 }
 
 .kpi-card.negative {
-  border-color: #f56c6c;
-  background: #fef0f0;
+  --group-color: #f56c6c;
+  border-color: #fca5a5;
+  background: linear-gradient(165deg, #fff5f5 0%, #fff 55%);
 }
 
 .kpi-name {
   font-size: 12px;
-  color: #64748b;
-  font-weight: 650;
+  color: color-mix(in srgb, var(--group-color) 35%, #64748b);
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .kpi-value {
-  margin: 5px 0 7px;
-  color: #172033;
-  font-size: 22px;
-  font-weight: 750;
+  margin: 8px 0 8px;
+  color: var(--ink);
+  font-size: 23px;
+  font-weight: 780;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .kpi-card.negative .kpi-value {
-  color: #f56c6c;
+  color: #dc2626;
 }
 
 .kpi-unit {
   font-size: 11px;
-  font-weight: 400;
-  color: #909399;
-  margin-left: 2px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-left: 3px;
 }
 
 .kpi-sub {
   display: flex;
   justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
-  color: #909399;
+  color: #94a3b8;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--group-color) 18%, #e2e8f0);
 }
 
 .kpi-sub .warn {
-  color: #e6a23c;
-  font-weight: 600;
+  color: #d97706;
+  font-weight: 700;
 }
 
 .card-header {
@@ -1595,56 +1859,58 @@ onBeforeUnmount(() => {
 }
 
 .card-title {
-  color: #172033;
+  color: var(--ink);
   font-size: 15px;
-  font-weight: 700;
-}
-
-.header-chip {
-  padding: 4px 9px;
-  border: 1px solid #dbeafe;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 650;
+  font-weight: 750;
+  letter-spacing: 0.02em;
 }
 
 .matrix-legend {
   display: flex;
   align-items: center;
-  gap: 13px;
-  color: #64748b;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e8edf4;
+  color: var(--muted);
   font-size: 11px;
+  font-weight: 600;
 }
 
 .matrix-legend span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
 }
 
 .legend-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
 }
 
 .legend-dot.inventory {
-  background: #2563eb;
+  background: var(--inv);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 .legend-dot.plan {
-  background: #16a34a;
+  background: var(--plan);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 }
 .legend-dot.actual {
   background: #94a3b8;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
 }
 .legend-dot.next {
-  background: #f59e0b;
+  background: var(--next);
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
 }
 
-.chart-card,
 .matrix-card {
   background: rgba(255, 255, 255, 0.98);
 }
@@ -1659,16 +1925,23 @@ onBeforeUnmount(() => {
 
 :deep(.matrix-tabs .el-tabs__item) {
   font-weight: 650;
+  color: #64748b;
+}
+
+:deep(.matrix-tabs .el-tabs__item.is-active) {
+  color: #1d4ed8;
+  font-weight: 750;
+}
+
+:deep(.matrix-tabs .el-tabs__active-bar) {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
 }
 
 :deep(.matrix-tabs .el-tabs__nav-wrap::after) {
   height: 1px;
   background-color: #e8edf4;
-}
-
-.chart-container {
-  width: 100%;
-  height: 370px;
 }
 
 .matrix-name-cell {
@@ -1693,92 +1966,134 @@ onBeforeUnmount(() => {
 }
 
 .process-link {
-  color: #409eff;
+  color: #1d4ed8;
   cursor: pointer;
-  font-weight: 600;
-}
-
-.process-header {
   font-weight: 700;
 }
 
+.process-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.process-header {
+  font-weight: 750;
+  color: color-mix(in srgb, var(--row-accent, #334155) 75%, #0f172a);
+}
+
 .process-metric {
-  color: #606266;
+  color: #64748b;
   font-size: 12px;
 }
 
+.toolbar-right :deep(.el-button--primary) {
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.28);
+  font-weight: 700;
+}
+
+.toolbar-right :deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
 .projected {
-  color: #409eff;
+  color: var(--inv);
+  font-weight: 600;
 }
 
 .projected-header {
-  color: #409eff;
+  color: var(--inv);
+  background: linear-gradient(180deg, #eff6ff, #dbeafe) !important;
 }
 
 .negative {
-  color: #f56c6c;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.metric-inventory {
+  color: var(--inv);
   font-weight: 600;
 }
 
 .metric-plan {
-  color: #16a34a;
-  font-weight: 550;
+  color: var(--plan);
+  font-weight: 600;
 }
 
 .plan-overridden {
-  color: #e6a23c;
-  font-weight: 700;
-  background: #fdf6ec;
-  border-radius: 2px;
-  padding: 0 2px;
+  color: #b45309;
+  font-weight: 750;
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  border-radius: 4px;
+  padding: 1px 4px;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25);
 }
 
 .plan-edit-hint {
   margin-bottom: 10px;
-  padding: 8px 10px;
-  background: #f4f4f5;
-  border-radius: 4px;
-  color: #909399;
+  padding: 9px 12px;
+  background: linear-gradient(90deg, #f8fafc, #f1f5f9);
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 8px;
+  color: #64748b;
   font-size: 12px;
   line-height: 1.7;
 }
 
 .metric-actual {
-  color: #64748b;
+  color: var(--actual);
 }
 
 .metric-next {
-  color: #d97706;
+  color: var(--next);
+  font-weight: 600;
 }
 
 :deep(.group-header-row) {
   --row-accent: #64748b;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 10%, #fff), #fff 65%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-accent) 14%, #fff),
+    color-mix(in srgb, var(--row-accent) 4%, #fff) 55%,
+    #fff 100%
+  );
 }
 
 :deep(.group-header-row td) {
-  border-top: 1px solid color-mix(in srgb, var(--row-accent) 16%, #e2e8f0);
-  font-weight: 700;
+  border-top: 1px solid color-mix(in srgb, var(--row-accent) 22%, #e2e8f0);
+  font-weight: 750;
 }
 
 :deep(.group-header-row td:first-child) {
-  box-shadow: inset 4px 0 var(--row-accent);
+  box-shadow:
+    inset 5px 0 var(--row-accent),
+    inset 0 -1px 0 color-mix(in srgb, var(--row-accent) 12%, transparent);
 }
 
 :deep(.inventory-row) {
-  background: #fbfdff;
+  background: linear-gradient(90deg, #f0f7ff 0%, #f8fbff 40%, #fff 100%);
+}
+
+:deep(.inventory-row td:first-child) {
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--row-accent, var(--inv)) 70%, transparent);
 }
 
 :deep(.plan-row) {
-  background: #fbfefb;
+  background: linear-gradient(90deg, #f3fbf4 0%, #f9fdf9 45%, #fff 100%);
 }
 
 :deep(.actual-row) {
-  background: #fcfcfd;
+  background: linear-gradient(90deg, #f8fafc 0%, #fcfcfd 50%, #fff 100%);
 }
 
 :deep(.next-usage-row) {
-  background: #fff8ec;
+  background: linear-gradient(90deg, #fff7ed 0%, #fffaf3 50%, #fff 100%);
 }
 
 :deep(.next-usage-child-row) {
@@ -1786,36 +2101,48 @@ onBeforeUnmount(() => {
 }
 
 :deep(.next-consume-row) {
-  background: #f4f1ff;
+  background: linear-gradient(90deg, #f5f3ff 0%, #faf8ff 50%, #fff 100%);
 }
 
 :deep(.next-consume-child-row) {
   background: #faf8ff;
 }
 
+:deep(.trend-parent-row) {
+  background: linear-gradient(90deg, #dbeafe 0%, #eff6ff 45%, #f8fbff 100%);
+  font-weight: 700;
+}
+
+:deep(.trend-parent-row td:first-child) {
+  box-shadow: inset 5px 0 var(--inv);
+}
+
 :deep(.group-cutting) {
-  --row-accent: #5470c6;
+  --row-accent: #4f6bd8;
 }
 :deep(.group-molding) {
-  --row-accent: #91cc75;
+  --row-accent: #4caf50;
 }
 :deep(.group-plating_inhouse) {
-  --row-accent: #d89b17;
+  --row-accent: #e6a23c;
 }
 :deep(.group-plating_outsource) {
-  --row-accent: #ee6666;
+  --row-accent: #f05656;
 }
 :deep(.group-welding_inhouse) {
-  --row-accent: #35a4c6;
+  --row-accent: #3aa0c4;
 }
 :deep(.group-welding_outsource) {
-  --row-accent: #fc8452;
+  --row-accent: #f07a3a;
 }
 :deep(.group-inspection) {
-  --row-accent: #3ba272;
+  --row-accent: #2f9e78;
 }
 :deep(.group-warehouse) {
-  --row-accent: #9a60b4;
+  --row-accent: #8b5bb5;
+}
+:deep(.group-inventory_trend) {
+  --row-accent: #2563eb;
 }
 
 .expand-icon {
@@ -1823,15 +2150,16 @@ onBeforeUnmount(() => {
   width: 1em;
   margin-right: 2px;
   font-size: 10px;
-  color: #e6a23c;
+  color: #d97706;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .next-parent-label {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .next-child-label {
-  color: #909399;
+  color: #64748b;
   font-size: 12px;
 }
 
@@ -1841,15 +2169,18 @@ onBeforeUnmount(() => {
 
 :deep(.matrix-card .el-table) {
   --el-table-border-color: #e8edf4;
-  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-bg-color: #f1f5f9;
   --el-table-row-hover-bg-color: #eff6ff;
-  border-radius: 9px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 :deep(.matrix-card .el-table th.el-table__cell) {
   height: 40px;
-  color: #475569;
-  font-weight: 650;
+  color: #334155;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f8fafc, #eef2f7) !important;
 }
 
 :deep(.matrix-card .el-table td.el-table__cell) {
@@ -1859,9 +2190,14 @@ onBeforeUnmount(() => {
 .matrix-chart-panel {
   margin-top: 16px;
   padding: 16px 16px 8px;
-  border: 1px solid #e5eaf2;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse 60% 50% at 10% 0%, rgba(37, 99, 235, 0.05), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 8px 22px rgba(15, 23, 42, 0.045);
 }
 
 .matrix-chart-toolbar {
@@ -1870,12 +2206,14 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eef2f7;
 }
 
 .matrix-chart-title {
-  color: #172033;
+  color: var(--ink);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .matrix-chart-subtitle {
@@ -1898,6 +2236,12 @@ onBeforeUnmount(() => {
 @media (max-width: 1400px) {
   .kpi-row {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 

@@ -448,6 +448,7 @@ export default {
     ERP_SHIPPING: 'Shipping',
     ERP_SHIPPING_HOME: 'Shipping Home',
     ERP_SHIPPING_LIST: 'Shipping Composition',
+    ERP_SHIPPING_PALLET_COUNT: 'Shipping Pallet Count',
     ERP_SHIPPING_REPORT: 'Shipping Report',
     ERP_SHIPPING_OVERVIEW: 'Shipping Schedule',
     ERP_SHIPPING_CONFIRM: 'Shipping Confirmation List',

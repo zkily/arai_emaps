@@ -97,6 +97,7 @@ import {
   Clock,
   Warning,
   DataAnalysis,
+  Grid,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { getJSTToday } from '@/utils/dateFormat'
@@ -279,6 +280,13 @@ const modules = [
     description: '出荷構成表の作成・編集・一覧',
     icon: markRaw(List),
     gradient: 'linear-gradient(135deg, #409eff, #66b1ff)',
+  },
+  {
+    path: '/erp/shipping/pallet-count',
+    title: '出荷パレット数管理',
+    description: 'グループ別カード・積込日×納入先の出荷パレット数',
+    icon: markRaw(Grid),
+    gradient: 'linear-gradient(135deg, #0ea5e9, #38bdf8)',
   },
   {
     path: '/erp/shipping/report',
