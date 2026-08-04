@@ -1,5 +1,5 @@
 <template>
-  <div ref="printRootRef" class="scheduling-page">
+  <div class="scheduling-page">
     <div class="plan-hd">
       <h2 class="plan-hd-title">
         <span class="plan-hd-icon" aria-hidden="true">
@@ -310,6 +310,7 @@
 
 <script setup lang="ts">
 import dayjs from 'dayjs'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
@@ -379,7 +380,6 @@ const processOptions = ref<ProcessItem[]>([])
 const lines = ref<ProductionLine[]>([])
 const grid = shallowRef<SchedulingGridResponse | null>(null)
 const loading = ref(false)
-const printRootRef = ref<HTMLElement | null>(null)
 /** false=標準（当日以前実績）、true=拡張（5日前以前実績・それ以降計画） */
 const matrixPlanExtendMode = ref(false)
 
@@ -1159,51 +1159,380 @@ function getCellToneClass(row: MatrixRow, date: string, displayValue?: number): 
   return dueMatch ? 'tone-active cell-due' : 'tone-active'
 }
 
+/** 印刷用：左固定列幅（%）。日付列は残りを日数で均等分割。 */
+const PRINT_FIXED_COL_PCT = {
+  line: 3.5,
+  order: 3,
+  item: 11,
+  eff: 4,
+  total: 4.5,
+} as const
+
+function escHtml(s: string) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function styleAttrFromRecord(style?: Record<string, string>): string {
+  if (!style) return ''
+  const css = Object.entries(style)
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';')
+  return css ? ` style="${escHtml(css)}"` : ''
+}
+
+function buildSchedulingPrintHtml(): string {
+  const title = '生産スケジューリングボード'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const modeLabel = matrixPlanExtendMode.value ? '拡張' : '標準'
+  const dates = gridDates.value
+  const cols = dateColumnMeta.value
+  const nDates = dates.length
+  const sumFixed =
+    PRINT_FIXED_COL_PCT.line +
+    PRINT_FIXED_COL_PCT.order +
+    PRINT_FIXED_COL_PCT.item +
+    PRINT_FIXED_COL_PCT.eff +
+    PRINT_FIXED_COL_PCT.total
+  const dayColPct = nDates > 0 ? (100 - sumFixed) / nDates : 0
+  const colgroup = `<colgroup>
+    <col style="width:${PRINT_FIXED_COL_PCT.line}%" />
+    <col style="width:${PRINT_FIXED_COL_PCT.order}%" />
+    <col style="width:${PRINT_FIXED_COL_PCT.item}%" />
+    <col style="width:${PRINT_FIXED_COL_PCT.eff}%" />
+    <col style="width:${PRINT_FIXED_COL_PCT.total}%" />
+    ${dates.map(() => `<col style="width:${dayColPct}%" />`).join('')}
+  </colgroup>`
+
+  const dateHeaders = cols
+    .map((col) => {
+      const cls = [
+        'date-col',
+        col.isWeekend ? 'is-weekend' : '',
+        col.isToday ? 'is-today' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+      return `<th class="${cls}"><div class="date-text">${escHtml(col.dateText)}</div><div class="weekday-text">${escHtml(col.weekday)}</div></th>`
+    })
+    .join('')
+
+  const sectionsHtml = matrixSections.value
+    .map((section) => {
+      const rowsHtml = section.rows
+        .map((row) => {
+          if (row.type === 'group') {
+            const dayCells = dates
+              .map((date) => {
+                const v = getMatrixCellDisplayValue(row, date)
+                return `<td class="num cell-day">${v ? escHtml(formatQty(v)) : ''}</td>`
+              })
+              .join('')
+            return `<tr class="group-row">
+              <td class="left line-col">${escHtml(row.line_name || '')}</td>
+              <td class="num"></td>
+              <td class="left"></td>
+              <td class="num">${escHtml(formatEfficiency(row.avg_efficiency))}</td>
+              <td class="num">${escHtml(formatQty(row.sum_planned_output_qty))}</td>
+              ${dayCells}
+            </tr>`
+          }
+
+          const dayCells = dates
+            .map((date) => {
+              const entry = getMatrixCellEntry(row, date)
+              const text = entry?.displayText || ''
+              const tone = (entry?.toneClass || '')
+                .split(/\s+/)
+                .filter((c) => c && c !== 'cell-due')
+                .join(' ')
+              const due = (entry?.toneClass || '').includes('cell-due') ? ' cell-due' : ''
+              const weekend = isWeekend(date) ? ' is-weekend' : ''
+              const styleAttr = styleAttrFromRecord(entry?.upstreamStyle)
+              return `<td class="num cell-day ${tone}${due}${weekend}"${styleAttr}>${escHtml(text)}</td>`
+            })
+            .join('')
+          const shortageFlag = row.material_shortage
+            ? '<div class="flag">資材不足</div>'
+            : ''
+          return `<tr class="item-row${row.material_shortage ? ' is-shortage' : ''}">
+            <td class="line-col"></td>
+            <td class="num">${escHtml(row.order_no != null ? String(row.order_no) : '-')}</td>
+            <td class="left item-col"><div class="item-name">${escHtml(row.item_name || '')}</div>${shortageFlag}</td>
+            <td class="num">${escHtml(formatEfficiency(row.efficiency_rate))}</td>
+            <td class="num">${escHtml(formatQty(row.planned_output_qty))}</td>
+            ${dayCells}
+          </tr>`
+        })
+        .join('')
+      return `<tbody class="line-section">${rowsHtml}</tbody>`
+    })
+    .join('')
+
+  const footerDayCells = dates
+    .map(
+      (date) =>
+        `<td class="num cell-day">${escHtml(formatQty(overallDailyTotals.value[date] || 0))}</td>`,
+    )
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escHtml(title)}</title>
+  <style>
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      color: #0f172a;
+      font: 9px/1.3 "Segoe UI", "Yu Gothic UI", Meiryo, "Hiragino Sans", sans-serif;
+      background: #fff;
+    }
+    .hd {
+      margin: 0 0 6px;
+      padding: 6px 8px;
+      border: 1px solid #dbe5f1;
+      border-radius: 6px;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    }
+    .tt {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1e3a8a;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 8px;
+    }
+    .tt-feature { color: #0f766e; }
+    .tt-sep { color: #94a3b8; font-weight: 600; }
+    .meta { margin-top: 3px; color: #475569; font-size: 9px; }
+    .legend {
+      margin-top: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: center;
+      font-size: 8.5px;
+      color: #334155;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 4px; }
+    .swatch {
+      width: 12px;
+      height: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .swatch--actual { background: rgba(254, 249, 195, 0.95); }
+    .swatch--cm { background: rgba(254, 202, 202, 0.9); }
+    .swatch--plan { background: rgba(187, 247, 208, 0.75); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    thead { display: table-header-group; }
+    tfoot { display: table-row-group; }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 2px 3px;
+      vertical-align: middle;
+      overflow: hidden;
+    }
+    th {
+      background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+      font-weight: 700;
+      color: #334155;
+      text-align: center;
+    }
+    .left { text-align: left; }
+    .num {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    th.date-col, td.cell-day {
+      text-align: center;
+      padding: 2px 1px;
+      font-size: 8px;
+    }
+    .date-text { font-weight: 700; line-height: 1.15; }
+    .weekday-text { color: #64748b; font-size: 7.5px; line-height: 1.1; }
+    th.is-weekend .date-text,
+    th.is-weekend .weekday-text { color: #dc2626; }
+    th.is-today { background: linear-gradient(180deg, #fff3d4 0%, #ffeab0 100%); }
+    td.is-weekend { background-color: #fff8f8; }
+    .line-col, .item-col {
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      font-size: 8.5px;
+    }
+    .line-col { font-weight: 800; color: #1e3a8a; }
+    .item-name { font-weight: 650; }
+    .flag { color: #dc2626; font-size: 7.5px; font-weight: 700; }
+    .group-row td {
+      background: #e2e8f0;
+      font-weight: 800;
+      border-top: 2px solid #94a3b8;
+    }
+    .item-row:nth-child(even) td { background: #fcfdff; }
+    .sc-cell-actual { background: rgba(254, 249, 195, 0.88) !important; }
+    .tone-active { background: rgba(187, 247, 208, 0.5) !important; }
+    .tone-high { background: rgba(34, 197, 94, 0.22) !important; }
+    .tone-mid { background: rgba(245, 158, 11, 0.18) !important; }
+    .tone-low { background: rgba(239, 68, 68, 0.18) !important; }
+    .tone-shortage { background: rgba(239, 68, 68, 0.26) !important; }
+    .cell-due { outline: 1px solid #f59e0b; outline-offset: -2px; }
+    .total-row td {
+      background: #f3f8ff;
+      font-weight: 700;
+      border-top: 2px solid #93c5fd;
+    }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    @page { size: A3 landscape; margin: 8mm; }
+    @media print {
+      @page { size: A3 landscape; margin: 8mm; }
+      html, body { margin: 0 !important; padding: 0 !important; width: auto !important; }
+      .hd { break-inside: avoid; page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="tt">
+      <span class="tt-feature">${escHtml(matrixTitleFeatureLabel.value)}</span>
+      <span class="tt-sep">・</span>
+      <span>スケジューリングマトリクス</span>
+    </div>
+    <div class="meta">期間：${escHtml(displayDateRangeText.value)}　表示：${escHtml(modeLabel)}　印刷日時：${escHtml(printedAt)}</div>
+    <div class="legend" aria-label="凡例">
+      <span class="legend-item"><span class="swatch swatch--actual"></span>実績</span>
+      <span class="legend-item"><span class="swatch swatch--cm"></span>切断指示済</span>
+      <span class="legend-item"><span class="swatch swatch--plan"></span>計画</span>
+    </div>
+  </div>
+  <table>
+    ${colgroup}
+    <thead>
+      <tr>
+        <th>ライン</th>
+        <th>順位</th>
+        <th>製品</th>
+        <th>能率(本/H)</th>
+        <th>生産計画</th>
+        ${dateHeaders}
+      </tr>
+    </thead>
+    ${sectionsHtml}
+    <tfoot>
+      <tr class="total-row">
+        <td class="left">合計</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td class="num">${escHtml(formatQty(overallPlannedOutputTotal.value))}</td>
+        ${footerDayCells}
+      </tr>
+    </tfoot>
+  </table>
+</body>
+</html>`
+}
+
 function handlePrint() {
   if (!guardApsOperation(canExport)) return
-  const root = printRootRef.value
-  if (!root) return
+  if (!matrixRows.value.length || !gridDates.value.length) {
+    ElMessage.warning('印刷対象のデータがありません')
+    return
+  }
 
-  const printTarget = root.querySelector('.result-card') as HTMLElement | null
-  if (!printTarget) return
+  const html = buildSchedulingPrintHtml()
 
-  const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map((el) => el.outerHTML)
-    .join('\n')
+  /**
+   * window.open + 即 print はプレビューが真っ白／用紙サイズ未反映になることがある。
+   * 離屏 iframe に書き込み、load 後に print する（A3 横）。
+   */
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.title = '生産スケジューリングボード印刷'
+  iframe.style.cssText = [
+    'position:fixed',
+    'left:-20000px',
+    'top:0',
+    'width:420mm',
+    'height:297mm',
+    'border:0',
+    'opacity:0',
+    'pointer-events:none',
+    'z-index:-1',
+  ].join(';')
 
-  const win = window.open('', '_blank')
-  if (!win) return
+  document.body.appendChild(iframe)
 
-  win.document.open()
-  win.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Scheduling Print</title>
-        ${styleTags}
-        <style>
-          @page { size: A3 landscape; margin: 8mm; }
-          html, body { margin: 0; padding: 0; }
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .matrix-table-wrapper { height: auto !important; max-height: none !important; overflow: visible !important; }
-          .result-card { border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
-          .result-head-actions .el-button { display: none !important; }
-          .sc-range-selection-ui { display: none !important; }
-          tfoot { display: table-row-group !important; }
-          .sc-total-footer-row td { position: static !important; bottom: auto !important; }
-          .sc-line-section { break-inside: avoid; page-break-inside: avoid; }
-          .sc-line-section tr { break-inside: avoid; page-break-inside: avoid; }
-        </style>
-      </head>
-      <body>
-        ${printTarget.outerHTML}
-      </body>
-    </html>
-  `)
-  win.document.close()
-  win.focus()
-  win.print()
+  const doc = iframe.contentDocument
+  const win = iframe.contentWindow
+  if (!doc || !win) {
+    iframe.remove()
+    ElMessage.error('印刷の準備に失敗しました')
+    return
+  }
+
+  const removeIframe = () => {
+    try {
+      iframe.remove()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let printed = false
+  const doPrint = () => {
+    if (printed) return
+    printed = true
+    try {
+      win.focus()
+      win.print()
+    } catch {
+      ElMessage.error('印刷ダイアログを開けませんでした')
+    }
+    win.addEventListener('afterprint', removeIframe, { once: true })
+    window.setTimeout(removeIframe, 4000)
+  }
+
+  const schedulePrint = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.setTimeout(doPrint, 50)
+      })
+    })
+  }
+
+  iframe.addEventListener('load', schedulePrint, { once: true })
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  if (doc.readyState === 'complete') {
+    window.setTimeout(schedulePrint, 0)
+  }
+  window.setTimeout(() => {
+    if (!printed) schedulePrint()
+  }, 400)
 }
 
 async function loadProcessOptions() {

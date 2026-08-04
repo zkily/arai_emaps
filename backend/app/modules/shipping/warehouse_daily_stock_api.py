@@ -27,6 +27,7 @@ from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Destination, Product
 from app.modules.shipping.warehouse_daily_stock_model import ShippingWarehouseDailyStock
 from app.modules.shipping.shortage_print_handwriting import fetch_handwriting_product_rows
+from app.modules.shipping.long_stay_uninspected_api import fetch_long_stay_uninspected_rows
 
 logger = logging.getLogger(__name__)
 
@@ -341,7 +342,13 @@ async def get_warehouse_daily_shortage_print(
                 }
             )
         handwriting_products = await fetch_handwriting_product_rows(db)
-        return {"success": True, "data": out, "handwriting_products": handwriting_products}
+        long_stay_uninspected = await fetch_long_stay_uninspected_rows(db)
+        return {
+            "success": True,
+            "data": out,
+            "handwriting_products": handwriting_products,
+            "long_stay_uninspected": long_stay_uninspected,
+        }
     except HTTPException:
         raise
     except Exception as e:

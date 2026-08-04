@@ -19,6 +19,7 @@ HANDWRITING_PRODUCT_NAMES: tuple[str, ...] = (
     "164B FR",
     "567D FR",
     "BY2 FR1",
+    "310D CTR",
 )
 
 

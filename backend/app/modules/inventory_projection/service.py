@@ -14,6 +14,7 @@
 
 計画合計の手動修正（inventory_projection_plan_overrides）:
   - 工程×日の合計値のみ手入力。当日の生計画構成比で製品明細へ比例配分する
+  - 生計画合計が 0 の日は、当該工程をルートに持つ製品へ均等配分する（手動値は有効）
   - 手動修正はその工程だけに適用。他工程（下流含む）の計画は自動計画のまま
   - production_summarys は変更しない（本画面専用の覆盖層）
   - 次工程移動が複数分岐の工程で手動計画がある日は、直近実績の去向平均比で各分岐へ配分する
@@ -800,6 +801,28 @@ def _plan_qty(row: dict[str, Any], process_key: str, eff: dict[str, int]) -> int
     return _num(row, field) if field else 0
 
 
+def _allocate_integer_by_shares(qty: int, shares: list[tuple[str, int]]) -> dict[str, int]:
+    """qty を shares の重みで最大剰余法配分（合計＝qty）。shares が空/合計0なら空。"""
+    if qty < 0 or not shares:
+        return {}
+    positive = [(cd, int(v)) for cd, v in shares if int(v) > 0]
+    if not positive:
+        return {}
+    total = sum(v for _, v in positive)
+    if total <= 0:
+        return {}
+    if qty == 0:
+        return {cd: 0 for cd, _ in positive}
+    exact = [(cd, qty * v / total) for cd, v in positive]
+    floors = {cd: int(val) for cd, val in exact}
+    remain = qty - sum(floors.values())
+    by_frac = sorted(exact, key=lambda x: -(x[1] - int(x[1])))
+    alloc = dict(floors)
+    for i in range(max(0, remain)):
+        alloc[by_frac[i % len(by_frac)][0]] += 1
+    return alloc
+
+
 def _compute_effective_plans(
     by_product: dict[str, list[dict[str, Any]]],
     sequence_by_product: dict[str, list[str]],
@@ -808,7 +831,9 @@ def _compute_effective_plans(
     """手動計画合計を、その工程の製品明細へ比例配分する。
 
     ルール:
-      - 手動修正した工程×日のみを対象（生計画合計 0 の日は比例配分できないため無効）
+      - 手動修正した工程×日のみを対象
+      - 生計画合計 > 0 → 生計画構成比で比例配分
+      - 生計画合計 = 0 → 当該工程をルートに持つ製品へ均等配分（手動値は有効）
       - 当日合計は最大剰余法で手動値に厳密一致
       - 他工程（下流含む）の計画は自動計画のまま。係数は伝播しない
     戻り値: ((product_cd, 日付ISO) → {工程key: 有効計画}), 適用済み ((工程key, 日付ISO) → 手動値)
@@ -816,8 +841,9 @@ def _compute_effective_plans(
     if not overrides:
         return {}, {}
 
-    # 生計画の製品別内訳（override 対象の工程×日のみ）
+    # 生計画の製品別内訳 / 均等配分候補（override 対象の工程×日のみ）
     raw_shares: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    equal_candidates: dict[tuple[str, str], list[str]] = {}
     rows_by_prod_date: dict[str, dict[str, dict[str, Any]]] = {}
     override_dates = {ds for (_pk, ds) in overrides}
     for cd, product_rows in by_product.items():
@@ -830,6 +856,7 @@ def _compute_effective_plans(
             row = rbd.get(ds)
             if not row:
                 continue
+            equal_candidates.setdefault((pk, ds), []).append(cd)
             field = PROCESS_KEY_TO_PLAN_FIELD.get(pk)
             raw = _num(row, field) if field else 0
             if raw > 0:
@@ -840,18 +867,14 @@ def _compute_effective_plans(
     applied: dict[tuple[str, str], int] = {}
     for (pk, ds), qty in overrides.items():
         shares = raw_shares.get((pk, ds)) or []
-        auto_total = sum(v for _, v in shares)
-        if auto_total <= 0:
-            continue  # 生計画が無い日は無効（比例配分できない）
-        exact = [(cd, qty * v / auto_total) for cd, v in shares]
-        floors = {cd: int(val) for cd, val in exact}
-        remain = qty - sum(floors.values())
-        by_frac = sorted(exact, key=lambda x: -(x[1] - int(x[1])))
-        alloc = dict(floors)
-        for i in range(remain):
-            alloc[by_frac[i % len(by_frac)][0]] += 1
+        if sum(v for _, v in shares) <= 0:
+            # 生計画 0 でも手動値を有効にする: 当該工程ルート製品へ均等配分
+            shares = [(cd, 1) for cd in equal_candidates.get((pk, ds), [])]
+        alloc = _allocate_integer_by_shares(int(qty), shares)
+        if not alloc:
+            continue
         node_alloc[(pk, ds)] = alloc
-        applied[(pk, ds)] = qty
+        applied[(pk, ds)] = int(qty)
 
     if not node_alloc:
         return {}, {}

@@ -24,12 +24,17 @@ class ProductionReviewMeeting(Base):
 
 
 class ProductionReviewCapacity(Base):
-    """生産検討会用 工程能力パラメータ（負荷率計算）"""
+    """生産検討会用 工程能力パラメータ（負荷率計算・月別可）"""
 
     __tablename__ = "production_review_capacity"
-    __table_args__ = (UniqueConstraint("process_cd", name="uk_prc_process_cd"),)
+    __table_args__ = (
+        UniqueConstraint("target_month", "process_cd", name="uk_prc_month_process"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="ID")
+    target_month = Column(
+        String(7), nullable=False, default="", comment="対象月 YYYY-MM（空=デフォルト）"
+    )
     process_cd = Column(String(50), nullable=False, comment="工程コード")
     process_name = Column(String(50), nullable=False, comment="工程名")
     equipment_label = Column(String(100), nullable=True, comment="設備・人員表示")

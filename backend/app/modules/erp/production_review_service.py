@@ -5,7 +5,7 @@ import calendar
 import json
 import re
 from calendar import monthrange
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from sqlalchemy import and_, func, select, text
@@ -21,8 +21,9 @@ from app.modules.erp.production_review_productivity import get_process_monthly_e
 from app.modules.master.models import ProductRouteStep
 
 # 実績一覧に出す工程（PPT 準拠）
+# shipping の実績 = production_summarys.order_quantity 月合計
 _PERFORMANCE_PROCESSES: Tuple[Tuple[str, str, Optional[str], Optional[str]], ...] = (
-    ("shipping", "出荷数", None, "warehouse_actual"),
+    ("shipping", "出荷数", None, "order_quantity"),
     ("cutting", "切断", "cutting_plan", "cutting_actual"),
     ("molding", "成型", "molding_plan", "molding_actual"),
     ("plating", "メッキ", "plating_plan", "plating_actual"),
@@ -472,48 +473,84 @@ def _apply_plan_adjust_rate(base_plan_th: float, plan_adjust_rate_pct: Any) -> f
     return round(float(base_plan_th or 0) * rate / 100.0, 1)
 
 
-async def get_capacity_rows(db: AsyncSession) -> List[Dict[str, Any]]:
+def _capacity_row_to_dict(r: ProductionReviewCapacity) -> Dict[str, Any]:
+    return {
+        "target_month": str(getattr(r, "target_month", "") or ""),
+        "process_cd": r.process_cd,
+        "process_name": r.process_name,
+        "equipment_label": r.equipment_label or "",
+        "standard_rate": int(r.standard_rate or 0),
+        "shift_label": r.shift_label or "",
+        "working_days": int(getattr(r, "working_days", 0) or 0),
+        "utilization_rate_pct": _normalize_utilization_rate_pct(
+            getattr(r, "utilization_rate_pct", None)
+        ),
+        "plan_adjust_rate_pct": _normalize_plan_adjust_rate_pct(
+            getattr(r, "plan_adjust_rate_pct", None)
+        ),
+        "daily_regular_hours": int(r.daily_regular_hours or 0),
+        "sort_order": int(r.sort_order or 0),
+    }
+
+
+async def fetch_capacity_rows_for_key(
+    db: AsyncSession,
+    target_month: str,
+) -> List[Dict[str, Any]]:
+    month_key = (target_month or "").strip()
     rows = list(
         (
             await db.execute(
-                select(ProductionReviewCapacity).order_by(
+                select(ProductionReviewCapacity)
+                .where(ProductionReviewCapacity.target_month == month_key)
+                .order_by(
                     ProductionReviewCapacity.sort_order,
                     ProductionReviewCapacity.id,
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
-    if rows:
-        return [
-            {
-                "process_cd": r.process_cd,
-                "process_name": r.process_name,
-                "equipment_label": r.equipment_label or "",
-                "standard_rate": int(r.standard_rate or 0),
-                "shift_label": r.shift_label or "",
-                "working_days": int(getattr(r, "working_days", 0) or 0),
-                "utilization_rate_pct": _normalize_utilization_rate_pct(
-                    getattr(r, "utilization_rate_pct", None)
-                ),
-                "plan_adjust_rate_pct": _normalize_plan_adjust_rate_pct(
-                    getattr(r, "plan_adjust_rate_pct", None)
-                ),
-                "daily_regular_hours": int(r.daily_regular_hours or 0),
-                "sort_order": int(r.sort_order or 0),
-            }
-            for r in rows
-        ]
-    return []
+    return [_capacity_row_to_dict(r) for r in rows]
 
 
-async def upsert_capacity_rows(db: AsyncSession, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def get_capacity_rows(
+    db: AsyncSession,
+    target_month: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """工程能力を取得。
+
+    target_month 未指定 / 空 → デフォルト（target_month=''）
+    指定時 → 当該月の設定。無ければデフォルトを返す（source は呼び出し側で区別可）
+    """
+    month_key = (target_month or "").strip()
+    if month_key:
+        monthly = await fetch_capacity_rows_for_key(db, month_key)
+        if monthly:
+            return monthly
+        defaults = await fetch_capacity_rows_for_key(db, "")
+        # デフォルトを月キー付きで返す（未保存の月別ドラフト用）
+        return [{**row, "target_month": month_key} for row in defaults]
+    return await fetch_capacity_rows_for_key(db, "")
+
+
+async def upsert_capacity_rows(
+    db: AsyncSession,
+    items: List[Dict[str, Any]],
+    target_month: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    month_key = (target_month or "").strip()
     for it in items:
         cd = str(it.get("process_cd") or "").strip()
         if not cd:
             continue
         row = (
             await db.execute(
-                select(ProductionReviewCapacity).where(ProductionReviewCapacity.process_cd == cd)
+                select(ProductionReviewCapacity).where(
+                    ProductionReviewCapacity.target_month == month_key,
+                    ProductionReviewCapacity.process_cd == cd,
+                )
             )
         ).scalar_one_or_none()
         util_pct = _normalize_utilization_rate_pct(it.get("utilization_rate_pct"))
@@ -540,9 +577,15 @@ async def upsert_capacity_rows(db: AsyncSession, items: List[Dict[str, Any]]) ->
             for k, v in payload.items():
                 setattr(row, k, v)
         else:
-            db.add(ProductionReviewCapacity(process_cd=cd, **payload))
+            db.add(
+                ProductionReviewCapacity(
+                    target_month=month_key,
+                    process_cd=cd,
+                    **payload,
+                )
+            )
     await db.commit()
-    return await get_capacity_rows(db)
+    return await get_capacity_rows(db, month_key or None)
 
 
 def _build_performance_row(
@@ -589,7 +632,8 @@ async def _build_performance_table(
     for key, name, plan_col, actual_col in _PERFORMANCE_PROCESSES:
         if key == "shipping":
             plan_qty = await _forecast_units(db, year, month)
-            actual_qty = await _sum_column(db, actual_col, start_d, end_d)
+            # 出荷実績 = production_summarys.order_quantity の対象月合計
+            actual_qty = await _sum_column(db, "order_quantity", start_d, end_d)
             forecast_qty = await _compute_shipping_jitsumi(db, year, month)
             prod_prev = None
             prod_curr = None
@@ -1071,6 +1115,162 @@ async def _build_inventory_table(
     }
     out["comments"] = _generate_inventory_comments(out)
     return out
+
+
+async def _apply_inventory_projection_to_forecast(
+    db: AsyncSession,
+    inv: Dict[str, Any],
+) -> Dict[str, Any]:
+    """在庫予測の「予測在庫(千本)」を月末在庫予測の month_end で上書きする。
+
+    工程キーは月末在庫予測画面（inventory_projection）と同一。
+    製品行は倉庫グループ（検査+倉庫）の月末予測を採用。
+    取得失敗時は元の集計値を維持する。
+    """
+    from loguru import logger
+
+    from app.modules.inventory_projection.service import get_projection_cached
+
+    ym = str(inv.get("inventory_month") or "").strip()
+    if not re.match(r"^\d{4}-\d{2}$", ym):
+        return inv
+
+    try:
+        y, m = int(ym[:4]), int(ym[5:7])
+    except ValueError:
+        return inv
+
+    month_start = date(y, m, 1)
+    month_end = date(y, m, monthrange(y, m)[1])
+    today = date.today()
+    if today < month_start:
+        base_date = month_start - timedelta(days=1)
+    elif today > month_end:
+        base_date = month_end
+    else:
+        base_date = today
+
+    try:
+        payload = await get_projection_cached(db, ym, base_date)
+    except Exception as exc:
+        logger.warning("在庫予測への月末在庫予測反映に失敗: {}", exc)
+        return inv
+
+    month_end_by_key: Dict[str, int] = {}
+    for g in payload.get("groups") or []:
+        key = str(g.get("key") or "").strip()
+        if not key:
+            continue
+        try:
+            month_end_by_key[key] = int(round(float(g.get("month_end") or 0)))
+        except (TypeError, ValueError):
+            month_end_by_key[key] = 0
+
+    if not month_end_by_key:
+        return inv
+
+    prev_wd = int(inv.get("prev_workdays") or 0)
+    curr_wd = int(inv.get("curr_workdays") or 0)
+
+    # leaf / product を上書き
+    for row in _iter_inventory_rows(inv.get("rows") or []):
+        key = str(row.get("key") or "")
+        if key in ("plating", "welding", "wip_total"):
+            continue
+        if key == "product":
+            # 倉庫グループ = 検査在庫 + 倉庫在庫（検討会の製品行に最も近い）
+            qty = month_end_by_key.get("warehouse")
+            if qty is None:
+                continue
+            row["curr_inventory_th"] = _thousands(qty)
+            _recompute_inventory_row_metrics(row, prev_wd=prev_wd, curr_wd=curr_wd)
+            continue
+        if key in month_end_by_key:
+            row["curr_inventory_th"] = _thousands(month_end_by_key[key])
+            _recompute_inventory_row_metrics(row, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    # 親行・仕掛合計を再集計
+    for row in inv.get("rows") or []:
+        if row.get("children"):
+            _resync_inventory_parent_row(row, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    wip = next((r for r in (inv.get("rows") or []) if r.get("key") == "wip_total"), None)
+    if wip:
+        tops = [r for r in (inv.get("rows") or []) if r.get("key") in _WIP_TOP_ORDER]
+        wip["curr_inventory_th"] = round(
+            sum(float(r.get("curr_inventory_th") or 0) for r in tops), 1
+        )
+        _recompute_inventory_row_metrics(wip, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    product_row = next((r for r in (inv.get("rows") or []) if r.get("key") == "product"), None)
+    if product_row:
+        pdays = float(product_row.get("curr_days") or 0)
+        prate = float(product_row.get("curr_rate_adj") or 0)
+        target_days = float(inv.get("product_target_days") or _PRODUCT_TARGET_DAYS)
+        target_rate = float(inv.get("product_target_rate") or _PRODUCT_TARGET_RATE)
+        if pdays < target_days or prate < target_rate:
+            inv["product_level"] = "danger"
+        elif pdays > target_days * 2:
+            inv["product_level"] = "high"
+        else:
+            inv["product_level"] = "ok"
+
+    inv["curr_inventory_source"] = "inventory_projection"
+    inv["curr_inventory_projection_base_date"] = base_date.isoformat()
+    inv["comments"] = _generate_inventory_comments(inv, forecast_mode=True)
+    return inv
+
+
+def _sync_forecast_prev_from_prior(
+    target: Dict[str, Any],
+    prior: Dict[str, Any],
+) -> Dict[str, Any]:
+    """翌月在庫予測の「前月在庫」← 当月在庫予測の「予測在庫」。
+
+    例: 9月在庫予測.prev ← 8月在庫予測.curr（千本）
+    prior が無い場合は target をそのまま返す。
+    """
+    if not target or not prior:
+        return target
+    prior_rows = list(_iter_inventory_rows(prior.get("rows") or []))
+    if not prior_rows:
+        return target
+
+    prior_by_key = {
+        str(r.get("key") or ""): r for r in prior_rows if r.get("key")
+    }
+    prev_wd = int(target.get("prev_workdays") or 0)
+    curr_wd = int(target.get("curr_workdays") or 0)
+
+    for row in _iter_inventory_rows(target.get("rows") or []):
+        key = str(row.get("key") or "")
+        if not key or key == "wip_total" or row.get("children"):
+            continue
+        src = prior_by_key.get(key)
+        if not src:
+            continue
+        try:
+            row["prev_inventory_th"] = round(float(src.get("curr_inventory_th") or 0), 1)
+        except (TypeError, ValueError):
+            row["prev_inventory_th"] = 0.0
+        _recompute_inventory_row_metrics(row, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    for row in target.get("rows") or []:
+        if row.get("children"):
+            _resync_inventory_parent_row(row, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    wip = next((r for r in (target.get("rows") or []) if r.get("key") == "wip_total"), None)
+    if wip:
+        tops = [r for r in (target.get("rows") or []) if r.get("key") in _WIP_TOP_ORDER]
+        wip["prev_inventory_th"] = round(
+            sum(float(r.get("prev_inventory_th") or 0) for r in tops), 1
+        )
+        _recompute_inventory_row_metrics(wip, prev_wd=prev_wd, curr_wd=curr_wd)
+
+    # 基準日取得ではなく前月予測在庫由来であることを明示
+    target["prev_inventory_as_of"] = None
+    target["prev_inventory_source"] = "prior_inventory_forecast"
+    return target
 
 
 _HOURS_PER_SHIFT = 7.6
@@ -1592,7 +1792,11 @@ def merge_preserve_editable(
     computed: Dict[str, Any],
     existing: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """再計算時、人工入力のコメント・生産性・負荷オーバーライドを保持"""
+    """再計算時、コメント・会議メタ・負荷の手改計画のみ保持。
+
+    実績・在庫・生産性などの集計値は常に最新計算結果を採用する
+    （旧実装は保存済み数値で上書きしていたため「再計算」が効かないように見えた）。
+    """
     if not existing:
         return computed
     merged = json.loads(json.dumps(computed))
@@ -1605,105 +1809,17 @@ def merge_preserve_editable(
             if ex.get(key):
                 mg[key] = ex[key]
         if section == "part01":
-            if ex.get("performance", {}).get("rows") and mg.get("performance", {}).get("rows"):
-                ex_rows = {r["key"]: r for r in ex["performance"]["rows"]}
-                for row in mg["performance"]["rows"]:
-                    prev = ex_rows.get(row["key"], {})
-                    for fld in ("plan_th", "forecast_th", "actual_th"):
-                        if prev.get(fld) is not None:
-                            row[fld] = prev[fld]
-                    plan_th = float(row.get("plan_th") or 0)
-                    forecast_th = float(row.get("forecast_th") or 0)
-                    actual_th = float(row.get("actual_th") or 0)
-                    row["vs_forecast_th"] = round(forecast_th - plan_th, 1)
-                    row["vs_plan_th"] = round(actual_th - plan_th, 1)
-                    if row.get("key") == "shipping":
-                        row["productivity_prev"] = None
-                        row["productivity_curr"] = None
-                        row["productivity_delta"] = None
-                        continue
-                    for fld in ("productivity_prev", "productivity_curr"):
-                        if prev.get(fld) is not None:
-                            row[fld] = prev[fld]
-                    if row.get("productivity_prev") is not None and row.get("productivity_curr") is not None:
-                        row["productivity_delta"] = row["productivity_curr"] - row["productivity_prev"]
             if ex.get("performance", {}).get("comments"):
                 mg["performance"]["comments"] = ex["performance"]["comments"]
             if ex.get("scrap", {}).get("comments"):
                 mg["scrap"]["comments"] = ex["scrap"]["comments"]
             if ex.get("inventory", {}).get("comments"):
                 mg["inventory"]["comments"] = ex["inventory"]["comments"]
+            # 基準日だけ保持（数量は最新集計。画面側で必要なら基準日で再取得）
             if ex.get("inventory", {}).get("curr_inventory_as_of"):
                 mg["inventory"]["curr_inventory_as_of"] = ex["inventory"]["curr_inventory_as_of"]
-            if ex.get("inventory", {}).get("rows") and mg.get("inventory", {}).get("rows"):
-                ex_inv_rows = {
-                    r.get("key"): r for r in _iter_inventory_rows(ex["inventory"]["rows"])
-                }
-                prev_wd = int(mg["inventory"].get("prev_workdays") or 0)
-                curr_wd = int(mg["inventory"].get("curr_workdays") or 0)
-                target_rate = float(
-                    mg["inventory"].get("product_target_rate") or _PRODUCT_TARGET_RATE
-                )
-                target_days = float(
-                    mg["inventory"].get("product_target_days") or _PRODUCT_TARGET_DAYS
-                )
-                for row in _iter_inventory_rows(mg["inventory"]["rows"]):
-                    # 親行は子から再集計するため、手改値は子のみ反映
-                    if row.get("children"):
-                        continue
-                    prev = ex_inv_rows.get(row.get("key"), {})
-                    for fld in ("prev_inventory_th", "curr_inventory_th"):
-                        if prev.get(fld) is not None:
-                            row[fld] = prev[fld]
-                    # 工程内示分母は再計算結果を維持
-                    _recompute_inventory_row_metrics(row, prev_wd=prev_wd, curr_wd=curr_wd)
-                for row in mg["inventory"]["rows"]:
-                    if row.get("children"):
-                        _resync_inventory_parent_row(row, prev_wd=prev_wd, curr_wd=curr_wd)
-                # 仕掛品合計をトップ行から再集計
-                wip = next(
-                    (r for r in mg["inventory"]["rows"] if r.get("key") == "wip_total"),
-                    None,
-                )
-                if wip:
-                    tops = [
-                        r
-                        for r in mg["inventory"]["rows"]
-                        if r.get("key") in _WIP_TOP_ORDER
-                    ]
-                    wip["prev_inventory_th"] = round(
-                        sum(float(r.get("prev_inventory_th") or 0) for r in tops), 1
-                    )
-                    wip["curr_inventory_th"] = round(
-                        sum(float(r.get("curr_inventory_th") or 0) for r in tops), 1
-                    )
-                    # 分母は全量出荷内示を維持
-                    wip["prev_forecast_th"] = float(mg["inventory"].get("prev_forecast_th") or 0)
-                    wip["curr_forecast_th"] = float(mg["inventory"].get("curr_forecast_th") or 0)
-                    wip["prev_forecast_adj_th"] = float(
-                        mg["inventory"].get("prev_forecast_adj_th")
-                        or mg["inventory"].get("prev_forecast_th")
-                        or 0
-                    )
-                    wip["curr_forecast_adj_th"] = float(
-                        mg["inventory"].get("curr_forecast_adj_th")
-                        or mg["inventory"].get("curr_forecast_th")
-                        or 0
-                    )
-                    _recompute_inventory_row_metrics(wip, prev_wd=prev_wd, curr_wd=curr_wd)
-                product_row = next(
-                    (r for r in mg["inventory"]["rows"] if r.get("key") == "product"),
-                    None,
-                )
-                if product_row:
-                    pdays = float(product_row.get("curr_days") or 0)
-                    prate = float(product_row.get("curr_rate_adj") or 0)
-                    if pdays < target_days or prate < target_rate:
-                        mg["inventory"]["product_level"] = "danger"
-                    elif pdays > target_days * 2:
-                        mg["inventory"]["product_level"] = "high"
-                    else:
-                        mg["inventory"]["product_level"] = "ok"
+            if ex.get("inventory", {}).get("prev_inventory_as_of"):
+                mg["inventory"]["prev_inventory_as_of"] = ex["inventory"]["prev_inventory_as_of"]
             # 手改コメントが無い場合のみ、最新数値で自動コメントを再生成
             if not (ex.get("performance") or {}).get("comments"):
                 mg["performance"]["comments"] = _generate_performance_comments(mg["performance"])
@@ -1730,17 +1846,33 @@ def merge_preserve_editable(
                         updated = _recompute_load_row_dict(row, prev_plan)
                         updated["base_plan_th"] = round(float(prev_base), 1)
                         row.update(updated)
-                else:
-                    # 旧データ互換: base が無い場合は従来どおり plan_th を保持
-                    row.update(_recompute_load_row_dict(row, prev_plan))
+                # base 無しの旧データは最新計算の plan_th を採用（手改判定不可）
             if not (ex.get("load_plan") or {}).get("comments"):
                 mg["load_plan"]["comments"] = _generate_load_plan_comments(mg["load_plan"])
-            if section == "part02" and ex.get("inventory_forecast"):
-                mg["inventory_forecast"] = ex["inventory_forecast"]
-            elif section == "part02" and not (ex.get("inventory_forecast") or {}).get("comments"):
-                mg["inventory_forecast"]["comments"] = _generate_inventory_comments(
-                    mg["inventory_forecast"], forecast_mode=True
-                )
+            if "inventory_forecast" in mg:
+                ex_fc = ex.get("inventory_forecast") or {}
+                if ex_fc.get("comments"):
+                    mg["inventory_forecast"]["comments"] = ex_fc["comments"]
+                if ex_fc.get("curr_inventory_as_of"):
+                    mg["inventory_forecast"]["curr_inventory_as_of"] = ex_fc["curr_inventory_as_of"]
+                # part03 の前月在庫は part02 予測在庫から同期するため、基準日は保持しない
+                if section == "part02" and ex_fc.get("prev_inventory_as_of"):
+                    mg["inventory_forecast"]["prev_inventory_as_of"] = ex_fc[
+                        "prev_inventory_as_of"
+                    ]
+                if not ex_fc.get("comments"):
+                    mg["inventory_forecast"]["comments"] = _generate_inventory_comments(
+                        mg["inventory_forecast"], forecast_mode=True
+                    )
+
+    # PART03 前月在庫 ← PART02 予測在庫（マージ後の数値で再同期）
+    p2_fc = (merged.get("part02") or {}).get("inventory_forecast")
+    p3_fc = (merged.get("part03") or {}).get("inventory_forecast")
+    if p2_fc and p3_fc:
+        _sync_forecast_prev_from_prior(p3_fc, p2_fc)
+        ex_p3_fc = ((existing or {}).get("part03") or {}).get("inventory_forecast") or {}
+        if not ex_p3_fc.get("comments"):
+            p3_fc["comments"] = _generate_inventory_comments(p3_fc, forecast_mode=True)
 
     if existing.get("meta"):
         merged.setdefault("meta", {}).update(
@@ -1762,8 +1894,10 @@ async def build_meeting_data(
     ty, tm = _parse_month(target_month)
     prev_y, prev_m = _shift_month(ty, tm, -1)
     next_y, next_m = _shift_month(ty, tm, 1)
+    next2_y, next2_m = _shift_month(next_y, next_m, 1)
 
-    capacities = await get_capacity_rows(db)
+    capacities_curr = await get_capacity_rows(db, f"{ty:04d}-{tm:02d}")
+    capacities_next = await get_capacity_rows(db, f"{next_y:04d}-{next_m:02d}")
 
     part01_performance = await _build_performance_table(db, prev_y, prev_m)
     part01_scrap = await _build_scrap_section(db, ty, tm)
@@ -1778,7 +1912,7 @@ async def build_meeting_data(
         curr_forecast_month=tm,
     )
 
-    part02_load = await _build_load_plan(db, ty, tm, capacities)
+    part02_load = await _build_load_plan(db, ty, tm, capacities_curr)
     part02_inventory_fc = await _build_inventory_table(
         db,
         inv_year=ty,
@@ -1788,11 +1922,31 @@ async def build_meeting_data(
         curr_forecast_year=next_y,
         curr_forecast_month=next_m,
     )
+    part02_inventory_fc = await _apply_inventory_projection_to_forecast(
+        db, part02_inventory_fc
+    )
     part02_inventory_fc["comments"] = _generate_inventory_comments(
         part02_inventory_fc, forecast_mode=True
     )
 
-    part03_load = await _build_load_plan(db, next_y, next_m, capacities)
+    part03_load = await _build_load_plan(db, next_y, next_m, capacities_next)
+    part03_inventory_fc = await _build_inventory_table(
+        db,
+        inv_year=next_y,
+        inv_month=next_m,
+        prev_forecast_year=next_y,
+        prev_forecast_month=next_m,
+        curr_forecast_year=next2_y,
+        curr_forecast_month=next2_m,
+    )
+    part03_inventory_fc = await _apply_inventory_projection_to_forecast(
+        db, part03_inventory_fc
+    )
+    # 9月前月在庫 ← 8月予測在庫
+    _sync_forecast_prev_from_prior(part03_inventory_fc, part02_inventory_fc)
+    part03_inventory_fc["comments"] = _generate_inventory_comments(
+        part03_inventory_fc, forecast_mode=True
+    )
 
     data = {
         "target_month": target_month,
@@ -1820,6 +1974,7 @@ async def build_meeting_data(
             "title": f"PART 03. {_month_label(next_y, next_m)} 生産計画",
             "subtitle": f"稼働日{part03_load['working_days']}日の生産負荷予測",
             "load_plan": part03_load,
+            "inventory_forecast": part03_inventory_fc,
         },
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }

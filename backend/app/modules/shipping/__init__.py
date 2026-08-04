@@ -18,6 +18,7 @@ from app.modules.shipping.picking_api import router as picking_router
 from app.modules.shipping.quick_update_api import router as quick_update_router
 from app.modules.shipping.warehouse_daily_stock_api import router as warehouse_daily_stock_router
 from app.modules.shipping.pallet_count_api import router as pallet_count_router
+from app.modules.shipping.long_stay_uninspected_api import router as long_stay_uninspected_router
 
 router = APIRouter()
 router.include_router(quick_update_router, tags=["出荷クイック編集"])
@@ -31,3 +32,8 @@ router.include_router(overview_router, prefix="/overview", tags=["出荷報告�
 router.include_router(print_history_router, prefix="/print", tags=["印刷履歴"])
 router.include_router(warehouse_daily_stock_router, prefix="/warehouse-daily", tags=["倉庫日次在庫"])
 router.include_router(pallet_count_router, prefix="/pallet-count", tags=["出荷パレット数"])
+router.include_router(
+    long_stay_uninspected_router,
+    prefix="/long-stay-uninspected",
+    tags=["長期滞在未検査在庫"],
+)

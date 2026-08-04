@@ -28,6 +28,7 @@ from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, ProductRouteStep, Destination
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.shipping.shortage_print_handwriting import fetch_handwriting_product_rows
+from app.modules.shipping.long_stay_uninspected_api import fetch_long_stay_uninspected_rows
 
 router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
 
@@ -1757,7 +1758,12 @@ async def get_inventory_shortage_print(
                 "box_quantity": box_quantity,
             })
         handwriting_products = await fetch_handwriting_product_rows(db)
-        return {"data": out, "handwriting_products": handwriting_products}
+        long_stay_uninspected = await fetch_long_stay_uninspected_rows(db)
+        return {
+            "data": out,
+            "handwriting_products": handwriting_products,
+            "long_stay_uninspected": long_stay_uninspected,
+        }
     except HTTPException:
         raise
     except Exception as e:

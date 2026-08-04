@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type {
   InventoryShortageHandwritingRow,
+  InventoryShortageLongStayRow,
   InventoryShortagePrintRow,
 } from '@/api/database'
 
@@ -14,5 +15,6 @@ export function getWarehouseDailyShortagePrint(params: {
     success?: boolean
     data: InventoryShortagePrintRow[]
     handwriting_products?: InventoryShortageHandwritingRow[]
+    long_stay_uninspected?: InventoryShortageLongStayRow[]
   }>('/api/shipping/warehouse-daily/shortage-print', { params })
 }

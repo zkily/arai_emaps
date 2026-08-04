@@ -79,6 +79,14 @@
               不足数発行
             </el-button>
             <el-button
+              :icon="EditPen"
+              class="action-btn action-btn-long-stay"
+              size="small"
+              @click="openLongStayDialog"
+            >
+              長期滞在未検査在庫
+            </el-button>
+            <el-button
               :icon="Operation"
               :disabled="updatingAll"
               :loading="updatingAll"
@@ -209,26 +217,28 @@
               :class="{ 'print-page--last': gIdx === printDataGroupedByDate.length - 1 }"
             >
               <div class="print-header">
-                <div class="print-title-wrap">
-                  <span class="print-title-accent"></span>
-                  <h1 class="print-title">出荷不足数一覧</h1>
-                  <p class="print-subtitle">検査工程用</p>
-                </div>
-                <div class="print-header-row">
+                <div class="print-header-top">
+                  <div class="print-title-wrap">
+                    <h1 class="print-title">出荷不足数一覧</h1>
+                    <p class="print-subtitle">検査工程用</p>
+                  </div>
                   <div class="print-period-block">
                     <span class="print-period-dot"></span>
                     <span class="print-period-label">対象日</span>
                     <span class="print-period-value">{{ formatPrintDate(group.date) }}</span>
                   </div>
-                  <div class="print-summary-box">
-                    <span class="print-summary-label">当日合計</span>
-                    <span class="print-summary-item"
-                      ><em>箱数</em> {{ formatNumber(printDayTotals(group.rows).box_quantity) }}</span
-                    >
-                    <span class="print-summary-item"
-                      ><em>本数</em> {{ formatNumber(printDayTotals(group.rows).units) }}</span
-                    >
-                  </div>
+                </div>
+              </div>
+
+              <div class="print-table-toolbar">
+                <div class="print-summary-box">
+                  <span class="print-summary-label">当日合計</span>
+                  <span class="print-summary-item"
+                    ><em>箱数</em> {{ formatNumber(printDayTotals(group.rows).box_quantity) }}</span
+                  >
+                  <span class="print-summary-item"
+                    ><em>本数</em> {{ formatNumber(printDayTotals(group.rows).units) }}</span
+                  >
                 </div>
               </div>
 
@@ -305,16 +315,97 @@
 
               <div class="print-notes">
                 <div class="print-notes-label">備考</div>
-                <div class="print-notes-box">
-                  <div class="print-notes-line"></div>
-                  <div class="print-notes-line"></div>
-                  <div class="print-notes-line"></div>
+                <div class="print-notes-box print-notes-box--single">
+                  <div class="print-long-stay">
+                    <div class="print-long-stay-title">長期滞在未検査在庫</div>
+                    <div v-if="printLongStayRows.length" class="print-long-stay-list">
+                      <div
+                        v-for="(ls, lsIdx) in printLongStayRows"
+                        :key="`ls-${gIdx}-${ls.id ?? lsIdx}`"
+                        class="print-long-stay-item"
+                      >
+                        {{ formatLongStayPrintItem(ls) }}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </template>
         </div>
       </div>
+
+      <!-- 長期滞在未検査在庫 管理ダイアログ -->
+      <el-dialog
+        v-model="showLongStayDialog"
+        title="長期滞在未検査在庫"
+        width="640px"
+        class="long-stay-dialog"
+        :close-on-click-modal="false"
+        destroy-on-close
+      >
+        <p class="long-stay-dialog__hint">
+          不足数一覧印刷の「備考」に表示されます（例：X11M FR：700本）。追加・修正・削除後は印刷に反映されます。
+        </p>
+        <div class="long-stay-dialog__toolbar">
+          <el-button type="primary" size="small" :icon="Plus" :disabled="!canCreate" @click="addLongStayDraft">
+            行を追加
+          </el-button>
+          <el-button size="small" :loading="longStayLoading" @click="loadLongStayRows">再読込</el-button>
+        </div>
+        <el-table
+          v-loading="longStayLoading"
+          :data="longStayRows"
+          border
+          size="small"
+          class="long-stay-dialog__table"
+          empty-text="データがありません"
+        >
+          <el-table-column label="製品名" min-width="200">
+            <template #default="{ row }">
+              <el-input v-model="row.product_name" size="small" placeholder="例：X11M FR" maxlength="128" />
+            </template>
+          </el-table-column>
+          <el-table-column label="本数" width="140" align="right">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.quantity"
+                size="small"
+                :min="0"
+                :step="1"
+                controls-position="right"
+                class="long-stay-qty"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" align="center" fixed="right">
+            <template #default="{ row, $index }">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :disabled="row._saving || (!row.id && !canCreate) || (row.id && !canEdit)"
+                :loading="row._saving"
+                @click="saveLongStayRow(row)"
+              >
+                保存
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                :disabled="row._saving || (row.id ? !canDelete : false)"
+                @click="removeLongStayRow(row, $index)"
+              >
+                削除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <template #footer>
+          <el-button size="small" @click="showLongStayDialog = false">閉じる</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 全部一括更新確認ダイアログ -->
       <el-dialog
@@ -412,9 +503,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
-import { Box, Lock, Warning, Printer, Operation, Loading, TrendCharts } from '@element-plus/icons-vue'
+import { Box, Lock, Warning, Printer, Operation, Loading, TrendCharts, EditPen, Plus } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import {
   getProductionSummarysList,
@@ -437,7 +528,14 @@ import type {
   ProductionSummaryProduct,
   InventoryShortagePrintRow,
   InventoryShortageHandwritingRow,
+  InventoryShortageLongStayRow,
 } from '@/api/database'
+import {
+  listLongStayUninspected,
+  createLongStayUninspected,
+  updateLongStayUninspected,
+  deleteLongStayUninspected,
+} from '@/api/shipping/longStayUninspected'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
 
@@ -465,6 +563,13 @@ const printContent = ref<HTMLElement | null>(null)
 const printTableData = ref<InventoryShortagePrintRow[]>([])
 /** 印刷ページ下部：固定製品の手書き記入用行 */
 const printHandwritingProducts = ref<InventoryShortageHandwritingRow[]>([])
+/** 印刷備考：長期滞在未検査在庫 */
+const printLongStayRows = ref<InventoryShortageLongStayRow[]>([])
+
+type LongStayEditRow = InventoryShortageLongStayRow & { _saving?: boolean; _isNew?: boolean }
+const showLongStayDialog = ref(false)
+const longStayLoading = ref(false)
+const longStayRows = ref<LongStayEditRow[]>([])
 
 const showAllUpdateConfirmDialog = ref(false)
 const showProgressDialog = ref(false)
@@ -752,6 +857,141 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Summ
   return sums
 }
 
+function formatLongStayPrintItem(row: InventoryShortageLongStayRow): string {
+  const name = String(row.product_name || '').trim() || '—'
+  const qty = Number(row.quantity)
+  const qtyText = Number.isFinite(qty) ? qty.toLocaleString('ja-JP') : '0'
+  return `${name}：${qtyText}本`
+}
+
+function extractLongStayFromPrintRes(res: any): InventoryShortageLongStayRow[] {
+  const list = Array.isArray(res?.long_stay_uninspected)
+    ? res.long_stay_uninspected
+    : Array.isArray(res?.data?.long_stay_uninspected)
+      ? res.data.long_stay_uninspected
+      : []
+  return list
+    .map((r: any) => ({
+      id: Number(r?.id) || 0,
+      product_name: String(r?.product_name || '').trim(),
+      quantity: Number(r?.quantity) || 0,
+      sort_order: Number(r?.sort_order) || 0,
+    }))
+    .filter((r: InventoryShortageLongStayRow) => r.product_name)
+}
+
+async function loadLongStayRows() {
+  longStayLoading.value = true
+  try {
+    const res: any = await listLongStayUninspected()
+    const list: any[] = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    longStayRows.value = list.map((r) => ({
+      id: Number(r.id),
+      product_name: String(r.product_name || '').trim(),
+      quantity: Number(r.quantity) || 0,
+      sort_order: Number(r.sort_order) || 0,
+      _saving: false,
+      _isNew: false,
+    }))
+    printLongStayRows.value = longStayRows.value.map(({ id, product_name, quantity, sort_order }) => ({
+      id,
+      product_name,
+      quantity,
+      sort_order,
+    }))
+  } catch (e: any) {
+    if (!e?.response) ElMessage.error('長期滞在未検査在庫の取得に失敗しました')
+  } finally {
+    longStayLoading.value = false
+  }
+}
+
+function openLongStayDialog() {
+  showLongStayDialog.value = true
+  void loadLongStayRows()
+}
+
+function addLongStayDraft() {
+  if (!guardSalesOperation(canCreate)) return
+  longStayRows.value.push({
+    id: 0,
+    product_name: '',
+    quantity: 0,
+    sort_order: (longStayRows.value.length + 1) * 10,
+    _saving: false,
+    _isNew: true,
+  })
+}
+
+async function saveLongStayRow(row: LongStayEditRow) {
+  const name = String(row.product_name || '').trim()
+  if (!name) {
+    ElMessage.warning('製品名を入力してください')
+    return
+  }
+  const qty = Math.max(0, Math.floor(Number(row.quantity) || 0))
+  const isNew = !row.id || row._isNew
+  if (isNew) {
+    if (!guardSalesOperation(canCreate)) return
+  } else if (!guardSalesOperation(canEdit)) {
+    return
+  }
+  row._saving = true
+  try {
+    if (isNew) {
+      const res: any = await createLongStayUninspected({
+        product_name: name,
+        quantity: qty,
+        sort_order: row.sort_order,
+      })
+      const newId = Number(res?.id ?? res?.data?.id)
+      if (Number.isFinite(newId) && newId > 0) row.id = newId
+      row._isNew = false
+      ElMessage.success('追加しました')
+    } else {
+      await updateLongStayUninspected(row.id, {
+        product_name: name,
+        quantity: qty,
+        sort_order: row.sort_order,
+      })
+      ElMessage.success('更新しました')
+    }
+    row.product_name = name
+    row.quantity = qty
+    await loadLongStayRows()
+  } catch (e: any) {
+    if (!e?.response) ElMessage.error('保存に失敗しました')
+  } finally {
+    row._saving = false
+  }
+}
+
+async function removeLongStayRow(row: LongStayEditRow, index: number) {
+  if (!row.id || row._isNew) {
+    longStayRows.value.splice(index, 1)
+    return
+  }
+  if (!guardSalesOperation(canDelete)) return
+  try {
+    await ElMessageBox.confirm(`「${row.product_name || 'この行'}」を削除しますか？`, '削除確認', {
+      type: 'warning',
+      confirmButtonText: '削除',
+      cancelButtonText: 'キャンセル',
+    })
+  } catch {
+    return
+  }
+  row._saving = true
+  try {
+    await deleteLongStayUninspected(row.id)
+    ElMessage.success('削除しました')
+    await loadLongStayRows()
+  } catch (e: any) {
+    if (!e?.response) ElMessage.error('削除に失敗しました')
+    row._saving = false
+  }
+}
+
 async function handlePrint() {
   if (!guardSalesOperation(canExport)) return
 
@@ -765,7 +1005,7 @@ async function handlePrint() {
       endDate: filters.dateRange[1],
       productCd: filters.productCd || undefined,
     })
-    // API: { data: rows[], handwriting_products: [...] }（interceptor で body 直返し）
+    // API: { data: rows[], handwriting_products: [...], long_stay_uninspected: [...] }
     const list: InventoryShortagePrintRow[] = Array.isArray(res)
       ? res
       : Array.isArray(res?.data)
@@ -782,6 +1022,7 @@ async function handlePrint() {
     const weekdaysOnly = list.filter((row: InventoryShortagePrintRow) => isWeekday(row.date || ''))
     printTableData.value = weekdaysOnly
     printHandwritingProducts.value = handwriting
+    printLongStayRows.value = extractLongStayFromPrintRes(res)
     if (weekdaysOnly.length === 0) {
       ElMessage.warning('印刷対象の在庫不足データがありません（対象期間内の平日データがありません）')
       return
@@ -1273,6 +1514,15 @@ onMounted(() => {
 }
 .action-btn-print:not(:disabled):hover {
   box-shadow: 0 4px 12px rgba(71, 85, 105, 0.35);
+}
+
+.action-btn-long-stay {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #fff !important;
+  border-color: rgba(2, 132, 199, 0.4);
+}
+.action-btn-long-stay:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
 }
 
 .action-btn-update {
@@ -2058,39 +2308,27 @@ onMounted(() => {
   break-after: auto;
 }
 
-/* ----- ヘッダー ----- */
+/* ----- ヘッダー（左：タイトル / 右：対象日） ----- */
 .print-header {
-  text-align: center;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  text-align: left;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #e2e8f0;
   position: relative;
 }
 
-.print-header::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #6366f1, transparent);
-  border-radius: 1px;
+.print-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .print-title-wrap {
   position: relative;
-  margin-bottom: 8px;
-}
-
-.print-title-accent {
-  display: block;
-  width: 24px;
-  height: 3px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 2px;
-  margin: 0 auto 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
 }
 
 .print-title {
@@ -2111,13 +2349,11 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.print-header-row {
+.print-table-toolbar {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
-  justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-top: 4px;
+  margin: 0 0 6px;
 }
 
 .print-period-block {
@@ -2129,6 +2365,8 @@ onMounted(() => {
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .print-period-dot {
@@ -2233,7 +2471,7 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-/* ----- 合計（対象日と同行） ----- */
+/* ----- 合計（テーブル右上） ----- */
 .print-summary-box {
   display: inline-flex;
   align-items: center;
@@ -2281,7 +2519,7 @@ onMounted(() => {
   border-bottom: 1px solid #94a3b8;
 }
 
-/* ----- 備考（3行・手書き用） ----- */
+/* ----- 備考（長期滞在未検査在庫＋手書き行） ----- */
 .print-notes {
   margin-top: auto;
   padding-top: 14px;
@@ -2297,6 +2535,38 @@ onMounted(() => {
   letter-spacing: 0.04em;
 }
 
+.print-long-stay {
+  margin: 0;
+  padding: 5px 8px 6px;
+}
+
+.print-long-stay-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.print-long-stay-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 4px;
+  min-height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #000;
+  line-height: 1.4;
+}
+
+.print-long-stay-item {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .print-notes-box {
   border: 1px solid #94a3b8;
   border-radius: 4px;
@@ -2305,14 +2575,29 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
-.print-notes-line {
-  height: 26px;
-  box-sizing: border-box;
-  border-bottom: 1px solid #cbd5e1;
+.print-notes-box--single {
+  min-height: 0;
 }
 
-.print-notes-line:last-child {
-  border-bottom: none;
+.long-stay-dialog__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.long-stay-dialog__toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.long-stay-dialog__table {
+  width: 100%;
+}
+
+.long-stay-qty {
+  width: 120px;
 }
 
 /* ----- フッター ----- */
@@ -2354,11 +2639,6 @@ onMounted(() => {
   .print-page--last {
     page-break-after: auto;
     break-after: auto;
-  }
-
-  .print-title-accent {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 
   .print-period-block,

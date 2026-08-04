@@ -543,17 +543,16 @@ async def batch_actual_stock_transaction_logs(
     }
 
 
-@router.get("/manual-entry-statistics")
-async def get_manual_entry_statistics(
-    month: Optional[str] = Query(None, description="対象月 YYYY-MM（未指定時は当月）"),
-    compare_month: Optional[str] = Query(None, description="比較月 YYYY-MM（未指定時は前月）"),
-    trend_months: int = Query(6, ge=1, le=24, description="推移グラフの月数"),
-    process_cd: Optional[str] = Query(None, description="工程コード"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
+async def fetch_manual_entry_statistics(
+    db: AsyncSession,
+    *,
+    month: Optional[str] = None,
+    compare_month: Optional[str] = None,
+    trend_months: int = 6,
+    process_cd: Optional[str] = None,
+) -> dict:
     """
-    実績修正統計（操作種別=実績、手入力除外）。
+    実績修正統計データ取得（操作種別=実績、手入力除外）。
     実績修正 vs 実績集計（MES・ファイル同期等）を月次比較。
     検査工程(KT09)は製品名に SD を含む行を除外。
     """
@@ -562,6 +561,7 @@ async def get_manual_entry_statistics(
     cmp_month = (compare_month or "").strip() or _shift_month(target_month, -1)
     _parse_month(target_month)
     _parse_month(cmp_month)
+    trend_months = max(1, min(int(trend_months or 6), 24))
 
     proc = (process_cd or "").strip() or None
 
@@ -584,11 +584,9 @@ async def get_manual_entry_statistics(
     current_summary = await _fetch_summary(target_month)
     compare_summary = await _fetch_summary(cmp_month)
 
-    # by process
     by_process = await _fetch_by_process(db, target_month, proc)
     by_process_compare = await _fetch_by_process(db, cmp_month, proc)
 
-    # monthly trend
     trend_list = _month_list_end_month(target_month, trend_months)
     trend_start, _ = _month_bounds(trend_list[0])
     _, trend_end = _month_bounds(target_month)
@@ -686,6 +684,7 @@ async def get_manual_entry_statistics(
         "compareMonth": cmp_month,
         "trendMonths": trend_months,
         "transactionType": "実績",
+        "processCd": proc,
         "current": current_summary,
         "compare": compare_summary,
         "monthOverMonth": {
@@ -711,6 +710,29 @@ async def get_manual_entry_statistics(
         "byProcessCompare": by_process_compare,
         "byMonthTrend": by_month_trend,
     }
+
+
+@router.get("/manual-entry-statistics")
+async def get_manual_entry_statistics(
+    month: Optional[str] = Query(None, description="対象月 YYYY-MM（未指定時は当月）"),
+    compare_month: Optional[str] = Query(None, description="比較月 YYYY-MM（未指定時は前月）"),
+    trend_months: int = Query(6, ge=1, le=24, description="推移グラフの月数"),
+    process_cd: Optional[str] = Query(None, description="工程コード"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    実績修正統計（操作種別=実績、手入力除外）。
+    実績修正 vs 実績集計（MES・ファイル同期等）を月次比較。
+    検査工程(KT09)は製品名に SD を含む行を除外。
+    """
+    return await fetch_manual_entry_statistics(
+        db,
+        month=month,
+        compare_month=compare_month,
+        trend_months=trend_months,
+        process_cd=process_cd,
+    )
 
 
 @router.get("/{log_id}")

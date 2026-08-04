@@ -21,6 +21,7 @@ from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.erp.production_review_models import ProductionReviewMeeting
 from app.modules.erp.production_review_service import (
     build_meeting_data,
+    fetch_capacity_rows_for_key,
     generate_section_comments,
     get_capacity_rows,
     meeting_from_json,
@@ -36,6 +37,14 @@ _MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 class SaveMeetingBody(BaseModel):
     status: str = Field(default="draft", description="draft/final")
     data: Dict[str, Any]
+
+
+class ScrapPptxBody(BaseModel):
+    """廃棄セクション専用 PPT。画面表示中の scrap + ECharts 画像を受け取る。"""
+
+    scrap: Dict[str, Any]
+    chart_image_base64: Optional[str] = None
+    meeting_label: Optional[str] = None
 
 
 class CapacityItem(BaseModel):
@@ -113,21 +122,43 @@ async def list_saved_months(
 
 @router.get("/capacity")
 async def get_capacity(
+    month: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    return {"success": True, "data": await get_capacity_rows(db)}
+    """工程能力。month 未指定=デフォルト、指定時=当該月（無ければデフォルト値を返す）。"""
+    _ = current_user
+    target = _validate_month(month) if month else ""
+    rows = await get_capacity_rows(db, target or None)
+    existing = await fetch_capacity_rows_for_key(db, target) if target else rows
+    source = "monthly" if target and existing else "default"
+    return {
+        "success": True,
+        "data": rows,
+        "source": source,
+        "target_month": target,
+    }
 
 
 @router.put("/capacity")
 async def put_capacity(
     body: CapacityPutBody,
+    month: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_inventory_operation("edit")),
 ):
+    """工程能力保存。month 未指定=デフォルト、指定時=当該月の設定として保存。"""
+    _ = current_user
+    target = _validate_month(month) if month else ""
     items = [it.model_dump() for it in body.items]
-    data = await upsert_capacity_rows(db, items)
-    return {"success": True, "data": data, "message": f"{len(items)}件の工程能力を保存しました"}
+    data = await upsert_capacity_rows(db, items, target_month=target)
+    label = target or "デフォルト"
+    return {
+        "success": True,
+        "data": data,
+        "message": f"{label} の工程能力を {len(items)}件保存しました",
+        "target_month": target,
+    }
 
 
 class GenerateCommentsBody(BaseModel):
@@ -311,7 +342,32 @@ async def recalculate_meeting(
     except Exception as exc:
         logger.exception("生産検討会資料の再計算に失敗")
         raise HTTPException(status_code=500, detail=f"再計算に失敗しました: {exc}") from exc
-    return {"success": True, "data": data, "message": "数値を再計算しました（コメント等の手入力は保持）"}
+    return {
+        "success": True,
+        "data": data,
+        "message": "数値を再計算しました（コメント・負荷の手改計画は保持）",
+    }
+
+
+@router.delete("/{month}")
+async def delete_meeting(
+    month: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("edit")),
+):
+    """保存済みの検討会資料を削除する（次回読込時は最新データから再集計）。"""
+    _ = current_user
+    target_month = _validate_month(month)
+    row = (
+        await db.execute(
+            select(ProductionReviewMeeting).where(ProductionReviewMeeting.target_month == target_month)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="保存済みデータが見つかりません")
+    await db.delete(row)
+    await db.commit()
+    return {"success": True, "message": f"{target_month} の保存データを削除しました"}
 
 
 @router.put("/{month}")
@@ -389,6 +445,43 @@ async def download_pptx(
         raise HTTPException(status_code=500, detail=f"PPT生成に失敗しました: {exc}") from exc
     label = (data.get("meta") or {}).get("meeting_month_label") or target_month
     filename = f"{label}生産検討会.pptx"
+    encoded = quote(filename)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/{month}/pptx/scrap")
+async def download_scrap_pptx(
+    month: str,
+    body: ScrapPptxBody,
+    current_user: User = Depends(require_inventory_operation("export")),
+):
+    """廃棄率及び廃棄本数セクションのみを画面レイアウトで PPT 化。"""
+    target_month = _validate_month(month)
+    try:
+        from app.modules.erp.production_review_ppt import build_scrap_section_pptx
+
+        content = build_scrap_section_pptx(
+            body.scrap or {},
+            chart_image_base64=body.chart_image_base64,
+            meeting_label=body.meeting_label or target_month,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name == "pptx":
+            raise HTTPException(
+                status_code=503,
+                detail="PPT生成には python-pptx が必要です。backend venv で pip install python-pptx を実行してください。",
+            ) from exc
+        raise
+    except Exception as exc:
+        logger.exception("廃棄PPT生成に失敗")
+        raise HTTPException(status_code=500, detail=f"廃棄PPT生成に失敗しました: {exc}") from exc
+
+    label = body.meeting_label or target_month
+    filename = f"{label}廃棄率及び廃棄本数.pptx"
     encoded = quote(filename)
     return StreamingResponse(
         io.BytesIO(content),

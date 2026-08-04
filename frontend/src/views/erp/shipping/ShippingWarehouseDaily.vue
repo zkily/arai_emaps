@@ -331,26 +331,28 @@
             :class="{ 'print-page--last': gIdx === printDataGroupedByDate.length - 1 }"
           >
             <div class="print-header">
-              <div class="print-title-wrap">
-                <span class="print-title-accent" />
-                <h1 class="print-title">出荷不足数一覧</h1>
-                <p class="print-subtitle">検査工程用</p>
-              </div>
-              <div class="print-header-row">
+              <div class="print-header-top">
+                <div class="print-title-wrap">
+                  <h1 class="print-title">出荷不足数一覧</h1>
+                  <p class="print-subtitle">検査工程用</p>
+                </div>
                 <div class="print-period-block">
                   <span class="print-period-dot" />
                   <span class="print-period-label">対象日</span>
                   <span class="print-period-value">{{ formatPrintDate(group.date) }}</span>
                 </div>
-                <div class="print-summary-box">
-                  <span class="print-summary-label">当日合計</span>
-                  <span class="print-summary-item"
-                    ><em>箱数</em> {{ formatPrintNumber(printDayTotals(group.rows).box_quantity) }}</span
-                  >
-                  <span class="print-summary-item"
-                    ><em>本数</em> {{ formatPrintNumber(printDayTotals(group.rows).units) }}</span
-                  >
-                </div>
+              </div>
+            </div>
+
+            <div class="print-table-toolbar">
+              <div class="print-summary-box">
+                <span class="print-summary-label">当日合計</span>
+                <span class="print-summary-item"
+                  ><em>箱数</em> {{ formatPrintNumber(printDayTotals(group.rows).box_quantity) }}</span
+                >
+                <span class="print-summary-item"
+                  ><em>本数</em> {{ formatPrintNumber(printDayTotals(group.rows).units) }}</span
+                >
               </div>
             </div>
 
@@ -427,10 +429,19 @@
 
             <div class="print-notes">
               <div class="print-notes-label">備考</div>
-              <div class="print-notes-box">
-                <div class="print-notes-line"></div>
-                <div class="print-notes-line"></div>
-                <div class="print-notes-line"></div>
+              <div class="print-notes-box print-notes-box--single">
+                <div class="print-long-stay">
+                  <div class="print-long-stay-title">長期滞在未検査在庫</div>
+                  <div v-if="printLongStayRows.length" class="print-long-stay-list">
+                    <div
+                      v-for="(ls, lsIdx) in printLongStayRows"
+                      :key="`ls-${gIdx}-${ls.id ?? lsIdx}`"
+                      class="print-long-stay-item"
+                    >
+                      {{ formatLongStayPrintItem(ls) }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -448,7 +459,11 @@ import { OfficeBuilding, MagicStick, Refresh, Setting, Printer } from '@element-
 import { getJSTToday } from '@/utils/dateFormat'
 import request from '@/utils/request'
 import { getWarehouseDailyShortagePrint } from '@/api/shipping/warehouseDailyStock'
-import type { InventoryShortageHandwritingRow, InventoryShortagePrintRow } from '@/api/database'
+import type {
+  InventoryShortageHandwritingRow,
+  InventoryShortageLongStayRow,
+  InventoryShortagePrintRow,
+} from '@/api/database'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
 
@@ -596,6 +611,7 @@ const printShortageLoading = ref(false)
 const printContentRef = ref<HTMLElement | null>(null)
 const printTableData = ref<InventoryShortagePrintRow[]>([])
 const printHandwritingProducts = ref<InventoryShortageHandwritingRow[]>([])
+const printLongStayRows = ref<InventoryShortageLongStayRow[]>([])
 const tableScrollRef = ref<HTMLElement | null>(null)
 const tableBodyHeight = ref(320)
 let tableResizeObserver: ResizeObserver | null = null
@@ -710,6 +726,13 @@ function isPrintWeekday(dateStr: string): boolean {
   const d = new Date(`${dateStr}T00:00:00+09:00`)
   const day = d.getDay()
   return day >= 1 && day <= 5
+}
+
+function formatLongStayPrintItem(row: InventoryShortageLongStayRow): string {
+  const name = String(row.product_name || '').trim() || '—'
+  const qty = Number(row.quantity)
+  const qtyText = Number.isFinite(qty) ? qty.toLocaleString('ja-JP') : '0'
+  return `${name}：${qtyText}本`
 }
 
 function formatPrintNumber(val: number | null | undefined): string {
@@ -836,9 +859,23 @@ async function handleShortageIssuePrint() {
       : Array.isArray(res?.data?.handwriting_products)
         ? res.data.handwriting_products
         : []
+    const longStayRaw = Array.isArray(res?.long_stay_uninspected)
+      ? res.long_stay_uninspected
+      : Array.isArray(res?.data?.long_stay_uninspected)
+        ? res.data.long_stay_uninspected
+        : []
+    const longStay: InventoryShortageLongStayRow[] = longStayRaw
+      .map((r: any) => ({
+        id: Number(r?.id) || 0,
+        product_name: String(r?.product_name || '').trim(),
+        quantity: Number(r?.quantity) || 0,
+        sort_order: Number(r?.sort_order) || 0,
+      }))
+      .filter((r: InventoryShortageLongStayRow) => r.product_name)
     const weekdaysOnly = list.filter((row: InventoryShortagePrintRow) => isPrintWeekday(row.date || ''))
     printTableData.value = weekdaysOnly
     printHandwritingProducts.value = handwriting
+    printLongStayRows.value = longStay
     if (weekdaysOnly.length === 0) {
       ElMessage.warning(t('shipping.warehouseDaily.shortagePrintNoWeekdayData'))
       return
@@ -1500,38 +1537,27 @@ watch(loading, (v) => {
   break-after: auto;
 }
 
+/* ----- ヘッダー（左：タイトル / 右：対象日） ----- */
 .print-header {
-  text-align: center;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  text-align: left;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #e2e8f0;
   position: relative;
 }
 
-.print-header::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #6366f1, transparent);
-  border-radius: 1px;
+.print-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .print-title-wrap {
   position: relative;
-  margin-bottom: 8px;
-}
-
-.print-title-accent {
-  display: block;
-  width: 24px;
-  height: 3px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 2px;
-  margin: 0 auto 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
 }
 
 .print-title {
@@ -1552,13 +1578,11 @@ watch(loading, (v) => {
   text-transform: uppercase;
 }
 
-.print-header-row {
+.print-table-toolbar {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
-  justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-top: 4px;
+  margin: 0 0 6px;
 }
 
 .print-period-block {
@@ -1570,6 +1594,8 @@ watch(loading, (v) => {
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .print-period-dot {
@@ -1727,6 +1753,38 @@ watch(loading, (v) => {
   letter-spacing: 0.04em;
 }
 
+.print-long-stay {
+  margin: 0;
+  padding: 5px 8px 6px;
+}
+
+.print-long-stay-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.print-long-stay-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 4px;
+  min-height: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #000;
+  line-height: 1.4;
+}
+
+.print-long-stay-item {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .print-notes-box {
   border: 1px solid #94a3b8;
   border-radius: 4px;
@@ -1735,14 +1793,8 @@ watch(loading, (v) => {
   box-sizing: border-box;
 }
 
-.print-notes-line {
-  height: 26px;
-  box-sizing: border-box;
-  border-bottom: 1px solid #cbd5e1;
-}
-
-.print-notes-line:last-child {
-  border-bottom: none;
+.print-notes-box--single {
+  min-height: 0;
 }
 
 @media print {
@@ -1769,7 +1821,6 @@ watch(loading, (v) => {
     font-size: 20px;
   }
 
-  .print-title-accent,
   .print-period-block,
   .print-summary-box,
   .print-td--highlight-product,

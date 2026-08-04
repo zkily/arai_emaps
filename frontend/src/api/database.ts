@@ -339,9 +339,18 @@ export interface InventoryShortageHandwritingRow {
   units: number | null
 }
 
+/** 印刷備考：長期滞在未検査在庫 */
+export interface InventoryShortageLongStayRow {
+  id: number
+  product_name: string
+  quantity: number
+  sort_order?: number
+}
+
 export interface InventoryShortagePrintResponse {
   data: InventoryShortagePrintRow[]
   handwriting_products?: InventoryShortageHandwritingRow[]
+  long_stay_uninspected?: InventoryShortageLongStayRow[]
 }
 
 /** 在庫不足一覧印刷用（products・destinations ジョイン済み） */

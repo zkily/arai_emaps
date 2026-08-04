@@ -477,12 +477,12 @@
       top="5vh"
     >
       <div class="plan-edit-hint">
-        手動値は当日の生計画構成比で製品別に比例配分されます。修正はこの工程の計画のみに適用され、他工程（下流を含む）の計画は自動計画のままです。
+        手動値は当日の生計画構成比で製品別に比例配分されます。生計画合計が 0
+        の日は、当該工程をルートに持つ製品へ均等配分します。修正はこの工程の計画のみに適用され、他工程（下流を含む）の計画は自動計画のままです。
         次工程移動が複数分岐する工程では、手動計画合計を直近 30
         日の実績去向の平均比（数量加重）で各分岐へ配分します。
-        実績最終日以前の日は実績が採用されるため手動値は反映されません。生計画合計が 0
-        の日は比例配分できないため手動値は無効です。 本画面専用の修正で、production_summarys
-        は変更しません。
+        実績最終日以前の日は実績が採用されるため手動値は反映されません。
+        本画面専用の修正で、production_summarys は変更しません。
       </div>
       <el-table :data="planEditRows" border size="small" :max-height="480">
         <el-table-column label="日付" width="110">
@@ -510,12 +510,9 @@
         </el-table-column>
         <el-table-column label="採用値" align="right">
           <template #default="{ row }">
-            <span :class="{ 'plan-overridden': row.manual != null && row.auto > 0 }">
-              {{ formatQty(row.manual != null && row.auto > 0 ? row.manual : row.auto) }}
+            <span :class="{ 'plan-overridden': row.manual != null }">
+              {{ formatQty(row.manual != null ? row.manual : row.auto) }}
             </span>
-            <el-tag v-if="row.manual != null && row.auto <= 0" size="small" type="warning">
-              無効
-            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="" width="70" align="center">

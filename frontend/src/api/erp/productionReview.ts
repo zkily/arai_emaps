@@ -14,6 +14,8 @@ export interface ProductionReviewMonthItem {
 export interface CapacityRow {
   process_cd: string
   process_name: string
+  /** 対象月 YYYY-MM。空=デフォルト */
+  target_month?: string
   equipment_label?: string
   standard_rate: number
   shift_label?: string
@@ -202,6 +204,8 @@ export interface ProductionReviewData {
     title?: string
     subtitle?: string
     load_plan: ProductionReviewData['part02']['load_plan']
+    /** 旧保存データには無い場合あり。再計算で生成 */
+    inventory_forecast?: InventorySection
   }
   generated_at?: string
 }
@@ -242,6 +246,13 @@ export function recalculateMeeting(month: string): Promise<{ success: boolean; d
   }>
 }
 
+export function deleteMeeting(month: string): Promise<{ success: boolean; message: string }> {
+  return request.delete(`${BASE}/${month}`) as unknown as Promise<{
+    success: boolean
+    message: string
+  }>
+}
+
 export function saveMeeting(
   month: string,
   body: { status: string; data: ProductionReviewData },
@@ -269,14 +280,54 @@ export async function downloadMeetingPptx(month: string, data?: ProductionReview
   window.URL.revokeObjectURL(url)
 }
 
-export function fetchCapacity(): Promise<{ success: boolean; data: CapacityRow[] }> {
-  return request.get(`${BASE}/capacity`) as unknown as Promise<{ success: boolean; data: CapacityRow[] }>
+export async function downloadScrapPptx(
+  month: string,
+  body: {
+    scrap: Record<string, unknown>
+    chart_image_base64?: string | null
+    meeting_label?: string
+  },
+): Promise<void> {
+  const resp = (await request.post(`${BASE}/${month}/pptx/scrap`, body, {
+    responseType: 'blob',
+  })) as unknown as Blob
+  const url = window.URL.createObjectURL(resp)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${month}廃棄率及び廃棄本数.pptx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
 }
 
-export function saveCapacity(items: CapacityRow[]): Promise<{ success: boolean; data: CapacityRow[] }> {
-  return request.put(`${BASE}/capacity`, { items }) as unknown as Promise<{
+export function fetchCapacity(month?: string): Promise<{
+  success: boolean
+  data: CapacityRow[]
+  source?: 'monthly' | 'default' | string
+  target_month?: string
+}> {
+  return request.get(`${BASE}/capacity`, {
+    params: month ? { month } : undefined,
+  }) as unknown as Promise<{
     success: boolean
     data: CapacityRow[]
+    source?: 'monthly' | 'default' | string
+    target_month?: string
+  }>
+}
+
+export function saveCapacity(
+  items: CapacityRow[],
+  month?: string,
+): Promise<{ success: boolean; data: CapacityRow[]; message?: string; target_month?: string }> {
+  return request.put(`${BASE}/capacity`, { items }, {
+    params: month ? { month } : undefined,
+  }) as unknown as Promise<{
+    success: boolean
+    data: CapacityRow[]
+    message?: string
+    target_month?: string
   }>
 }
 

@@ -103,16 +103,25 @@
 
     <div v-if="savedMonths.length" class="pr-saved pr-glass pr-animate-in" style="animation-delay: 0.05s">
       <span class="pr-saved__label">保存済み</span>
-      <button
+      <div
         v-for="m in savedMonths"
         :key="m.target_month"
-        type="button"
         class="pr-saved__chip"
         :class="{ active: m.target_month === targetMonth, final: m.status === 'final' }"
-        @click="selectMonth(m.target_month)"
       >
-        {{ m.target_month }} · {{ m.status === 'final' ? '確定' : '下書き' }}
-      </button>
+        <button type="button" class="pr-saved__chip-main" @click="selectMonth(m.target_month)">
+          {{ m.target_month }} · {{ m.status === 'final' ? '確定' : '下書き' }}
+        </button>
+        <button
+          type="button"
+          class="pr-saved__chip-del"
+          title="削除して最新データから再生成"
+          :disabled="loading || deletingMonth === m.target_month"
+          @click.stop="onDeleteSaved(m.target_month)"
+        >
+          <el-icon :size="12"><Close /></el-icon>
+        </button>
+      </div>
     </div>
 
     <el-empty v-if="!payload && !loading" class="pr-empty" description="対象月を選択してください" />
@@ -352,42 +361,54 @@
                   <span v-if="scrapMeta.rangeLabel" class="pr-range-badge">{{ scrapMeta.rangeLabel }}</span>
                 </p>
               </div>
-              <div class="pr-scrap-range">
-                <span class="pr-scrap-range__label">期間</span>
-                <el-select
-                  v-model="scrapRangeFrom"
-                  size="small"
-                  class="pr-scrap-range__select"
-                  :disabled="!scrapMonthOptions.length"
-                  @change="onScrapRangeChange"
+              <div class="pr-scrap-head-actions">
+                <el-button
+                  type="warning"
+                  round
+                  :loading="scrapPptLoading"
+                  :disabled="!payload || scrapPptLoading"
+                  @click="onDownloadScrapPpt"
                 >
-                  <el-option
-                    v-for="opt in scrapMonthOptions"
-                    :key="`from-${opt.value}`"
-                    :label="opt.label"
-                    :value="opt.value"
-                    :disabled="scrapRangeTo != null && opt.value > scrapRangeTo"
-                  />
-                </el-select>
-                <span class="pr-scrap-range__tilde">〜</span>
-                <el-select
-                  v-model="scrapRangeTo"
-                  size="small"
-                  class="pr-scrap-range__select"
-                  :disabled="!scrapMonthOptions.length"
-                  @change="onScrapRangeChange"
-                >
-                  <el-option
-                    v-for="opt in scrapMonthOptions"
-                    :key="`to-${opt.value}`"
-                    :label="opt.label"
-                    :value="opt.value"
-                    :disabled="scrapRangeFrom != null && opt.value < scrapRangeFrom"
-                  />
-                </el-select>
-                <el-button size="small" text type="warning" :disabled="!scrapMonthOptions.length" @click="resetScrapRange">
-                  リセット
+                  <el-icon><Download /></el-icon>
+                  <span>{{ scrapPptLoading ? '生成中…' : '廃棄PPT' }}</span>
                 </el-button>
+                <div class="pr-scrap-range">
+                  <span class="pr-scrap-range__label">期間</span>
+                  <el-select
+                    v-model="scrapRangeFrom"
+                    size="small"
+                    class="pr-scrap-range__select"
+                    :disabled="!scrapMonthOptions.length"
+                    @change="onScrapRangeChange"
+                  >
+                    <el-option
+                      v-for="opt in scrapMonthOptions"
+                      :key="`from-${opt.value}`"
+                      :label="opt.label"
+                      :value="opt.value"
+                      :disabled="scrapRangeTo != null && opt.value > scrapRangeTo"
+                    />
+                  </el-select>
+                  <span class="pr-scrap-range__tilde">〜</span>
+                  <el-select
+                    v-model="scrapRangeTo"
+                    size="small"
+                    class="pr-scrap-range__select"
+                    :disabled="!scrapMonthOptions.length"
+                    @change="onScrapRangeChange"
+                  >
+                    <el-option
+                      v-for="opt in scrapMonthOptions"
+                      :key="`to-${opt.value}`"
+                      :label="opt.label"
+                      :value="opt.value"
+                      :disabled="scrapRangeFrom != null && opt.value < scrapRangeFrom"
+                    />
+                  </el-select>
+                  <el-button size="small" text type="warning" :disabled="!scrapMonthOptions.length" @click="resetScrapRange">
+                    リセット
+                  </el-button>
+                </div>
               </div>
             </div>
 
@@ -655,14 +676,6 @@
                     <span v-else class="pr-inv-val pr-inv-val--prev pr-inv-val--parent">{{ fmtNum(row.prev_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月在庫率" min-width="88" align="center" class-name="col-prev">
-                  <template #default="{ row }">
-                    <span
-                      class="pr-inv-rate pr-inv-rate--prev pr-inv-rate--adj"
-                      :class="inventoryMetricClass(row, row.prev_rate_adj ?? row.prev_rate, 'rate')"
-                    >{{ fmtRate(row.prev_rate_adj ?? row.prev_rate) }}</span>
-                  </template>
-                </el-table-column>
                 <el-table-column label="前月在庫日数" min-width="96" align="center" class-name="col-prev">
                   <template #default="{ row }">
                     <span
@@ -700,14 +713,6 @@
                       @dblclick.stop="startInvEdit(row, 'curr_inventory_th')"
                     >{{ fmtNum(row.curr_inventory_th) }}</span>
                     <span v-else class="pr-inv-val pr-inv-val--curr pr-inv-val--parent">{{ fmtNum(row.curr_inventory_th) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="当月在庫率" min-width="88" align="center" class-name="col-curr">
-                  <template #default="{ row }">
-                    <span
-                      class="pr-inv-rate pr-inv-rate--curr pr-inv-rate--adj"
-                      :class="inventoryMetricClass(row, row.curr_rate_adj ?? row.curr_rate, 'rate')"
-                    >{{ fmtRate(row.curr_rate_adj ?? row.curr_rate) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="当月在庫日数" min-width="96" align="center" class-name="col-curr">
@@ -860,7 +865,7 @@
                   <span class="pr-col-toggle__indicator" />
                   設備・能率・稼働日・定時H・所要H
                 </button>
-                <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog">
+                <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog('part02')">
                   <el-icon><Setting /></el-icon>
                   設備・能率・直・稼働日設定
                 </el-button>
@@ -1087,7 +1092,7 @@
                     <span
                       class="pr-inv-col-hdr pr-inv-col-hdr--clickable"
                       title="ダブルクリックで在庫基準日を選択"
-                      @dblclick.stop="openFcPrevInvDateDialog"
+                      @dblclick.stop="openFcPrevInvDateDialog('part02')"
                     >
                       {{ fcPrevInventoryHeaderLabel }}
                     </span>
@@ -1096,15 +1101,18 @@
                     <span class="pr-inv-val pr-inv-val--prev">{{ fmtNum(row.prev_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="前月在庫率" min-width="100" align="center" class-name="col-prev">
+                <el-table-column label="前月在庫日数" min-width="100" align="center" class-name="col-prev">
                   <template #default="{ row }">
-                    <span class="pr-inv-rate pr-inv-rate--prev pr-inv-rate--adj">{{ fmtRate(row.prev_rate_adj ?? row.prev_rate) }}</span>
+                    <span
+                      class="pr-inv-days pr-inv-days--prev"
+                      :class="inventoryMetricClass(row, row.prev_days, 'days')"
+                    >{{ fmtDays(row.prev_days) }}<small>日</small></span>
                   </template>
                 </el-table-column>
                 <el-table-column label="予測在庫(千本)" min-width="130" align="center" class-name="col-curr">
                   <template #default="{ row }">
                     <input
-                      v-if="isForecastInvEditable(row) && isFcInvEditing(row.key)"
+                      v-if="isForecastInvEditable(row) && isFcInvEditing(row.key, 'part02')"
                       class="pr-inv-edit-input pr-inv-edit-input--curr pr-inv-edit-input--fc"
                       type="number"
                       step="0.1"
@@ -1118,14 +1126,17 @@
                       v-else-if="isForecastInvEditable(row)"
                       class="pr-inv-val pr-inv-val--curr pr-inv-val--editable"
                       title="ダブルクリックで編集"
-                      @dblclick.stop="startFcInvEdit(row)"
+                      @dblclick.stop="startFcInvEdit(row, 'part02')"
                     >{{ fmtNum(row.curr_inventory_th) }}</span>
                     <span v-else class="pr-inv-val pr-inv-val--curr pr-inv-val--parent">{{ fmtNum(row.curr_inventory_th) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="予測補正率" min-width="100" align="center" class-name="col-curr">
+                <el-table-column label="当月在庫日数" min-width="100" align="center" class-name="col-curr">
                   <template #default="{ row }">
-                    <span class="pr-inv-rate pr-inv-rate--curr pr-inv-rate--adj">{{ fmtRate(row.curr_rate_adj ?? row.curr_rate) }}</span>
+                    <span
+                      class="pr-inv-days"
+                      :class="inventoryMetricClass(row, row.curr_days, 'days')"
+                    >{{ fmtDays(row.curr_days) }}<small>日</small></span>
                   </template>
                 </el-table-column>
                 <el-table-column label="増減(千本)" min-width="110" align="center">
@@ -1147,11 +1158,11 @@
                   </div>
                 </div>
                 <div class="pr-perf-comment__actions">
-                  <el-button round :loading="commentRegenLoading === 'inventory_forecast'" @click="regenerateSectionComments('inventory_forecast')">
+                  <el-button round :loading="commentRegenLoading === 'inventory_forecast_part02'" @click="regenerateSectionComments('inventory_forecast', 'part02')">
                     <el-icon><Refresh /></el-icon>
                     自動再生成
                   </el-button>
-                  <el-button type="success" round class="pr-inv-comment-btn" @click="openCommentDialog('inventory_forecast')">
+                  <el-button type="success" round class="pr-inv-comment-btn" @click="openCommentDialog('inventory_forecast', 'part02')">
                     <el-icon><EditPen /></el-icon>
                     コメント編集
                   </el-button>
@@ -1265,7 +1276,7 @@
                   <span class="pr-col-toggle__indicator" />
                   設備・能率・稼働日・定時H・所要H
                 </button>
-                <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog">
+                <el-button size="small" round type="primary" plain @click="openLoadCapacityDialog('part03')">
                   <el-icon><Setting /></el-icon>
                   設備・能率・直・稼働日設定
                 </el-button>
@@ -1432,6 +1443,144 @@
               <div v-if="part03LoadCommentsDisplay.length" class="pr-perf-comment__body">
                 <div
                   v-for="(line, i) in part03LoadCommentsDisplay"
+                  :key="i"
+                  class="pr-perf-comment__line"
+                  :style="{ animationDelay: `${i * 0.05}s` }"
+                >
+                  <span class="pr-perf-comment__bullet">■</span>
+                  <p class="pr-perf-comment__text">
+                    <template v-for="(seg, j) in parseCommentSegments(line)" :key="j">
+                      <span v-if="seg.kind === 'text'" class="seg-text">{{ seg.text }}</span>
+                      <span v-else-if="seg.kind === 'pos'" class="seg-num seg-num--pos">{{ seg.text }}</span>
+                      <span v-else class="seg-num seg-num--neg">{{ seg.text }}</span>
+                    </template>
+                  </p>
+                </div>
+              </div>
+              <div v-else class="pr-perf-comment__empty">
+                <el-icon><EditPen /></el-icon>
+                <p>コメント未入力</p>
+                <span>「再計算」で自動生成されます。その後「コメント編集」で修正できます</span>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="payload.part03.inventory_forecast" class="pr-card pr-card--teal pr-card--inventory">
+            <div class="pr-card__head pr-card__head--inventory">
+              <div class="pr-inv-title">
+                <h2>{{ payload.part03.inventory_forecast.inventory_month_label }} 在庫予測</h2>
+              </div>
+              <p class="pr-inv-forecast-line">
+                {{ payload.part03.inventory_forecast.prev_forecast_label }}出荷内示
+                <strong>{{ fmtNum(payload.part03.inventory_forecast.prev_forecast_th) }}</strong>
+                千本
+                <span class="pr-inv-forecast-sep">|</span>
+                {{ payload.part03.inventory_forecast.curr_forecast_label }}出荷内示
+                <strong>{{ fmtNum(payload.part03.inventory_forecast.curr_forecast_th) }}</strong>
+                千本
+              </p>
+            </div>
+
+            <div class="pr-table-wrap pr-table-wrap--performance pr-table-wrap--inventory">
+              <el-table
+                :data="payload.part03.inventory_forecast.rows"
+                border
+                row-key="key"
+                :tree-props="{ children: 'children' }"
+                class="pr-table pr-table--modern pr-table--performance pr-table--inventory"
+                stripe
+                :row-class-name="inventoryRowClassName"
+              >
+                <el-table-column label="工程名" min-width="130" fixed>
+                  <template #default="{ row }">
+                    <div class="pr-inv-name-cell">
+                      <span class="pr-inv-name-cell__name">{{ row.name }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column min-width="120" align="center" class-name="col-prev">
+                  <template #header>
+                    <span
+                      class="pr-inv-col-hdr"
+                      title="前月の在庫予測「予測在庫(千本)」を転記"
+                    >
+                      {{ fcPrevInventoryHeaderLabelPart03 }}
+                    </span>
+                  </template>
+                  <template #default="{ row }">
+                    <span class="pr-inv-val pr-inv-val--prev">{{ fmtNum(row.prev_inventory_th) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="前月在庫日数" min-width="100" align="center" class-name="col-prev">
+                  <template #default="{ row }">
+                    <span
+                      class="pr-inv-days pr-inv-days--prev"
+                      :class="inventoryMetricClass(row, row.prev_days, 'days')"
+                    >{{ fmtDays(row.prev_days) }}<small>日</small></span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="予測在庫(千本)" min-width="130" align="center" class-name="col-curr">
+                  <template #default="{ row }">
+                    <input
+                      v-if="isForecastInvEditable(row) && isFcInvEditing(row.key, 'part03')"
+                      class="pr-inv-edit-input pr-inv-edit-input--curr pr-inv-edit-input--fc"
+                      type="number"
+                      step="0.1"
+                      v-model.number="fcInvEditDraft"
+                      @blur="commitFcInvEdit"
+                      @keydown.enter.prevent="commitFcInvEdit"
+                      @keydown.esc.prevent="cancelFcInvEdit"
+                      @click.stop
+                    />
+                    <span
+                      v-else-if="isForecastInvEditable(row)"
+                      class="pr-inv-val pr-inv-val--curr pr-inv-val--editable"
+                      title="ダブルクリックで編集"
+                      @dblclick.stop="startFcInvEdit(row, 'part03')"
+                    >{{ fmtNum(row.curr_inventory_th) }}</span>
+                    <span v-else class="pr-inv-val pr-inv-val--curr pr-inv-val--parent">{{ fmtNum(row.curr_inventory_th) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="当月在庫日数" min-width="100" align="center" class-name="col-curr">
+                  <template #default="{ row }">
+                    <span
+                      class="pr-inv-days"
+                      :class="inventoryMetricClass(row, row.curr_days, 'days')"
+                    >{{ fmtDays(row.curr_days) }}<small>日</small></span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="増減(千本)" min-width="110" align="center">
+                  <template #default="{ row }">
+                    <span :class="deltaClass(row.delta_th)">{{ fmtDelta(row.delta_th) }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <div class="pr-perf-comment pr-perf-comment--inventory">
+              <div class="pr-perf-comment__head">
+                <div class="pr-perf-comment__title">
+                  <span class="pr-perf-comment__icon" aria-hidden="true">
+                    <el-icon :size="22"><Box /></el-icon>
+                  </span>
+                  <div>
+                    <strong>在庫予測コメント</strong>
+                  </div>
+                </div>
+                <div class="pr-perf-comment__actions">
+                  <el-button round :loading="commentRegenLoading === 'inventory_forecast_part03'" @click="regenerateSectionComments('inventory_forecast', 'part03')">
+                    <el-icon><Refresh /></el-icon>
+                    自動再生成
+                  </el-button>
+                  <el-button type="success" round class="pr-inv-comment-btn" @click="openCommentDialog('inventory_forecast', 'part03')">
+                    <el-icon><EditPen /></el-icon>
+                    コメント編集
+                  </el-button>
+                </div>
+              </div>
+              <div v-if="part03InventoryForecastCommentsDisplay.length" class="pr-perf-comment__body">
+                <div
+                  v-for="(line, i) in part03InventoryForecastCommentsDisplay"
                   :key="i"
                   class="pr-perf-comment__line"
                   :style="{ animationDelay: `${i * 0.05}s` }"
@@ -1629,7 +1778,10 @@
             <div class="pr-lcap-header__text">
               <h3 class="pr-lcap-header__title">設備・能率・直・稼働日設定</h3>
               <p class="pr-lcap-header__sub">
+                <span class="pr-lcap-header__month">{{ loadCapacityMonthLabel }}</span>
                 工程別パラメータ
+                <span v-if="loadCapacitySource === 'default'" class="pr-lcap-header__badge">デフォルトから編集</span>
+                <span v-else-if="loadCapacitySource === 'monthly'" class="pr-lcap-header__badge pr-lcap-header__badge--saved">月別保存済</span>
                 <span v-if="loadCapacityMonthWd" class="pr-lcap-header__badge">月次参考 {{ loadCapacityMonthWd }}日</span>
               </p>
             </div>
@@ -1981,7 +2133,9 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
 import {
+  deleteMeeting,
   downloadMeetingPptx,
+  downloadScrapPptx,
   fetchCapacity,
   fetchEfficiencyTrend,
   fetchMeeting,
@@ -2022,6 +2176,8 @@ const CHART_THEME = {
 
 const loading = ref(false)
 const pptLoading = ref(false)
+const scrapPptLoading = ref(false)
+const deletingMonth = ref('')
 const capacityVisible = ref(false)
 const capacitySaving = ref(false)
 const wdDialogVisible = ref(false)
@@ -2039,6 +2195,9 @@ const capacityRows = ref<CapacityRow[]>([])
 const loadCapacityVisible = ref(false)
 const loadCapacitySaving = ref(false)
 const loadCapacityRows = ref<CapacityRow[]>([])
+const loadCapacityMonth = ref('')
+const loadCapacityPart = ref<'part02' | 'part03'>('part02')
+const loadCapacitySource = ref<'monthly' | 'default' | ''>('')
 
 const LOAD_CAPACITY_PROCESS_CDS = [
   'cutting',
@@ -2415,9 +2574,17 @@ function loadCapacityCardClass(processCd: string): string {
   return LOAD_CAPACITY_CARD_CLASS[processCd] || ''
 }
 
-const loadCapacityMonthWd = computed(
-  () => Number(payload.value?.part02?.load_plan?.working_days) || 0,
-)
+const loadCapacityMonthWd = computed(() => {
+  const part = loadCapacityPart.value
+  return Number(payload.value?.[part]?.load_plan?.working_days) || 0
+})
+
+const loadCapacityMonthLabel = computed(() => {
+  const m = loadCapacityMonth.value
+  if (!/^\d{4}-\d{2}$/.test(m)) return '対象月未設定'
+  const [y, mo] = m.split('-')
+  return `${Number(y)}年${Number(mo)}月`
+})
 
 function computeLoadPlanMeta(rows: LoadPlanRow[]) {
   const list = rows || []
@@ -2584,16 +2751,18 @@ function isForecastInvEditable(row: InventoryRow): boolean {
 }
 
 const fcInvEditKey = ref<string | null>(null)
+const fcInvEditPart = ref<'part02' | 'part03'>('part02')
 const fcInvEditDraft = ref<number | null>(null)
 
-function isFcInvEditing(key: string) {
-  return fcInvEditKey.value === key
+function isFcInvEditing(key: string, part: 'part02' | 'part03' = 'part02') {
+  return fcInvEditKey.value === key && fcInvEditPart.value === part
 }
 
-function startFcInvEdit(row: InventoryRow) {
+function startFcInvEdit(row: InventoryRow, part: 'part02' | 'part03' = 'part02') {
   if (!isForecastInvEditable(row)) return
   cancelInvEdit()
   fcInvEditKey.value = row.key
+  fcInvEditPart.value = part
   fcInvEditDraft.value = Number(row.curr_inventory_th ?? 0)
   nextTick(() => {
     const el = document.querySelector('.pr-inv-edit-input--fc') as HTMLInputElement | null
@@ -2607,8 +2776,12 @@ function cancelFcInvEdit() {
   fcInvEditDraft.value = null
 }
 
-function findFcInvRowByKey(key: string): InventoryRow | null {
-  const rows = payload.value?.part02?.inventory_forecast?.rows || []
+function forecastInvSection(part: 'part02' | 'part03' = 'part02'): InventorySection | null {
+  return payload.value?.[part]?.inventory_forecast ?? null
+}
+
+function findFcInvRowByKey(key: string, part: 'part02' | 'part03' = 'part02'): InventoryRow | null {
+  const rows = forecastInvSection(part)?.rows || []
   for (const row of rows) {
     if (row.key === key) return row
     const child = row.children?.find((c) => c.key === key)
@@ -2617,30 +2790,69 @@ function findFcInvRowByKey(key: string): InventoryRow | null {
   return null
 }
 
-function findFcInvParentOf(key: string): InventoryRow | null {
-  const rows = payload.value?.part02?.inventory_forecast?.rows || []
+function findFcInvParentOf(key: string, part: 'part02' | 'part03' = 'part02'): InventoryRow | null {
+  const rows = forecastInvSection(part)?.rows || []
   return rows.find((r) => r.children?.some((c) => c.key === key)) || null
 }
 
 function commitFcInvEdit() {
-  const inv = payload.value?.part02?.inventory_forecast
+  const part = fcInvEditPart.value
+  const inv = forecastInvSection(part)
   if (!fcInvEditKey.value || !inv) {
     cancelFcInvEdit()
     return
   }
   const key = fcInvEditKey.value
-  const row = findFcInvRowByKey(key)
+  const row = findFcInvRowByKey(key, part)
   if (row) {
     const n = Number(fcInvEditDraft.value)
     row.curr_inventory_th = Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
     recomputeInvDerived(row, inv)
-    const parent = findFcInvParentOf(key)
+    const parent = findFcInvParentOf(key, part)
     if (parent) {
       refreshInvParentFromChildren(parent, inv)
     }
     refreshWipTotalFromProcesses(inv)
+    if (part === 'part02') {
+      syncPart03PrevFromPart02Forecast()
+    }
   }
   cancelFcInvEdit()
+}
+
+/** PART03 前月在庫 ← PART02 予測在庫 */
+function syncPart03PrevFromPart02Forecast() {
+  const prior = forecastInvSection('part02')
+  const target = forecastInvSection('part03')
+  if (!prior?.rows?.length || !target?.rows?.length) return
+
+  const priorByKey = new Map<string, InventoryRow>()
+  for (const row of prior.rows) {
+    priorByKey.set(row.key, row)
+    for (const child of row.children || []) {
+      priorByKey.set(child.key, child)
+    }
+  }
+
+  for (const row of target.rows) {
+    if (row.key === 'wip_total') continue
+    if (row.children?.length) {
+      for (const child of row.children) {
+        const src = priorByKey.get(child.key)
+        if (!src) continue
+        child.prev_inventory_th = Math.round(Number(src.curr_inventory_th || 0) * 10) / 10
+        recomputeInvDerived(child, target)
+      }
+      refreshInvParentFromChildren(row, target)
+      continue
+    }
+    const src = priorByKey.get(row.key)
+    if (!src) continue
+    row.prev_inventory_th = Math.round(Number(src.curr_inventory_th || 0) * 10) / 10
+    recomputeInvDerived(row, target)
+  }
+  refreshWipTotalFromProcesses(target)
+  target.prev_inventory_as_of = null
 }
 
 const part02LoadCommentsDisplay = computed(() =>
@@ -2653,6 +2865,10 @@ const part03LoadCommentsDisplay = computed(() =>
 
 const inventoryForecastCommentsDisplay = computed(() =>
   (payload.value?.part02?.inventory_forecast?.comments ?? []).filter((c) => c.trim()),
+)
+
+const part03InventoryForecastCommentsDisplay = computed(() =>
+  (payload.value?.part03?.inventory_forecast?.comments ?? []).filter((c) => c.trim()),
 )
 
 const part02LoadMeta = computed(() => computeLoadPlanMeta(payload.value?.part02?.load_plan?.rows ?? []))
@@ -2721,7 +2937,10 @@ function openCommentDialog(
         ? payload.value?.part03?.load_plan?.comments ?? []
         : payload.value?.part02?.load_plan?.comments ?? []
   } else if (kind === 'inventory_forecast') {
-    existing = payload.value?.part02?.inventory_forecast?.comments ?? []
+    existing =
+      part === 'part03'
+        ? payload.value?.part03?.inventory_forecast?.comments ?? []
+        : payload.value?.part02?.inventory_forecast?.comments ?? []
   } else {
     existing = payload.value?.part01?.performance?.comments ?? []
   }
@@ -2747,7 +2966,10 @@ async function regenerateSectionComments(
     return
   }
 
-  const loadingKey = kind === 'load_plan' && part ? `load_plan_${part}` : kind
+  const loadingKey =
+    (kind === 'load_plan' || kind === 'inventory_forecast') && part
+      ? `${kind}_${part}`
+      : kind
   let section: Record<string, unknown> | null = null
   if (kind === 'performance') section = payload.value.part01.performance as unknown as Record<string, unknown>
   else if (kind === 'scrap') {
@@ -2775,7 +2997,11 @@ async function regenerateSectionComments(
     }
   } else if (kind === 'inventory') section = payload.value.part01.inventory as unknown as Record<string, unknown>
   else if (kind === 'inventory_forecast') {
-    section = payload.value.part02.inventory_forecast as unknown as Record<string, unknown>
+    const fc =
+      part === 'part03'
+        ? payload.value.part03.inventory_forecast
+        : payload.value.part02.inventory_forecast
+    section = fc as unknown as Record<string, unknown>
   } else if (kind === 'load_plan') {
     const lp = part === 'part03' ? payload.value.part03.load_plan : payload.value.part02.load_plan
     section = lp as unknown as Record<string, unknown>
@@ -2792,8 +3018,17 @@ async function regenerateSectionComments(
     if (kind === 'performance') payload.value.part01.performance.comments = lines
     else if (kind === 'scrap') payload.value.part01.scrap.comments = lines
     else if (kind === 'inventory') payload.value.part01.inventory.comments = lines
-    else if (kind === 'inventory_forecast') payload.value.part02.inventory_forecast.comments = lines
-    else if (kind === 'load_plan') {
+    else if (kind === 'inventory_forecast') {
+      if (part === 'part03') {
+        if (!payload.value.part03.inventory_forecast) {
+          ElMessage.error('対象データが見つかりません')
+          return
+        }
+        payload.value.part03.inventory_forecast.comments = lines
+      } else {
+        payload.value.part02.inventory_forecast.comments = lines
+      }
+    } else if (kind === 'load_plan') {
       if (part === 'part03') payload.value.part03.load_plan.comments = lines
       else payload.value.part02.load_plan.comments = lines
     }
@@ -2835,8 +3070,17 @@ function saveCommentDialog() {
     }
     ElMessage.success('計画コメントを保存しました')
   } else if (commentDialogKind.value === 'inventory_forecast') {
-    payload.value.part02.inventory_forecast.comments ||= []
-    payload.value.part02.inventory_forecast.comments = lines
+    if (commentDialogPart.value === 'part03') {
+      if (!payload.value.part03.inventory_forecast) {
+        ElMessage.warning('在庫予測データがありません')
+        return
+      }
+      payload.value.part03.inventory_forecast.comments ||= []
+      payload.value.part03.inventory_forecast.comments = lines
+    } else {
+      payload.value.part02.inventory_forecast.comments ||= []
+      payload.value.part02.inventory_forecast.comments = lines
+    }
     ElMessage.success('在庫予測コメントを保存しました')
   } else {
     payload.value.part01.performance.comments ||= []
@@ -3132,6 +3376,7 @@ const currInvDateLoading = ref(false)
 const fcPrevInvDateDialogVisible = ref(false)
 const fcPrevInvDateDraft = ref<string>('')
 const fcPrevInvDateLoading = ref(false)
+const fcPrevInvDatePart = ref<'part02' | 'part03'>('part02')
 
 function formatInvAsOfHeader(prefix: string, asOf?: string | null) {
   if (!asOf) return `${prefix}(千本)`
@@ -3147,6 +3392,8 @@ const currInventoryHeaderLabel = computed(() =>
 const fcPrevInventoryHeaderLabel = computed(() =>
   formatInvAsOfHeader('前月在庫', payload.value?.part02?.inventory_forecast?.prev_inventory_as_of),
 )
+
+const fcPrevInventoryHeaderLabelPart03 = computed(() => '前月在庫(千本)')
 
 function defaultInventoryMonthEndDate(inv: InventorySection): string {
   const label = inv.inventory_month_label || ''
@@ -3176,12 +3423,13 @@ function openCurrInvDateDialog() {
   currInvDateDialogVisible.value = true
 }
 
-function openFcPrevInvDateDialog() {
-  const inv = payload.value?.part02?.inventory_forecast
+function openFcPrevInvDateDialog(part: 'part02' | 'part03' = 'part02') {
+  const inv = forecastInvSection(part)
   if (!inv) {
     ElMessage.warning('在庫予測データがありません')
     return
   }
+  fcPrevInvDatePart.value = part
   // 前月在庫のデフォルトは在庫月（inventory_month_label）の前月末
   fcPrevInvDateDraft.value = inv.prev_inventory_as_of || ''
   if (!fcPrevInvDateDraft.value) {
@@ -3250,7 +3498,8 @@ async function applyCurrInventoryByDate() {
 }
 
 async function applyFcPrevInventoryByDate() {
-  const inv = payload.value?.part02?.inventory_forecast
+  const part = fcPrevInvDatePart.value
+  const inv = forecastInvSection(part)
   if (!inv?.rows) return
   const dateStr = (fcPrevInvDateDraft.value || '').trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -3698,6 +3947,9 @@ function ensureCommentArrays(data: ProductionReviewData) {
   data.part02.load_plan.comments ||= []
   data.part02.inventory_forecast.comments ||= []
   data.part03.load_plan.comments ||= []
+  if (data.part03.inventory_forecast) {
+    data.part03.inventory_forecast.comments ||= []
+  }
 }
 
 async function loadMeeting(month: string) {
@@ -3708,6 +3960,7 @@ async function loadMeeting(month: string) {
     const data = res.data.data
     ensureCommentArrays(data)
     payload.value = data
+    syncPart03PrevFromPart02Forecast()
     syncInvWorkdayDraft()
     recordStatus.value = res.data.status || 'draft'
     dataSource.value = res.source
@@ -3730,6 +3983,20 @@ function selectMonth(month: string) {
 
 async function onRecalculate() {
   if (!targetMonth.value) return
+  try {
+    await ElMessageBox.confirm(
+      '最新データから数値を再集計します。手入力した実績・在庫などの数値は上書きされます（コメントと負荷の手改計画は保持）。よろしいですか？',
+      '再計算',
+      { type: 'warning', confirmButtonText: '再計算', cancelButtonText: 'キャンセル' },
+    )
+  } catch {
+    return
+  }
+  await runRecalculate()
+}
+
+async function runRecalculate(options?: { silent?: boolean }) {
+  if (!targetMonth.value) return
   loading.value = true
   try {
     const res = await recalculateMeeting(targetMonth.value)
@@ -3737,12 +4004,64 @@ async function onRecalculate() {
     payload.value = res.data
     syncInvWorkdayDraft()
     dataSource.value = 'computed'
+    await reapplyInventoryAsOfDates()
     scheduleScrapChart()
-    ElMessage.success('数値を再計算しました')
+    if (!options?.silent) {
+      ElMessage.success('数値を再計算しました')
+    }
   } catch (e: unknown) {
     ElMessage.error((e as Error)?.message || '再計算に失敗しました')
   } finally {
     loading.value = false
+  }
+}
+
+async function reapplyInventoryAsOfDates() {
+  const inv = payload.value?.part01?.inventory
+  if (inv?.curr_inventory_as_of && /^\d{4}-\d{2}-\d{2}$/.test(inv.curr_inventory_as_of)) {
+    try {
+      await applyInventoryQtyByDate(inv, inv.curr_inventory_as_of, 'curr_inventory_th')
+      refreshInventoryProductLevel()
+    } catch {
+      /* 基準日再適用失敗時は月末在庫のまま表示 */
+    }
+  }
+  // part02 のみ基準日再適用。part03 前月在庫は part02 予測在庫から同期する
+  const fc = forecastInvSection('part02')
+  if (fc?.prev_inventory_as_of && /^\d{4}-\d{2}-\d{2}$/.test(fc.prev_inventory_as_of)) {
+    try {
+      await applyInventoryQtyByDate(fc, fc.prev_inventory_as_of, 'prev_inventory_th')
+    } catch {
+      /* ignore */
+    }
+  }
+  syncPart03PrevFromPart02Forecast()
+}
+
+async function onDeleteSaved(month: string) {
+  if (!month) return
+  try {
+    await ElMessageBox.confirm(
+      `${month} の保存データを削除し、最新データから再集計します。よろしいですか？`,
+      '保存データ削除',
+      { type: 'warning', confirmButtonText: '削除して再生成', cancelButtonText: 'キャンセル' },
+    )
+  } catch {
+    return
+  }
+  deletingMonth.value = month
+  try {
+    const res = await deleteMeeting(month)
+    await loadSavedList()
+    if (targetMonth.value === month) {
+      recordStatus.value = ''
+      await loadMeeting(month)
+    }
+    ElMessage.success(res.message || '削除しました')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error)?.message || '削除に失敗しました')
+  } finally {
+    deletingMonth.value = ''
   }
 }
 
@@ -3766,12 +4085,103 @@ async function onDownloadPpt() {
   if (!targetMonth.value || !payload.value) return
   pptLoading.value = true
   try {
-    await downloadMeetingPptx(targetMonth.value, payload.value)
+    // 画面表示中の数値・コメント・廃棄期間をそのまま PPT に渡す
+    const snapshot = JSON.parse(JSON.stringify(payload.value)) as ProductionReviewData
+    const meta = scrapMeta.value
+    if (snapshot.part01?.scrap) {
+      const s = snapshot.part01.scrap
+      s.monthly = meta.monthly
+      s.fiscal_year_label = meta.fiscalLabel
+      s.range_label = meta.rangeLabel
+      s.avg_rate_new_current_fy_pct = Number(meta.avgRateNew)
+      s.avg_rate_old_current_fy_pct = Number(meta.avgRateOld)
+      s.avg_loss_current_fy_qty = meta.monthly.length
+        ? Math.round(meta.monthly.reduce((sum, m) => sum + scrapLossQty(m), 0) / meta.monthly.length)
+        : 0
+      s.current_month_rate_new_pct = Number(meta.currentRateNew)
+      s.current_month_rate_old_pct = Number(meta.currentRateOld)
+      const last = meta.monthly[meta.monthly.length - 1]
+      if (last) {
+        s.current_month_loss_qty = scrapLossQty(last)
+      }
+    }
+    for (const row of snapshot.part01?.performance?.rows || []) {
+      if (row.key === 'shipping') {
+        row.productivity_delta = null
+      } else {
+        row.productivity_delta = calcProdDelta(row)
+      }
+    }
+    await downloadMeetingPptx(targetMonth.value, snapshot)
     ElMessage.success('PPTをダウンロードしました')
   } catch (e: unknown) {
     ElMessage.error((e as Error)?.message || 'PPT生成に失敗しました')
   } finally {
     pptLoading.value = false
+  }
+}
+
+function buildScrapPptPayload() {
+  const meta = scrapMeta.value
+  const base = payload.value?.part01?.scrap
+  return {
+    ...(base ? JSON.parse(JSON.stringify(base)) : {}),
+    monthly: meta.monthly,
+    fiscal_year_label: meta.fiscalLabel,
+    range_label: meta.rangeLabel,
+    comments: payload.value?.part01?.scrap?.comments || [],
+    avg_rate_new_current_fy_pct: Number(meta.avgRateNew),
+    avg_rate_old_current_fy_pct: Number(meta.avgRateOld),
+    avg_rate_new_prev_fy_pct: Number(payload.value?.part01?.scrap?.avg_rate_new_prev_fy_pct ?? 0),
+    avg_rate_old_prev_fy_pct: Number(
+      payload.value?.part01?.scrap?.avg_rate_old_prev_fy_pct ??
+        payload.value?.part01?.scrap?.avg_rate_prev_fy_pct ??
+        0,
+    ),
+    avg_loss_current_fy_qty: meta.monthly.length
+      ? Math.round(meta.monthly.reduce((sum, m) => sum + scrapLossQty(m), 0) / meta.monthly.length)
+      : 0,
+    current_month_rate_new_pct: Number(meta.currentRateNew),
+    current_month_rate_old_pct: Number(meta.currentRateOld),
+    current_month_loss_qty: meta.monthly.length
+      ? scrapLossQty(meta.monthly[meta.monthly.length - 1])
+      : 0,
+  }
+}
+
+async function onDownloadScrapPpt() {
+  if (!targetMonth.value || !payload.value) return
+  scrapPptLoading.value = true
+  try {
+    if (activeTab.value !== 'part01') {
+      activeTab.value = 'part01'
+      await nextTick()
+    }
+    renderScrapChart()
+    await nextTick()
+    // チャート描画完了を少し待つ
+    await new Promise((r) => setTimeout(r, 120))
+    const chartImage =
+      scrapChart && scrapMeta.value.monthly.length
+        ? scrapChart.getDataURL({
+            type: 'png',
+            pixelRatio: 2,
+            backgroundColor: '#fff7ed',
+          })
+        : null
+    await downloadScrapPptx(targetMonth.value, {
+      scrap: buildScrapPptPayload(),
+      chart_image_base64: chartImage,
+      meeting_label:
+        payload.value.meta?.meeting_month_label ||
+        payload.value.part01?.scrap?.fiscal_year_label ||
+        targetMonth.value,
+    })
+    ElMessage.success('廃棄PPTをダウンロードしました')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error)?.message || '廃棄PPT生成に失敗しました')
+  } finally {
+    scrapPptLoading.value = false
   }
 }
 
@@ -3795,7 +4205,7 @@ async function saveCapacity() {
     await saveCapacityApi(capacityRows.value)
     ElMessage.success('工程能力を保存しました')
     capacityVisible.value = false
-    if (targetMonth.value) await onRecalculate()
+    if (targetMonth.value) await runRecalculate()
   } catch {
     ElMessage.error('保存に失敗しました')
   } finally {
@@ -3803,11 +4213,21 @@ async function saveCapacity() {
   }
 }
 
-function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
+function resolveLoadCapacityMonth(part: 'part02' | 'part03'): string {
+  const fromPayload = payload.value?.[part]?.load_plan?.month
+  if (fromPayload && /^\d{4}-\d{2}$/.test(fromPayload)) return fromPayload
+  if (!targetMonth.value || !/^\d{4}-\d{2}$/.test(targetMonth.value)) return ''
+  return part === 'part03' ? shiftYm(targetMonth.value, 1) : targetMonth.value
+}
+
+function buildLoadCapacityDraftFromApi(
+  rows: CapacityRow[],
+  part: 'part02' | 'part03',
+): CapacityRow[] {
   const byCd = Object.fromEntries(rows.map((r) => [r.process_cd, r]))
-  const fromPayload = payload.value?.part02?.load_plan?.rows ?? []
+  const fromPayload = payload.value?.[part]?.load_plan?.rows ?? []
   const payloadByCd = Object.fromEntries(fromPayload.map((r) => [r.process_cd, r]))
-  const monthWd = Number(payload.value?.part02?.load_plan?.working_days) || 0
+  const monthWd = Number(payload.value?.[part]?.load_plan?.working_days) || 0
 
   return LOAD_CAPACITY_PROCESS_CDS.map((cd, idx) => {
     const saved = byCd[cd]
@@ -3835,23 +4255,36 @@ function buildLoadCapacityDraftFromApi(rows: CapacityRow[]): CapacityRow[] {
   })
 }
 
-async function openLoadCapacityDialog() {
+async function openLoadCapacityDialog(part: 'part02' | 'part03' = 'part02') {
+  const month = resolveLoadCapacityMonth(part)
+  if (!month) {
+    ElMessage.warning('対象月がありません。再計算してから設定してください')
+    return
+  }
+  loadCapacityPart.value = part
+  loadCapacityMonth.value = month
   loadCapacityVisible.value = true
   try {
-    const res = await fetchCapacity()
-    loadCapacityRows.value = buildLoadCapacityDraftFromApi(res.data || [])
+    const res = await fetchCapacity(month)
+    loadCapacitySource.value = (res.source as 'monthly' | 'default') || 'default'
+    loadCapacityRows.value = buildLoadCapacityDraftFromApi(res.data || [], part)
   } catch {
     ElMessage.error('設備・能率・直の読込に失敗しました')
   }
 }
 
 async function saveLoadCapacity() {
+  if (!loadCapacityMonth.value) {
+    ElMessage.warning('対象月がありません')
+    return
+  }
   loadCapacitySaving.value = true
   try {
-    await saveCapacityApi(loadCapacityRows.value)
-    ElMessage.success('設備・能率・直を保存しました')
+    await saveCapacityApi(loadCapacityRows.value, loadCapacityMonth.value)
+    ElMessage.success(`${loadCapacityMonthLabel.value} の設備・能率・直を保存しました`)
     loadCapacityVisible.value = false
-    if (targetMonth.value) await onRecalculate()
+    loadCapacitySource.value = 'monthly'
+    if (targetMonth.value) await runRecalculate()
   } catch {
     ElMessage.error('保存に失敗しました')
   } finally {
@@ -3914,7 +4347,7 @@ async function saveInventoryWorkingDays() {
       items.map((it) => ({ year: it.year, month: it.month, working_days: it.days })),
     )
     ElMessage.success('稼働日を保存しました')
-    if (targetMonth.value) await onRecalculate()
+    if (targetMonth.value) await runRecalculate()
   } catch (e: unknown) {
     ElMessage.error((e as Error)?.message || '稼働日の保存に失敗しました')
   } finally {
@@ -3951,7 +4384,7 @@ async function saveWorkingDaysDialog() {
     )
     ElMessage.success('稼働日を保存しました')
     wdDialogVisible.value = false
-    if (targetMonth.value) await onRecalculate()
+    if (targetMonth.value) await runRecalculate()
   } catch (e: unknown) {
     ElMessage.error((e as Error)?.message || '稼働日の保存に失敗しました')
   } finally {
@@ -4398,14 +4831,45 @@ watch(
   color: #64748b;
 }
 .pr-saved__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   border: 1px solid #cbd5e1;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 2px 4px 2px 10px;
   font-size: 12px;
-  cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 2px 6px rgb(15 23 42 / 6%);
+}
+.pr-saved__chip-main {
+  border: none;
+  background: transparent;
+  padding: 3px 4px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.pr-saved__chip-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.pr-saved__chip-del:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.pr-saved__chip-del:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .pr-saved__chip:hover {
   transform: translateY(-1px);
@@ -5007,6 +5471,10 @@ watch(
   gap: 6px;
   flex-wrap: wrap;
 }
+.pr-lcap-header__month {
+  font-weight: 800;
+  color: #fff;
+}
 .pr-lcap-header__badge {
   display: inline-block;
   padding: 1px 7px;
@@ -5015,6 +5483,9 @@ watch(
   font-weight: 700;
   background: rgb(255 255 255 / 20%);
   color: #fff;
+}
+.pr-lcap-header__badge--saved {
+  background: rgb(52 211 153 / 35%);
 }
 .pr-lcap-header__close {
   display: flex;
@@ -5424,6 +5895,13 @@ watch(
   align-items: center;
   flex-wrap: wrap;
   gap: 12px 16px;
+}
+.pr-scrap-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-left: auto;
 }
 .pr-scrap-range {
   display: flex;
