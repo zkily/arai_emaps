@@ -293,11 +293,15 @@ function printDailyMatrix() {
   const dates = [...dailyDates.value]
   const lblMaker = t('productionRequirements.colMaker')
   const lblName = t('productionRequirements.colMaterialName')
-  const lblSpec = t('productionRequirements.colSpec')
   const lblTotal = t('productionRequirements.rowTotal')
   const title = t('productionRequirements.dailyMatrixTitle')
   const period =
     summary.value != null ? `${summary.value.date_start} — ${summary.value.date_end}` : ''
+
+  const dayOnlyLabel = (iso: string) => {
+    if (!iso || iso.length < 10) return iso
+    return String(Number(iso.slice(8, 10)))
+  }
 
   const byMaker = new Map<string, MaterialRequirementsDailyMatrixRow[]>()
   for (const row of matrixRows.value) {
@@ -310,14 +314,12 @@ function printDailyMatrix() {
   )
 
   const buildHeader = () => {
-    const dateThs = dates
-      .map((d) => `<th class="col-day">${escapeHtml(shortDateLabel(d))}</th>`)
+    const dayThs = dates
+      .map((d) => `<th class="col-day">${escapeHtml(dayOnlyLabel(d))}</th>`)
       .join('')
     return `<thead><tr>
-      <th class="col-mk">${escapeHtml(lblMaker)}</th>
       <th class="col-nm">${escapeHtml(lblName)}</th>
-      <th class="col-sp">${escapeHtml(lblSpec)}</th>
-      ${dateThs}
+      ${dayThs}
       <th class="col-tot">${escapeHtml(lblTotal)}</th>
     </tr></thead>`
   }
@@ -341,15 +343,13 @@ function printDailyMatrix() {
         const tds = dates
           .map((d) => {
             const cell = formatQtyCell(row, d)
-            return `<td class="td-num">${escapeHtml(cell)}</td>`
+            return `<td class="td-num col-day">${escapeHtml(cell)}</td>`
           })
           .join('')
         return `<tr>
-          <td>${escapeHtml(row.material_manufacturer ?? '')}</td>
-          <td>${escapeHtml(row.material_name ?? '')}</td>
-          <td>${escapeHtml(row.standard_specification ?? '')}</td>
+          <td class="col-nm">${escapeHtml(row.material_name ?? '')}</td>
           ${tds}
-          <td class="td-num">${escapeHtml((row.row_total ?? 0).toLocaleString())}</td>
+          <td class="td-num col-tot">${escapeHtml((row.row_total ?? 0).toLocaleString())}</td>
         </tr>`
       })
       .join('')
@@ -359,7 +359,7 @@ function printDailyMatrix() {
       <section class="print-mfg" style="${pageBreak}">
         <header class="print-doc-hdr">
           <h1>${escapeHtml(title)}</h1>
-          <p class="print-doc-meta">${escapeHtml(period)} &nbsp;|&nbsp; ${escapeHtml(lblMaker)}: <strong>${escapeHtml(maker || '—')}</strong></p>
+          <p class="print-doc-meta">${escapeHtml(period)}　／　${escapeHtml(lblMaker)}：<strong>${escapeHtml(maker || '—')}</strong></p>
         </header>
         <div class="print-tbl-wrap">
           <table class="print-tbl">
@@ -372,70 +372,110 @@ function printDailyMatrix() {
   }
 
   const styles = `
-    @page { size: A4 landscape; margin: 8mm; }
+    @page { size: A4 landscape; margin: 10mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
-      color: #111;
+      font-family: 'Yu Gothic', 'YuGothic', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      color: #1a1a1a;
+      background: #fff;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .print-mfg { padding: 0 0 3mm 0; }
+    .print-mfg { padding: 0; }
     .print-doc-hdr {
-      margin: 0 0 4mm 0;
-      padding: 0 0 3mm 0;
-      border-bottom: 0.75pt solid #94a3b8;
+      margin: 0 0 5mm 0;
+      padding: 0 0 3.5mm 0;
+      border-bottom: 1.25pt solid #1a1a1a;
     }
     .print-doc-hdr h1 {
-      font-size: 12.5pt;
+      font-family: 'Yu Mincho', 'YuMincho', 'Hiragino Mincho ProN', 'MS PMincho', serif;
+      font-size: 16pt;
       margin: 0 0 2.5mm 0;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: #0f172a;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: #1a1a1a;
+      line-height: 1.3;
     }
     .print-doc-meta {
-      font-size: 8.5pt;
+      font-size: 10.5pt;
       margin: 0;
-      color: #475569;
-      padding: 1.8mm 3mm;
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-      border: 0.5pt solid #cbd5e1;
-      border-radius: 5pt;
-      display: inline-block;
-      line-height: 1.35;
+      color: #444;
+      padding: 0;
+      background: none;
+      border: none;
+      border-radius: 0;
+      display: block;
+      line-height: 1.5;
+      letter-spacing: 0.04em;
     }
-    .print-doc-meta strong { color: #1e293b; font-weight: 800; }
+    .print-doc-meta strong { color: #1a1a1a; font-weight: 700; }
     .print-tbl-wrap {
-      border-radius: 5pt;
-      overflow: hidden;
-      border: 0.55pt solid #94a3b8;
+      border-radius: 0;
+      overflow: visible;
+      border: none;
       background: #fff;
     }
-    .print-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.25pt; }
+    .print-tbl {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 9.5pt;
+      border-top: 1.25pt solid #1a1a1a;
+      border-bottom: 1.25pt solid #1a1a1a;
+    }
     .print-tbl th, .print-tbl td {
-      border: 0.45pt solid #cbd5e1;
-      padding: 0.65mm 0.55mm;
-      line-height: 1.78;
+      border: none;
+      border-bottom: 0.5pt solid #c8c8c8;
+      padding: 1.6mm 0.8mm;
+      line-height: 1.35;
       vertical-align: middle;
       word-wrap: break-word;
       overflow-wrap: anywhere;
+      color: #1a1a1a;
     }
-    .print-tbl tbody tr:nth-child(even) { background: #f8fafc; }
+    .print-tbl tbody tr:nth-child(even) { background: transparent; }
+    .print-tbl tbody tr:last-child td { border-bottom: none; }
     .print-tbl th {
-      background: linear-gradient(180deg, #e8ecff 0%, #dbeafe 55%, #e0e7ff 100%);
-      color: #1e293b;
-      font-weight: 800;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      font-weight: 700;
       text-align: center;
-      border-color: #a5b4fc;
-      padding: 0.75mm 0.5mm;
+      border-bottom: 0.75pt solid #1a1a1a;
+      padding: 1.4mm 0.5mm;
+      letter-spacing: 0.04em;
     }
-    .col-day { font-size: 6.5pt; padding: 0.6mm 0.35mm !important; line-height: 1.62; }
-    .td-num, .col-tot { text-align: right; font-variant-numeric: tabular-nums; }
-    .col-mk { width: 8%; }
-    .col-nm { width: 12%; }
-    .col-sp { width: 9%; }
-    .col-tot { width: 5%; }
+    .col-day {
+      font-size: 8.5pt;
+      padding: 1.2mm 0.3mm !important;
+      line-height: 1.25;
+      font-weight: 600;
+      text-align: center;
+      width: ${Math.max(1.8, Math.min(3.2, 72 / Math.max(dates.length, 1))).toFixed(2)}%;
+    }
+    .td-num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: 'tnum';
+    }
+    .td-num.col-day {
+      text-align: center;
+      font-weight: 500;
+      padding: 1.4mm 0.3mm !important;
+    }
+    .col-nm {
+      width: 18%;
+      text-align: left;
+      padding-left: 2mm !important;
+      padding-right: 2mm !important;
+    }
+    .col-tot {
+      width: 5.5%;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: 'tnum';
+    }
+    th.col-tot { text-align: center; }
   `
 
   const html = `<!DOCTYPE html><html lang="ja"><head>
