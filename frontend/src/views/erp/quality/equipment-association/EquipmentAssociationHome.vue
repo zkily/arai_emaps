@@ -1250,27 +1250,27 @@ const buildPrintListRows = (
 ): PrintListRow[] => {
   const statusByCd = new Map(statusList.map((s) => [String(s.roller_cd ?? '').trim(), s]))
   const out: PrintListRow[] = []
+  /** 手動スケジュールで計画行が1件以上出たローラーCD（計画なしは status 側で補完） */
+  const manualCdsWithPlan = new Set<string>()
 
+  // 自動予測：予定実施日の有無に関わらず印刷（日付なしは「実施日未設定」）
   for (const s of statusList) {
     const cd = String(s.roller_cd ?? '').trim()
     if (!cd || isManualRoller(cd)) continue
-    const rawDate = String(s.next_exec_date ?? '').trim()
-    if (!rawDate) continue
     out.push({
       roller_cd: cd,
       roller_type: String(s.roller_type ?? '').trim(),
       machine_name: String(s.machine_name ?? '').trim(),
       planned_product_cd: s.planned_product_cd ?? null,
-      planned_exec_date: rawDate,
+      planned_exec_date: String(s.next_exec_date ?? '').trim(),
       statusRow: s,
     })
   }
 
+  // 手動スケジュール：計画行を印刷（予定実施日なしも含む）
   for (const p of planList) {
     const cd = String(p.roller_cd ?? '').trim()
     if (!cd || !isManualRoller(cd)) continue
-    const rawDate = String(p.planned_exec_date ?? '').trim()
-    if (!rawDate) continue
     const s = statusByCd.get(cd)
     if (!s) continue
 
@@ -1285,17 +1285,35 @@ const buildPrintListRows = (
       if (et !== filters.value.exec_type) continue
     }
 
+    manualCdsWithPlan.add(cd)
     out.push({
       roller_cd: cd,
       roller_type: String(s.roller_type ?? '').trim(),
       machine_name: String(s.machine_name ?? '').trim(),
       planned_product_cd: p.planned_product_cd ?? s.planned_product_cd ?? null,
-      planned_exec_date: rawDate,
+      planned_exec_date: String(p.planned_exec_date ?? '').trim(),
+      statusRow: s,
+    })
+  }
+
+  // 手動だが計画が1件もないローラーも、status から印刷（日付なし可）
+  for (const s of statusList) {
+    const cd = String(s.roller_cd ?? '').trim()
+    if (!cd || !isManualRoller(cd) || manualCdsWithPlan.has(cd)) continue
+    out.push({
+      roller_cd: cd,
+      roller_type: String(s.roller_type ?? '').trim(),
+      machine_name: String(s.machine_name ?? '').trim(),
+      planned_product_cd: s.planned_product_cd ?? null,
+      planned_exec_date: String(s.next_exec_date ?? '').trim(),
       statusRow: s,
     })
   }
 
   return out.sort((a, b) => {
+    const aEmpty = !a.planned_exec_date
+    const bEmpty = !b.planned_exec_date
+    if (aEmpty !== bEmpty) return aEmpty ? 1 : -1
     const d = a.planned_exec_date.localeCompare(b.planned_exec_date)
     if (d !== 0) return d
     return a.roller_cd.localeCompare(b.roller_cd, 'ja')
@@ -1326,17 +1344,50 @@ const printMainListReport = async () => {
     const rowsHtml =
       sorted.length > 0
         ? (() => {
-            const buckets: Array<{ monthKey: string; monthLabel: string; rows: PrintListRow[] }> = []
-            let currentMonthKey = ''
+            /** データがある月だけでなく、最初〜最後の間の空月も印刷する */
+            const byMonth = new Map<string, PrintListRow[]>()
+            const unsetRows: PrintListRow[] = []
             for (const row of sorted) {
               const rawDate = String(row.planned_exec_date ?? '').trim()
-              const monthKey = rawDate ? rawDate.slice(0, 7) : '未設定'
-              const monthLabel = monthKey === '未設定' ? '実施日未設定' : `${monthKey} 月`
-              if (monthKey !== currentMonthKey) {
-                buckets.push({ monthKey, monthLabel, rows: [] })
-                currentMonthKey = monthKey
+              const monthKey =
+                rawDate && /^\d{4}-\d{2}/.test(rawDate) ? rawDate.slice(0, 7) : '未設定'
+              if (monthKey === '未設定') {
+                unsetRows.push(row)
+                continue
               }
-              buckets[buckets.length - 1].rows.push(row)
+              const list = byMonth.get(monthKey)
+              if (list) list.push(row)
+              else byMonth.set(monthKey, [row])
+            }
+
+            const buckets: Array<{ monthKey: string; monthLabel: string; rows: PrintListRow[] }> =
+              []
+            const monthKeys = [...byMonth.keys()].sort()
+            if (monthKeys.length > 0) {
+              const [startY, startM] = monthKeys[0].split('-').map(Number)
+              const [endY, endM] = monthKeys[monthKeys.length - 1].split('-').map(Number)
+              let y = startY
+              let m = startM
+              while (y < endY || (y === endY && m <= endM)) {
+                const key = `${y}-${String(m).padStart(2, '0')}`
+                buckets.push({
+                  monthKey: key,
+                  monthLabel: `${key} 月`,
+                  rows: byMonth.get(key) ?? [],
+                })
+                m += 1
+                if (m > 12) {
+                  m = 1
+                  y += 1
+                }
+              }
+            }
+            if (unsetRows.length > 0) {
+              buckets.push({
+                monthKey: '未設定',
+                monthLabel: '実施日未設定',
+                rows: unsetRows,
+              })
             }
 
             const preferredPairs = [
@@ -1378,7 +1429,7 @@ const printMainListReport = async () => {
                           return `<tr><td>${category}</td><td>${rt}</td><td>${mn}</td><td class="num">${pq}</td><td>${pp}</td><td>${ld}</td><td></td><td></td><td></td></tr>`
                         })
                         .join('')
-                    : ''
+                    : `<tr class="empty-month"><td colspan="9">（該当データなし）</td></tr>`
 
                 return `${monthRow}${detailRows}`
               })
@@ -1405,6 +1456,7 @@ const printMainListReport = async () => {
   td.num { text-align: right; }
   .foot { margin-top: 10px; font-size: 8pt; color: #555; }
   .month-group td { background: #f5f8fc; font-weight: 700; text-align: left; }
+  .empty-month td { color: #9ca3af; text-align: center; font-style: italic; }
 </style></head><body>
   <div class="title-row">
     <h1>ローラー交換・点検管理表</h1>
