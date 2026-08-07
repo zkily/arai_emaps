@@ -293,10 +293,22 @@
           </div>
         </section>
         <section class="panel panel--chart animate-in" style="--delay: 520ms">
-          <div class="panel-head">
+          <div class="panel-head panel-head--chart-export">
             <span class="panel-accent panel-accent--orange" />
             <span class="panel-title">修正比率推移</span>
             <span class="panel-meta">件数</span>
+            <el-button
+              size="small"
+              type="success"
+              plain
+              class="panel-export-btn"
+              :icon="Download"
+              :loading="exportingRatioTrend"
+              :disabled="!(stats?.byMonthTrend?.length)"
+              @click="exportRatioTrendExcel"
+            >
+              Excel出力
+            </el-button>
           </div>
           <div class="chart-canvas-wrap">
             <div ref="trendChartRef" class="chart-canvas" />
@@ -337,8 +349,21 @@
       <!-- 工程別比較テーブル -->
       <section class="panel glass animate-in" style="--delay: 600ms">
         <div class="panel-head panel-head--table">
-          <span class="panel-title">工程別比較一覧</span>
-          <span class="panel-hint">{{ stats?.compareMonth }} → {{ stats?.month }}</span>
+          <div class="panel-head-left">
+            <span class="panel-title">工程別比較一覧</span>
+            <span class="panel-hint">{{ stats?.compareMonth }} → {{ stats?.month }}</span>
+          </div>
+          <el-button
+            size="small"
+            type="success"
+            plain
+            :icon="Download"
+            :loading="exportingProcessCompare"
+            :disabled="!byProcessComparison.length"
+            @click="exportProcessCompareExcel"
+          >
+            Excel出力
+          </el-button>
         </div>
         <div class="table-wrap table-wrap--fluid">
           <el-table
@@ -504,8 +529,10 @@
       <!-- テーブル -->
       <section class="panel glass animate-in" style="--delay: 490ms">
         <div class="panel-head panel-head--table">
-          <span class="panel-title">工程別一覧</span>
-          <span class="panel-hint">行クリックで在庫取引記録へ</span>
+          <div class="panel-head-left">
+            <span class="panel-title">工程別一覧</span>
+            <span class="panel-hint">行クリックで在庫取引記録へ</span>
+          </div>
         </div>
         <div class="table-wrap table-wrap--fluid">
           <el-table
@@ -568,10 +595,12 @@ import {
   TrendCharts,
   Loading,
   Printer,
+  Download,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import type { OptionItem } from '@/types/master'
 import { openPrintWindow, PRINT_POPUP_BLOCKED_MSG } from '@/utils/printWindow'
+import { downloadExcelFromJson } from '@/utils/excelExport'
 import { buildManualEntryStatisticsPrintHtml } from './manualEntryStatisticsPrint'
 
 interface Bucket {
@@ -656,6 +685,8 @@ const API_BASE = '/api/erp/stock-transaction-logs/manual-entry-statistics'
 const router = useRouter()
 
 const loading = ref(false)
+const exportingProcessCompare = ref(false)
+const exportingRatioTrend = ref(false)
 const contentReady = ref(false)
 const stats = ref<StatsResponse | null>(null)
 const processOptions = ref<OptionItem[]>([])
@@ -833,7 +864,14 @@ const ratioTone = (ratio: number) => {
 
 function updateTableHeight() {
   const vh = window.innerHeight
-  tableMaxHeight.value = Math.max(220, Math.min(420, vh - 520))
+  const vw = window.innerWidth
+  if (vw <= 640) {
+    tableMaxHeight.value = Math.max(200, Math.min(320, vh - 420))
+  } else if (vw <= 1100) {
+    tableMaxHeight.value = Math.max(240, Math.min(380, vh - 480))
+  } else {
+    tableMaxHeight.value = Math.max(260, Math.min(460, vh - 500))
+  }
 }
 
 function chartMonthRange(ym: string) {
@@ -842,15 +880,57 @@ function chartMonthRange(ym: string) {
   return `対象月 ${ym}（${start} ～ ${end}）`
 }
 
+const CHART_FONT =
+  '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, system-ui, sans-serif'
+
+function chartDpr() {
+  return Math.min(Math.max(window.devicePixelRatio || 1, 1.5), 3)
+}
+
+function initChart(el: HTMLElement) {
+  return echarts.init(el, undefined, {
+    renderer: 'canvas',
+    devicePixelRatio: chartDpr(),
+  })
+}
+
+function chartTextStyle(fontSize = 12, color = '#334155') {
+  return { fontFamily: CHART_FONT, fontSize, color }
+}
+
+function chartTooltipBase(extra: Record<string, unknown> = {}) {
+  return {
+    trigger: 'axis' as const,
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    borderWidth: 0,
+    padding: [10, 14] as [number, number],
+    textStyle: { color: '#f8fafc', fontSize: 12, fontFamily: CHART_FONT, fontWeight: 500 },
+    extraCssText:
+      'border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,0.22);backdrop-filter:blur(8px);',
+    ...extra,
+  }
+}
+
+function chartLegendBase(data: string[]) {
+  return {
+    data,
+    bottom: 4,
+    itemWidth: 12,
+    itemHeight: 12,
+    itemGap: 18,
+    textStyle: { fontSize: 11, color: '#475569', fontWeight: 600, fontFamily: CHART_FONT },
+  }
+}
+
 function baseChartGrid() {
-  return { left: 40, right: 12, top: 40, bottom: 36, containLabel: true }
+  return { left: 44, right: 16, top: 44, bottom: 40, containLabel: true }
 }
 
 function axisStyle() {
   return {
     axisLine: { show: false },
     axisTick: { show: false },
-    axisLabel: { color: CHART_THEME.text, fontSize: 10 },
+    axisLabel: { color: CHART_THEME.text, fontSize: 11, fontFamily: CHART_FONT, fontWeight: 500 },
     splitLine: { lineStyle: { color: CHART_THEME.grid, type: 'dashed' as const } },
   }
 }
@@ -948,6 +1028,7 @@ function barTopLabel(color = '#334155', fontSize = 10) {
     distance: 5,
     fontSize,
     fontWeight: 700,
+    fontFamily: CHART_FONT,
     color,
     formatter: (p: { value: number }) => (Number(p.value) > 0 ? fmtNum(p.value) : ''),
   }
@@ -960,6 +1041,7 @@ function barTopQtyLabel(color = '#334155', fontSize = 10) {
     distance: 5,
     fontSize,
     fontWeight: 700,
+    fontFamily: CHART_FONT,
     color,
     formatter: (p: { value: number }) => (Number(p.value) > 0 ? fmtQty(p.value) : ''),
   }
@@ -972,6 +1054,7 @@ function barTopQtySenLabel(color = '#334155', fontSize = 10) {
     distance: 5,
     fontSize,
     fontWeight: 700,
+    fontFamily: CHART_FONT,
     color,
     formatter: (p: { value: number }) => {
       const v = Number(p.value)
@@ -985,8 +1068,9 @@ function lineTopLabel(color: string, suffix = '') {
     show: true,
     position: 'top' as const,
     distance: 6,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 700,
+    fontFamily: CHART_FONT,
     color,
     formatter: (p: { value: number }) =>
       p.value == null || Number.isNaN(Number(p.value)) ? '' : `${p.value}${suffix}`,
@@ -1000,32 +1084,19 @@ function renderCharts() {
   const anim = chartAnimBase()
 
   if (monthCompareChartRef.value) {
-    monthCompareChart = echarts.init(monthCompareChartRef.value)
+    monthCompareChart = initChart(monthCompareChartRef.value)
     const cur = stats.value.current
     const cmp = stats.value.compare
     monthCompareChart.setOption({
       ...anim,
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
-      },
-      legend: {
-        data: [stats.value.compareMonth, stats.value.month],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        itemGap: 16,
-        textStyle: { fontSize: 11, color: '#475569', fontWeight: 600 },
-      },
-      grid: { ...baseChartGrid(), bottom: 44 },
+      textStyle: chartTextStyle(),
+      tooltip: chartTooltipBase(),
+      legend: chartLegendBase([stats.value.compareMonth, stats.value.month]),
+      grid: { ...baseChartGrid(), bottom: 48 },
       xAxis: {
         type: 'category',
         data: ['実績修正', '実績集計', '総件数'],
-        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 600, interval: 0 },
+        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 600, fontFamily: CHART_FONT, interval: 0 },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
@@ -1034,9 +1105,9 @@ function renderCharts() {
         {
           name: stats.value.compareMonth,
           type: 'bar',
-          barMaxWidth: 26,
-          barGap: '30%',
-          label: barTopLabel('#64748b'),
+          barMaxWidth: 28,
+          barGap: '28%',
+          label: barTopLabel('#64748b', 11),
           emphasis: barEmphasis('#94a3b8'),
           itemStyle: {
             borderRadius: [6, 6, 0, 0],
@@ -1050,8 +1121,8 @@ function renderCharts() {
         {
           name: stats.value.month,
           type: 'bar',
-          barMaxWidth: 26,
-          label: barTopLabel('#1d4ed8'),
+          barMaxWidth: 28,
+          label: barTopLabel('#1d4ed8', 11),
           emphasis: barEmphasis('#3b82f6'),
           itemStyle: {
             borderRadius: [6, 6, 0, 0],
@@ -1067,40 +1138,28 @@ function renderCharts() {
   }
 
   if (qtyCompareChartRef.value) {
-    qtyCompareChart = echarts.init(qtyCompareChartRef.value)
+    qtyCompareChart = initChart(qtyCompareChartRef.value)
     const cur = stats.value.current
     const cmp = stats.value.compare
     qtyCompareChart.setOption({
       ...anim,
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
+      textStyle: chartTextStyle(),
+      tooltip: chartTooltipBase({
         valueFormatter: (v: number) => fmtSenVal(Number(v), true),
-      },
-      legend: {
-        data: [stats.value.compareMonth, stats.value.month],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        itemGap: 16,
-        textStyle: { fontSize: 11, color: '#475569', fontWeight: 600 },
-      },
-      grid: { ...baseChartGrid(), bottom: 44 },
+      }),
+      legend: chartLegendBase([stats.value.compareMonth, stats.value.month]),
+      grid: { ...baseChartGrid(), bottom: 48 },
       xAxis: {
         type: 'category',
         data: ['実績修正', '実績集計', '総数量'],
-        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 600, interval: 0 },
+        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 600, fontFamily: CHART_FONT, interval: 0 },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
       yAxis: {
         type: 'value',
         name: '千',
-        nameTextStyle: { fontSize: 10, color: '#94a3b8' },
+        nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
         ...axisStyle(),
         axisLabel: {
           ...axisStyle().axisLabel,
@@ -1111,9 +1170,9 @@ function renderCharts() {
         {
           name: stats.value.compareMonth,
           type: 'bar',
-          barMaxWidth: 26,
-          barGap: '30%',
-          label: barTopQtySenLabel('#64748b', 8),
+          barMaxWidth: 28,
+          barGap: '28%',
+          label: barTopQtySenLabel('#64748b', 10),
           emphasis: barEmphasis('#94a3b8'),
           itemStyle: {
             borderRadius: [6, 6, 0, 0],
@@ -1131,8 +1190,8 @@ function renderCharts() {
         {
           name: stats.value.month,
           type: 'bar',
-          barMaxWidth: 26,
-          label: barTopQtySenLabel('#6d28d9', 8),
+          barMaxWidth: 28,
+          label: barTopQtySenLabel('#6d28d9', 10),
           emphasis: barEmphasis('#8b5cf6'),
           itemStyle: {
             borderRadius: [6, 6, 0, 0],
@@ -1152,42 +1211,36 @@ function renderCharts() {
   }
 
   if (trendChartRef.value) {
-    trendChart = echarts.init(trendChartRef.value)
+    trendChart = initChart(trendChartRef.value)
     const trend = stats.value.byMonthTrend
     trendChart.setOption({
       ...anim,
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
-      },
-      legend: {
-        data: ['修正件数', '修正比率'],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        textStyle: { fontSize: 11, color: '#475569', fontWeight: 600 },
-      },
-      grid: { ...baseChartGrid(), right: 40, bottom: 44 },
+      textStyle: chartTextStyle(),
+      tooltip: chartTooltipBase(),
+      legend: chartLegendBase(['修正件数', '修正比率']),
+      grid: { ...baseChartGrid(), right: 48, bottom: 48 },
       xAxis: {
         type: 'category',
         data: trend.map((t) => t.month),
-        axisLabel: { color: '#475569', fontSize: 10, fontWeight: 500 },
+        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 500, fontFamily: CHART_FONT },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
       yAxis: [
-        { type: 'value', name: '件数', nameTextStyle: { fontSize: 10, color: '#94a3b8' }, minInterval: 1, ...axisStyle() },
+        {
+          type: 'value',
+          name: '件数',
+          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
+          minInterval: 1,
+          ...axisStyle(),
+        },
         {
           type: 'value',
           name: '%',
           min: 0,
           max: 20,
-          nameTextStyle: { fontSize: 10, color: '#94a3b8' },
-          axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 10 },
+          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
+          axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11, fontFamily: CHART_FONT },
           splitLine: { show: false },
         },
       ],
@@ -1195,8 +1248,8 @@ function renderCharts() {
         {
           name: '修正件数',
           type: 'bar',
-          barMaxWidth: 20,
-          label: barTopLabel('#ca8a04'),
+          barMaxWidth: 22,
+          label: barTopLabel('#ca8a04', 10),
           emphasis: barEmphasis('#fbbf24'),
           itemStyle: {
             borderRadius: [5, 5, 0, 0],
@@ -1213,10 +1266,10 @@ function renderCharts() {
           yAxisIndex: 1,
           smooth: true,
           symbol: 'circle',
-          symbolSize: 7,
+          symbolSize: 8,
           label: lineTopLabel(CHART_THEME.danger, '%'),
-          lineStyle: { width: 2.5, color: CHART_THEME.danger, shadowColor: 'rgba(239,68,68,0.4)', shadowBlur: 6 },
-          itemStyle: { color: '#fff', borderColor: CHART_THEME.danger, borderWidth: 2 },
+          lineStyle: { width: 3, color: CHART_THEME.danger, shadowColor: 'rgba(239,68,68,0.4)', shadowBlur: 8 },
+          itemStyle: { color: '#fff', borderColor: CHART_THEME.danger, borderWidth: 2.5 },
           emphasis: { scale: 1.4 },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -1231,48 +1284,42 @@ function renderCharts() {
   }
 
   if (qtyTrendChartRef.value) {
-    qtyTrendChart = echarts.init(qtyTrendChartRef.value)
+    qtyTrendChart = initChart(qtyTrendChartRef.value)
     const trend = stats.value.byMonthTrend
     qtyTrendChart.setOption({
       ...anim,
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
+      textStyle: chartTextStyle(),
+      tooltip: chartTooltipBase({
         valueFormatter: (v: number, _idx: number, series: { seriesName?: string }) => {
           if (series?.seriesName === '修正数量比率') {
             return `${Number(v).toFixed(2)}%`
           }
           return fmtQty(Number(v))
         },
-      },
-      legend: {
-        data: ['修正数量', '修正数量比率'],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        textStyle: { fontSize: 11, color: '#475569', fontWeight: 600 },
-      },
-      grid: { ...baseChartGrid(), right: 40, bottom: 44 },
+      }),
+      legend: chartLegendBase(['修正数量', '修正数量比率']),
+      grid: { ...baseChartGrid(), right: 48, bottom: 48 },
       xAxis: {
         type: 'category',
         data: trend.map((t) => t.month),
-        axisLabel: { color: '#475569', fontSize: 10, fontWeight: 500 },
+        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 500, fontFamily: CHART_FONT },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
       yAxis: [
-        { type: 'value', name: '数量', nameTextStyle: { fontSize: 10, color: '#94a3b8' }, ...axisStyle() },
+        {
+          type: 'value',
+          name: '数量',
+          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
+          ...axisStyle(),
+        },
         {
           type: 'value',
           name: '%',
           min: 0,
           max: 20,
-          nameTextStyle: { fontSize: 10, color: '#94a3b8' },
-          axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 10 },
+          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
+          axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11, fontFamily: CHART_FONT },
           splitLine: { show: false },
         },
       ],
@@ -1280,8 +1327,8 @@ function renderCharts() {
         {
           name: '修正数量',
           type: 'bar',
-          barMaxWidth: 20,
-          label: barTopQtyLabel('#6d28d9'),
+          barMaxWidth: 22,
+          label: barTopQtyLabel('#6d28d9', 10),
           emphasis: barEmphasis('#a78bfa'),
           itemStyle: {
             borderRadius: [5, 5, 0, 0],
@@ -1298,10 +1345,10 @@ function renderCharts() {
           yAxisIndex: 1,
           smooth: true,
           symbol: 'circle',
-          symbolSize: 7,
+          symbolSize: 8,
           label: lineTopLabel('#7c3aed', '%'),
-          lineStyle: { width: 2.5, color: '#7c3aed', shadowColor: 'rgba(124,58,237,0.4)', shadowBlur: 6 },
-          itemStyle: { color: '#fff', borderColor: '#7c3aed', borderWidth: 2 },
+          lineStyle: { width: 3, color: '#7c3aed', shadowColor: 'rgba(124,58,237,0.4)', shadowBlur: 8 },
+          itemStyle: { color: '#fff', borderColor: '#7c3aed', borderWidth: 2.5 },
           emphasis: { scale: 1.4 },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -1316,38 +1363,33 @@ function renderCharts() {
   }
 
   if (processCompareChartRef.value) {
-    processCompareChart = echarts.init(processCompareChartRef.value)
+    processCompareChart = initChart(processCompareChartRef.value)
     const rows = byProcessComparison.value.slice(0, 14)
     const cmpLabel = stats.value.compareMonth
     const curLabel = stats.value.month
     processCompareChart.setOption({
       ...anim,
-      tooltip: {
-        trigger: 'axis',
+      textStyle: chartTextStyle(),
+      tooltip: chartTooltipBase({
         axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(20,184,166,0.08)' } },
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
-      },
-      legend: {
-        data: [
-          `${cmpLabel} 実績修正`,
-          `${curLabel} 実績修正`,
-          `${cmpLabel} 実績集計`,
-          `${curLabel} 実績集計`,
-        ],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        textStyle: { fontSize: 10, color: '#475569', fontWeight: 600 },
-      },
-      grid: { left: 40, right: 12, top: 40, bottom: 64, containLabel: true },
+      }),
+      legend: chartLegendBase([
+        `${cmpLabel} 実績修正`,
+        `${curLabel} 実績修正`,
+        `${cmpLabel} 実績集計`,
+        `${curLabel} 実績集計`,
+      ]),
+      grid: { left: 44, right: 16, top: 44, bottom: 68, containLabel: true },
       xAxis: {
         type: 'category',
         data: rows.map((r) => r.processName),
-        axisLabel: { color: '#475569', fontSize: 10, rotate: 28, fontWeight: 500 },
+        axisLabel: {
+          color: '#475569',
+          fontSize: 11,
+          rotate: 28,
+          fontWeight: 500,
+          fontFamily: CHART_FONT,
+        },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
@@ -1356,9 +1398,9 @@ function renderCharts() {
         {
           name: `${cmpLabel} 実績修正`,
           type: 'bar',
-          barMaxWidth: 16,
-          barGap: '20%',
-          label: barTopLabel('#64748b', 8),
+          barMaxWidth: 18,
+          barGap: '18%',
+          label: barTopLabel('#64748b', 9),
           emphasis: barEmphasis('#94a3b8'),
           itemStyle: {
             borderRadius: [4, 4, 0, 0],
@@ -1372,8 +1414,8 @@ function renderCharts() {
         {
           name: `${curLabel} 実績修正`,
           type: 'bar',
-          barMaxWidth: 16,
-          label: barTopLabel('#c2410c', 8),
+          barMaxWidth: 18,
+          label: barTopLabel('#c2410c', 9),
           emphasis: barEmphasis(CHART_THEME.prod),
           itemStyle: {
             borderRadius: [4, 4, 0, 0],
@@ -1387,8 +1429,8 @@ function renderCharts() {
         {
           name: `${cmpLabel} 実績集計`,
           type: 'bar',
-          barMaxWidth: 16,
-          label: barTopLabel('#64748b', 8),
+          barMaxWidth: 18,
+          label: barTopLabel('#64748b', 9),
           emphasis: barEmphasis('#94a3b8'),
           itemStyle: {
             borderRadius: [4, 4, 0, 0],
@@ -1402,8 +1444,8 @@ function renderCharts() {
         {
           name: `${curLabel} 実績集計`,
           type: 'bar',
-          barMaxWidth: 16,
-          label: barTopLabel('#047857', 8),
+          barMaxWidth: 18,
+          label: barTopLabel('#047857', 9),
           emphasis: barEmphasis(CHART_THEME.auto),
           itemStyle: {
             borderRadius: [4, 4, 0, 0],
@@ -1419,39 +1461,34 @@ function renderCharts() {
   }
 
   if (processChartRef.value) {
-    processChart = echarts.init(processChartRef.value)
+    processChart = initChart(processChartRef.value)
     const rows = stats.value.byProcess.slice(0, 14)
     processChart.setOption({
       ...anim,
+      textStyle: chartTextStyle(),
       title: {
         text: '工程別内訳',
         subtext: chartMonthRange(stats.value.month),
         left: 'center',
         top: 2,
-        textStyle: { fontSize: 11, fontWeight: 700, color: '#334155' },
-        subtextStyle: { fontSize: 10, fontWeight: 600, color: '#2563eb' },
+        textStyle: { fontSize: 12, fontWeight: 700, color: '#334155', fontFamily: CHART_FONT },
+        subtextStyle: { fontSize: 11, fontWeight: 600, color: '#2563eb', fontFamily: CHART_FONT },
       },
-      tooltip: {
-        trigger: 'axis',
+      tooltip: chartTooltipBase({
         axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(59,130,246,0.08)' } },
-        backgroundColor: 'rgba(15, 23, 42, 0.94)',
-        borderWidth: 0,
-        padding: [8, 12],
-        textStyle: { color: '#f8fafc', fontSize: 12 },
-        extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);',
-      },
-      legend: {
-        data: ['実績修正', '実績集計'],
-        bottom: 2,
-        itemWidth: 12,
-        itemHeight: 12,
-        textStyle: { fontSize: 11, color: '#475569', fontWeight: 600 },
-      },
-      grid: { left: 40, right: 12, top: 50, bottom: 56, containLabel: true },
+      }),
+      legend: chartLegendBase(['実績修正', '実績集計']),
+      grid: { left: 44, right: 16, top: 54, bottom: 60, containLabel: true },
       xAxis: {
         type: 'category',
         data: rows.map((r) => r.processName),
-        axisLabel: { color: '#475569', fontSize: 10, rotate: 28, fontWeight: 500 },
+        axisLabel: {
+          color: '#475569',
+          fontSize: 11,
+          rotate: 28,
+          fontWeight: 500,
+          fontFamily: CHART_FONT,
+        },
         axisLine: { lineStyle: { color: '#e2e8f0' } },
         axisTick: { show: false },
       },
@@ -1460,9 +1497,9 @@ function renderCharts() {
         {
           name: '実績修正',
           type: 'bar',
-          barMaxWidth: 22,
-          barGap: '30%',
-          label: barTopLabel('#c2410c'),
+          barMaxWidth: 24,
+          barGap: '28%',
+          label: barTopLabel('#c2410c', 11),
           emphasis: barEmphasis(CHART_THEME.prod),
           itemStyle: {
             borderRadius: [5, 5, 0, 0],
@@ -1476,8 +1513,8 @@ function renderCharts() {
         {
           name: '実績集計',
           type: 'bar',
-          barMaxWidth: 22,
-          label: barTopLabel('#047857'),
+          barMaxWidth: 24,
+          label: barTopLabel('#047857', 11),
           emphasis: barEmphasis(CHART_THEME.auto),
           itemStyle: {
             borderRadius: [5, 5, 0, 0],
@@ -1496,7 +1533,11 @@ function renderCharts() {
 function chartToPng(chart: echarts.ECharts | null): string | undefined {
   if (!chart) return undefined
   try {
-    return chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' })
+    return chart.getDataURL({
+      type: 'png',
+      pixelRatio: Math.min(chartDpr(), 2.5),
+      backgroundColor: '#fff',
+    })
   } catch {
     return undefined
   }
@@ -1506,6 +1547,84 @@ function selectedProcessLabel(): string {
   if (!filters.value.processCd) return '全工程'
   const found = processOptions.value.find((p) => p.cd === filters.value.processCd)
   return found?.name || filters.value.processCd
+}
+
+async function exportRatioTrendExcel() {
+  const trend = stats.value?.byMonthTrend ?? []
+  if (!trend.length) {
+    ElMessage.warning('出力するデータがありません。先に検索を実行してください。')
+    return
+  }
+
+  const months = filters.value.trendMonths || stats.value?.trendMonths || trend.length
+  const pct = (v?: number | null) =>
+    v == null ? 0 : Number((Number(v) * 100).toFixed(2))
+
+  exportingRatioTrend.value = true
+  try {
+    const exportRows = trend.map((row) => ({
+      月: row.month,
+      修正件数: row.prodDataMgmtCount,
+      実績集計件数: row.autoCount,
+      総件数: row.totalCount,
+      '修正比率(%)': pct(row.prodDataMgmtCountRatio),
+    }))
+
+    await downloadExcelFromJson(
+      exportRows,
+      '修正比率推移',
+      `修正比率推移_${months}ヶ月.xlsx`,
+    )
+    ElMessage.success('Excelを出力しました')
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('Excel出力に失敗しました')
+  } finally {
+    exportingRatioTrend.value = false
+  }
+}
+
+async function exportProcessCompareExcel() {
+  const rows = byProcessComparison.value
+  if (!rows.length) {
+    ElMessage.warning('出力するデータがありません。先に検索を実行してください。')
+    return
+  }
+
+  const month = stats.value?.month || filters.value.month
+  const compareMonth = stats.value?.compareMonth || filters.value.compareMonth
+  const pct = (v?: number | null) =>
+    v == null ? 0 : Number((Number(v) * 100).toFixed(1))
+
+  exportingProcessCompare.value = true
+  try {
+    const exportRows = rows.map((row) => ({
+      工程: row.processName,
+      [`実績修正件数_${month}`]: row.current.prodDataMgmt.count,
+      [`実績修正数量_${month}`]: row.current.prodDataMgmt.quantity,
+      [`実績修正比率%_${month}`]: pct(row.current.prodDataMgmtCountRatio),
+      [`実績修正件数_${compareMonth}`]: row.compare.prodDataMgmt.count,
+      [`実績修正数量_${compareMonth}`]: row.compare.prodDataMgmt.quantity,
+      [`実績修正比率%_${compareMonth}`]: pct(row.compare.prodDataMgmtCountRatio),
+      前月比件数: row.prodCountChange,
+      前月比数量: row.prodQtyChange,
+      [`実績集計件数_${month}`]: row.current.auto.count,
+      [`実績集計件数_${compareMonth}`]: row.compare.auto.count,
+    }))
+
+    const fileTag = `${compareMonth}_${month}`.replace(/[^\d_-]/g, '')
+    await downloadExcelFromJson(
+      exportRows,
+      '工程別比較一覧',
+      `工程別比較一覧_${fileTag}.xlsx`,
+    )
+    ElMessage.success('Excelを出力しました')
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('Excel出力に失敗しました')
+  } finally {
+    exportingProcessCompare.value = false
+  }
 }
 
 function handlePrintReport() {
@@ -1588,14 +1707,19 @@ function openTransactionLog(row: ProcessRow) {
   })
 }
 
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+
 function onResize() {
-  updateTableHeight()
-  monthCompareChart?.resize()
-  qtyCompareChart?.resize()
-  trendChart?.resize()
-  qtyTrendChart?.resize()
-  processChart?.resize()
-  processCompareChart?.resize()
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    updateTableHeight()
+    monthCompareChart?.resize()
+    qtyCompareChart?.resize()
+    trendChart?.resize()
+    qtyTrendChart?.resize()
+    processChart?.resize()
+    processCompareChart?.resize()
+  }, 90)
 }
 
 watch(
@@ -1614,21 +1738,40 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  if (resizeTimer) clearTimeout(resizeTimer)
   disposeCharts()
 })
 </script>
 
 <style scoped>
-/* ── ベース ── */
+/* ── ベース / デザイントークン ── */
 .mes-page {
   --mes-accent: #3b82f6;
-  --mes-radius: 10px;
-  --mes-gap: 6px;
+  --mes-radius: 12px;
+  --mes-gap: clamp(8px, 1.2vw, 14px);
+  --mes-font: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI',
+    'Yu Gothic', Meiryo, 'Segoe UI', system-ui, sans-serif;
+  --mes-font-num: 'DIN Alternate', 'TabularNums', 'Hiragino Sans', 'Noto Sans JP', Meiryo,
+    system-ui, sans-serif;
+  --mes-fs-xs: clamp(0.62rem, 0.55rem + 0.2vw, 0.7rem);
+  --mes-fs-sm: clamp(0.7rem, 0.64rem + 0.25vw, 0.8rem);
+  --mes-fs-md: clamp(0.78rem, 0.72rem + 0.3vw, 0.9rem);
+  --mes-fs-lg: clamp(0.95rem, 0.88rem + 0.35vw, 1.15rem);
+  --mes-fs-xl: clamp(1.15rem, 1.05rem + 0.45vw, 1.4rem);
+  --mes-text: #0f172a;
+  --mes-muted: #64748b;
+  --mes-border: rgba(148, 163, 184, 0.28);
   position: relative;
-  min-height: 100vh;
-  padding: 6px 8px 10px;
-  font-size: 12px;
-  color: #1e293b;
+  min-height: 100%;
+  padding: clamp(8px, 1.2vw, 14px) clamp(8px, 1.5vw, 16px) clamp(12px, 1.5vw, 20px);
+  font-family: var(--mes-font);
+  font-size: var(--mes-fs-sm);
+  color: var(--mes-text);
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   overflow-x: hidden;
 }
 
@@ -1637,7 +1780,10 @@ onBeforeUnmount(() => {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: linear-gradient(145deg, #eef2f7 0%, #e4eaf2 45%, #e8edf5 100%);
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(147, 197, 253, 0.35), transparent 55%),
+    radial-gradient(900px 500px at 92% 8%, rgba(196, 181, 253, 0.28), transparent 50%),
+    linear-gradient(155deg, #eef2f7 0%, #e6ebf3 48%, #edf1f7 100%);
 }
 
 .orb {
@@ -1687,7 +1833,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--mes-gap);
-  max-width: 1600px;
+  width: 100%;
+  max-width: min(1680px, 100%);
   margin: 0 auto;
 }
 
@@ -1789,18 +1936,19 @@ onBeforeUnmount(() => {
 
 .toolbar-title {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--mes-fs-md);
   font-weight: 800;
-  letter-spacing: 0.03em;
-  line-height: 1.2;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
   color: #1e3a5f;
 }
 
 .toolbar-sub {
-  margin: 2px 0 0;
-  font-size: 0.62rem;
-  color: #64748b;
-  line-height: 1.2;
+  margin: 3px 0 0;
+  font-size: var(--mes-fs-xs);
+  color: var(--mes-muted);
+  line-height: 1.3;
+  font-weight: 500;
 }
 
 /* フィルタ帯 */
@@ -2077,8 +2225,8 @@ onBeforeUnmount(() => {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--mes-gap);
 }
 
 .kpi-card {
@@ -2284,17 +2432,18 @@ onBeforeUnmount(() => {
 }
 
 .kpi-metric__value {
-  font-size: 1.28rem;
+  font-size: var(--mes-fs-xl);
   font-weight: 800;
   color: #0f172a;
   line-height: 1.1;
+  font-family: var(--mes-font-num);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   text-align: right;
 }
 
 .kpi-metric__value--qty {
-  font-size: 1.05rem;
+  font-size: var(--mes-fs-lg);
   color: #334155;
 }
 
@@ -2479,9 +2628,10 @@ onBeforeUnmount(() => {
 }
 
 .vs-metric-value {
-  font-size: 1rem;
+  font-size: var(--mes-fs-lg);
   font-weight: 800;
   color: #1e293b;
+  font-family: var(--mes-font-num);
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
@@ -2572,8 +2722,8 @@ onBeforeUnmount(() => {
 /* ── パネル・チャート ── */
 .chart-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--mes-gap);
 }
 
 .panel {
@@ -2581,14 +2731,14 @@ onBeforeUnmount(() => {
 }
 
 .panel.glass {
-  padding: 8px 10px 6px;
+  padding: 10px 12px 8px;
 }
 
 .panel--chart {
-  padding: 10px 12px 8px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.86) 100%);
+  padding: 12px 14px 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.9) 100%);
   border: 1px solid rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
+  border-radius: var(--mes-radius);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.95) inset,
     0 8px 22px rgba(15, 23, 42, 0.07),
@@ -2614,18 +2764,36 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding: 0 2px;
+  flex-wrap: wrap;
 }
 
 .panel-head--table {
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+
+.panel-head--chart-export {
+  width: 100%;
+}
+
+.panel-head--chart-export .panel-export-btn {
+  margin-left: auto;
+}
+
+.panel-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .panel-accent {
   width: 4px;
-  height: 16px;
+  height: 18px;
   border-radius: 4px;
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
@@ -2648,28 +2816,29 @@ onBeforeUnmount(() => {
 }
 
 .panel-title {
-  flex: 1;
-  font-size: 0.78rem;
+  flex: 0 1 auto;
+  font-size: var(--mes-fs-md);
   font-weight: 800;
   color: #1e293b;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .panel-meta,
 .panel-hint {
-  font-size: 0.65rem;
+  font-size: var(--mes-fs-xs);
   font-weight: 600;
-  color: #94a3b8;
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: rgba(15, 23, 42, 0.04);
+  color: #64748b;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.045);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .chart-canvas-wrap {
   position: relative;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.6) 0%, rgba(255, 255, 255, 0.4) 100%);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.75) 0%, rgba(255, 255, 255, 0.55) 100%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
@@ -2679,48 +2848,66 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, transparent 40%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, transparent 42%);
   border-radius: inherit;
 }
 
 .chart-canvas {
-  height: 210px;
+  height: clamp(200px, 28vh, 280px);
   width: 100%;
 }
 
 .chart-canvas-wrap--tall .chart-canvas,
 .chart-canvas--tall {
-  height: 260px;
+  height: clamp(240px, 34vh, 340px);
 }
 
 /* ── テーブル ── */
 .table-wrap {
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
+  border: 1px solid var(--mes-border);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .table-wrap--fluid {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.table-wrap--fluid::-webkit-scrollbar {
+  height: 8px;
+}
+.table-wrap--fluid::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 999px;
 }
 
 .data-table--fluid {
   width: 100%;
+  font-family: var(--mes-font);
 }
 
 .data-table--fluid :deep(.el-table__header th) {
-  padding: 6px 0;
+  padding: 8px 0;
 }
 
 .data-table--fluid :deep(.el-table__header th .cell) {
   white-space: nowrap;
   word-break: keep-all;
-  line-height: 1.25;
+  line-height: 1.3;
   padding: 0 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .data-table--fluid :deep(.el-table__body td .cell) {
   white-space: nowrap;
-  padding: 0 6px;
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
 .data-table--fluid:not(.data-table--clickable) :deep(.el-table__row) {
@@ -2728,7 +2915,7 @@ onBeforeUnmount(() => {
 }
 
 .data-table--fluid:not(.data-table--clickable) :deep(.el-table__row:hover > td) {
-  background: rgba(241, 245, 249, 0.5) !important;
+  background: rgba(241, 245, 249, 0.65) !important;
 }
 
 /* ── 工程別比較テーブル ── */
@@ -2887,10 +3074,11 @@ onBeforeUnmount(() => {
 
 .cmp-delta {
   display: inline-block;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 0.62rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: var(--mes-fs-xs);
   font-weight: 700;
+  font-family: var(--mes-font-num);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2905,15 +3093,17 @@ onBeforeUnmount(() => {
 }
 
 .data-table :deep(.el-table__header th) {
-  background: rgba(241, 245, 249, 0.9) !important;
-  font-size: 0.68rem;
-  padding: 4px 0;
-  color: #475569;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9) !important;
+  font-size: var(--mes-fs-xs);
+  padding: 6px 0;
+  color: #334155;
+  border-bottom-color: rgba(148, 163, 184, 0.35) !important;
 }
 
 .data-table :deep(.el-table__body td) {
-  font-size: 0.68rem;
-  padding: 3px 0;
+  font-size: var(--mes-fs-sm);
+  padding: 5px 0;
+  color: #1e293b;
 }
 
 .data-table :deep(.el-table__row) {
@@ -2922,15 +3112,21 @@ onBeforeUnmount(() => {
 }
 
 .data-table :deep(.el-table__row:hover > td) {
-  background: rgba(59, 130, 246, 0.06) !important;
+  background: rgba(59, 130, 246, 0.07) !important;
+}
+
+.data-table :deep(.el-table__body tr.el-table__row--striped td) {
+  background: rgba(248, 250, 252, 0.7);
 }
 
 .ratio-pill {
   display: inline-block;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 0.62rem;
-  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: var(--mes-fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 .ratio-pill--low {
@@ -2947,23 +3143,33 @@ onBeforeUnmount(() => {
 }
 
 /* ── レスポンシブ ── */
-@media (max-width: 1200px) {
-  .kpi-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
-  .panel--wide {
-    grid-column: auto;
+@media (max-width: 1400px) {
+  .mes-inner {
+    max-width: 100%;
   }
 }
 
-@media (max-width: 768px) {
-  .mes-page {
-    padding: 4px 6px 8px;
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
 
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel--wide {
+    grid-column: auto;
+  }
+
+  .filter-group--process {
+    max-width: none;
+    flex: 1 1 220px;
+  }
+}
+
+@media (max-width: 980px) {
   .toolbar {
     flex-direction: column;
   }
@@ -2972,6 +3178,7 @@ onBeforeUnmount(() => {
     border-right: none;
     border-bottom: 1px solid rgba(59, 130, 246, 0.12);
     width: 100%;
+    min-width: 0;
   }
 
   .toolbar-brand-zone::after {
@@ -2979,8 +3186,36 @@ onBeforeUnmount(() => {
   }
 
   .toolbar-filters-zone {
-    flex-direction: column;
     width: 100%;
+  }
+
+  .toolbar-actions-zone {
+    width: 100%;
+    justify-content: flex-end;
+    border-left: none;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-grid .kpi-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .vs-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .mes-page {
+    padding: 6px 8px 12px;
+  }
+
+  .toolbar-filters-zone {
+    flex-direction: column;
   }
 
   .filter-group {
@@ -2997,18 +3232,20 @@ onBeforeUnmount(() => {
   }
 
   .tf-control--month {
-    width: 108px !important;
-  }
-
-  .toolbar-actions-zone {
-    width: 100%;
-    justify-content: flex-end;
-    border-left: none;
-    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    width: min(132px, 42vw) !important;
+    max-width: none;
   }
 
   .kpi-grid {
     grid-template-columns: 1fr;
+  }
+
+  .kpi-grid .kpi-card:last-child {
+    grid-column: auto;
+  }
+
+  .kpi-card {
+    min-height: 0;
   }
 
   .vs-panel {
@@ -3018,7 +3255,7 @@ onBeforeUnmount(() => {
 
   .vs-center {
     width: 100%;
-    height: 36px;
+    height: 40px;
     order: 2;
   }
 
@@ -3026,30 +3263,61 @@ onBeforeUnmount(() => {
     order: 3;
   }
 
+  .vs-section-divider--ghost {
+    display: none;
+  }
+
   .vs-metric-grid {
     grid-template-columns: 1fr;
   }
 
   .chart-canvas {
-    height: 180px;
+    height: clamp(180px, 32vh, 240px);
   }
 
+  .chart-canvas-wrap--tall .chart-canvas,
   .chart-canvas--tall {
-    height: 200px;
+    height: clamp(200px, 38vh, 280px);
+  }
+
+  .panel-head--table {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel-head--table .el-button {
+    align-self: flex-end;
+  }
+
+  .cmp-col-head {
+    gap: 3px;
   }
 }
 
 @media (max-width: 480px) {
-  .kpi-grid {
-    grid-template-columns: 1fr;
+  .toolbar-actions-zone {
+    flex-wrap: wrap;
+    justify-content: stretch;
   }
 
-  .kpi-metric__value {
-    font-size: 1.1rem;
+  .action-btn {
+    flex: 1 1 auto;
+    min-width: 96px;
   }
 
+  .kpi-metric__main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .kpi-metric__value,
   .kpi-metric__value--qty {
-    font-size: 0.95rem;
+    text-align: left;
+  }
+
+  .vs-month {
+    font-size: var(--mes-fs-md);
   }
 }
 

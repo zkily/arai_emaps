@@ -116,7 +116,7 @@
               </el-button>
             </el-tooltip>
             <el-tooltip
-              content="基準日平均生産数の計算に使用する稼働日数を指定できます（空欄の場合は自動計算）"
+              content="基準日平均生産数の計算用。生産日の月に設定された稼働日数を自動読込（手動変更可・空欄は自動計算）"
               placement="top"
             >
               <el-input-number
@@ -484,6 +484,7 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+import { fetchWorkingDays } from '@/api/erp/budget'
 import { fetchScheduledWorkdaysForDateIso } from '@/api/master/companyWorkCalendar'
 import { fetchPlanBaselineComparison } from '@/api/planBaseline'
 import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
@@ -530,7 +531,7 @@ const planSelectedDate = computed<string>({
       return
     }
     planSearchForm.dateRange = [value, value]
-    setSpecifiedWorkingDaysByMonth(value)
+    void setSpecifiedWorkingDaysByMonth(value)
   },
 })
 
@@ -637,11 +638,32 @@ const updatingEfficiency = ref(false)
 const updateEfficiencyDialogVisible = ref(false)
 const printingSetupSchedule = ref(false)
 
-// 指定工作日天数（用于基准日平均生产数计算，默认按“生産日所选月份”的工作日数）
-const specifiedWorkingDays = ref<number | null>(20)
+// 指定稼働日数（基準日平均生産数の計算用）。生産日の月の budget_working_days.working_days を優先
+const specifiedWorkingDays = ref<number | null>(null)
 
 const setSpecifiedWorkingDaysByMonth = async (baseDate: string) => {
-  specifiedWorkingDays.value = await fetchScheduledWorkdaysForDateIso(baseDate)
+  const date = (baseDate || '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    specifiedWorkingDays.value = null
+    return
+  }
+  const year = Number(date.slice(0, 4))
+  const month = Number(date.slice(5, 7))
+  try {
+    const bundle = await fetchWorkingDays(year)
+    const item = (bundle.defaults || []).find(
+      (d) => Number(d.year) === year && Number(d.month) === month,
+    )
+    const days = Number(item?.working_days) || 0
+    if (days > 0) {
+      specifiedWorkingDays.value = days
+      return
+    }
+  } catch (e) {
+    console.warn('budget_working_days の読込に失敗、会社カレンダーへフォールバック:', e)
+  }
+  // DB未設定時は会社稼働カレンダー（生産レビューと同じフォールバック）
+  specifiedWorkingDays.value = await fetchScheduledWorkdaysForDateIso(date)
 }
 
 const isApiSuccess = (res: any): boolean => {
@@ -702,11 +724,11 @@ const machineOptions = ref<any[]>([])
 const dialogTitle = computed(() => (isEdit.value ? '溶接指示編集' : '新規溶接指示作成'))
 
 // 検索フォームのデフォルト値を初期化
-const initializeSearchForm = () => {
+const initializeSearchForm = async () => {
   // 生産日を当日に設定（日本時区）
   const todayStr = JapanDateUtils.getTodayString()
   planSearchForm.dateRange = [todayStr, todayStr]
-  setSpecifiedWorkingDaysByMonth(todayStr)
+  await setSpecifiedWorkingDaysByMonth(todayStr)
 
   // 設備名は空（全設備を表示）
   planSearchForm.machineName = ''
@@ -716,7 +738,7 @@ const initializeSearchForm = () => {
 }
 
 // 日付範囲を設定（現在選択している日付からの相対日数）
-const setDateRange = (daysOffset: number) => {
+const setDateRange = async (daysOffset: number) => {
   let targetDate: Date
 
   if (planSearchForm.dateRange && planSearchForm.dateRange.length > 0) {
@@ -732,7 +754,7 @@ const setDateRange = (daysOffset: number) => {
 
   const dateStr = JapanDateUtils.getDateString(targetDate)
   planSearchForm.dateRange = [dateStr, dateStr]
-  setSpecifiedWorkingDaysByMonth(dateStr)
+  await setSpecifiedWorkingDaysByMonth(dateStr)
 
   // 自動的に検索を実行
   searchPlans()
@@ -1205,9 +1227,9 @@ const searchPlans = () => {
 }
 
 // 計画検索をリセット
-const resetPlanSearch = () => {
+const resetPlanSearch = async () => {
   // 重置为默认值
-  initializeSearchForm()
+  await initializeSearchForm()
   searchPlans()
   calculatePlanStats() // 同时更新统计
 }
@@ -4512,9 +4534,9 @@ const getStatusLabel = (status: string) => {
 }
 
 // ページ初期化
-onMounted(() => {
-  // 先初始化搜索表单默认值
-  initializeSearchForm()
+onMounted(async () => {
+  // 先初始化搜索表单默认值（稼働日は budget_working_days から読込）
+  await initializeSearchForm()
   // 然后加载数据
   loadMachineOptions()
   loadPlanData()
