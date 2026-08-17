@@ -489,6 +489,7 @@
             :default-sort="{ prop: 'product_name', order: 'ascending' }"
             :height="'calc(72vh - 60px)'"
             @sort-change="handleSortChange"
+            @cell-click="handleCellClick"
             @cell-dblclick="handleCellDoubleClick"
             :cell-style="cellStyleHandler"
             :header-cell-style="headerCellStyle"
@@ -745,6 +746,166 @@
           <el-button @click="showPlanConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
           <el-button type="primary" @click="confirmUpdatePlan" class="confirm-btn">更新</el-button>
         </div>
+      </template>
+    </el-dialog>
+
+    <!-- 工程セル单击：当月実績一覧 -->
+    <el-dialog
+      v-model="showMonthActualDialog"
+      class="month-actual-dialog"
+      width="1000px"
+      align-center
+      destroy-on-close
+      append-to-body
+      @closed="closeMonthActualDialog"
+    >
+      <template #header>
+        <div class="month-actual-dialog__head">
+          <div class="month-actual-dialog__title">当月実績一覧</div>
+          <div class="month-actual-dialog__sub">
+            <span>{{ monthActualInfo.productCd }} {{ monthActualInfo.productName }}</span>
+            <span class="month-actual-dialog__sep">｜</span>
+            <span>{{ monthActualInfo.processCd }}（{{ monthActualInfo.processName }}）</span>
+            <span class="month-actual-dialog__sep">｜</span>
+            <span>{{ monthActualInfo.monthLabel }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="monthActualStats" class="month-actual-stats">
+        <span class="month-actual-stats__item">
+          <span class="month-actual-stats__label">件数</span>
+          <strong>{{ monthActualStats.total_records }}</strong>
+        </span>
+        <span class="month-actual-stats__item">
+          <span class="month-actual-stats__label">数量合計</span>
+          <strong>{{ monthActualStats.total_quantity }}</strong>
+        </span>
+        <span class="month-actual-stats__item">
+          <span class="month-actual-stats__label">稼働日</span>
+          <strong>{{ monthActualStats.active_days }}</strong>
+        </span>
+      </div>
+
+      <el-table
+        v-loading="monthActualLoading"
+        :data="monthActualList"
+        border
+        stripe
+        size="small"
+        class="month-actual-table"
+        max-height="440"
+        empty-text="当月の該当実績はありません"
+        table-layout="fixed"
+      >
+        <el-table-column prop="transaction_time" label="日付" width="110" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="month-actual-cell-time">{{ formatMonthActualTime(row.transaction_time) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="transaction_type" label="種別" width="88" align="center">
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              effect="light"
+              :type="getMonthActualTypeTagType(row.transaction_type)"
+              class="month-actual-type-tag"
+            >
+              {{ row.transaction_type || '-' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="target_cd" label="製品CD" width="96" align="center" show-overflow-tooltip />
+        <el-table-column prop="target_name" label="製品名" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="quantity" label="数量" width="84" align="right">
+          <template #default="{ row }">
+            <span class="month-actual-qty">{{ row.quantity ?? '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="machine_name" label="設備" width="108" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.machine_name || row.machine_cd || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="operator_name" label="担当" width="84" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.operator_name || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.remarks || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="132" fixed="right" align="center">
+          <template #default="{ row }">
+            <div class="month-actual-actions">
+              <el-button
+                type="primary"
+                size="small"
+                link
+                :icon="Edit"
+                @click="openMonthActualQuantityEdit(row)"
+              >
+                数量
+              </el-button>
+              <el-button
+                type="danger"
+                size="small"
+                link
+                :icon="Delete"
+                @click="handleMonthActualDelete(row)"
+              >
+                削除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showMonthActualDialog = false">閉じる</el-button>
+          <el-button type="primary" @click="openTransactionFromMonthActual">取引を登録</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 当月実績：数量変更 -->
+    <el-dialog
+      v-model="showMonthActualEditDialog"
+      title="数量変更"
+      width="420px"
+      append-to-body
+      :close-on-click-modal="false"
+      class="month-actual-edit-dialog"
+    >
+      <el-form label-width="88px" @submit.prevent>
+        <el-form-item label="日付">
+          <el-input :model-value="formatMonthActualTime(monthActualEditForm.transaction_time) || '-'" disabled />
+        </el-form-item>
+        <el-form-item label="種別">
+          <el-input :model-value="monthActualEditForm.transaction_type || '-'" disabled />
+        </el-form-item>
+        <el-form-item label="製品CD">
+          <el-input :model-value="monthActualEditForm.target_cd || '-'" disabled />
+        </el-form-item>
+        <el-form-item label="数量" required>
+          <el-input-number
+            v-model="monthActualEditForm.quantity"
+            :min="0"
+            :precision="0"
+            :step="1"
+            controls-position="right"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showMonthActualEditDialog = false">キャンセル</el-button>
+        <el-button type="primary" :loading="monthActualEditSaving" @click="saveMonthActualQuantity">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -2174,6 +2335,7 @@ import {
   Operation,
   CircleCheck,
   DataBoard,
+  Edit,
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import {
@@ -2212,6 +2374,12 @@ import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
 import { fetchScheduledWorkdaysForMonth, calcWeekdayFallbackForMonth } from '@/api/master/companyWorkCalendar'
 import { getProductsByCdPrefix } from '@/api/master/productMaster'
+import {
+  getStockActualLogs,
+  updateStockTransactionLog,
+  deleteStockTransactionLog,
+  type StockActualLogRecord,
+} from '@/api/productionActualStockLogs'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import InventoryStagnationDrawer from './components/InventoryStagnationDrawer.vue'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
@@ -4174,56 +4342,334 @@ async function ensureProcessOptions() {
   }
 }
 
+function resolveProcessCdFromColumnProp(prop: string): string | null {
+  const parts = prop.split('_')
+  for (let i = 1; i <= parts.length; i++) {
+    const prefix = parts.slice(0, i).join('_')
+    if (processFieldToProcessCd[prefix]) {
+      return processFieldToProcessCd[prefix]
+    }
+  }
+  return null
+}
+
+function getMonthBoundsFromDate(dateStr: string): { from: string; to: string; label: string } {
+  const raw = (dateStr || '').slice(0, 10)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  let y: number
+  let mo: number
+  if (m) {
+    y = Number(m[1])
+    mo = Number(m[2])
+  } else {
+    const j = getCurrentJSTInfo()
+    y = j.year
+    mo = j.month + 1
+  }
+  const from = `${y}-${String(mo).padStart(2, '0')}-01`
+  const lastDay = new Date(y, mo, 0).getDate()
+  const to = `${y}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+  return { from, to, label: `${y}年${mo}月` }
+}
+
+const showMonthActualDialog = ref(false)
+const monthActualLoading = ref(false)
+const monthActualList = ref<StockActualLogRecord[]>([])
+const monthActualStats = ref<{
+  total_records: number
+  total_quantity: number
+  active_days: number
+} | null>(null)
+const monthActualInfo = ref({
+  date: '',
+  productCd: '',
+  productName: '',
+  processCd: '',
+  processName: '',
+  monthLabel: '',
+  dateFrom: '',
+  dateTo: '',
+})
+const monthActualSourceRow = ref<Record<string, any> | null>(null)
+
+const showMonthActualEditDialog = ref(false)
+const monthActualEditSaving = ref(false)
+const monthActualEditForm = ref({
+  id: 0,
+  transaction_time: '',
+  transaction_type: '',
+  target_cd: '',
+  quantity: 0 as number | null,
+})
+
+function getMonthActualTypeTagType(
+  type: unknown
+): 'success' | 'warning' | 'info' | 'primary' | 'danger' {
+  const map: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
+    入庫: 'success',
+    出庫: 'danger',
+    実績: 'primary',
+    不良: 'danger',
+    廃棄: 'warning',
+    保留: 'info',
+    調整: 'warning',
+    初期: 'info',
+  }
+  return map[String(type || '').trim()] ?? 'info'
+}
+
+function formatMonthActualTime(value: unknown): string {
+  if (!value) return '-'
+  const raw = String(value).trim()
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+  if (m) return `${m[1]}/${m[2]}/${m[3]}`
+  try {
+    return new Date(raw).toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  } catch {
+    return raw.slice(0, 10)
+  }
+}
+
+async function loadMonthActualList() {
+  const info = monthActualInfo.value
+  if (!info.productCd || !info.processCd || !info.dateFrom || !info.dateTo) return
+  monthActualLoading.value = true
+  try {
+    const res = await getStockActualLogs({
+      target_cd: info.productCd,
+      process_cd: info.processCd,
+      date_from: info.dateFrom,
+      date_to: info.dateTo,
+      page: 1,
+      limit: 1000,
+      sort_by: 'transaction_time',
+      sort_order: 'DESC',
+    })
+    monthActualList.value = res?.data?.list ?? []
+    const st = res?.data?.stats
+    monthActualStats.value = st
+      ? {
+          total_records: st.total_records ?? monthActualList.value.length,
+          total_quantity: st.total_quantity ?? 0,
+          active_days: st.active_days ?? 0,
+        }
+      : {
+          total_records: monthActualList.value.length,
+          total_quantity: monthActualList.value.reduce((s, r) => s + Number(r.quantity || 0), 0),
+          active_days: 0,
+        }
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '')
+        : ''
+    ElMessage.error(msg || '当月実績の取得に失敗しました')
+  } finally {
+    monthActualLoading.value = false
+  }
+}
+
+async function openMonthActualDialog(row: Record<string, any>, processCd: string) {
+  const dateVal = row.date
+  const dateStr = dateVal
+    ? typeof dateVal === 'string'
+      ? dateVal.slice(0, 10)
+      : String(dateVal).slice(0, 10)
+    : ''
+  const productCd = (row.product_cd ?? '').toString().trim()
+  if (!productCd) {
+    ElMessage.warning('製品CDがありません')
+    return
+  }
+  await ensureProcessOptions()
+  const bounds = getMonthBoundsFromDate(dateStr)
+  monthActualSourceRow.value = row
+  monthActualInfo.value = {
+    date: dateStr,
+    productCd,
+    productName: (row.product_name ?? '').toString().trim(),
+    processCd,
+    processName: getProcessName(processCd),
+    monthLabel: bounds.label,
+    dateFrom: bounds.from,
+    dateTo: bounds.to,
+  }
+  showMonthActualDialog.value = true
+  monthActualList.value = []
+  monthActualStats.value = null
+  await loadMonthActualList()
+}
+
+function closeMonthActualDialog() {
+  monthActualList.value = []
+  monthActualStats.value = null
+  monthActualSourceRow.value = null
+  showMonthActualEditDialog.value = false
+}
+
+function openMonthActualQuantityEdit(row: StockActualLogRecord) {
+  if (!guardApsOperation(canEdit)) return
+  monthActualEditForm.value = {
+    id: Number(row.id),
+    transaction_time: row.transaction_time ? String(row.transaction_time) : '',
+    transaction_type: row.transaction_type ? String(row.transaction_type) : '',
+    target_cd: row.target_cd ? String(row.target_cd) : '',
+    quantity: Number(row.quantity) || 0,
+  }
+  showMonthActualEditDialog.value = true
+}
+
+async function saveMonthActualQuantity() {
+  if (!guardApsOperation(canEdit)) return
+  const form = monthActualEditForm.value
+  if (!form.id) return
+  if (form.quantity == null || Number.isNaN(Number(form.quantity)) || Number(form.quantity) < 0) {
+    ElMessage.warning('数量を正しく入力してください')
+    return
+  }
+  monthActualEditSaving.value = true
+  try {
+    await updateStockTransactionLog(form.id, { quantity: Number(form.quantity) })
+    ElMessage.success('数量を更新しました')
+    showMonthActualEditDialog.value = false
+    await loadMonthActualList()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '')
+        : ''
+    ElMessage.error(msg || '数量の更新に失敗しました')
+  } finally {
+    monthActualEditSaving.value = false
+  }
+}
+
+async function handleMonthActualDelete(row: StockActualLogRecord) {
+  if (!guardApsOperation(canDelete)) return
+  try {
+    await ElMessageBox.confirm(
+      `取引ログ（ID: ${row.id} / 数量: ${row.quantity ?? '-'}）を削除しますか？`,
+      '削除確認',
+      {
+        confirmButtonText: '削除',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+      }
+    )
+    await deleteStockTransactionLog(row.id)
+    ElMessage.success('削除しました')
+    await loadMonthActualList()
+  } catch (e: unknown) {
+    if (e === 'cancel' || e === 'close') return
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '')
+        : ''
+    ElMessage.error(msg || '削除に失敗しました')
+  }
+}
+
+function openTransactionFromMonthActual() {
+  const row = monthActualSourceRow.value
+  const processCd = monthActualInfo.value.processCd
+  if (!row || !processCd) return
+  if (!guardApsOperation(canEdit)) return
+  showMonthActualDialog.value = false
+  void openTransactionDialog(row, processCd)
+}
+
+const PRE_PROCESS_SKIP_PROPS = new Set([
+  'pre_plating_inventory',
+  'pre_plating_prev_process',
+  'pre_molding_inventory',
+  'pre_molding_prev_process',
+  'pre_welding_inventory',
+  'pre_welding_prev_process',
+])
+
+function resolveProcessCellContext(
+  row: Record<string, any>,
+  column: { property?: string }
+): { processCd: string; productCd: string } | null {
+  const prop = column?.property
+  if (!prop || basicColumns.has(prop) || PRE_PROCESS_SKIP_PROPS.has(prop)) return null
+  const processCd = resolveProcessCdFromColumnProp(prop)
+  if (!processCd) {
+    ElMessage.warning('該当する工程が見つかりません')
+    return null
+  }
+  const productCd = (row.product_cd ?? '').toString().trim()
+  if (!productCd) return null
+  return { processCd, productCd }
+}
+
+function withProcessRouteCheck(
+  productCd: string,
+  processCd: string,
+  action: () => void | Promise<void>
+) {
+  if (processCd === 'KT13') {
+    void Promise.resolve(action())
+    return
+  }
+  getProductRouteSteps(productCd)
+    .then(async (steps) => {
+      const hasProcess = steps.some((s) => (s.process_cd || '').trim() === processCd)
+      if (steps.length > 0 && !hasProcess) {
+        ElMessage.warning('製品は工程に属していません')
+        return
+      }
+      await action()
+    })
+    .catch(async () => {
+      await action()
+    })
+}
+
+/** 单击と双击が衝突しないよう、单击は短い遅延後に実行 */
+let cellClickTimer: ReturnType<typeof setTimeout> | null = null
+const CELL_CLICK_DELAY_MS = 280
+
+function handleCellClick(
+  row: Record<string, any>,
+  column: { property?: string },
+  _cell: HTMLElement,
+  _event: MouseEvent
+) {
+  const ctx = resolveProcessCellContext(row, column)
+  if (!ctx) return
+  if (cellClickTimer) clearTimeout(cellClickTimer)
+  cellClickTimer = setTimeout(() => {
+    cellClickTimer = null
+    withProcessRouteCheck(ctx.productCd, ctx.processCd, () =>
+      openMonthActualDialog(row, ctx.processCd)
+    )
+  }, CELL_CLICK_DELAY_MS)
+}
+
 function handleCellDoubleClick(
   row: Record<string, any>,
   column: { property?: string },
   _cell: HTMLElement,
   _event: MouseEvent
 ) {
+  if (cellClickTimer) {
+    clearTimeout(cellClickTimer)
+    cellClickTimer = null
+  }
   if (!guardApsOperation(canEdit)) return
 
-  const prop = column?.property
-  if (!prop || basicColumns.has(prop)) return
-  if (
-    prop === 'pre_plating_inventory' ||
-    prop === 'pre_plating_prev_process' ||
-    prop === 'pre_molding_inventory' ||
-    prop === 'pre_molding_prev_process' ||
-    prop === 'pre_welding_inventory' ||
-    prop === 'pre_welding_prev_process'
+  const ctx = resolveProcessCellContext(row, column)
+  if (!ctx) return
+
+  withProcessRouteCheck(ctx.productCd, ctx.processCd, () =>
+    openTransactionDialog(row, ctx.processCd)
   )
-    return
-  const parts = prop.split('_')
-  let processCd: string | null = null
-  for (let i = 1; i <= parts.length; i++) {
-    const prefix = parts.slice(0, i).join('_')
-    if (processFieldToProcessCd[prefix]) {
-      processCd = processFieldToProcessCd[prefix]
-      break
-    }
-  }
-  if (!processCd) {
-    ElMessage.warning('該当する工程が見つかりません')
-    return
-  }
-  const productCd = (row.product_cd ?? '').toString().trim()
-  if (!productCd) return
-  if (processCd !== 'KT13') {
-    getProductRouteSteps(productCd)
-      .then(async (steps) => {
-        const hasProcess = steps.some((s) => (s.process_cd || '').trim() === processCd)
-        if (steps.length > 0 && !hasProcess) {
-          ElMessage.warning('製品は工程に属していません')
-          return
-        }
-        await openTransactionDialog(row, processCd)
-      })
-      .catch(async () => {
-        await openTransactionDialog(row, processCd)
-      })
-  } else {
-    void openTransactionDialog(row, processCd)
-  }
 }
 
 async function openTransactionDialog(row: Record<string, any>, processCd: string) {
@@ -7474,6 +7920,114 @@ onUnmounted(() => {
   flex: 1;
   min-width: 260px;
 }
+/* 当月実績一覧ダイアログ */
+.month-actual-dialog__head {
+  padding-right: 28px;
+}
+.month-actual-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+}
+.month-actual-dialog__sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.month-actual-dialog__sep {
+  margin: 0 4px;
+  color: #94a3b8;
+}
+.month-actual-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.month-actual-stats__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+}
+.month-actual-stats__label {
+  color: #94a3b8;
+}
+.month-actual-stats__item strong {
+  color: #0f172a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.month-actual-dialog .el-dialog__header {
+  margin: 0;
+  padding: 14px 16px 12px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+.month-actual-dialog .el-dialog__body {
+  padding: 12px 16px 8px;
+}
+.month-actual-dialog .el-dialog__footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid #eef2f7;
+}
+.month-actual-table {
+  width: 100%;
+}
+.month-actual-table :deep(.el-table__header th.el-table__cell) {
+  background: #f1f5f9 !important;
+  color: #334155;
+  font-weight: 600;
+  font-size: 12px;
+}
+.month-actual-table :deep(.el-table__cell) {
+  padding: 6px 0;
+}
+.month-actual-table :deep(.cell) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 22px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.month-actual-cell-time {
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+.month-actual-qty {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+.month-actual-type-tag {
+  min-width: 52px;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.month-actual-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.month-actual-actions .el-button {
+  margin: 0;
+  padding: 0 4px;
+}
+
 /* 在庫取引ログ入力ダイアログ */
 .transaction-log-dialog .el-dialog__body {
   padding: 16px 20px 20px;

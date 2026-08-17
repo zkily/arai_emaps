@@ -42,6 +42,7 @@ export interface GetStockActualLogsParams {
   page?: number
   limit?: number
   keyword?: string
+  target_cd?: string
   target_name?: string
   machine_name?: string
   date_from?: string

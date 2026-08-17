@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, distinct, or_
+from sqlalchemy import select, func, distinct, or_, and_
 from sqlalchemy.orm import aliased
 from typing import Optional, List
 from decimal import Decimal
@@ -26,7 +26,25 @@ def _apply_filters(
     date_to,
     process_cd,
     transaction_type,
+    target_cd=None,
 ):
+    if target_cd and str(target_cd).strip():
+        cd = str(target_cd).strip()
+        # 末尾が 1 の製品CDは、同一桁数・同一幹番（末尾以外）の実体CDも対象にする
+        if len(cd) >= 2 and cd.endswith("1"):
+            stem = cd[:-1]
+            cd_len = len(cd)
+            query = query.where(
+                or_(
+                    StockTransactionLog.target_cd == cd,
+                    and_(
+                        func.char_length(StockTransactionLog.target_cd) == cd_len,
+                        func.left(StockTransactionLog.target_cd, cd_len - 1) == stem,
+                    ),
+                )
+            )
+        else:
+            query = query.where(StockTransactionLog.target_cd == cd)
     if keyword and keyword.strip():
         q = f"%{keyword.strip()}%"
         query = query.where(
@@ -73,6 +91,7 @@ async def get_production_actual_logs(
     date_to: Optional[str] = Query(None),
     process_cd: Optional[str] = Query(None),
     transaction_type: Optional[str] = Query(None),
+    target_cd: Optional[str] = Query(None, description="製品CD（末尾1なら同幹番の実体CDも含む）"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=10000),
     sort_by: Optional[str] = Query(None),
@@ -91,6 +110,7 @@ async def get_production_actual_logs(
         date_to,
         process_cd,
         transaction_type,
+        target_cd,
     )
 
     # total count
@@ -131,6 +151,7 @@ async def get_production_actual_logs(
         date_to,
         process_cd,
         transaction_type,
+        target_cd,
     )
 
     order_col = getattr(StockTransactionLog, sort_by, None) if sort_by else StockTransactionLog.transaction_time
@@ -190,6 +211,7 @@ async def get_production_actual_logs(
         date_to,
         process_cd,
         transaction_type,
+        target_cd,
     )
     stats_result = await db.execute(stats_q)
     stats_row = stats_result.one()
@@ -226,6 +248,7 @@ async def get_production_actual_logs(
         date_to,
         process_cd,
         transaction_type,
+        target_cd,
     )
     type_result = await db.execute(type_q)
     type_rows = type_result.all()
