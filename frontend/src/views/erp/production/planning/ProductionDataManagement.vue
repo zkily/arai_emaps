@@ -753,7 +753,7 @@
     <el-dialog
       v-model="showMonthActualDialog"
       class="month-actual-dialog"
-      width="1000px"
+      width="1080px"
       align-center
       destroy-on-close
       append-to-body
@@ -761,41 +761,95 @@
     >
       <template #header>
         <div class="month-actual-dialog__head">
-          <div class="month-actual-dialog__title">当月実績一覧</div>
-          <div class="month-actual-dialog__sub">
-            <span>{{ monthActualInfo.productCd }} {{ monthActualInfo.productName }}</span>
-            <span class="month-actual-dialog__sep">｜</span>
-            <span>{{ monthActualInfo.processCd }}（{{ monthActualInfo.processName }}）</span>
-            <span class="month-actual-dialog__sep">｜</span>
-            <span>{{ monthActualInfo.monthLabel }}</span>
+          <div class="month-actual-dialog__title">実績一覧</div>
+          <div class="month-actual-dialog__sub-row">
+            <div class="month-actual-dialog__sub">
+              <span>{{ monthActualInfo.productCd }} {{ monthActualInfo.productName }}</span>
+              <span class="month-actual-dialog__sep">｜</span>
+              <span>{{ monthActualInfo.processCd }}（{{ monthActualInfo.processName }}）</span>
+              <span class="month-actual-dialog__sep">｜</span>
+              <span>{{ monthActualInfo.monthLabel }}</span>
+            </div>
+            <div class="month-actual-dialog__period">
+              <span class="month-actual-dialog__period-label">期間</span>
+              <el-date-picker
+                v-model="monthActualDateRange"
+                type="daterange"
+                range-separator="～"
+                start-placeholder="開始日"
+                end-placeholder="終了日"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                :locale="jaLocale"
+                size="small"
+                class="month-actual-period-picker"
+                :clearable="false"
+                @change="handleMonthActualPeriodChange"
+              />
+              <el-button
+                size="small"
+                class="month-actual-period-btn month-actual-period-btn--current"
+                @click="resetMonthActualPeriodToMonth"
+              >
+                当月
+              </el-button>
+              <el-button
+                size="small"
+                class="month-actual-period-btn month-actual-period-btn--prev"
+                @click="resetMonthActualPeriodToPrevMonth"
+              >
+                前月
+              </el-button>
+            </div>
           </div>
         </div>
       </template>
 
-      <div v-if="monthActualStats" class="month-actual-stats">
-        <span class="month-actual-stats__item">
-          <span class="month-actual-stats__label">件数</span>
-          <strong>{{ monthActualStats.total_records }}</strong>
-        </span>
-        <span class="month-actual-stats__item">
-          <span class="month-actual-stats__label">数量合計</span>
-          <strong>{{ monthActualStats.total_quantity }}</strong>
-        </span>
-        <span class="month-actual-stats__item">
-          <span class="month-actual-stats__label">稼働日</span>
-          <strong>{{ monthActualStats.active_days }}</strong>
-        </span>
+      <div class="month-actual-toolbar">
+        <div class="month-actual-stats">
+          <template v-if="monthActualStats">
+            <span class="month-actual-stats__item">
+              <span class="month-actual-stats__label">件数</span>
+              <strong>{{ monthActualStats.total_records }}</strong>
+            </span>
+            <span class="month-actual-stats__item month-actual-stats__item--actual">
+              <span class="month-actual-stats__label">実績</span>
+              <strong>{{ monthActualStats.qty_actual }}</strong>
+            </span>
+            <span class="month-actual-stats__item month-actual-stats__item--defect">
+              <span class="month-actual-stats__label">不良</span>
+              <strong>{{ monthActualStats.qty_defect }}</strong>
+            </span>
+            <span class="month-actual-stats__item month-actual-stats__item--scrap">
+              <span class="month-actual-stats__label">廃棄</span>
+              <strong>{{ monthActualStats.qty_scrap }}</strong>
+            </span>
+            <span class="month-actual-stats__item">
+              <span class="month-actual-stats__label">稼働日</span>
+              <strong>{{ monthActualStats.active_days }}</strong>
+            </span>
+          </template>
+        </div>
+        <div class="month-actual-filter">
+          <span class="month-actual-filter__label">種別表示</span>
+          <el-radio-group v-model="monthActualTypeFilter" size="small" class="month-actual-filter__group">
+            <el-radio-button value="all" class="ma-filter-all">全部</el-radio-button>
+            <el-radio-button value="actual" class="ma-filter-actual">実績のみ</el-radio-button>
+            <el-radio-button value="defect_scrap" class="ma-filter-ng">不良・廃棄</el-radio-button>
+          </el-radio-group>
+          <span class="month-actual-filter__count">表示 {{ monthActualFilteredList.length }} 件</span>
+        </div>
       </div>
 
       <el-table
         v-loading="monthActualLoading"
-        :data="monthActualList"
+        :data="monthActualFilteredList"
         border
         stripe
         size="small"
         class="month-actual-table"
         max-height="440"
-        empty-text="当月の該当実績はありません"
+        empty-text="該当するデータはありません"
         table-layout="fixed"
       >
         <el-table-column prop="transaction_time" label="日付" width="110" align="center" show-overflow-tooltip>
@@ -819,7 +873,12 @@
         <el-table-column prop="target_name" label="製品名" min-width="140" show-overflow-tooltip />
         <el-table-column prop="quantity" label="数量" width="84" align="right">
           <template #default="{ row }">
-            <span class="month-actual-qty">{{ row.quantity ?? '-' }}</span>
+            <span
+              class="month-actual-qty"
+              :class="{ 'is-negative': getMonthActualSignedQuantity(row) < 0 }"
+            >
+              {{ formatMonthActualQuantity(row) }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="machine_name" label="設備" width="108" show-overflow-tooltip>
@@ -837,22 +896,20 @@
             {{ row.remarks || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="132" fixed="right" align="center">
+        <el-table-column label="操作" width="148" fixed="right" align="center">
           <template #default="{ row }">
             <div class="month-actual-actions">
               <el-button
-                type="primary"
                 size="small"
-                link
+                class="month-actual-action-btn month-actual-action-btn--qty"
                 :icon="Edit"
                 @click="openMonthActualQuantityEdit(row)"
               >
                 数量
               </el-button>
               <el-button
-                type="danger"
                 size="small"
-                link
+                class="month-actual-action-btn month-actual-action-btn--del"
                 :icon="Delete"
                 @click="handleMonthActualDelete(row)"
               >
@@ -864,9 +921,13 @@
       </el-table>
 
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="showMonthActualDialog = false">閉じる</el-button>
-          <el-button type="primary" @click="openTransactionFromMonthActual">取引を登録</el-button>
+        <div class="dialog-footer month-actual-footer">
+          <el-button class="month-actual-footer-btn month-actual-footer-btn--close" @click="showMonthActualDialog = false">
+            閉じる
+          </el-button>
+          <el-button class="month-actual-footer-btn month-actual-footer-btn--register" @click="openTransactionFromMonthActual">
+            取引を登録
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -902,10 +963,21 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showMonthActualEditDialog = false">キャンセル</el-button>
-        <el-button type="primary" :loading="monthActualEditSaving" @click="saveMonthActualQuantity">
-          保存
-        </el-button>
+        <div class="month-actual-footer">
+          <el-button
+            class="month-actual-footer-btn month-actual-footer-btn--close"
+            @click="showMonthActualEditDialog = false"
+          >
+            キャンセル
+          </el-button>
+          <el-button
+            class="month-actual-footer-btn month-actual-footer-btn--save"
+            :loading="monthActualEditSaving"
+            @click="saveMonthActualQuantity"
+          >
+            保存
+          </el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -4372,12 +4444,24 @@ function getMonthBoundsFromDate(dateStr: string): { from: string; to: string; la
   return { from, to, label: `${y}年${mo}月` }
 }
 
+function formatMonthActualPeriodLabel(from: string, to: string): string {
+  if (!from || !to) return ''
+  const bounds = getMonthBoundsFromDate(from)
+  if (from === bounds.from && to === bounds.to) return bounds.label
+  return `${from.replace(/-/g, '/')} ～ ${to.replace(/-/g, '/')}`
+}
+
 const showMonthActualDialog = ref(false)
 const monthActualLoading = ref(false)
 const monthActualList = ref<StockActualLogRecord[]>([])
+/** all | actual | defect_scrap */
+const monthActualTypeFilter = ref<'all' | 'actual' | 'defect_scrap'>('all')
+const monthActualDateRange = ref<[string, string] | null>(null)
 const monthActualStats = ref<{
   total_records: number
-  total_quantity: number
+  qty_actual: number
+  qty_defect: number
+  qty_scrap: number
   active_days: number
 } | null>(null)
 const monthActualInfo = ref({
@@ -4402,11 +4486,59 @@ const monthActualEditForm = ref({
   quantity: 0 as number | null,
 })
 
+function applyMonthActualPeriod(from: string, to: string) {
+  monthActualDateRange.value = [from, to]
+  monthActualInfo.value = {
+    ...monthActualInfo.value,
+    dateFrom: from,
+    dateTo: to,
+    monthLabel: formatMonthActualPeriodLabel(from, to),
+  }
+}
+
+function handleMonthActualPeriodChange(val: [string, string] | null) {
+  if (!val || val.length !== 2 || !val[0] || !val[1]) return
+  applyMonthActualPeriod(val[0], val[1])
+  void loadMonthActualList()
+}
+
+function resetMonthActualPeriodToMonth() {
+  const base = monthActualInfo.value.date || monthActualInfo.value.dateFrom
+  const bounds = getMonthBoundsFromDate(base)
+  applyMonthActualPeriod(bounds.from, bounds.to)
+  void loadMonthActualList()
+}
+
+function resetMonthActualPeriodToPrevMonth() {
+  const base = monthActualInfo.value.date || monthActualInfo.value.dateFrom
+  const raw = (base || '').slice(0, 10)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw)
+  let y: number
+  let mo: number
+  if (m) {
+    y = Number(m[1])
+    mo = Number(m[2])
+  } else {
+    const j = getCurrentJSTInfo()
+    y = j.year
+    mo = j.month + 1
+  }
+  mo -= 1
+  if (mo < 1) {
+    mo = 12
+    y -= 1
+  }
+  const prevBase = `${y}-${String(mo).padStart(2, '0')}-01`
+  const bounds = getMonthBoundsFromDate(prevBase)
+  applyMonthActualPeriod(bounds.from, bounds.to)
+  void loadMonthActualList()
+}
+
 function getMonthActualTypeTagType(
   type: unknown
 ): 'success' | 'warning' | 'info' | 'primary' | 'danger' {
   const map: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
-    入庫: 'success',
+    入庫: 'primary',
     出庫: 'danger',
     実績: 'primary',
     不良: 'danger',
@@ -4416,6 +4548,25 @@ function getMonthActualTypeTagType(
     初期: 'info',
   }
   return map[String(type || '').trim()] ?? 'info'
+}
+
+/** 実績系：実績・入庫（加算）／出庫（実績の負数として扱う） */
+function isMonthActualLikeType(type: unknown): boolean {
+  const t = String(type || '').trim()
+  return t === '実績' || t === '入庫' || t === '出庫'
+}
+
+function getMonthActualSignedQuantity(row: Pick<StockActualLogRecord, 'transaction_type' | 'quantity'>): number {
+  const qty = Number(row.quantity || 0)
+  if (Number.isNaN(qty)) return 0
+  const t = String(row.transaction_type || '').trim()
+  if (t === '出庫') return qty > 0 ? -qty : qty
+  return qty
+}
+
+function formatMonthActualQuantity(row: StockActualLogRecord): string {
+  if (row.quantity == null || row.quantity === '') return '-'
+  return String(getMonthActualSignedQuantity(row))
 }
 
 function formatMonthActualTime(value: unknown): string {
@@ -4435,6 +4586,44 @@ function formatMonthActualTime(value: unknown): string {
   }
 }
 
+const monthActualFilteredList = computed(() => {
+  const list = monthActualList.value
+  const mode = monthActualTypeFilter.value
+  if (mode === 'all') return list
+  if (mode === 'actual') {
+    return list.filter((r) => isMonthActualLikeType(r.transaction_type))
+  }
+  return list.filter((r) => {
+    const t = String(r.transaction_type || '').trim()
+    return t === '不良' || t === '廃棄'
+  })
+})
+
+function sumMonthActualQtyByType(
+  list: StockActualLogRecord[],
+  typeSummary: Array<{ transaction_type?: string; total_quantity?: number }> | undefined,
+  typeName: string
+): number {
+  if (typeSummary?.length) {
+    const hit = typeSummary.find((t) => String(t.transaction_type || '').trim() === typeName)
+    if (hit) return Number(hit.total_quantity || 0)
+  }
+  return list
+    .filter((r) => String(r.transaction_type || '').trim() === typeName)
+    .reduce((s, r) => s + Number(r.quantity || 0), 0)
+}
+
+/** 実績合計 = 実績 + 入庫 − 出庫（出庫は正数でも負として差し引き） */
+function sumMonthActualEquivalentQty(
+  list: StockActualLogRecord[],
+  typeSummary: Array<{ transaction_type?: string; total_quantity?: number }> | undefined
+): number {
+  const actual = sumMonthActualQtyByType(list, typeSummary, '実績')
+  const inbound = sumMonthActualQtyByType(list, typeSummary, '入庫')
+  const outbound = sumMonthActualQtyByType(list, typeSummary, '出庫')
+  return actual + inbound - Math.abs(outbound)
+}
+
 async function loadMonthActualList() {
   const info = monthActualInfo.value
   if (!info.productCd || !info.processCd || !info.dateFrom || !info.dateTo) return
@@ -4450,19 +4639,17 @@ async function loadMonthActualList() {
       sort_by: 'transaction_time',
       sort_order: 'DESC',
     })
-    monthActualList.value = res?.data?.list ?? []
+    const list = res?.data?.list ?? []
+    monthActualList.value = list
     const st = res?.data?.stats
-    monthActualStats.value = st
-      ? {
-          total_records: st.total_records ?? monthActualList.value.length,
-          total_quantity: st.total_quantity ?? 0,
-          active_days: st.active_days ?? 0,
-        }
-      : {
-          total_records: monthActualList.value.length,
-          total_quantity: monthActualList.value.reduce((s, r) => s + Number(r.quantity || 0), 0),
-          active_days: 0,
-        }
+    const typeSummary = res?.data?.typeSummary
+    monthActualStats.value = {
+      total_records: st?.total_records ?? list.length,
+      qty_actual: sumMonthActualEquivalentQty(list, typeSummary),
+      qty_defect: sumMonthActualQtyByType(list, typeSummary, '不良'),
+      qty_scrap: sumMonthActualQtyByType(list, typeSummary, '廃棄'),
+      active_days: st?.active_days ?? 0,
+    }
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'response' in e
@@ -4499,9 +4686,11 @@ async function openMonthActualDialog(row: Record<string, any>, processCd: string
     dateFrom: bounds.from,
     dateTo: bounds.to,
   }
+  monthActualDateRange.value = [bounds.from, bounds.to]
   showMonthActualDialog.value = true
   monthActualList.value = []
   monthActualStats.value = null
+  monthActualTypeFilter.value = 'all'
   await loadMonthActualList()
 }
 
@@ -4509,6 +4698,8 @@ function closeMonthActualDialog() {
   monthActualList.value = []
   monthActualStats.value = null
   monthActualSourceRow.value = null
+  monthActualTypeFilter.value = 'all'
+  monthActualDateRange.value = null
   showMonthActualEditDialog.value = false
 }
 
@@ -7930,8 +8121,17 @@ onUnmounted(() => {
   letter-spacing: 0.02em;
   color: #0f172a;
 }
+.month-actual-dialog__sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin-top: 6px;
+  min-width: 0;
+}
 .month-actual-dialog__sub {
-  margin-top: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   color: #64748b;
   line-height: 1.4;
@@ -7943,30 +8143,158 @@ onUnmounted(() => {
   margin: 0 4px;
   color: #94a3b8;
 }
+.month-actual-dialog__period {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 2px 4px 2px 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+}
+.month-actual-dialog__period-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+.month-actual-period-picker {
+  width: 230px;
+}
+.month-actual-period-picker :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  background: transparent;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.month-actual-period-picker :deep(.el-range-separator) {
+  color: #94a3b8;
+  padding: 0 2px;
+}
+.month-actual-period-picker :deep(.el-range-input) {
+  font-size: 12px;
+  color: #334155;
+}
+.month-actual-period-btn {
+  height: 26px !important;
+  padding: 0 11px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
+  box-shadow: none !important;
+}
+.month-actual-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
 .month-actual-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .month-actual-stats__item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 5px;
+  padding: 4px 10px;
   font-size: 12px;
   color: #475569;
-  background: #f8fafc;
+  background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 999px;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
 }
 .month-actual-stats__label {
   color: #94a3b8;
+  font-weight: 500;
 }
 .month-actual-stats__item strong {
   color: #0f172a;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.month-actual-stats__item--actual {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.month-actual-stats__item--actual strong {
+  color: #1d4ed8;
+}
+.month-actual-stats__item--defect {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.month-actual-stats__item--defect strong {
+  color: #dc2626;
+}
+.month-actual-stats__item--scrap {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.month-actual-stats__item--scrap strong {
+  color: #c2410c;
+}
+.month-actual-filter {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 3px 4px 3px 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+}
+.month-actual-filter__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+.month-actual-filter__group {
+  --el-border-radius-base: 999px;
+}
+.month-actual-filter__group :deep(.el-radio-button__inner) {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.month-actual-filter__group :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 999px 0 0 999px !important;
+}
+.month-actual-filter__group :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 999px 999px 0 !important;
+}
+.month-actual-filter__group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  color: #fff;
+}
+.month-actual-filter__count {
+  padding: 0 8px 0 2px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .month-actual-dialog .el-dialog__header {
   margin: 0;
@@ -8010,6 +8338,9 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
   color: #0f172a;
 }
+.month-actual-qty.is-negative {
+  color: #dc2626;
+}
 .month-actual-type-tag {
   min-width: 52px;
   justify-content: center;
@@ -8020,12 +8351,8 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   white-space: nowrap;
-}
-.month-actual-actions .el-button {
-  margin: 0;
-  padding: 0 4px;
 }
 
 /* 在庫取引ログ入力ダイアログ */
@@ -9130,5 +9457,152 @@ onUnmounted(() => {
 }
 .molding-bom-compact-dialog .molding-bom-table .el-table__body tr.current-row > td {
   background: rgba(224, 231, 255, 0.5) !important;
+}
+
+/* 実績一覧ダイアログ：和風簡約ボタン（teleport 先でも効く） */
+.month-actual-dialog,
+.month-actual-edit-dialog {
+  --ma-ink: #3a3a3a;
+  --ma-stone: #6b6b6b;
+  --ma-line: #d8d4cc;
+  --ma-ai: #3d5a80;
+  --ma-ai-soft: #eef2f5;
+  --ma-shu: #a44a3f;
+  --ma-shu-soft: #f6eeec;
+  --ma-kaki: #9a6b3a;
+  --ma-kaki-soft: #f6f0e8;
+}
+
+.month-actual-dialog .el-button.month-actual-period-btn {
+  height: 26px;
+  padding: 0 11px;
+  margin: 0;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  box-shadow: none;
+}
+.month-actual-dialog .el-button.month-actual-period-btn--current {
+  color: #3d5a80;
+  background: #eef2f5;
+  border: 1px solid #c5d0dc;
+}
+.month-actual-dialog .el-button.month-actual-period-btn--current:hover {
+  color: #fff;
+  background: #3d5a80;
+  border-color: #3d5a80;
+}
+.month-actual-dialog .el-button.month-actual-period-btn--prev {
+  color: #7a5a32;
+  background: #f6f0e8;
+  border: 1px solid #e2d4bf;
+}
+.month-actual-dialog .el-button.month-actual-period-btn--prev:hover {
+  color: #fff;
+  background: #9a6b3a;
+  border-color: #9a6b3a;
+}
+
+.month-actual-dialog .month-actual-filter__group .el-radio-button__inner {
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #6b6b6b;
+  background: #faf9f7;
+  border-color: #d8d4cc;
+  box-shadow: none;
+}
+.month-actual-dialog .month-actual-filter__group .el-radio-button__inner:hover {
+  color: #3a3a3a;
+}
+.month-actual-dialog .ma-filter-all .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  color: #fff;
+  background: #5c5c5c;
+  border-color: #5c5c5c;
+  box-shadow: none;
+}
+.month-actual-dialog .ma-filter-actual .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  color: #fff;
+  background: #3d5a80;
+  border-color: #3d5a80;
+  box-shadow: none;
+}
+.month-actual-dialog .ma-filter-ng .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  color: #fff;
+  background: #a44a3f;
+  border-color: #a44a3f;
+  box-shadow: none;
+}
+
+.month-actual-dialog .el-button.month-actual-action-btn {
+  height: 24px;
+  padding: 0 8px;
+  margin: 0;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  box-shadow: none;
+}
+.month-actual-dialog .el-button.month-actual-action-btn--qty {
+  color: #3d5a80;
+  background: #eef2f5;
+  border: 1px solid #c5d0dc;
+}
+.month-actual-dialog .el-button.month-actual-action-btn--qty:hover {
+  color: #fff;
+  background: #3d5a80;
+  border-color: #3d5a80;
+}
+.month-actual-dialog .el-button.month-actual-action-btn--del {
+  color: #a44a3f;
+  background: #f6eeec;
+  border: 1px solid #e4cfcb;
+}
+.month-actual-dialog .el-button.month-actual-action-btn--del:hover {
+  color: #fff;
+  background: #a44a3f;
+  border-color: #a44a3f;
+}
+
+.month-actual-dialog .month-actual-footer,
+.month-actual-edit-dialog .month-actual-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.el-button.month-actual-footer-btn {
+  min-width: 88px;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  box-shadow: none;
+}
+.el-button.month-actual-footer-btn--close {
+  color: #5c5c5c;
+  background: #faf9f7;
+  border: 1px solid #d8d4cc;
+}
+.el-button.month-actual-footer-btn--close:hover {
+  color: #3a3a3a;
+  background: #f0eee9;
+  border-color: #c8c3ba;
+}
+.el-button.month-actual-footer-btn--register,
+.el-button.month-actual-footer-btn--save {
+  color: #fff;
+  background: #3d5a80;
+  border: 1px solid #3d5a80;
+}
+.el-button.month-actual-footer-btn--register:hover,
+.el-button.month-actual-footer-btn--save:hover {
+  color: #fff;
+  background: #334b6b;
+  border-color: #334b6b;
 }
 </style>
