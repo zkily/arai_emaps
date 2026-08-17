@@ -1131,78 +1131,105 @@
       <!-- 第3行：カンバン発行 -->
       <div class="instruction-row instruction-two-cols">
         <div ref="kanbanSectionRef" class="instruction-col kanban-issuance-section instruction-col-full">
-          <div class="cutting-mgmt-header">
+          <div class="cutting-mgmt-header kanban-issuance-header">
             <span class="cutting-mgmt-title">カンバン発行</span>
-            <div class="cutting-mgmt-date-wrap">
-              <el-button
-                size="small"
-                circle
-                title="前日"
-                @click="shiftKanbanFilterDay(-1)"
-              >
-                ‹
-              </el-button>
-              <el-date-picker
-                v-model="kanbanFilterProductionDay"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="生産日"
-                size="small"
-                clearable
-                class="kanban-filter-date"
-                style="width: 130px;"
-                @change="loadKanbanIssuance"
-              />
-              <el-button
-                size="small"
-                plain
-                class="mt-today-btn"
-                @click="setKanbanFilterToday"
-              >
-                今日
-              </el-button>
-              <el-button
-                size="small"
-                circle
-                title="翌日"
-                @click="shiftKanbanFilterDay(1)"
-              >
-                ›
-              </el-button>
-              <el-select
-                v-model="kanbanFilterStatus"
-                placeholder="状態"
-                clearable
-                size="small"
-                class="kanban-filter-status"
-                style="width: 110px; margin-left: 8px;"
-                @change="loadKanbanIssuance"
-              >
-                <el-option label="（全部）" value="" />
-                <el-option label="待発行" value="pending" />
-                <el-option label="発行済" value="issued" />
-                <el-option label="完了" value="completed" />
-              </el-select>
-              <el-select
-                v-model="kanbanFilterProductName"
-                placeholder="製品名"
-                clearable
-                filterable
-                size="small"
-                class="kanban-filter-product"
-                style="width: 160px; margin-left: 8px;"
-                @change="loadKanbanIssuance"
-              >
-                <el-option label="（全部）" value="" />
-                <el-option
-                  v-for="name in kanbanIssuanceProductNameOptions"
-                  :key="name"
-                  :label="name"
-                  :value="name"
+            <div class="kanban-toolbar">
+              <div class="kanban-toolbar-filters">
+                <el-button
+                  size="small"
+                  circle
+                  title="前日"
+                  class="kanban-day-nav-btn"
+                  @click="shiftKanbanFilterDay(-1)"
+                >
+                  ‹
+                </el-button>
+                <el-date-picker
+                  v-model="kanbanFilterProductionDay"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="生産日"
+                  size="small"
+                  clearable
+                  class="kanban-filter-date"
+                  @change="loadKanbanIssuance"
                 />
-              </el-select>
-              <el-button type="primary" size="small" :loading="kanbanBatchIssueLoading" @click="batchIssueKanban">一括発行</el-button>
-              <el-button type="default" size="small" :loading="kanbanSyncProductionDayLoading" @click="syncKanbanProductionDay">更新</el-button>
+                <el-button
+                  size="small"
+                  plain
+                  class="mt-today-btn kanban-today-btn"
+                  @click="setKanbanFilterToday"
+                >
+                  今日
+                </el-button>
+                <el-button
+                  size="small"
+                  circle
+                  title="翌日"
+                  class="kanban-day-nav-btn"
+                  @click="shiftKanbanFilterDay(1)"
+                >
+                  ›
+                </el-button>
+                <span class="kanban-toolbar-sep" aria-hidden="true" />
+                <el-select
+                  v-model="kanbanFilterStatus"
+                  placeholder="状態"
+                  clearable
+                  size="small"
+                  class="kanban-filter-status"
+                  @change="loadKanbanIssuance"
+                >
+                  <el-option label="（全部）" value="" />
+                  <el-option label="待発行" value="pending" />
+                  <el-option label="発行済" value="issued" />
+                  <el-option label="完了" value="completed" />
+                </el-select>
+                <el-select
+                  v-model="kanbanFilterProductName"
+                  placeholder="製品名"
+                  clearable
+                  filterable
+                  size="small"
+                  class="kanban-filter-product"
+                  @change="loadKanbanIssuance"
+                >
+                  <el-option label="（全部）" value="" />
+                  <el-option
+                    v-for="name in kanbanIssuanceProductNameOptions"
+                    :key="name"
+                    :label="name"
+                    :value="name"
+                  />
+                </el-select>
+              </div>
+              <div class="kanban-toolbar-actions">
+                <el-tooltip
+                  content="発行前に切断指示の生産日・切断機をカンバンへ同期してください"
+                  placement="top"
+                >
+                  <el-button
+                    type="warning"
+                    size="small"
+                    class="kanban-sync-btn"
+                    :loading="kanbanSyncProductionDayLoading"
+                    :icon="Refresh"
+                    @click="syncKanbanProductionDay"
+                  >
+                    更新
+                    <span class="kanban-sync-btn__hint">発行前</span>
+                  </el-button>
+                </el-tooltip>
+                <el-button
+                  type="primary"
+                  size="small"
+                  class="kanban-batch-issue-btn"
+                  :loading="kanbanBatchIssueLoading"
+                  @click="batchIssueKanban"
+                >
+                  一括発行
+                </el-button>
+              </div>
             </div>
           </div>
           <div v-loading="kanbanIssuanceLoading" class="cutting-mgmt-table-wrap">
@@ -9104,7 +9131,7 @@ async function batchIssueKanban() {
   }
 }
 
-/** カンバン発行の生産日を cutting_management / chamfering_management から同期する */
+/** カンバン発行の生産日・切断機を cutting_management / chamfering_management から同期する */
 async function syncKanbanProductionDay() {
   if (!guardMesOperation(canEdit)) return
   kanbanSyncProductionDayLoading.value = true
@@ -9112,10 +9139,10 @@ async function syncKanbanProductionDay() {
     const res = await request.post<{ success?: boolean; message?: string; updated?: number }>(
       '/api/plan/kanban-issuance/sync-production-day'
     )
-    ElMessage.success((res as any)?.message ?? '生産日を更新しました')
+    ElMessage.success((res as any)?.message ?? '生産日・切断機を更新しました')
     loadKanbanIssuance()
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '生産日の更新に失敗しました'
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '生産日・切断機の更新に失敗しました'
     ElMessage.error(String(msg))
   } finally {
     kanbanSyncProductionDayLoading.value = false
@@ -10665,6 +10692,145 @@ onUnmounted(() => {
 
 .instruction-col.kanban-issuance-section .cutting-mgmt-header {
   border-bottom-color: #ffedd5;
+}
+
+.kanban-issuance-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.kanban-toolbar {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.kanban-toolbar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  background: rgba(255, 251, 235, 0.85);
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+.kanban-toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: #fcd34d;
+  flex-shrink: 0;
+}
+
+.kanban-toolbar-filters :deep(.kanban-filter-date),
+.kanban-toolbar-filters :deep(.kanban-filter-date.el-date-editor) {
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: 130px !important;
+}
+
+.kanban-toolbar-filters :deep(.kanban-filter-status) {
+  width: 110px;
+}
+
+.kanban-toolbar-filters :deep(.kanban-filter-product) {
+  width: 160px;
+}
+
+.kanban-day-nav-btn {
+  flex-shrink: 0;
+}
+
+.kanban-today-btn {
+  border-color: #f59e0b !important;
+  color: #b45309 !important;
+  background: #fffbeb !important;
+}
+
+.kanban-today-btn:hover {
+  border-color: #d97706 !important;
+  color: #92400e !important;
+  background: #fef3c7 !important;
+}
+
+.kanban-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 4px 6px 4px 10px;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.12);
+}
+
+.kanban-sync-btn {
+  position: relative;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  min-height: 30px !important;
+  padding: 5px 14px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow:
+    0 2px 8px rgba(217, 119, 6, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  animation: kanban-sync-pulse 2.4s ease-in-out infinite;
+}
+
+.kanban-sync-btn:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+  box-shadow:
+    0 4px 12px rgba(217, 119, 6, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.kanban-sync-btn__hint {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #92400e;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.kanban-batch-issue-btn {
+  min-height: 30px !important;
+  padding: 5px 14px !important;
+  font-weight: 600 !important;
+}
+
+@keyframes kanban-sync-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 8px rgba(217, 119, 6, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow:
+      0 2px 14px rgba(217, 119, 6, 0.55),
+      0 0 0 3px rgba(251, 191, 36, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kanban-sync-btn {
+    animation: none;
+  }
 }
 
 .kanban-pagination {

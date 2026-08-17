@@ -410,7 +410,7 @@
                 <el-input-number
                   :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
                   :min="0"
-                  :max="20"
+                  :max="999999"
                   :precision="0"
                   size="small"
                   class="usage-quantity-input"
@@ -884,14 +884,10 @@
             <el-table-column label="使用状態" width="120" align="center">
               <template #default="{ row }">
                 <el-tag
-                  :type="
-                    (row.usage_quantity || 0) === (row.order_quantity || 0) ? 'success' : 'warning'
-                  "
+                  :type="isSubStockUsed(row) ? 'success' : 'warning'"
                   size="small"
                 >
-                  {{
-                    (row.usage_quantity || 0) === (row.order_quantity || 0) ? '使用済' : '未使用'
-                  }}
+                  {{ isSubStockUsed(row) ? '使用済' : '未使用' }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -2218,7 +2214,7 @@ const subEditCalculatedAmount = computed(() => {
 })
 
 const subEditFormIsUsed = computed(() => {
-  return (subEditForm.usage_quantity || 0) === (subEditForm.order_quantity || 0)
+  return isSubStockUsed(subEditForm)
 })
 
 /** 受入ログ行の材料CD（API が materials と材料名で突合済み） */
@@ -2284,17 +2280,29 @@ const _totalStockValue = computed(() => {
   return 0
 })
 
+/** 半端: 注文数>0 かつ 使用数>=注文数 を使用済（0=0 は未使用） */
+const isSubStockUsed = (item: { usage_quantity?: number; order_quantity?: number }) => {
+  const order = Number(item.order_quantity) || 0
+  const usage = Number(item.usage_quantity) || 0
+  return order > 0 && usage >= order
+}
+
 const mapMaterialStockRow = (item: any): MaterialOrderItem => {
   const usage_quantity = item.planned_usage || 0
-  const order_quantity = item.order_quantity || 0
+  const order_quantity = Number(item.order_quantity) || 0
+  const dbBundleQty = Number(item.order_bundle_quantity)
+  // DB の注文本数>0 は手修正として優先。0 は未保存のデフォルトなので束数から算出する。
+  // bundle_weight 列はマスタ同期の「束重量」にも使われるため、注文重量としては使わない。
   let order_bundle_quantity = 0
-  let bundle_weight = 0
-  let order_amount = 0
-  if (order_quantity > 0 && item.pieces_per_bundle && item.long_weight) {
+  if (dbBundleQty > 0) {
+    order_bundle_quantity = dbBundleQty
+  } else if (order_quantity > 0 && item.pieces_per_bundle) {
     order_bundle_quantity = order_quantity * item.pieces_per_bundle
-    bundle_weight = order_bundle_quantity * item.long_weight
-    order_amount = bundle_weight * (item.unit_price || 0)
   }
+  const bundle_weight = order_bundle_quantity * (Number(item.long_weight) || 0)
+  const dbAmount = Number(item.order_amount)
+  const order_amount =
+    dbAmount > 0 ? dbAmount : bundle_weight * (Number(item.unit_price) || 0)
   return {
     ...item,
     usage_quantity,
@@ -2332,8 +2340,9 @@ const fetchData = async () => {
       page: params.page ?? pagination.page,
       pageSize: params.page_size ?? pagination.page_size,
       keyword: params.keyword,
-      target_date: searchForm.dateRange?.[0] || params.start_date,
     }
+    if (params.start_date) apiParams.start_date = params.start_date
+    if (params.end_date) apiParams.end_date = params.end_date
     if (searchForm.supplier && searchForm.supplier.length > 0) {
       apiParams.suppliers = searchForm.supplier.join(',')
     }
@@ -2429,8 +2438,9 @@ const fetchSubData = async () => {
     if (searchForm.supplier && searchForm.supplier.length > 0) {
       apiParams.suppliers = searchForm.supplier.join(',')
     }
-    const result = await getMaterialStockSubList(apiParams)
+      const result = await getMaterialStockSubList(apiParams)
     const list = (result as any)?.data?.list ?? []
+    const total = (result as any)?.data?.total ?? list.length
     if ((result as any)?.success !== false && list) {
       let filteredData = list.map((item: any) => ({
         ...item,
@@ -2441,14 +2451,14 @@ const fetchSubData = async () => {
         order_amount: item.order_amount || 0,
       }))
 
-      // 客户端筛选使用状態
+      // クライアント側使用状態フィルタ（注文ありかつ使用数>=注文数を使用済）
       if (searchForm.usageStatus) {
         filteredData = filteredData.filter((item: any) => {
-          const isUsed = (item.usage_quantity || 0) === (item.order_quantity || 0)
+          const used = isSubStockUsed(item)
           if (searchForm.usageStatus === 'used') {
-            return isUsed
+            return used
           } else if (searchForm.usageStatus === 'unused') {
-            return !isUsed
+            return !used
           }
           return true
         })
@@ -2456,8 +2466,8 @@ const fetchSubData = async () => {
 
       // 按使用状態排序：未使用排在最前面
       filteredData.sort((a: any, b: any) => {
-        const aIsUsed = (a.usage_quantity || 0) === (a.order_quantity || 0)
-        const bIsUsed = (b.usage_quantity || 0) === (b.order_quantity || 0)
+        const aIsUsed = isSubStockUsed(a)
+        const bIsUsed = isSubStockUsed(b)
 
         // 未使用的排在前面（false < true）
         if (aIsUsed !== bIsUsed) {
@@ -2469,7 +2479,8 @@ const fetchSubData = async () => {
       })
 
       subTableData.value = filteredData
-      pagination.total = filteredData.length
+      // サーバ total を優先（クライアントフィルタ時は当該ページ内件数）
+      pagination.total = searchForm.usageStatus ? filteredData.length : total
       console.log('半端材料リストデータ取得成功:', subTableData.value.length, '件')
     } else {
       ElMessage.error('半端材料リストデータ取得に失敗しました')
@@ -2510,8 +2521,9 @@ const fetchInitialStockData = async () => {
         page: params.page,
         pageSize: params.page_size,
         keyword: params.keyword,
-        target_date: params.start_date,
       }
+      if (params.start_date) apiParams.start_date = params.start_date
+      if (params.end_date) apiParams.end_date = params.end_date
       if (searchForm.supplier && searchForm.supplier.length > 0) {
         apiParams.suppliers = searchForm.supplier.join(',')
       }
@@ -2526,7 +2538,7 @@ const fetchInitialStockData = async () => {
             initial_stock:
               item.initial_stock !== undefined ? item.initial_stock : item.current_stock || 0,
             // adjustment_quantityフィールドを直接使用
-            adjustment_quantity: item.adjustment_quantity || 0,
+            adjustment_quantity: item.adjustment_quantity ?? 0,
           }
         })
         pagination.total = (result as any)?.data?.total ?? list.length
@@ -2891,7 +2903,7 @@ const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
     const updateParams: MaterialQuantityUpdate = {
       material_cd: row.material_cd,
       date: row.date,
-      adjustment_quantity: row.adjustment_quantity || 0,
+      adjustment_quantity: row.adjustment_quantity ?? 0,
     }
 
     try {
@@ -3180,10 +3192,9 @@ const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
     const response = await updateMaterialQuantities({
       material_cd: row.material_cd,
       date: row.date,
-      usage_quantity: row.usage_quantity || 0,
       order_quantity: row.order_quantity || 0,
       order_bundle_quantity: row.order_bundle_quantity || 0,
-      bundle_weight: row.bundle_weight || 0,
+      // bundle_weight はマスタの束重量列。注文重量は画面側で算出するため上書きしない
       order_amount: row.order_amount || 0,
     })
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, distinct, update
+from sqlalchemy import select, func, or_, distinct
 from collections import defaultdict
 from typing import Optional, Any
 from datetime import date
@@ -208,56 +208,43 @@ async def calculate_material_stock(
 ):
     """
     在庫計算: material_stock の current_stock を再計算する。
-    全データ中で initial_stock > 0 の「最後」の日付を1つだけ求め、その日付を開始計算日とする。
-    全材料ともこの開始計算日以降で計算する。
+    材料ごとに initial_stock > 0 である最終日を開始計算日とし、その日以降を計算する。
+    開始計算日の前日結転は 0 とする。
     空または 0 の項目はすべて 0 として計算に用いる。
     計算式: current_stock = initial_stock + order_quantity + adjustment_quantity - planned_usage + 前日の current_stock
+    （半端転送分は adjustment_quantity に負数で記録され、再計算でも再現される）
     """
     q = select(MaterialStock).order_by(MaterialStock.material_cd, MaterialStock.date.asc())
     rows = (await db.execute(q)).scalars().all()
     if not rows:
         return {"success": True, "data": {"calculated_count": 0, "updated_count": 0}}
 
-    # material_cd ごとにグループ化
     by_material: dict[str, list[MaterialStock]] = defaultdict(list)
     for r in rows:
         by_material[r.material_cd].append(r)
 
-    # 開始計算日 = 全行のうち initial_stock > 0 である日の「最後」（最大日付）を1つ。全材料ともこの日から計算
-    rows_with_initial = [r for r in rows if (r.initial_stock or 0) > 0]
-    if not rows_with_initial:
-        return {"success": True, "data": {"calculated_count": 0, "updated_count": 0}}
-    global_start_date = max(r.date for r in rows_with_initial)
-
-    # 開始計算日以降の current_stock を 0 にクリア
-    stmt = update(MaterialStock).where(MaterialStock.date >= global_start_date).values(current_stock=0)
-    await db.execute(stmt)
-    await db.flush()
-
-    updates: dict[int, int] = {}
     calculated_count = 0
-    for material_cd, list_rows in by_material.items():
-        # 全材料とも同じ global_start_date 以降の行を日付昇順で計算
-        to_calc = sorted([r for r in list_rows if r.date >= global_start_date], key=lambda x: x.date)
+    updated_count = 0
+    for _material_cd, list_rows in by_material.items():
+        sorted_rows = sorted(list_rows, key=lambda x: x.date)
+        rows_with_initial = [r for r in sorted_rows if (r.initial_stock or 0) > 0]
+        if not rows_with_initial:
+            continue
+        start_date = max(r.date for r in rows_with_initial)
+        to_calc = [r for r in sorted_rows if r.date >= start_date]
         prev_current = 0
         for r in to_calc:
-            # 空または 0 はすべて 0 として扱う
             init = int(r.initial_stock or 0)
             order_qty = int(r.order_quantity or 0)
             adj = int(r.adjustment_quantity or 0)
             usage = int(r.planned_usage or 0)
             new_current = init + order_qty + adj - usage + prev_current
-            updates[r.id] = new_current
+            if r.current_stock != new_current:
+                r.current_stock = new_current
+                updated_count += 1
             prev_current = new_current
-        if to_calc:
-            calculated_count += 1
+        calculated_count += 1
 
-    # 一括更新
-    updated_count = 0
-    for row in rows:
-        if row.id in updates and row.current_stock != updates[row.id]:
-            row.current_stock = updates[row.id]
-            updated_count += 1
     await db.commit()
     return {
         "success": True,
@@ -458,7 +445,11 @@ async def transfer_to_sub(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
-    """主表在庫を半端（material_stock_sub）へ転送。主表 current_stock を減算し、sub に新規行を作成。"""
+    """主表在庫を半端（material_stock_sub）へ転送。
+
+    主表 current_stock を減算し、再計算でも再現できるよう adjustment_quantity にも同量を負数加算する。
+    sub に新規行を作成。
+    """
     if body.quantity < 1:
         raise HTTPException(status_code=400, detail="転送数量は1以上で指定してください")
     result = await db.execute(select(MaterialStock).where(MaterialStock.id == body.stock_id))
@@ -499,6 +490,8 @@ async def transfer_to_sub(
         remarks=row.remarks,
     )
     db.add(sub_row)
+    # 再計算式に含めるため調整数へ記録（負数）。即時表示用に current_stock も減算。
+    row.adjustment_quantity = int(row.adjustment_quantity or 0) - body.quantity
     row.current_stock = (row.current_stock or 0) - body.quantity
     await db.commit()
     await db.refresh(sub_row)
@@ -581,7 +574,7 @@ async def list_stock_sub(
     suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り。指定時は supplier_name で IN 検索"),
     target_date: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_purchase_operation("delete")),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """サブ在庫一覧（materials.status=0 の材料は除外）"""
     join_cond = MaterialStockSub.material_cd.collate("utf8mb4_unicode_ci") == Material.material_cd.collate("utf8mb4_unicode_ci")

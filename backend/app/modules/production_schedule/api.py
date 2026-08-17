@@ -6496,18 +6496,26 @@ async def sync_kanban_production_day(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """kanban_issuance の production_day を source_id で cutting_management / chamfering_management から取得して更新する。"""
+    """kanban_issuance の production_day / cutting_machine を元指示から同期する。
+
+    - cutting: cutting_management から production_day・cutting_machine
+    - chamfering: production_day は chamfering_management、
+      cutting_machine は紐づく cutting_management から（無い場合は変更しない）
+    """
     # process_type='cutting' の source_id = cutting_management.id
     upd_cutting = text("""
         UPDATE kanban_issuance k
         INNER JOIN cutting_management c ON k.source_id = c.id AND k.process_type = 'cutting'
-        SET k.production_day = c.production_day
+        SET k.production_day = c.production_day,
+            k.cutting_machine = c.cutting_machine
     """)
-    # process_type='chamfering' → source_id = chamfering_management.id, production_day は chamfering_management から
+    # process_type='chamfering' → source_id = chamfering_management.id
     upd_chamfering = text("""
         UPDATE kanban_issuance k
         INNER JOIN chamfering_management ch ON k.source_id = ch.id AND k.process_type = 'chamfering'
-        SET k.production_day = ch.production_day
+        LEFT JOIN cutting_management c ON ch.cutting_management_id = c.id
+        SET k.production_day = ch.production_day,
+            k.cutting_machine = COALESCE(c.cutting_machine, k.cutting_machine)
     """)
     try:
         r1 = await db.execute(upd_cutting)
@@ -6516,7 +6524,7 @@ async def sync_kanban_production_day(
         # rowcount は DB によっては UPDATE 件数が返らない場合がある
         updated = getattr(r1, "rowcount", None) or 0
         updated += getattr(r2, "rowcount", None) or 0
-        return {"success": True, "message": "生産日を更新しました", "updated": updated}
+        return {"success": True, "message": "生産日・切断機を更新しました", "updated": updated}
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e

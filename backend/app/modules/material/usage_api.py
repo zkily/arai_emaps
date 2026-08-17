@@ -13,13 +13,14 @@
           - 完了後 cutting_management.material_usage_reflected = '反映済' に更新
   Step 2: material_usage_record（reflected=0）を (usage_date, material_cd) で集計
           → material_stock.planned_usage を更新
-  Step 3: Step 2 対象レコードの reflected = 1 に更新
+  Step 3: Step 2 で material_stock 更新に成功した material_cd のみ reflected = 1 に更新
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from typing import Optional, List
 from datetime import date as date_type
+import logging
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
@@ -31,6 +32,7 @@ from app.modules.material.schemas import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 SOURCE_CUTTING = "cutting_management"
 
@@ -377,7 +379,7 @@ async def commit_material_usage(
     Step 2: material_usage_record（reflected=0）を (usage_date, material_cd) で集計
             → material_stock.planned_usage を更新
 
-    Step 3: Step 2 で対象とした material_usage_record.reflected = 1 に更新
+    Step 3: Step 2 で material_stock 更新に成功した材料のみ reflected / 切断「反映済」を付ける
     """
     today_d = _parse_date(body.today_date)
     if today_d is None:
@@ -460,14 +462,7 @@ async def commit_material_usage(
             })
             inserted += result.rowcount
 
-        # 反映対象（use_material_stock_sub=0）の行のみ「反映済」に更新
-        update_cm_sql = text("""
-            UPDATE cutting_management
-            SET material_usage_reflected = '反映済'
-            WHERE production_day = :prod_day
-              AND COALESCE(use_material_stock_sub, 0) = 0
-        """)
-        await db.execute(update_cm_sql, {"prod_day": today_d})
+        # cutting_management の「反映済」は Step 2 成功後に付ける（在庫未更新のまま済扱いにしない）
 
     except Exception as e:
         await db.rollback()
@@ -490,6 +485,7 @@ async def commit_material_usage(
         raise HTTPException(status_code=500, detail=f"Step 2 集計に失敗しました: {e}") from e
 
     stock_updated = 0
+    updated_material_cds: list[str] = []
     for agg_row in agg_rows:
         agg_date = agg_row[0]
         agg_mat_cd = agg_row[1]
@@ -502,6 +498,21 @@ async def commit_material_usage(
             continue
 
         try:
+            # 再実行時に未反映分だけで上書きしないよう、当日・当該材料の全レコード合計を書く
+            total_sql = text("""
+                SELECT COALESCE(SUM(usage_count), 0)
+                FROM material_usage_record
+                WHERE usage_date = :usage_date
+                  AND source = :source
+                  AND material_cd = :material_cd
+            """)
+            total_result = await db.execute(total_sql, {
+                "usage_date": agg_date,
+                "source": source,
+                "material_cd": agg_mat_cd,
+            })
+            total_count = int(round(float(total_result.scalar() or agg_count or 0)))
+
             update_stock_sql = text("""
                 UPDATE material_stock
                 SET planned_usage = :usage_count,
@@ -510,26 +521,68 @@ async def commit_material_usage(
                   AND date = :usage_date
             """)
             result = await db.execute(update_stock_sql, {
-                "usage_count": agg_count,
+                "usage_count": total_count,
                 "material_cd": agg_mat_cd,
                 "usage_date": agg_date,
             })
-            stock_updated += result.rowcount
-        except Exception:
-            pass
+            rowcount = int(result.rowcount or 0)
+            if rowcount > 0:
+                stock_updated += rowcount
+                updated_material_cds.append(agg_mat_cd)
+            else:
+                logger.warning(
+                    "usage commit: material_stock 更新0件 material_cd=%s date=%s（レコード未作成の可能性）",
+                    agg_mat_cd,
+                    agg_date,
+                )
+        except Exception as e:
+            logger.warning(
+                "usage commit: material_stock 更新失敗 material_cd=%s date=%s: %s",
+                agg_mat_cd,
+                agg_date,
+                e,
+            )
 
-    # ──────── Step 3: material_usage_record.reflected = 1 に更新 ────────
-    try:
-        mark_sql = text("""
-            UPDATE material_usage_record
-            SET reflected = 1
-            WHERE usage_date = :usage_date
-              AND source = :source
-              AND reflected = 0
-        """)
-        await db.execute(mark_sql, {"usage_date": today_d, "source": source})
-    except Exception:
-        pass
+    # ──────── Step 3: stock 更新成功分のみ reflected = 1、切断側も同様 ────────
+    unique_updated_cds = list(dict.fromkeys(updated_material_cds))
+    if unique_updated_cds:
+        try:
+            mark_sql = text("""
+                UPDATE material_usage_record
+                SET reflected = 1
+                WHERE usage_date = :usage_date
+                  AND source = :source
+                  AND reflected = 0
+                  AND material_cd IN :material_cds
+            """).bindparams(bindparam("material_cds", expanding=True))
+            await db.execute(
+                mark_sql,
+                {
+                    "usage_date": today_d,
+                    "source": source,
+                    "material_cds": unique_updated_cds,
+                },
+            )
+            mark_cm_sql = text("""
+                UPDATE cutting_management cm
+                LEFT JOIN products p
+                  ON cm.product_cd COLLATE utf8mb4_unicode_ci = p.product_cd COLLATE utf8mb4_unicode_ci
+                SET cm.material_usage_reflected = '反映済'
+                WHERE cm.production_day = :prod_day
+                  AND COALESCE(cm.use_material_stock_sub, 0) = 0
+                  AND p.material_cd IN :material_cds
+            """).bindparams(bindparam("material_cds", expanding=True))
+            await db.execute(
+                mark_cm_sql,
+                {"prod_day": today_d, "material_cds": unique_updated_cds},
+            )
+        except Exception as e:
+            logger.warning("usage commit: reflected 更新失敗: %s", e)
+            await db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Step 3 reflected 更新に失敗しました: {e}",
+            ) from e
 
     try:
         await db.commit()
@@ -537,12 +590,21 @@ async def commit_material_usage(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"コミットに失敗しました: {e}") from e
 
+    skipped_cds = {
+        str(r[1])
+        for r in agg_rows
+        if r[1] and r[1] != "__unknown__" and str(r[1]) not in set(updated_material_cds)
+    }
+    message = (
+        f"使用数を反映しました（{inserted} 件挿入、"
+        f"material_stock {stock_updated} 件更新）"
+    )
+    if skipped_cds:
+        message += f"（未更新 {len(skipped_cds)} 材料分は reflected 未設定のため再実行可能）"
+
     return {
         "success": True,
-        "message": (
-            f"使用数を反映しました（{inserted} 件挿入、"
-            f"material_stock {stock_updated} 件更新）"
-        ),
+        "message": message,
         "inserted": inserted,
         "stock_updated": stock_updated,
     }
