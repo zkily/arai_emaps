@@ -68,6 +68,8 @@ export interface ReceivingListParams {
   keyword?: string
   /** material_logs.material_name 完全一致 */
   materialNameExact?: string
+  /** material_logs.manufacture_no 完全一致 */
+  manufacture_no?: string
   material_cd?: string
   supplier?: string
   startDate?: string
@@ -493,6 +495,10 @@ export interface ImportMaterialCuttingCsvParams {
 export interface ImportMaterialCuttingCsvResult {
   success?: boolean
   imported?: number
+  parsed_rows?: number
+  unique_rows?: number
+  skipped_csv_dup?: number
+  skipped_db_dup?: number
   errors_count?: number
   errors?: string[]
   full_replace?: boolean
@@ -501,7 +507,13 @@ export interface ImportMaterialCuttingCsvResult {
   retain_days?: number
   csv_date_min?: string | null
   csv_date_max?: string | null
+  window_start?: string | null
+  window_end?: string | null
   skipped_before_retention?: number
+  warning?: string
+  csv_path?: string
+  delimiter?: string
+  header?: string[]
 }
 
 export function getMaterialCuttingCsvStatus(): Promise<{

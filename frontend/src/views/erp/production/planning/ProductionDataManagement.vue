@@ -4274,15 +4274,28 @@ async function openTransactionDialog(row: Record<string, any>, processCd: string
 
       const hasNonTrailingOne = list.some((p) => !p.product_cd.endsWith('1'))
       if (hasNonTrailingOne && list.length > 0) {
-        transactionEntityOptions.value = list.sort((a, b) =>
-          a.product_cd.localeCompare(b.product_cd, 'ja')
-        )
+        transactionEntityOptions.value = list.sort((a, b) => {
+          const aOne = a.product_cd.endsWith('1') ? 0 : 1
+          const bOne = b.product_cd.endsWith('1') ? 0 : 1
+          if (aOne !== bOne) return aOne - bOne
+          return a.product_cd.localeCompare(b.product_cd, 'ja')
+        })
         transactionNeedsEntitySelect.value = true
-        // 実体選択を必須とするため初期は未選択
-        transactionSelectedEntityCd.value = ''
-        transactionInputInfo.value.productCd = ''
-        transactionInputInfo.value.productName = ''
-        transactionInputInfo.value.destinationName = ''
+        // 末尾が1の実体をデフォルト選択（なければ未選択）
+        const trailingOneCandidates = list.filter((p) => p.product_cd.endsWith('1'))
+        const defaultEntity =
+          trailingOneCandidates.find((p) => p.product_cd === baseProductCd) ||
+          trailingOneCandidates.find((p) => p.status === 'active') ||
+          trailingOneCandidates[0] ||
+          null
+        if (defaultEntity) {
+          handleTransactionEntitySelect(defaultEntity)
+        } else {
+          transactionSelectedEntityCd.value = ''
+          transactionInputInfo.value.productCd = ''
+          transactionInputInfo.value.productName = ''
+          transactionInputInfo.value.destinationName = ''
+        }
       }
     } catch {
       // 候補取得失敗時は従来どおり行の製品CDで登録可能

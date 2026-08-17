@@ -178,7 +178,7 @@
         <h2 class="pma-help__h2"><span class="pma-help__num">5</span> 並び順・ページング・印刷</h2>
         <ul class="pma-help__ul">
           <li>
-            <strong>既定の並び</strong>：<strong>切断開始日 昇順 → 切断開始時刻 昇順</strong>（値が無い行は後ろに回る動きになります）。同じ条件なら看板IDで安定化。
+            <strong>既定の並び</strong>：<strong>切断開始日 降順 → 切断開始時刻 降順</strong>（値が無い行は後ろに回る動きになります）。同じ条件なら看板IDで安定化。
           </li>
           <li>
             <strong>ページサイズ</strong>：既定 20 件。変更すると1ページ目から再読込します。

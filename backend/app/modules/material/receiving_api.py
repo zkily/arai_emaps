@@ -157,6 +157,10 @@ async def list_receiving_logs(
         None,
         description="材料名完全一致（材料詳細ダイアログ等。keyword より優先）",
     ),
+    manufacture_no: Optional[str] = Query(
+        None,
+        description="製造番号完全一致（製品材料照会の受入履歴など）",
+    ),
     material_cd: Optional[str] = Query(None),
     supplier: Optional[str] = Query(None),
     startDate: Optional[str] = Query(None),
@@ -172,7 +176,10 @@ async def list_receiving_logs(
     q = select(MaterialLog)
 
     exact_name = (materialNameExact or "").strip()
-    if exact_name:
+    exact_mfg = (manufacture_no or "").strip()
+    if exact_mfg:
+        q = q.where(MaterialLog.manufacture_no == exact_mfg)
+    elif exact_name:
         q = q.where(MaterialLog.material_name == exact_name)
     elif keyword and keyword.strip():
         kw = f"%{_escape_like_pattern(keyword.strip())}%"

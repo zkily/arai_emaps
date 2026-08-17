@@ -1,22 +1,19 @@
 """
 材料切断 CSV → material_cutting_logs 同期（file_watcher 用・同期・mysql.connector）
-API の import_cutting_csv（デフォルトモード）と同一ロジック。
+API の import_cutting_csv（デフォルト：削除せず追記＋重複スキップ）と同一ロジック。
 """
-import csv
-import io
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date
 from typing import Any, Optional
 
 import mysql.connector
 
 from app.core.config import settings
 from app.modules.material.cutting_import_api import (
-    JST,
     RETENTION_DAYS,
-    CUTTING_LOG_MANUAL_SOURCE_PREFIX,
-    _parse_date,
-    _parse_time,
+    cutting_log_dedupe_key,
+    dedupe_rows_keep_last,
+    parse_material_cutting_csv_text,
     _read_csv_file,
 )
 
@@ -33,71 +30,62 @@ def _get_conn():
     )
 
 
+def _load_existing_keys(cur, d_min: Optional[date], d_max: Optional[date]) -> set:
+    if d_min is not None and d_max is not None:
+        cur.execute(
+            """
+            SELECT log_date, log_time, hd_no, material_cd, management_code
+            FROM material_cutting_logs
+            WHERE log_date IS NULL
+               OR (log_date >= %s AND log_date <= %s)
+            """,
+            (d_min, d_max),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT log_date, log_time, hd_no, material_cd, management_code
+            FROM material_cutting_logs
+            """
+        )
+    keys = set()
+    for row in cur.fetchall():
+        keys.add(
+            cutting_log_dedupe_key(
+                {
+                    "log_date": row[0],
+                    "log_time": row[1],
+                    "hd_no": row[2],
+                    "material_cd": row[3],
+                    "management_code": row[4],
+                }
+            )
+        )
+    return keys
+
+
 def sync_material_cutting_csv(
     filepath: str,
     *,
     retain_days: int = RETENTION_DAYS,
 ) -> dict[str, Any]:
     """
-    共有パスの materialCutting.csv を読み、material_cutting_logs に反映する。
-    full_replace は行わない（API と同じデフォルト戦略）。
+    共有パスの materialCutting.csv を読み、material_cutting_logs に追記する。
+    既存行は削除しない。CSV内・DB既存の同一キーはスキップ。
     """
     path = filepath
     raw_text = _read_csv_file(path)
-
-    reader = csv.reader(io.StringIO(raw_text))
-    header: Optional[list[str]] = None
-    errors: list[str] = []
-    rows_to_insert: list[tuple] = []
-    csv_dates: list[date] = []
-
-    for row_idx, row in enumerate(reader, start=1):
-        if not any(cell.strip() for cell in row):
-            continue
-        if header is None:
-            header = [c.strip() for c in row]
-            continue
-        raw_line = ",".join(row)
-        try:
-
-            def _col(name: str) -> str:
-                idx = header.index(name) if name in header else -1
-                return row[idx].strip() if 0 <= idx < len(row) else ""
-
-            log_date = _parse_date(_col("日付"))
-            log_time = _parse_time(_col("時間"))
-            rows_to_insert.append(
-                (
-                    _col("項目") or None,
-                    log_date,
-                    log_time,
-                    _col("HDNo") or None,
-                    _col("担当者") or None,
-                    _col("材料コード") or None,
-                    _col("管理コード") or None,
-                    raw_line,
-                    path,
-                )
-            )
-            if log_date is not None:
-                csv_dates.append(log_date)
-        except Exception as exc:
-            errors.append(f"行 {row_idx}: {exc}")
-            if len(errors) >= 50:
-                errors.append("... エラーが多すぎるため省略")
-                break
-
-    today_jst = datetime.now(JST).date()
-    cutoff: Optional[date] = None
-    if retain_days > 0:
-        cutoff = today_jst - timedelta(days=retain_days)
+    parsed = parse_material_cutting_csv_text(raw_text, source_path=path)
+    rows = parsed["rows"]
+    errors = list(parsed["errors"])
+    csv_dates = list(parsed["csv_dates"])
+    unique_rows, skipped_csv_dup = dedupe_rows_keep_last(rows)
 
     d_min = min(csv_dates) if csv_dates else None
     d_max = max(csv_dates) if csv_dates else None
 
     deleted_prune = 0
-    deleted_window = 0
-    skipped_retention = 0
+    skipped_db_dup = 0
     imported = 0
 
     conn = _get_conn()
@@ -109,36 +97,43 @@ def sync_material_cutting_csv(
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     try:
-        _manual_like = CUTTING_LOG_MANUAL_SOURCE_PREFIX + "%"
-        if retain_days > 0 and cutoff is not None:
+        # 非推奨互換: retain_days>0 のときだけ古い行削除
+        if retain_days > 0:
+            from datetime import datetime, timedelta
+            from app.modules.material.cutting_import_api import JST, CUTTING_LOG_MANUAL_SOURCE_PREFIX
+
+            cutoff = datetime.now(JST).date() - timedelta(days=retain_days)
             cur.execute(
                 """
                 DELETE FROM material_cutting_logs
                 WHERE log_date < %s
                   AND (source_file IS NULL OR source_file NOT LIKE %s)
                 """,
-                (cutoff, _manual_like),
+                (cutoff, CUTTING_LOG_MANUAL_SOURCE_PREFIX + "%"),
             )
             deleted_prune = cur.rowcount
 
-        if d_min is not None and d_max is not None and d_min <= d_max:
-            cur.execute(
-                """
-                DELETE FROM material_cutting_logs
-                WHERE log_date >= %s AND log_date <= %s
-                  AND (source_file IS NULL OR source_file NOT LIKE %s)
-                """,
-                (d_min, d_max, _manual_like),
-            )
-            deleted_window = cur.rowcount
-
+        existing = _load_existing_keys(cur, d_min, d_max)
         batch: list[tuple] = []
-        for tup in rows_to_insert:
-            log_date = tup[1]
-            if log_date is not None and cutoff is not None and log_date < cutoff:
-                skipped_retention += 1
+        for rec in unique_rows:
+            key = cutting_log_dedupe_key(rec)
+            if key in existing:
+                skipped_db_dup += 1
                 continue
-            batch.append(tup)
+            batch.append(
+                (
+                    rec.get("item"),
+                    rec.get("log_date"),
+                    rec.get("log_time"),
+                    rec.get("hd_no"),
+                    rec.get("operator_name"),
+                    rec.get("material_cd"),
+                    rec.get("management_code"),
+                    rec.get("raw_line"),
+                    rec.get("source_file") or path,
+                )
+            )
+            existing.add(key)
             imported += 1
 
         if batch:
@@ -152,15 +147,25 @@ def sync_material_cutting_csv(
         cur.close()
         conn.close()
 
-    return {
+    result: dict[str, Any] = {
         "success": True,
         "imported": imported,
+        "parsed_rows": len(rows),
+        "unique_rows": len(unique_rows),
+        "skipped_csv_dup": skipped_csv_dup,
+        "skipped_db_dup": skipped_db_dup,
         "errors_count": len(errors),
         "errors": errors[:20],
         "deleted_prune": deleted_prune,
-        "deleted_window": deleted_window,
+        "deleted_window": 0,
         "retain_days": retain_days,
         "csv_date_min": d_min.isoformat() if d_min else None,
         "csv_date_max": d_max.isoformat() if d_max else None,
-        "skipped_before_retention": skipped_retention,
+        "skipped_before_retention": 0,
+        "delimiter": parsed.get("delimiter"),
     }
+    if imported == 0 and skipped_db_dup > 0:
+        result["warning"] = (
+            f"新規取込 0 件（DB 既存と重複 {skipped_db_dup} 件をスキップ）。すでに取り込み済みです。"
+        )
+    return result

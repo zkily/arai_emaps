@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from typing import Optional
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
@@ -31,15 +31,50 @@ def _is_table_missing(e: Exception) -> bool:
     )
 
 
-# kanban の管理コードに対応する切断ログの log_date（一覧の「切断開始日付」と同一ロジック）
-_CUTTING_LOG_DATE_SQL = """(
-    SELECT m.log_date
-    FROM material_cutting_logs m
-    WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-        AND m.management_code = k.management_code
-    ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-    LIMIT 1
-)"""
+# 管理コードごとの切断ログ最新1件（ROW_NUMBER。LATERAL ON TRUE は相関が効かず日付が全部 NULL になるため使わない）
+_CUTTING_LATEST_JOIN_SQL = """
+        LEFT JOIN (
+            SELECT management_code, manufacture_no, log_date, log_time
+            FROM (
+                SELECT
+                    m.management_code,
+                    m.manufacture_no,
+                    m.log_date,
+                    m.log_time,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY m.management_code
+                        ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
+                    ) AS rn
+                FROM material_cutting_logs m
+                WHERE m.management_code IS NOT NULL AND TRIM(m.management_code) <> ''
+            ) ranked_cut
+            WHERE rn = 1
+        ) mc ON mc.management_code = k.management_code
+            AND k.management_code IS NOT NULL
+            AND TRIM(k.management_code) <> ''
+"""
+
+# 製造番号ごとの受入ログ最新1件
+_MATERIAL_LOG_LATEST_JOIN_SQL = """
+        LEFT JOIN (
+            SELECT manufacture_no, manufacture_date, supplier
+            FROM (
+                SELECT
+                    ml.manufacture_no,
+                    ml.manufacture_date,
+                    ml.supplier,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY ml.manufacture_no
+                        ORDER BY ml.log_date DESC, ml.id DESC
+                    ) AS rn
+                FROM material_logs ml
+                WHERE ml.manufacture_no IS NOT NULL AND TRIM(ml.manufacture_no) <> ''
+            ) ranked_ml
+            WHERE rn = 1
+        ) mlog ON mlog.manufacture_no = mc.manufacture_no
+            AND mc.manufacture_no IS NOT NULL
+            AND TRIM(mc.manufacture_no) <> ''
+"""
 
 
 @router.get("")
@@ -84,23 +119,29 @@ async def list_product_material_association(
     if status and status.strip():
         params["st"] = status.strip().lower()
         conditions.append("k.status = :st")
+    has_date_filter = False
     if startDate and len(startDate.strip()) >= 10:
         try:
             params["sd"] = date.fromisoformat(startDate.strip()[:10])
-            conditions.append(f"{_CUTTING_LOG_DATE_SQL} >= :sd")
+            conditions.append("mc.log_date >= :sd")
+            has_date_filter = True
         except ValueError:
             pass
     if endDate and len(endDate.strip()) >= 10:
         try:
             params["ed"] = date.fromisoformat(endDate.strip()[:10])
-            conditions.append(f"{_CUTTING_LOG_DATE_SQL} <= :ed")
+            conditions.append("mc.log_date <= :ed")
+            has_date_filter = True
         except ValueError:
             pass
 
     where = " AND ".join(conditions)
 
-    count_sql = text(f"SELECT COUNT(*) FROM kanban_issuance k WHERE {where}")
-    # 管理コード → material_cutting_logs（最新1件の manufacture_no）→ material_logs（manufacture_no で最新1件）
+    # count は日付フィルタ時のみ切断ログ突合が必要（rn=1 のため件数は増えない）
+    count_from = "FROM kanban_issuance k" + (_CUTTING_LATEST_JOIN_SQL if has_date_filter else "")
+    count_sql = text(f"SELECT COUNT(*) {count_from} WHERE {where}")
+
+    # 管理コード → material_cutting_logs（最新1件）→ material_logs（manufacture_no で最新1件）
     data_sql = text(f"""
         SELECT
             k.id, k.process_type, k.source_id, k.kanban_no,
@@ -112,65 +153,20 @@ async def list_product_material_association(
             k.actual_production_quantity, k.take_count,
             k.cutting_length, k.chamfering_length, k.developed_length,
             k.has_chamfering_process, k.lot_number, k.production_day,
-            (
-                SELECT m.manufacture_no
-                FROM material_cutting_logs m
-                WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-                    AND m.management_code = k.management_code
-                ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-                LIMIT 1
-            ) AS cutting_log_manufacture_no,
-            (
-                SELECT m.log_date
-                FROM material_cutting_logs m
-                WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-                    AND m.management_code = k.management_code
-                ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-                LIMIT 1
-            ) AS cutting_log_date,
-            (
-                SELECT m.log_time
-                FROM material_cutting_logs m
-                WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-                    AND m.management_code = k.management_code
-                ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-                LIMIT 1
-            ) AS cutting_log_time,
-            (
-                SELECT ml.manufacture_date
-                FROM material_logs ml
-                WHERE ml.manufacture_no = (
-                    SELECT m.manufacture_no
-                    FROM material_cutting_logs m
-                    WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-                        AND m.management_code = k.management_code
-                    ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-                    LIMIT 1
-                )
-                ORDER BY ml.log_date DESC, ml.id DESC
-                LIMIT 1
-            ) AS material_log_manufacture_date,
-            (
-                SELECT ml.supplier
-                FROM material_logs ml
-                WHERE ml.manufacture_no = (
-                    SELECT m.manufacture_no
-                    FROM material_cutting_logs m
-                    WHERE k.management_code IS NOT NULL AND k.management_code <> ''
-                        AND m.management_code = k.management_code
-                    ORDER BY m.log_date DESC, m.log_time DESC, m.id DESC
-                    LIMIT 1
-                )
-                ORDER BY ml.log_date DESC, ml.id DESC
-                LIMIT 1
-            ) AS material_log_supplier
+            mc.manufacture_no AS cutting_log_manufacture_no,
+            mc.log_date AS cutting_log_date,
+            mc.log_time AS cutting_log_time,
+            mlog.manufacture_date AS material_log_manufacture_date,
+            mlog.supplier AS material_log_supplier
         FROM kanban_issuance k
+        {_CUTTING_LATEST_JOIN_SQL}
+        {_MATERIAL_LOG_LATEST_JOIN_SQL}
         WHERE {where}
         ORDER BY
-            (cutting_log_date IS NULL) ASC,
-            cutting_log_date ASC,
-            (cutting_log_time IS NULL) ASC,
-            cutting_log_time ASC,
+            (mc.log_date IS NULL) ASC,
+            mc.log_date DESC,
+            (mc.log_time IS NULL) ASC,
+            mc.log_time DESC,
             k.id ASC
         LIMIT :lim OFFSET :off
     """)
@@ -215,9 +211,32 @@ async def list_product_material_association(
         val = row.get(key)
         if val is None:
             return None
+        if isinstance(val, datetime):
+            return val.date().isoformat()
+        if isinstance(val, date):
+            return val.isoformat()
         if hasattr(val, "isoformat"):
-            return val.isoformat()[:10]
-        return val
+            s = val.isoformat()
+            return s[:10] if len(s) >= 10 else s
+        s = str(val).strip()
+        if not s:
+            return None
+        return s[:10]
+
+    def _time_str(val):
+        if val is None:
+            return None
+        if isinstance(val, time):
+            return val.strftime("%H:%M:%S")
+        if isinstance(val, timedelta):
+            total = int(val.total_seconds()) % (24 * 3600)
+            h, rem = divmod(total, 3600)
+            m, s = divmod(rem, 60)
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        if isinstance(val, datetime):
+            return val.strftime("%H:%M:%S")
+        s = str(val).strip()
+        return s or None
 
     data = [
         {
@@ -253,9 +272,7 @@ async def list_product_material_association(
                 else None
             ),
             "cutting_log_date": _v(r, "cutting_log_date"),
-            "cutting_log_time": (
-                str(r["cutting_log_time"]) if r.get("cutting_log_time") is not None else None
-            ),
+            "cutting_log_time": _time_str(r.get("cutting_log_time")),
             "material_log_manufacture_date": _v(r, "material_log_manufacture_date"),
             "material_log_supplier": r.get("material_log_supplier"),
         }

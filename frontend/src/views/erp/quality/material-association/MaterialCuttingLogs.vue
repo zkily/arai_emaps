@@ -194,13 +194,22 @@ const onImport = async () => {
   try {
     const res = await importMaterialCuttingCsv()
     const n = res.imported ?? 0
+    const parsed = res.parsed_rows ?? 0
+    const uniq = res.unique_rows ?? parsed
+    const csvDup = res.skipped_csv_dup ?? 0
+    const dbDup = res.skipped_db_dup ?? 0
     const errN = res.errors_count ?? 0
-    const dp = res.deleted_prune ?? 0
-    const dw = res.deleted_window ?? 0
-    const sk = res.skipped_before_retention ?? 0
-    ElMessage.success(
-      `取込 ${n} 件 / 削除(保持期間外) ${dp} / 削除(CSV日付帯) ${dw} / CSVスキップ(期間外) ${sk} / エラー行 ${errN}`,
-    )
+    if (n > 0) {
+      ElMessage.success(
+        `新規取込 ${n} 件（解析 ${parsed} / ユニーク ${uniq}） / CSV内重複スキップ ${csvDup} / DB既存スキップ ${dbDup} / エラー行 ${errN}`,
+      )
+    } else if (res.warning) {
+      ElMessage.warning(res.warning)
+    } else {
+      ElMessage.warning(
+        `新規取込 0 件（解析 ${parsed}）。CSVパス・ヘッダ・権限を確認してください。`,
+      )
+    }
     if (res.errors?.length) {
       ElMessage.warning(res.errors.slice(0, 3).join(' / '))
     }

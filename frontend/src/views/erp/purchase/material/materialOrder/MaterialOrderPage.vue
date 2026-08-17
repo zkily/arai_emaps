@@ -248,7 +248,7 @@
         <div class="table-header">
           <div class="table-tabs">
             <div
-              class="tab-item"
+              class="tab-item tab-item--initial"
               :class="{ active: activeTab === 'initial' }"
               @click="handleTabChange('initial')"
             >
@@ -256,7 +256,7 @@
               <span>初期在庫管理</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--stock"
               :class="{ active: activeTab === 'stock' }"
               @click="handleTabChange('stock')"
             >
@@ -264,7 +264,7 @@
               <span>材料日別在庫</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--sub"
               :class="{ active: activeTab === 'sub' }"
               @click="handleTabChange('sub')"
             >
@@ -272,7 +272,7 @@
               <span>半端材料管理</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--usage"
               :class="{ active: activeTab === 'usage' }"
               @click="handleTabChange('usage')"
             >
@@ -280,7 +280,7 @@
               <span>材料使用管理</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--order"
               :class="{ active: activeTab === 'order' }"
               @click="handleTabChange('order')"
             >
@@ -288,7 +288,7 @@
               <span>材料注文</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--order-history"
               :class="{ active: activeTab === 'orderHistory' }"
               @click="handleTabChange('orderHistory')"
             >
@@ -1166,7 +1166,7 @@
     <!-- 手入力材料注文ダイアログ -->
     <el-dialog
       v-model="manualOrderDialogVisible"
-      width="660px"
+      width="540px"
       :close-on-click-modal="false"
       align-center
       destroy-on-close
@@ -1175,11 +1175,11 @@
       <template #header>
         <div class="manual-order-dialog__header">
           <div class="manual-order-dialog__header-icon">
-            <el-icon><ShoppingCart /></el-icon>
+            <el-icon :size="16"><ShoppingCart /></el-icon>
           </div>
           <div class="manual-order-dialog__header-text">
             <h3>材料注文追加</h3>
-            <p>新しい材料注文を手動で入力</p>
+            <p>半端材料への手動注文を登録</p>
           </div>
         </div>
       </template>
@@ -1190,153 +1190,170 @@
           :rules="manualOrderRules"
           ref="manualOrderFormRef"
           label-position="top"
-          label-width="auto"
+          size="small"
           class="manual-order-form manual-order-form--compact"
         >
-          <div class="manual-order-section">
+          <section class="manual-order-section manual-order-section--base">
             <div class="manual-order-section__title">
               <el-icon><Calendar /></el-icon>
               <span>基本情報</span>
             </div>
-          <div class="manual-order-grid manual-order-grid--main">
-            <el-form-item label="日付" prop="date" class="manual-order-field">
-              <el-date-picker
-                v-model="manualOrderForm.date"
-                type="date"
-                placeholder="日付を選択"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                class="manual-order-input"
-                size="default"
-              />
-            </el-form-item>
-            <el-form-item label="材料" prop="material_cd" class="manual-order-field manual-order-field--span2">
-              <el-select
-                v-model="manualOrderForm.material_cd"
-                placeholder="材料を選択"
-                filterable
-                :loading="materialSearchLoading"
-                @change="handleMaterialChange"
-                class="manual-order-input"
-                size="default"
-              >
-                <el-option
-                  v-for="material in materialOptions"
-                  :key="material.material_cd"
-                  :label="`${material.material_cd} - ${material.material_name}`"
-                  :value="material.material_cd"
-                  :data-material="material"
+            <div class="manual-order-grid manual-order-grid--main">
+              <el-form-item label="日付" prop="date" class="manual-order-field">
+                <el-date-picker
+                  v-model="manualOrderForm.date"
+                  type="date"
+                  placeholder="日付"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  class="manual-order-input"
+                  size="small"
                 />
-              </el-select>
-            </el-form-item>
-          </div>
-          </div>
+              </el-form-item>
+              <el-form-item label="材料" prop="material_cd" class="manual-order-field manual-order-field--material">
+                <el-select
+                  v-model="manualOrderForm.material_cd"
+                  placeholder="材料CD / 材料名で検索"
+                  filterable
+                  :loading="materialSearchLoading"
+                  @change="handleMaterialChange"
+                  class="manual-order-input"
+                  size="small"
+                >
+                  <el-option
+                    v-for="material in materialOptions"
+                    :key="material.material_cd"
+                    :label="`${material.material_cd} - ${material.material_name}`"
+                    :value="material.material_cd"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+          </section>
 
-          <div class="manual-order-section">
+          <section class="manual-order-section manual-order-section--qty">
             <div class="manual-order-section__title">
               <el-icon><EditPen /></el-icon>
               <span>注文数量</span>
+              <span
+                v-if="selectedMaterial && (calculatedWeight > 0 || calculatedAmount > 0)"
+                class="manual-order-section__chips"
+              >
+                <span class="manual-order-chip manual-order-chip--weight">{{ Math.round(calculatedWeight) }}kg</span>
+                <span class="manual-order-chip manual-order-chip--amount">{{ formatCurrency(calculatedAmount) }}</span>
+              </span>
             </div>
-          <div class="manual-order-grid manual-order-grid--order">
-            <el-form-item label="注文束数" prop="order_quantity" class="manual-order-field">
-              <el-input-number
-                v-model="manualOrderForm.order_quantity"
-                :min="0"
-                :max="999999"
-                :precision="0"
-                placeholder="束数"
-                class="manual-order-input"
-                size="default"
-                controls-position="right"
-                @change="calculateOrderDetails"
-              />
-            </el-form-item>
-            <el-form-item label="注文本数" prop="order_bundle_quantity" class="manual-order-field">
-              <el-input-number
-                v-model="manualOrderForm.order_bundle_quantity"
-                :min="0"
-                :max="999999"
-                :precision="0"
-                placeholder="本数"
-                class="manual-order-input"
-                size="default"
-                controls-position="right"
-                :controls="false"
-                @change="handleManualOrderBundleQuantityChange"
-              />
-            </el-form-item>
-            <el-form-item label="備考" class="manual-order-field manual-order-field--full">
+            <div class="manual-order-grid manual-order-grid--order">
+              <el-form-item label="注文束数" prop="order_quantity" class="manual-order-field manual-order-field--bundle">
+                <el-input-number
+                  v-model="manualOrderForm.order_quantity"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  placeholder="束数"
+                  class="manual-order-input"
+                  size="small"
+                  controls-position="right"
+                  @change="calculateOrderDetails"
+                />
+              </el-form-item>
+              <el-form-item label="注文本数" prop="order_bundle_quantity" class="manual-order-field manual-order-field--pieces">
+                <el-input-number
+                  v-model="manualOrderForm.order_bundle_quantity"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  placeholder="本数"
+                  class="manual-order-input"
+                  size="small"
+                  controls-position="right"
+                  :controls="false"
+                  @change="handleManualOrderBundleQuantityChange"
+                />
+              </el-form-item>
+            </div>
+          </section>
+
+          <section class="manual-order-section manual-order-section--remarks">
+            <div class="manual-order-section__title">
+              <el-icon><Document /></el-icon>
+              <span>備考</span>
+              <span class="manual-order-section__hint">注文本数あり → バラ束○本</span>
+            </div>
+            <el-form-item class="manual-order-field manual-order-field--remarks" label-width="0">
               <el-input
                 v-model="manualOrderForm.remarks"
                 type="textarea"
                 :rows="2"
-                placeholder="備考（任意）"
+                placeholder="例：バラ束12本"
                 class="manual-order-input"
-                size="default"
+                size="small"
+                maxlength="50"
+                show-word-limit
               />
             </el-form-item>
-          </div>
-          </div>
+          </section>
 
           <Transition name="manual-order-detail-fade">
-          <div class="manual-order-detail manual-order-detail--modern" v-if="selectedMaterial" key="material-detail">
-            <div class="manual-order-detail__title">
-              <el-icon><InfoFilled /></el-icon>
-              <span>材料詳細</span>
-              <span class="manual-order-detail__summary" v-if="calculatedWeight > 0 || calculatedAmount > 0">
-                重量 {{ Math.round(calculatedWeight) }}kg · 金額 {{ formatCurrency(calculatedAmount) }}
-              </span>
+            <div
+              v-if="selectedMaterial"
+              key="material-detail"
+              class="manual-order-detail manual-order-detail--modern"
+            >
+              <div class="manual-order-detail__title">
+                <el-icon><InfoFilled /></el-icon>
+                <span>材料詳細</span>
+              </div>
+              <div class="manual-order-detail__grid">
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">材料CD</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.material_cd || '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item manual-order-detail__item--wide">
+                  <span class="manual-order-detail__label">材料名</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.material_name || '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">仕入先</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.supplier_name || '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">規格</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.standard_spec || '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">単価</span>
+                  <span class="manual-order-detail__value">{{ formatCurrency(selectedMaterial.unit_price || 0) }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">束本数</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.pieces_per_bundle ?? '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">一本重量</span>
+                  <span class="manual-order-detail__value">
+                    {{ selectedMaterial.long_weight ?? '—' }}<template v-if="selectedMaterial.long_weight">kg</template>
+                  </span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">安全在庫</span>
+                  <span class="manual-order-detail__value">{{ selectedMaterial.safety_stock ?? '—' }}</span>
+                </div>
+                <div class="manual-order-detail__item">
+                  <span class="manual-order-detail__label">LT</span>
+                  <span class="manual-order-detail__value">
+                    {{ selectedMaterial.lead_time ?? '—' }}<template v-if="selectedMaterial.lead_time != null">日</template>
+                  </span>
+                </div>
+              </div>
             </div>
-            <div class="manual-order-detail__grid">
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">材料CD</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.material_cd || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">材料名</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.material_name || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">仕入先</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.supplier_name || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">規格</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.standard_spec || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">単価</span>
-                <span class="manual-order-detail__value">{{ formatCurrency(selectedMaterial.unit_price || 0) }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">束本数</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.pieces_per_bundle ?? '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">一本重量</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.long_weight ?? '—' }}<template v-if="selectedMaterial.long_weight">kg</template></span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">安全在庫</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.safety_stock ?? '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">リードタイム</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.lead_time ?? '—' }}<template v-if="selectedMaterial.lead_time != null">日</template></span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">単位</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.unit || '—' }}</span>
-              </div>
-            </div>
-          </div>
           </Transition>
         </el-form>
       </div>
 
       <template #footer>
         <div class="manual-order-footer manual-order-footer--compact">
-          <el-button @click="handleCancelManualOrder" size="default" class="manual-order-btn manual-order-btn--cancel">
+          <el-button @click="handleCancelManualOrder" size="small" class="manual-order-btn manual-order-btn--cancel">
             <el-icon><Close /></el-icon>
             キャンセル
           </el-button>
@@ -1344,7 +1361,7 @@
             type="primary"
             @click="handleConfirmManualOrder"
             :loading="manualOrderLoading"
-            size="default"
+            size="small"
             class="manual-order-btn manual-order-btn--confirm"
           >
             <el-icon><Check /></el-icon>
@@ -1817,6 +1834,7 @@ import {
   Check,
   Delete,
   List,
+  Document,
   DocumentCopy,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
@@ -4078,15 +4096,26 @@ const fillMaterialData = (material: Material) => {
 
 const calculateOrderDetails = () => {
   // 注文本数は手入力値を優先（自動計算しない）
-  // 只重新计算重量和金额
-  console.log('重新计算订单详情，注文本数:', manualOrderForm.order_bundle_quantity)
+  syncManualOrderRemarksFromBundleQty()
+}
+
+/** 自動備考: バラ束 / バラ束{注文本数}本。ユーザー手入力は上書きしない */
+const MANUAL_ORDER_AUTO_REMARKS_RE = /^バラ束(\d+本)?$/
+
+function buildManualOrderAutoRemarks(bundleQty: number | null | undefined): string {
+  const n = Number(bundleQty) || 0
+  return n > 0 ? `バラ束${n}本` : 'バラ束'
+}
+
+function syncManualOrderRemarksFromBundleQty() {
+  const current = (manualOrderForm.remarks || '').trim()
+  if (current && !MANUAL_ORDER_AUTO_REMARKS_RE.test(current)) return
+  manualOrderForm.remarks = buildManualOrderAutoRemarks(manualOrderForm.order_bundle_quantity)
 }
 
 // 处理手动输入表单的注文本数变化
 const handleManualOrderBundleQuantityChange = () => {
-  console.log('手动输入注文本数变化:', manualOrderForm.order_bundle_quantity)
-  // 注文本数变化时，重新计算重量和金额
-  // 重量和金额的计算逻辑在computed属性中已经处理
+  syncManualOrderRemarksFromBundleQty()
 }
 
 const handleConfirmManualOrder = async () => {
@@ -5013,43 +5042,200 @@ ${groupBlocks}
 
 .table-tabs {
   display: flex;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
 }
 
 .tab-item {
+  --tab-accent: #64748b;
+  --tab-accent-soft: rgba(100, 116, 139, 0.12);
+  --tab-grad-a: #64748b;
+  --tab-grad-b: #475569;
+  --tab-shadow: rgba(71, 85, 105, 0.35);
+
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 6px 14px;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s ease;
-  color: #6b7280;
-  background: transparent;
+  color: var(--tab-accent);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(0) scale(1);
+  transition:
+    color 0.22s ease,
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.tab-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--tab-accent);
+  opacity: 0.85;
+  border-radius: 8px 0 0 8px;
+  transition: width 0.22s ease, opacity 0.22s ease;
+}
+
+.tab-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 40%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.45s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tab-item > * {
+  position: relative;
+  z-index: 1;
 }
 
 .tab-item:hover {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
+  color: var(--tab-accent);
+  background: linear-gradient(180deg, #ffffff 0%, var(--tab-accent-soft) 100%);
+  border-color: color-mix(in srgb, var(--tab-accent) 35%, #cbd5e1);
+  box-shadow:
+    0 4px 12px var(--tab-shadow),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.04) inset;
+  transform: translateY(-2px) scale(1.02);
+}
+
+.tab-item:hover::before {
+  width: 4px;
+  opacity: 1;
+}
+
+.tab-item:hover::after {
+  transform: translateX(120%);
+}
+
+.tab-item:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.12),
+    inset 0 2px 4px rgba(15, 23, 42, 0.08);
 }
 
 .tab-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
-}
-
-.tab-item.tab-item--unused:not(.active):hover {
-  background: rgba(13, 148, 136, 0.1);
-  color: #0f766e;
-}
-
-.tab-item.tab-item--unused.active {
-  background: linear-gradient(135deg, #0d9488 0%, #059669 55%, #10b981 100%);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.38);
+  background: linear-gradient(135deg, var(--tab-grad-a) 0%, var(--tab-grad-b) 100%);
+  border-color: transparent;
+  box-shadow:
+    0 6px 16px var(--tab-shadow),
+    0 2px 0 rgba(255, 255, 255, 0.22) inset,
+    0 -2px 6px rgba(0, 0, 0, 0.12) inset;
+  transform: translateY(-1px);
+  animation: tab-item-activate 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tab-item.active::before {
+  width: 0;
+  opacity: 0;
+}
+
+.tab-item.active:hover {
+  color: #fff;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 8px 20px var(--tab-shadow),
+    0 2px 0 rgba(255, 255, 255, 0.25) inset,
+    0 -2px 6px rgba(0, 0, 0, 0.14) inset;
+}
+
+@keyframes tab-item-activate {
+  0% {
+    transform: translateY(2px) scale(0.96);
+    filter: brightness(0.95);
+  }
+  60% {
+    transform: translateY(-3px) scale(1.03);
+  }
+  100% {
+    transform: translateY(-1px) scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* 各タブ色区分 */
+.tab-item--initial {
+  --tab-accent: #475569;
+  --tab-accent-soft: rgba(71, 85, 105, 0.12);
+  --tab-grad-a: #64748b;
+  --tab-grad-b: #334155;
+  --tab-shadow: rgba(51, 65, 85, 0.38);
+}
+
+.tab-item--stock {
+  --tab-accent: #2563eb;
+  --tab-accent-soft: rgba(37, 99, 235, 0.12);
+  --tab-grad-a: #3b82f6;
+  --tab-grad-b: #1d4ed8;
+  --tab-shadow: rgba(37, 99, 235, 0.4);
+}
+
+.tab-item--sub {
+  --tab-accent: #d97706;
+  --tab-accent-soft: rgba(217, 119, 6, 0.12);
+  --tab-grad-a: #f59e0b;
+  --tab-grad-b: #c2410c;
+  --tab-shadow: rgba(194, 65, 12, 0.36);
+}
+
+.tab-item--usage {
+  --tab-accent: #e11d48;
+  --tab-accent-soft: rgba(225, 29, 72, 0.12);
+  --tab-grad-a: #f43f5e;
+  --tab-grad-b: #be123c;
+  --tab-shadow: rgba(190, 18, 60, 0.38);
+}
+
+.tab-item--order {
+  --tab-accent: #059669;
+  --tab-accent-soft: rgba(5, 150, 105, 0.12);
+  --tab-grad-a: #10b981;
+  --tab-grad-b: #047857;
+  --tab-shadow: rgba(4, 120, 87, 0.4);
+}
+
+.tab-item--order-history {
+  --tab-accent: #7c3aed;
+  --tab-accent-soft: rgba(124, 58, 237, 0.12);
+  --tab-grad-a: #8b5cf6;
+  --tab-grad-b: #6d28d9;
+  --tab-shadow: rgba(109, 40, 217, 0.4);
+}
+
+.tab-item--unused {
+  --tab-accent: #0f766e;
+  --tab-accent-soft: rgba(13, 148, 136, 0.12);
+  --tab-grad-a: #14b8a6;
+  --tab-grad-b: #0f766e;
+  --tab-shadow: rgba(15, 118, 110, 0.4);
 }
 
 .table-actions {
@@ -5508,18 +5694,21 @@ ${groupBlocks}
   font-size: 12px;
 }
 
-/* 手入力材料注文ダイアログ - モダンUI（翠绿主题，与 App 对齐） */
+/* 手入力材料注文ダイアログ - 紧凑・色区分・立体感 */
 .manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog) {
-  border-radius: 20px;
-  box-shadow: 0 24px 48px rgba(5, 150, 105, 0.18), 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
   overflow: hidden;
-  animation: manual-order-dialog-enter 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 18px 42px rgba(4, 120, 87, 0.22),
+    0 6px 14px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+  animation: manual-order-dialog-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes manual-order-dialog-enter {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(12px);
+    transform: scale(0.96) translateY(8px);
   }
   to {
     opacity: 1;
@@ -5530,143 +5719,200 @@ ${groupBlocks}
 .manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__header) {
   padding: 0;
   margin: 0;
-  background: linear-gradient(135deg, #047857 0%, #059669 35%, #10b981 70%, #34d399 100%);
+  background: linear-gradient(135deg, #065f46 0%, #047857 45%, #059669 100%);
   color: #fff;
   border: none;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .manual-order-dialog__header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 22px;
+  gap: 8px;
+  padding: 10px 40px 10px 12px;
 }
 
 .manual-order-dialog__header-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
   flex-shrink: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
 }
 
 .manual-order-dialog__header-text h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 
 .manual-order-dialog__header-text p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 .manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn) {
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
-  transition: background 0.2s ease, transform 0.2s ease;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn:hover) {
   background: rgba(255, 255, 255, 0.28);
-  transform: scale(1.05);
 }
 
 .manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: rgba(255, 255, 255, 0.95);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__body) {
   padding: 0;
-  max-height: 68vh;
+  max-height: 70vh;
   overflow-y: auto;
-  background: linear-gradient(180deg, #fafdfb 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, #eef7f3 0%, #e8f0ec 100%);
 }
 
 .manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__footer) {
-  padding: 14px 20px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  padding: 8px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-top: 1px solid #d8e5df;
 }
 
 .manual-order-content--modern {
-  padding: 16px 20px 18px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.manual-order-form--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.manual-order-form--compact :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.manual-order-form--compact :deep(.el-form-item__label) {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+  padding-bottom: 3px;
+  line-height: 1.15;
+  height: auto;
 }
 
 .manual-order-section {
-  margin-bottom: 16px;
+  margin: 0;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #d8e5df;
+  border-radius: 8px;
+  border-left: 3px solid #94a3b8;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 3px 8px rgba(15, 23, 42, 0.05);
+}
+
+.manual-order-section--base {
+  border-left-color: #0f766e;
+  background: linear-gradient(180deg, #f0fdfa 0%, #fff 78%);
+  border-color: #99f6e4;
+}
+
+.manual-order-section--qty {
+  border-left-color: #2563eb;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 78%);
+  border-color: #bfdbfe;
+}
+
+.manual-order-section--remarks {
+  border-left-color: #64748b;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 78%);
 }
 
 .manual-order-section__title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 10px;
   font-weight: 700;
-  color: #047857;
-  text-transform: uppercase;
+  color: #64748b;
   letter-spacing: 0.06em;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  margin: 0 0 6px;
+  line-height: 1;
 }
+
+.manual-order-section--base .manual-order-section__title { color: #0f766e; }
+.manual-order-section--qty .manual-order-section__title { color: #1d4ed8; }
+.manual-order-section--remarks .manual-order-section__title { color: #475569; }
 
 .manual-order-section__title .el-icon {
-  font-size: 14px;
-  color: #10b981;
+  font-size: 13px;
 }
 
-/* 表单紧凑 */
-.manual-order-form--compact {
-  margin-top: 0;
-}
-
-.manual-order-form--compact :deep(.el-form-item) {
-  margin-bottom: 12px;
-}
-
-.manual-order-form--compact :deep(.el-form-item__label) {
-  font-size: 12px;
-  color: #475569;
+.manual-order-section__hint {
+  margin-left: auto;
+  font-size: 10px;
   font-weight: 600;
-  padding-bottom: 5px;
-  line-height: 1.3;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0;
+}
+
+.manual-order-section__chips {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.manual-order-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0;
+}
+
+.manual-order-chip--weight {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.manual-order-chip--amount {
+  color: #047857;
+  background: #d1fae5;
 }
 
 .manual-order-grid {
   display: grid;
-  gap: 0 14px;
+  gap: 8px;
 }
 
 .manual-order-grid--main {
-  grid-template-columns: 130px 1fr;
-}
-
-.manual-order-grid--main .manual-order-field--span2 {
-  grid-column: span 1;
+  grid-template-columns: 128px 1fr;
 }
 
 .manual-order-grid--order {
   grid-template-columns: 1fr 1fr;
-}
-
-.manual-order-grid--order .manual-order-field--full {
-  grid-column: 1 / -1;
 }
 
 .manual-order-field :deep(.el-input-number),
@@ -5675,135 +5921,130 @@ ${groupBlocks}
   width: 100%;
 }
 
+.manual-order-field--bundle :deep(.el-input__wrapper) {
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #bfdbfe, 0 1px 2px rgba(37, 99, 235, 0.08);
+}
+
+.manual-order-field--pieces :deep(.el-input__wrapper) {
+  background: #fff7ed;
+  box-shadow: 0 0 0 1px #fed7aa, 0 1px 2px rgba(234, 88, 12, 0.08);
+}
+
+.manual-order-field--remarks {
+  width: 100%;
+}
+
 .manual-order-input :deep(.el-input__wrapper),
-.manual-order-input :deep(.el-input__inner),
-.manual-order-input :deep(.el-textarea__inner) {
-  border-radius: 10px;
-  font-size: 13px;
-  background: #f8fafc;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+.manual-order-input :deep(.el-textarea__inner),
+.manual-order-input :deep(.el-select__wrapper) {
+  border-radius: 6px;
+  font-size: 12px;
+  min-height: 28px;
+  box-shadow: 0 0 0 1px #d8e0ea, 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .manual-order-input :deep(.el-input__wrapper:hover),
 .manual-order-input :deep(.el-textarea__inner:hover) {
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 1px #94a3b8, 0 2px 4px rgba(15, 23, 42, 0.06);
 }
 
 .manual-order-input :deep(.el-input__wrapper.is-focus),
 .manual-order-input :deep(.el-textarea__inner:focus) {
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.28);
   background: #fff;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35), 0 2px 6px rgba(16, 185, 129, 0.12);
 }
 
-/* 材料詳細ブロック */
 .manual-order-detail--modern {
-  margin-top: 4px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
-  border-radius: 14px;
-  border: 1px solid rgba(16, 185, 129, 0.28);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+  margin: 0;
+  padding: 8px;
+  background: linear-gradient(180deg, #ecfdf5 0%, #fff 85%);
+  border-radius: 8px;
+  border: 1px solid #a7f3d0;
+  border-left: 3px solid #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
 }
 
 .manual-order-detail-fade-enter-active {
-  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.34, 1.2, 0.64, 1), max-height 0.35s ease;
-  overflow: hidden;
+  transition: opacity 0.22s ease, transform 0.22s ease;
 }
-
 .manual-order-detail-fade-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.25s ease;
-  overflow: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
-
 .manual-order-detail-fade-enter-from,
 .manual-order-detail-fade-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
-  max-height: 0;
-}
-
-.manual-order-detail-fade-enter-to,
-.manual-order-detail-fade-leave-from {
-  opacity: 1;
-  transform: translateY(0);
-  max-height: 400px;
+  transform: translateY(-4px);
 }
 
 .manual-order-detail__title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 10px;
   font-weight: 700;
   color: #047857;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
 }
 
 .manual-order-detail__title .el-icon {
-  font-size: 15px;
+  font-size: 13px;
   color: #10b981;
-}
-
-.manual-order-detail__summary {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 600;
-  color: #059669;
-  background: rgba(16, 185, 129, 0.12);
-  padding: 3px 10px;
-  border-radius: 20px;
 }
 
 .manual-order-detail__grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .manual-order-detail__item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.65);
-  border-radius: 8px;
+  gap: 1px;
+  padding: 5px 6px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  border: 1px solid rgba(167, 243, 208, 0.55);
+  min-width: 0;
+}
+
+.manual-order-detail__item--wide {
+  grid-column: span 2;
 }
 
 .manual-order-detail__label {
   font-size: 10px;
   color: #64748b;
   font-weight: 500;
-  letter-spacing: 0.02em;
 }
 
 .manual-order-detail__value {
   font-size: 12px;
   color: #1e293b;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* フッターボタン */
 .manual-order-footer--compact {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .manual-order-btn {
-  min-width: 96px;
-  border-radius: 10px;
+  min-width: 88px;
+  border-radius: 7px;
   font-weight: 600;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.manual-order-btn:hover {
-  transform: translateY(-1px);
 }
 
 .manual-order-btn :deep(.el-icon) {
-  margin-right: 5px;
-  font-size: 14px;
+  margin-right: 4px;
+  font-size: 13px;
 }
 
 .manual-order-btn--cancel {
@@ -5818,9 +6059,17 @@ ${groupBlocks}
 }
 
 .manual-order-btn--confirm {
-  background: linear-gradient(135deg, #047857 0%, #059669 50%, #10b981 100%);
+  background: linear-gradient(135deg, #047857 0%, #059669 55%, #10b981 100%);
   border: none;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  box-shadow:
+    0 3px 8px rgba(16, 185, 129, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.manual-order-btn--confirm:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(16, 185, 129, 0.36);
 }
 
 .manual-order-btn--confirm:hover {
@@ -7787,4 +8036,54 @@ ${groupBlocks}
 }
 
 
+</style>
+
+<!-- el-dialog は body へ teleport されるため、ヘッダー色は global で担保 -->
+<style>
+.manual-order-dialog.manual-order-dialog--modern {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 18px 42px rgba(4, 120, 87, 0.22),
+    0 6px 14px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+.manual-order-dialog.manual-order-dialog--modern .el-dialog__header {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: linear-gradient(135deg, #065f46 0%, #047857 45%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.manual-order-dialog.manual-order-dialog--modern .manual-order-dialog__header-text h3 {
+  color: #ffffff !important;
+}
+
+.manual-order-dialog.manual-order-dialog--modern .manual-order-dialog__header-text p {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.manual-order-dialog.manual-order-dialog--modern .manual-order-dialog__header-icon {
+  color: #ffffff !important;
+}
+
+.manual-order-dialog.manual-order-dialog--modern .el-dialog__headerbtn {
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.manual-order-dialog.manual-order-dialog--modern .el-dialog__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.manual-order-dialog.manual-order-dialog--modern .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
 </style>

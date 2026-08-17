@@ -242,12 +242,14 @@ class Settings(BaseSettings):
 
     def get_material_cutting_csv_path(self) -> str:
         """materialCutting.csv の絶対パス（UNC 可）。MATERIAL_CUTTING_CSV_PATH 優先。"""
+        import os
+
         explicit = (self.MATERIAL_CUTTING_CSV_PATH or "").strip()
         if explicit:
-            return explicit
+            return os.path.normpath(os.path.expandvars(explicit))
         base = (self.FILE_WATCH_BASE_PATH or "").strip()
         if base:
-            return str(Path(base) / "materialCutting.csv")
+            return os.path.normpath(os.path.join(os.path.expandvars(base), "materialCutting.csv"))
         return r"\\192.168.1.200\社内共有\02_生産管理部\Data\BT-data\受信\materialCutting.csv"
 
     def get_material_receiving_watch_base(self) -> str:

@@ -1967,153 +1967,208 @@
       </template>
     </el-dialog>
 
-    <!-- 切断指示：双击编辑（切断機・生産数・生産順・備考） -->
+    <!-- 切断指示：双击编辑 -->
     <el-dialog
       v-model="cuttingEditDialogVisible"
-      width="504px"
+      width="520px"
+      align-center
       :close-on-click-modal="false"
-      class="cutting-edit-dialog"
+      class="cutting-edit-dialog cutting-edit-dialog--compact"
       @close="editingCuttingId = null"
     >
       <template #header>
         <div class="cutting-edit-dialog__header">
-          <span class="cutting-edit-dialog__title">切断指示編集</span>
+          <div class="cutting-edit-dialog__header-main">
+            <span class="cutting-edit-dialog__icon">
+              <el-icon :size="15"><EditPen /></el-icon>
+            </span>
+            <div class="cutting-edit-dialog__heading">
+              <span class="cutting-edit-dialog__title">切断指示編集</span>
+              <span class="cutting-edit-dialog__subtitle">管理コード・指示内容を修正</span>
+            </div>
+          </div>
         </div>
       </template>
-      <el-form :model="cuttingEditForm" label-width="72px" label-position="left" class="cutting-edit-form">
-        <el-row :gutter="12" class="cutting-edit-form-row">
-          <el-col :span="12">
-            <el-form-item label="切断機" class="cutting-edit-form-item">
-              <el-select
-                v-model="cuttingEditForm.cutting_machine"
-                placeholder="切断機を選択"
-                filterable
-                clearable
-                size="small"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="m in cuttingMachineOptionsFiltered"
-                  :key="m.machine_name"
-                  :label="m.machine_name"
-                  :value="m.machine_name"
+      <el-form :model="cuttingEditForm" label-position="top" size="small" class="cutting-edit-form cutting-edit-form--stacked">
+        <section class="cutting-edit-section cutting-edit-section--code">
+          <div class="cutting-edit-section__title">管理コード</div>
+          <el-form-item class="cutting-edit-form-item cutting-edit-form-item--code" label-width="0">
+            <el-input
+              v-model="cuttingEditForm.management_code"
+              placeholder="空欄で保存すると自動生成"
+              size="small"
+              clearable
+              maxlength="100"
+              show-word-limit
+              class="cutting-edit-code-input"
+            >
+              <template #prefix>
+                <el-icon class="cutting-edit-code-icon"><Ticket /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+        </section>
+
+        <section class="cutting-edit-section cutting-edit-section--machine">
+          <div class="cutting-edit-section__title">指示</div>
+          <el-row :gutter="8" class="cutting-edit-form-row">
+            <el-col :span="14">
+              <el-form-item label="切断機" class="cutting-edit-form-item">
+                <el-select
+                  v-model="cuttingEditForm.cutting_machine"
+                  placeholder="切断機を選択"
+                  filterable
+                  clearable
+                  size="small"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="m in cuttingMachineOptionsFiltered"
+                    :key="m.machine_name"
+                    :label="m.machine_name"
+                    :value="m.machine_name"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="10">
+              <el-form-item label="生産順" class="cutting-edit-form-item">
+                <el-input-number
+                  v-model="cuttingEditForm.production_sequence"
+                  :min="1"
+                  :max="9999"
+                  controls-position="right"
+                  size="small"
+                  style="width: 100%"
                 />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="生産順" class="cutting-edit-form-item">
-              <el-input-number
-                v-model="cuttingEditForm.production_sequence"
-                :min="1"
-                :max="9999"
-                controls-position="right"
-                size="small"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="12" class="cutting-edit-form-row">
-          <el-col :span="12">
-            <el-form-item label="生産数" class="cutting-edit-form-item cutting-edit-form-item--qty">
-              <el-input
-                v-model="cuttingEditForm.actual_production_quantity"
-                placeholder="生産数"
-                size="small"
-                clearable
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="不良数" class="cutting-edit-form-item cutting-edit-form-item--defect">
-              <el-input
-                v-model="cuttingEditForm.defect_qty"
-                placeholder="不良数"
-                size="small"
-                clearable
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="12" class="cutting-edit-form-row">
-          <el-col :span="12">
-            <el-form-item label="ロット数" class="cutting-edit-form-item">
-              <el-input-number
-                v-model="cuttingEditForm.production_lot_size"
-                :min="0"
-                :max="9999"
-                controls-position="right"
-                size="small"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="ロットNo." class="cutting-edit-form-item">
-              <el-input
-                v-model="cuttingEditForm.lot_number"
-                placeholder="ロットNo."
-                size="small"
-                clearable
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="12" class="cutting-edit-form-row">
-          <el-col :span="12">
-            <el-form-item label="使用サブ在庫" class="cutting-edit-form-item">
-              <el-switch
-                v-model="cuttingEditForm.use_material_stock_sub"
-                :active-value="1"
-                :inactive-value="0"
-                size="small"
-                active-text="サブ"
-                inactive-text="主表"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="材料使用数" class="cutting-edit-form-item">
-              <el-input-number
-                v-model="cuttingEditForm.usage_count"
-                :min="0.01"
-                :max="9999"
-                :step="0.1"
-                :precision="4"
-                controls-position="right"
-                size="small"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="備考" class="cutting-edit-remarks cutting-edit-form-item">
-          <div class="cutting-edit-remarks-btns">
-            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ・試作')">取合せ・試作</el-button>
-            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ')">取合せ</el-button>
-            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('成型17号用')">成型17号用</el-button>
-            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('青ニス')">青ニス</el-button>
-            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('半端材本')">半端材本</el-button>
-          </div>
-          <el-input
-            v-model="cuttingEditForm.remarks"
-            type="textarea"
-            :rows="2"
-            placeholder="備考"
-            maxlength="500"
-            show-word-limit
-            size="small"
-          />
-        </el-form-item>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="cutting-edit-section cutting-edit-section--qty">
+          <div class="cutting-edit-section__title">数量</div>
+          <el-row :gutter="8" class="cutting-edit-form-row">
+            <el-col :span="12">
+              <el-form-item label="生産数" class="cutting-edit-form-item cutting-edit-form-item--qty">
+                <el-input
+                  v-model="cuttingEditForm.actual_production_quantity"
+                  placeholder="生産数"
+                  size="small"
+                  clearable
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="不良数" class="cutting-edit-form-item cutting-edit-form-item--defect">
+                <el-input
+                  v-model="cuttingEditForm.defect_qty"
+                  placeholder="不良数"
+                  size="small"
+                  clearable
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="cutting-edit-section cutting-edit-section--lot">
+          <div class="cutting-edit-section__title">ロット</div>
+          <el-row :gutter="8" class="cutting-edit-form-row">
+            <el-col :span="12">
+              <el-form-item label="ロット数" class="cutting-edit-form-item">
+                <el-input-number
+                  v-model="cuttingEditForm.production_lot_size"
+                  :min="0"
+                  :max="9999"
+                  controls-position="right"
+                  size="small"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="ロットNo." class="cutting-edit-form-item">
+                <el-input
+                  v-model="cuttingEditForm.lot_number"
+                  placeholder="ロットNo."
+                  size="small"
+                  clearable
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="cutting-edit-section cutting-edit-section--material">
+          <div class="cutting-edit-section__title">材料</div>
+          <el-row :gutter="8" class="cutting-edit-form-row">
+            <el-col :span="12">
+              <el-form-item label="使用サブ在庫" class="cutting-edit-form-item cutting-edit-form-item--switch">
+                <el-switch
+                  v-model="cuttingEditForm.use_material_stock_sub"
+                  :active-value="1"
+                  :inactive-value="0"
+                  size="small"
+                  inline-prompt
+                  active-text="サブ"
+                  inactive-text="主表"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="材料使用数" class="cutting-edit-form-item">
+                <el-input-number
+                  v-model="cuttingEditForm.usage_count"
+                  :min="0.01"
+                  :max="9999"
+                  :step="0.1"
+                  :precision="4"
+                  controls-position="right"
+                  size="small"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="cutting-edit-section cutting-edit-section--remarks">
+          <div class="cutting-edit-section__title">備考</div>
+          <el-form-item class="cutting-edit-remarks cutting-edit-form-item" label-width="0">
+            <div class="cutting-edit-remarks-btns">
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ・試作')">取合せ・試作</el-button>
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ')">取合せ</el-button>
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('成型17号用')">成型17号用</el-button>
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('青ニス')">青ニス</el-button>
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('半端材本')">半端材本</el-button>
+              <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('緑線ラベル')">緑線ラベル</el-button>
+            </div>
+            <el-input
+              v-model="cuttingEditForm.remarks"
+              type="textarea"
+              :rows="2"
+              placeholder="備考を入力"
+              maxlength="500"
+              show-word-limit
+              size="small"
+            />
+          </el-form-item>
+        </section>
       </el-form>
       <template #footer>
         <div class="cutting-edit-dialog__footer">
-          <el-button size="small" @click="cuttingEditDialogVisible = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="cuttingEditSubmitting" class="cutting-edit-save-btn" @click="saveCuttingEdit">保存</el-button>
+          <el-button size="small" @click="cuttingEditDialogVisible = false">
+            <el-icon class="el-icon--left"><Close /></el-icon>
+            キャンセル
+          </el-button>
+          <el-button type="primary" size="small" :loading="cuttingEditSubmitting" class="cutting-edit-save-btn" @click="saveCuttingEdit">
+            <el-icon class="el-icon--left"><Check /></el-icon>
+            保存
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -3976,7 +4031,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, Document, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, Close, Document, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion, EditPen, Ticket } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
   escapeHtml,
@@ -4761,6 +4816,7 @@ const moveToChamferingSubmitting = ref(false)
 const cuttingEditDialogVisible = ref(false)
 const editingCuttingId = ref<number | null>(null)
 const cuttingEditForm = reactive({
+  management_code: '',
   cutting_machine: '',
   actual_production_quantity: '' as string,
   defect_qty: '' as string,
@@ -7854,6 +7910,7 @@ async function toggleChamferingNoCount(row: ChamferingManagementRow) {
 function openCuttingEditDialog(row: CuttingManagementRow) {
   if (row.id == null) return
   editingCuttingId.value = row.id
+  cuttingEditForm.management_code = row.management_code != null ? String(row.management_code).trim() : ''
   cuttingEditForm.cutting_machine = (row.cutting_machine ?? '') || ''
   cuttingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
   cuttingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
@@ -7884,6 +7941,7 @@ async function saveCuttingEdit() {
     const defectStr = cuttingEditForm.defect_qty
     const defectNum = defectStr === '' || defectStr === null || defectStr === undefined ? 0 : parseInt(String(defectStr).trim(), 10)
     await request.patch(`/api/plan/cutting-management/${id}`, {
+      management_code: cuttingEditForm.management_code?.trim() || '',
       cutting_machine: cuttingEditForm.cutting_machine?.trim() || null,
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
       defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
@@ -14073,11 +14131,14 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #10b981 0%, #34d399 100%) !important;
 }
 
-/* 切断指示の編集：现代精美UI（body 直下 teleport のため global） */
+/* 切断指示の編集：紧凑・色区分・立体感（body 直下 teleport のため global） */
 .cutting-edit-dialog .el-dialog {
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 12px 40px rgba(30, 58, 95, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 20px 44px rgba(15, 23, 42, 0.24),
+    0 6px 14px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 .cutting-edit-dialog .el-dialog__header {
   padding: 0;
@@ -14086,34 +14147,148 @@ onUnmounted(() => {
 }
 .cutting-edit-dialog .el-dialog__headerbtn {
   top: 10px;
-  right: 12px;
-  width: 28px;
-  height: 28px;
-  color: rgba(255, 255, 255, 0.85);
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  color: rgba(255, 255, 255, 0.88);
 }
 .cutting-edit-dialog .el-dialog__headerbtn:hover {
   color: #fff;
 }
 .cutting-edit-dialog__header {
-  padding: 10px 14px 10px 16px;
-  background: linear-gradient(135deg, #334155 0%, #475569 50%, #64748b 100%);
+  padding: 10px 40px 10px 12px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #334155 55%, #475569 100%);
   color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+.cutting-edit-dialog__header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cutting-edit-dialog__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+}
+.cutting-edit-dialog__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 .cutting-edit-dialog__title {
-  opacity: 0.98;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+.cutting-edit-dialog__subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 .cutting-edit-dialog .el-dialog__body {
-  padding: 10px 14px 12px;
-  background: #fafbfc;
+  padding: 8px;
+  background: linear-gradient(180deg, #eef2f7 0%, #e8edf4 100%);
+}
+.cutting-edit-dialog--compact .cutting-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cutting-edit-section {
+  margin: 0;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  border-left: 3px solid #94a3b8;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 3px 8px rgba(15, 23, 42, 0.06);
+}
+.cutting-edit-section--code {
+  border-left-color: #2563eb;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 78%);
+  border-color: #bfdbfe;
+}
+.cutting-edit-section--machine {
+  border-left-color: #0f766e;
+  background: linear-gradient(180deg, #f0fdfa 0%, #fff 78%);
+  border-color: #99f6e4;
+}
+.cutting-edit-section--qty {
+  border-left-color: #2563eb;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 78%);
+  border-color: #c7dbf7;
+}
+.cutting-edit-section--lot {
+  border-left-color: #7c3aed;
+  background: linear-gradient(180deg, #faf5ff 0%, #fff 78%);
+  border-color: #ddd6fe;
+}
+.cutting-edit-section--material {
+  border-left-color: #059669;
+  background: linear-gradient(180deg, #ecfdf5 0%, #fff 78%);
+  border-color: #a7f3d0;
+}
+.cutting-edit-section--remarks {
+  border-left-color: #64748b;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 78%);
+}
+.cutting-edit-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+  line-height: 1;
+  text-transform: none;
+}
+.cutting-edit-section__title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.18);
+  flex-shrink: 0;
+}
+.cutting-edit-section--code .cutting-edit-section__title { color: #1d4ed8; }
+.cutting-edit-section--code .cutting-edit-section__title::before { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+.cutting-edit-section--machine .cutting-edit-section__title { color: #0f766e; }
+.cutting-edit-section--machine .cutting-edit-section__title::before { box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.2); }
+.cutting-edit-section--qty .cutting-edit-section__title { color: #1d4ed8; }
+.cutting-edit-section--qty .cutting-edit-section__title::before { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+.cutting-edit-section--lot .cutting-edit-section__title { color: #6d28d9; }
+.cutting-edit-section--lot .cutting-edit-section__title::before { box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2); }
+.cutting-edit-section--material .cutting-edit-section__title { color: #047857; }
+.cutting-edit-section--material .cutting-edit-section__title::before { box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2); }
+.cutting-edit-section--remarks .cutting-edit-section__title { color: #475569; }
+
+.cutting-edit-form.el-form--default.el-form--label-top .el-form-item,
+.cutting-edit-form.el-form--small.el-form--label-top .el-form-item {
+  margin-bottom: 0;
 }
 .cutting-edit-form .el-form-item.cutting-edit-form-item {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 .cutting-edit-form .cutting-edit-form-row {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 .cutting-edit-form .cutting-edit-form-row .cutting-edit-form-item {
   margin-bottom: 0;
@@ -14122,48 +14297,108 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 .cutting-edit-form .el-form-item__label {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
-  padding-right: 10px;
+  padding-right: 8px;
+}
+.cutting-edit-form--stacked .el-form-item__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  padding: 0 0 3px;
+  line-height: 1.15;
+  height: auto;
 }
 .cutting-edit-form .el-input__wrapper,
-.cutting-edit-form .el-textarea__inner {
+.cutting-edit-form .el-textarea__inner,
+.cutting-edit-form .el-select .el-select__wrapper {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px #e2e8f0;
+  box-shadow:
+    0 0 0 1px #d8e0ea,
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  min-height: 28px;
+}
+.cutting-edit-form .el-input-number {
+  width: 100%;
+}
+.cutting-edit-form .el-input-number .el-input__wrapper {
+  padding-left: 8px;
 }
 .cutting-edit-form .el-input__wrapper:hover,
-.cutting-edit-form .el-textarea__inner:hover {
-  box-shadow: 0 0 0 1px #94a3b8;
+.cutting-edit-form .el-textarea__inner:hover,
+.cutting-edit-form .el-select .el-select__wrapper:hover {
+  box-shadow:
+    0 0 0 1px #94a3b8,
+    0 2px 4px rgba(15, 23, 42, 0.06);
 }
 .cutting-edit-form .el-input__wrapper.is-focus,
-.cutting-edit-form .el-textarea__inner:focus {
-  box-shadow: 0 0 0 2px #3b82f6;
+.cutting-edit-form .el-textarea__inner:focus,
+.cutting-edit-form .el-select .el-select__wrapper.is-focused {
+  box-shadow:
+    0 0 0 2px #3b82f6,
+    0 2px 6px rgba(59, 130, 246, 0.18);
 }
-/* 生産数：青系で区別 */
+.cutting-edit-form-item--code .el-input__wrapper {
+  background: #fff;
+  box-shadow:
+    0 0 0 1px #93c5fd,
+    0 2px 4px rgba(37, 99, 235, 0.1);
+}
+.cutting-edit-form-item--code .el-input__wrapper.is-focus {
+  box-shadow:
+    0 0 0 2px #2563eb,
+    0 2px 6px rgba(37, 99, 235, 0.2);
+}
+.cutting-edit-code-input .el-input__inner {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+}
+.cutting-edit-code-icon {
+  color: #2563eb;
+}
+.cutting-edit-form-item--switch .el-form-item__content {
+  min-height: 28px;
+  align-items: center;
+}
+/* 生産数：青系 */
 .cutting-edit-form-item--qty .el-input__wrapper {
   background-color: #eff6ff;
-  box-shadow: 0 0 0 1px #bfdbfe;
+  box-shadow:
+    0 0 0 1px #bfdbfe,
+    0 1px 2px rgba(37, 99, 235, 0.08);
 }
 .cutting-edit-form-item--qty .el-input__wrapper:hover {
   background-color: #dbeafe;
-  box-shadow: 0 0 0 1px #93c5fd;
+  box-shadow:
+    0 0 0 1px #93c5fd,
+    0 2px 4px rgba(37, 99, 235, 0.12);
 }
 .cutting-edit-form-item--qty .el-input__wrapper.is-focus {
   background-color: #fff;
-  box-shadow: 0 0 0 2px #3b82f6;
+  box-shadow:
+    0 0 0 2px #3b82f6,
+    0 2px 6px rgba(59, 130, 246, 0.2);
 }
-/* 不良数：琥珀系で区別 */
+/* 不良数：琥珀系 */
 .cutting-edit-form-item--defect .el-input__wrapper {
   background-color: #fffbeb;
-  box-shadow: 0 0 0 1px #fde68a;
+  box-shadow:
+    0 0 0 1px #fde68a,
+    0 1px 2px rgba(217, 119, 6, 0.08);
 }
 .cutting-edit-form-item--defect .el-input__wrapper:hover {
   background-color: #fef3c7;
-  box-shadow: 0 0 0 1px #fcd34d;
+  box-shadow:
+    0 0 0 1px #fcd34d,
+    0 2px 4px rgba(217, 119, 6, 0.12);
 }
 .cutting-edit-form-item--defect .el-input__wrapper.is-focus {
   background-color: #fff;
-  box-shadow: 0 0 0 2px #d97706;
+  box-shadow:
+    0 0 0 2px #d97706,
+    0 2px 6px rgba(217, 119, 6, 0.18);
 }
 .cutting-edit-remarks .el-form-item__content {
   display: flex;
@@ -14179,25 +14414,46 @@ onUnmounted(() => {
   margin-left: 0;
 }
 .cutting-edit-tag-btn {
-  --el-button-bg-color: #eff6ff;
-  --el-button-border-color: #bfdbfe;
-  --el-button-text-color: #1d4ed8;
+  --el-button-bg-color: #fff;
+  --el-button-border-color: #cbd5e1;
+  --el-button-text-color: #475569;
   font-size: 11px;
-  padding: 4px 10px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 .cutting-edit-tag-btn:hover {
-  --el-button-bg-color: #dbeafe;
+  --el-button-bg-color: #eff6ff;
   --el-button-border-color: #93c5fd;
   --el-button-text-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.14);
 }
 .cutting-edit-dialog__footer {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding: 8px 14px 10px;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
+  padding: 8px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-top: 1px solid #dbe3ee;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.cutting-edit-save-btn {
+  min-width: 88px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%) !important;
+  border-color: #2563eb !important;
+  box-shadow:
+    0 3px 8px rgba(37, 99, 235, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.cutting-edit-save-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 100%) !important;
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 12px rgba(37, 99, 235, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 /* 面取指示編集：同レイアウト＋緑テーマで区別・入力しやすく */

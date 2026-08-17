@@ -4127,6 +4127,9 @@ class UpdateCuttingManagementBody(BaseModel):
     defect_qty: Optional[int] = None
     use_material_stock_sub: Optional[int] = None  # 0/1
     usage_count: Optional[float] = None  # 1=1本, <1=按分
+    management_code: Optional[str] = None
+    production_lot_size: Optional[int] = None
+    lot_number: Optional[str] = None
     start_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
     end_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
     mes_production_started_at: Optional[str] = None  # ISO8601（生産開始）
@@ -4221,6 +4224,17 @@ async def update_cutting_management(
                 params["usage_count"] = uc
         except (TypeError, ValueError):
             pass
+    if body.management_code is not None:
+        mc = (body.management_code or "").strip()
+        updates.append("management_code = :management_code")
+        params["management_code"] = mc[:100] if mc else None
+    if body.production_lot_size is not None:
+        updates.append("production_lot_size = :production_lot_size")
+        params["production_lot_size"] = max(0, int(body.production_lot_size))
+    if body.lot_number is not None:
+        ln = (body.lot_number or "").strip()
+        updates.append("lot_number = :lot_number")
+        params["lot_number"] = ln or None
     if body.start_date is not None:
         sd = body.start_date.strip()[:10] if body.start_date and len(body.start_date.strip()) >= 10 else None
         if sd:
@@ -4374,6 +4388,9 @@ async def update_cutting_management(
                 chamfering_params,
             )
         await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="管理コードが既に使用されています") from e
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -99,7 +99,14 @@
         <el-table-column label="管理コード" prop="management_code" width="150" show-overflow-tooltip />
         <el-table-column label="材料製造番号" width="120" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ toPlainCodeDisplay(row.cutting_log_manufacture_no) }}
+            <span
+              class="pma-mfg-link"
+              :class="{ 'is-empty': !row.cutting_log_manufacture_no }"
+              :title="row.cutting_log_manufacture_no ? 'ダブルクリックで材料受入履歴' : ''"
+              @dblclick.stop="openReceivingHistory(row)"
+            >
+              {{ toPlainCodeDisplay(row.cutting_log_manufacture_no) }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="切断開始日" prop="cutting_log_date" width="100" />
@@ -123,6 +130,81 @@
         />
       </div>
     </div>
+
+    <el-dialog
+      v-model="receivingDialogVisible"
+      class="pma-recv-dialog"
+      width="920px"
+      align-center
+      destroy-on-close
+      append-to-body
+    >
+      <template #header>
+        <div class="pma-recv-dialog__head">
+          <div class="pma-recv-dialog__title">材料受入履歴</div>
+          <div class="pma-recv-dialog__sub">
+            製造番号
+            <strong>{{ toPlainCodeDisplay(receivingManufactureNo) }}</strong>
+            <span v-if="receivingContext.product_cd" class="pma-recv-dialog__meta">
+              ｜ {{ receivingContext.product_cd }}
+              {{ receivingContext.product_name || '' }}
+            </span>
+            <span v-if="receivingContext.management_code" class="pma-recv-dialog__meta">
+              ｜ 管理 {{ receivingContext.management_code }}
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <el-table
+        v-loading="receivingLoading"
+        :data="receivingList"
+        border
+        stripe
+        size="small"
+        max-height="420"
+        empty-text="該当製造番号の受入履歴はありません"
+      >
+        <el-table-column prop="log_date" label="受入日" width="100" align="center" />
+        <el-table-column prop="log_time" label="時刻" width="80" align="center" />
+        <el-table-column prop="material_cd" label="材料CD" width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ toPlainCodeDisplay(row.material_cd) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="material_name" label="材料名" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="manufacture_no" label="製造番号" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ toPlainCodeDisplay(row.manufacture_no) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="manufacture_date" label="材料製造日" width="100" align="center" />
+        <el-table-column prop="supplier" label="仕入先" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="quantity" label="数量" width="72" align="right" />
+        <el-table-column prop="bundle_quantity" label="束数" width="64" align="right" />
+        <el-table-column label="切断使用" width="88" align="center">
+          <template #default="{ row }">
+            <el-tag
+              :type="row.used_in_cutting ? (row.cutting_used_manual ? 'info' : 'warning') : 'success'"
+              size="small"
+              effect="plain"
+            >
+              {{
+                !row.used_in_cutting
+                  ? '未使用'
+                  : row.cutting_used_manual
+                    ? '手動済'
+                    : '使用済'
+              }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pma-recv-dialog__foot">
+        <span>{{ receivingTotal.toLocaleString() }} 件</span>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -132,11 +214,12 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Box, Printer, Reading, Refresh, Search } from '@element-plus/icons-vue'
 import {
+  getMaterialLogs,
   getProductMaterialAssociation,
   getProductMaterialProducts,
   type ProductMaterialAssociationParams,
 } from '@/api/material'
-import type { ProductMaterialAssociationItem } from '@/types/material'
+import type { MaterialLogItem, ProductMaterialAssociationItem } from '@/types/material'
 import { toPlainCodeDisplay } from '@/utils/plainCodeDisplay'
 import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
 import { guardQualityOperation } from '@/utils/qualityOperationGuard'
@@ -261,6 +344,51 @@ const onClear = () => {
   onSearch()
 }
 
+const receivingDialogVisible = ref(false)
+const receivingLoading = ref(false)
+const receivingManufactureNo = ref('')
+const receivingList = ref<MaterialLogItem[]>([])
+const receivingTotal = ref(0)
+const receivingContext = reactive({
+  product_cd: '' as string,
+  product_name: '' as string,
+  management_code: '' as string,
+})
+
+const openReceivingHistory = async (row: ProductMaterialAssociationItem) => {
+  const mfg = String(row.cutting_log_manufacture_no ?? '').trim()
+  if (!mfg) {
+    ElMessage.info('材料製造番号がありません')
+    return
+  }
+  receivingManufactureNo.value = mfg
+  receivingContext.product_cd = String(row.product_cd ?? '')
+  receivingContext.product_name = String(row.product_name ?? '')
+  receivingContext.management_code = String(row.management_code ?? '')
+  receivingDialogVisible.value = true
+  receivingLoading.value = true
+  receivingList.value = []
+  receivingTotal.value = 0
+  try {
+    const res = await getMaterialLogs({
+      manufacture_no: mfg,
+      page: 1,
+      pageSize: 500,
+      includeCuttingUsage: true,
+    })
+    receivingList.value = res?.data?.list ?? []
+    receivingTotal.value = res?.data?.total ?? receivingList.value.length
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'response' in e
+        ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '')
+        : ''
+    ElMessage.error(msg || '材料受入履歴の取得に失敗しました')
+  } finally {
+    receivingLoading.value = false
+  }
+}
+
 function escHtml(s: unknown): string {
   if (s == null || s === '') return '-'
   return String(s)
@@ -314,7 +442,7 @@ function generatePrintHtml(data: ProductMaterialAssociationItem[]): string {
   return `
     <div class="print-header">
       <div class="print-title">製品材料照会</div>
-      <div class="print-date">印刷日時: ${escHtml(printDate)}　件数: ${data.length}件（切断開始日付・時間の昇順）</div>
+      <div class="print-date">印刷日時: ${escHtml(printDate)}　件数: ${data.length}件（切断開始日付・時間の降順）</div>
     </div>
     <table class="print-table">
       ${PRINT_TABLE_COLGROUP}
@@ -648,5 +776,78 @@ onMounted(() => {
 
 .pma-table :deep(.el-table__row) {
   --el-table-row-hover-bg-color: #f0f9ff;
+}
+
+.pma-mfg-link {
+  color: #0369a1;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(3, 105, 161, 0.35);
+  text-underline-offset: 2px;
+}
+
+.pma-mfg-link:hover {
+  color: #0284c7;
+  text-decoration-color: #0284c7;
+}
+
+.pma-mfg-link.is-empty {
+  color: #94a3b8;
+  font-weight: 400;
+  cursor: default;
+  text-decoration: none;
+}
+
+.pma-recv-dialog__head {
+  padding-right: 28px;
+}
+
+.pma-recv-dialog__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.pma-recv-dialog__sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.pma-recv-dialog__sub strong {
+  color: #0369a1;
+  font-weight: 700;
+}
+
+.pma-recv-dialog__meta {
+  color: #64748b;
+}
+
+.pma-recv-dialog__foot {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+  text-align: right;
+}
+</style>
+
+<style>
+.pma-recv-dialog.el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pma-recv-dialog .el-dialog__header {
+  margin: 0;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pma-recv-dialog .el-dialog__body {
+  padding: 12px 16px 8px;
 }
 </style>
