@@ -32,6 +32,7 @@ router = APIRouter()
 SUMMARY_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
+    "溶接SP": "welding_plan",
     "メッキ": "plating_plan",
     "切断": "cutting_plan",
     "面取": "chamfering_plan",
@@ -42,18 +43,53 @@ SUMMARY_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
 }
 ALLOWED_SUMMARY_PLAN_COLUMNS = frozenset(SUMMARY_PLAN_COLUMN_BY_PROCESS.values())
 
-# 比較 API の「現行計画」に載せるサマリ列（溶接のみ welding_actual_plan、他は *_plan と同じ）
+# 比較 API の「現行計画」に載せるサマリ列（溶接／溶接SP は welding_actual_plan、他は *_plan と同じ）
 SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
     **SUMMARY_PLAN_COLUMN_BY_PROCESS,
     "溶接": "welding_actual_plan",
+    "溶接SP": "welding_actual_plan",
 }
 ALLOWED_SUMMARY_CURRENT_PLAN_COLUMNS = frozenset(SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS.values())
 
 # メッキ・検査は「平日一律＋土日任意」の手入力ベースラインで生成する
 FIXED_WEEKDAY_BASELINE_PROCESSES = frozenset({"メッキ", "検査"})
 
-# 成型・溶接は Excel(ppu) ではなく production_summarys の molding_plan / welding_plan を日次ベースラインの正とする
-BASELINE_SUMMARY_PRIORITY_PROCESSES = frozenset({"成型", "溶接"})
+# 成型・溶接・溶接SP は Excel(ppu) ではなく production_summarys の molding_plan / welding_plan を日次ベースラインの正とする
+BASELINE_SUMMARY_PRIORITY_PROCESSES = frozenset({"成型", "溶接", "溶接SP"})
+
+# 溶接SP：製品名が該当するものを別工程として集計（生産検討会と同じ定義）
+WELDING_PROCESS_NAME = "溶接"
+WELDING_SP_PROCESS_NAME = "溶接SP"
+WELDING_SP_PRODUCT_NAMES: Tuple[str, ...] = ("CH2 RR", "FE-7")
+WELDING_SPLIT_PROCESS_NAMES = frozenset({WELDING_PROCESS_NAME, WELDING_SP_PROCESS_NAME})
+# product_name は utf8mb4_bin、バインド値は接続照合（0900_ai_ci）になり得るため IN 比較で揃える
+_WELDING_NAME_COLLATION = "utf8mb4_unicode_ci"
+
+
+def _as_unicode_ci(expr: str) -> str:
+    return f"(CONVERT({expr} USING utf8mb4) COLLATE {_WELDING_NAME_COLLATION})"
+
+
+def _welding_sp_bind_params() -> dict[str, str]:
+    return {f"wsp_n{i}": name for i, name in enumerate(WELDING_SP_PRODUCT_NAMES)}
+
+
+def _welding_sp_in_list_sql() -> str:
+    return ", ".join(_as_unicode_ci(f":wsp_n{i}") for i in range(len(WELDING_SP_PRODUCT_NAMES)))
+
+
+def _welding_product_filter_sql(for_sp: bool, expr: str = "TRIM(COALESCE(product_name, ''))") -> str:
+    """溶接計画・実績を製品名で分割する WHERE 断片。NULL / 空は通常溶接側。"""
+    collated = _as_unicode_ci(expr)
+    placeholders = _welding_sp_in_list_sql()
+    op = "IN" if for_sp else "NOT IN"
+    null_clause = "" if for_sp else f" OR CHAR_LENGTH({collated}) = 0"
+    return f"({collated} {op} ({placeholders}){null_clause})"
+
+
+def _normalized_product_cd_sql(column: str) -> str:
+    """製品CD末尾を '1' にそろえる（stock_transaction_logs.target_cd 等）。"""
+    return f"CONCAT(SUBSTRING({column}, 1, LENGTH({column}) - 1), '1')"
 
 # 比較画面の「現行計画」はサマリ／Excel を見ず基準計画と同一値にする（計画差異は常に 0）
 CURRENT_PLAN_MIRROR_BASELINE_PROCESSES = frozenset({
@@ -81,16 +117,22 @@ async def _rows_from_summary_plan_by_date(
             continue
         if col not in ALLOWED_SUMMARY_PLAN_COLUMNS:
             continue
+        extra_where = ""
+        params: dict[str, Any] = {"start_date": start_date, "end_date": end_date}
+        if proc_label in WELDING_SPLIT_PROCESS_NAMES:
+            extra_where = " AND " + _welding_product_filter_sql(proc_label == WELDING_SP_PROCESS_NAME)
+            params.update(_welding_sp_bind_params())
         q = text(
             f"""
             SELECT `date` AS plan_date, COALESCE(SUM(`{col}`), 0) AS plan_quantity
             FROM production_summarys
             WHERE `date` BETWEEN :start_date AND :end_date
+            {extra_where}
             GROUP BY `date`
             HAVING COALESCE(SUM(`{col}`), 0) > 0
             """
         )
-        res = await db.execute(q, {"start_date": start_date, "end_date": end_date})
+        res = await db.execute(q, params)
         for r in res.mappings().fetchall():
             pd = _date_str(r.get("plan_date"))
             if not pd:
@@ -108,7 +150,7 @@ async def _merge_current_plan_from_summary(
     process_name_filter: Optional[str],
     current_plan_map: Dict[Tuple[str, str], float],
 ) -> None:
-    """現行計画マップに production_summarys 由来の日次合計を反映。成型・溶接は ppu を使わずサマリのみ（溶接は welding_actual_plan、合計 0 の日も行として反映）。切断・面取等は比較時に基準と同期するためマージしない。その他は ppu に無いキーのみ補完。"""
+    """現行計画マップに production_summarys 由来の日次合計を反映。成型・溶接・溶接SP は ppu を使わずサマリのみ（溶接／溶接SP は welding_actual_plan、合計 0 の日も行として反映）。切断・面取等は比較時に基準と同期するためマージしない。その他は ppu に無いキーのみ補完。"""
     for proc_label, col in SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS.items():
         if proc_label in CURRENT_PLAN_MIRROR_BASELINE_PROCESSES:
             continue
@@ -118,16 +160,22 @@ async def _merge_current_plan_from_summary(
             continue
         summary_priority = proc_label in BASELINE_SUMMARY_PRIORITY_PROCESSES
         having_sql = "" if summary_priority else f"HAVING COALESCE(SUM(`{col}`), 0) > 0"
+        extra_where = ""
+        params: dict[str, Any] = {"start_date": start_date, "end_date": end_date}
+        if proc_label in WELDING_SPLIT_PROCESS_NAMES:
+            extra_where = " AND " + _welding_product_filter_sql(proc_label == WELDING_SP_PROCESS_NAME)
+            params.update(_welding_sp_bind_params())
         q = text(
             f"""
             SELECT `date` AS plan_date, COALESCE(SUM(`{col}`), 0) AS plan_quantity
             FROM production_summarys
             WHERE `date` BETWEEN :start_date AND :end_date
+            {extra_where}
             GROUP BY `date`
             {having_sql}
             """
         )
-        res = await db.execute(q, {"start_date": start_date, "end_date": end_date})
+        res = await db.execute(q, params)
         for r in res.mappings().fetchall():
             pd = _date_str(r.get("plan_date"))
             if not pd:
@@ -157,6 +205,79 @@ def _decimal_float(val: Any) -> float:
         return float(val)
     except (TypeError, ValueError):
         return 0.0
+
+
+async def _fetch_welding_split_actual_map(
+    db: AsyncSession,
+    *,
+    start_date: str,
+    next_month_start: str,
+    process_name_filter: Optional[str],
+) -> Dict[Tuple[str, str], float]:
+    """溶接実績を製品名で 溶接 / 溶接SP に分割。製品名はサマリ優先、無ければ製品マスタ。"""
+    filt = (process_name_filter or "").strip() or None
+    if filt and filt not in WELDING_SPLIT_PROCESS_NAMES:
+        return {}
+
+    placeholders = _welding_sp_in_list_sql()
+    empty_name = _as_unicode_ci("''")
+    name_expr = (
+        "COALESCE("
+        f"{_as_unicode_ci('TRIM(pn.product_name)')}, "
+        f"{_as_unicode_ci('TRIM(p.product_name)')}, "
+        f"{empty_name}"
+        ")"
+    )
+    norm_cd = _normalized_product_cd_sql("l.target_cd")
+    sql = text(
+        f"""
+        SELECT
+            DATE(l.transaction_time) AS plan_date_value,
+            CASE
+                WHEN {name_expr} IN ({placeholders}) THEN :sp_label
+                ELSE :weld_label
+            END AS process_name_value,
+            SUM(COALESCE(l.quantity, 0)) AS total_actual
+        FROM stock_transaction_logs l
+        INNER JOIN processes pr ON l.process_cd = pr.process_cd
+        LEFT JOIN (
+            SELECT product_cd, MAX(product_name) AS product_name
+            FROM production_summarys
+            WHERE `date` >= :start_date AND `date` < :next_month_start
+            GROUP BY product_cd
+        ) pn ON LENGTH(COALESCE(l.target_cd, '')) >= 1
+           AND pn.product_cd COLLATE utf8mb4_unicode_ci = ({norm_cd}) COLLATE utf8mb4_unicode_ci
+        LEFT JOIN products p
+          ON LENGTH(COALESCE(l.target_cd, '')) >= 1
+         AND p.product_cd COLLATE utf8mb4_unicode_ci = ({norm_cd}) COLLATE utf8mb4_unicode_ci
+        WHERE l.transaction_time >= :start_date AND l.transaction_time < :next_month_start
+          AND l.transaction_type = '実績'
+          AND pr.process_name = :weld_label
+        GROUP BY DATE(l.transaction_time),
+            CASE
+                WHEN {name_expr} IN ({placeholders}) THEN :sp_label
+                ELSE :weld_label
+            END
+        """
+    )
+    params: dict[str, Any] = {
+        "start_date": start_date,
+        "next_month_start": next_month_start,
+        "sp_label": WELDING_SP_PROCESS_NAME,
+        "weld_label": WELDING_PROCESS_NAME,
+        **_welding_sp_bind_params(),
+    }
+    result = await db.execute(sql, params)
+    out: Dict[Tuple[str, str], float] = {}
+    for r in result.mappings().fetchall():
+        proc = (r.get("process_name_value") or "").strip()
+        if filt and proc != filt:
+            continue
+        pd = _date_str(r.get("plan_date_value"))
+        if not pd:
+            continue
+        out[(pd, proc)] = _decimal_float(r.get("total_actual"))
+    return out
 
 
 def _optional_body_float(body: dict[str, Any], key: str) -> Optional[float]:
@@ -231,7 +352,7 @@ async def generate_plan_baseline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_aps_operation("edit")),
 ):
-    """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接は production_summarys の molding_plan / welding_plan のみ。他は ppu を優先し不足をサマリで補完。"""
+    """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接・溶接SP は production_summarys の molding_plan / welding_plan のみ（溶接SP は製品名 FE-7 / CH2 RR）。他は ppu を優先し不足をサマリで補完。"""
     baseline_month = body.get("baselineMonth")
     process_name = body.get("processName") or None
     if not baseline_month:
@@ -279,6 +400,13 @@ async def generate_plan_baseline(
         return {"success": True, "message": "ベースラインを生成しました", "count": count}
 
     # production_plan_updates を plan_date, process_name で集計
+    # 溶接を指定した場合は溶接SP（FE-7 / CH2 RR）も同時に生成する
+    generate_process_names: Optional[list[str]] = None
+    if proc_fixed == WELDING_PROCESS_NAME:
+        generate_process_names = [WELDING_PROCESS_NAME, WELDING_SP_PROCESS_NAME]
+    elif proc_fixed:
+        generate_process_names = [proc_fixed]
+
     agg_sql = text("""
         SELECT plan_date, process_name,
                COALESCE(SUM(quantity), 0) AS plan_quantity
@@ -301,16 +429,26 @@ async def generate_plan_baseline(
         pr = (r.get("process_name") or "").strip()
         if pd:
             ppu_keys.add((pd, pr))
-    summary_extra = await _rows_from_summary_plan_by_date(db, start_date, end_date, process_name, ppu_keys)
+    summary_extra: list[dict[str, Any]] = []
+    if generate_process_names:
+        for pn in generate_process_names:
+            summary_extra.extend(
+                await _rows_from_summary_plan_by_date(db, start_date, end_date, pn, ppu_keys)
+            )
+    else:
+        summary_extra = await _rows_from_summary_plan_by_date(
+            db, start_date, end_date, process_name, ppu_keys
+        )
     rows.extend(summary_extra)
 
     # 既存の該当ベースラインを削除
-    if process_name:
+    if generate_process_names:
         delete_sql = text("""
             DELETE FROM production_plan_baselines
             WHERE baseline_month = :baseline_month AND process_name = :process_name
         """)
-        await db.execute(delete_sql, {"baseline_month": month_start, "process_name": process_name})
+        for pn in generate_process_names:
+            await db.execute(delete_sql, {"baseline_month": month_start, "process_name": pn})
     else:
         delete_sql = text("DELETE FROM production_plan_baselines WHERE baseline_month = :baseline_month")
         await db.execute(delete_sql, {"baseline_month": month_start})
@@ -481,7 +619,18 @@ async def build_plan_baseline_comparison(
                 current_plan_map[(pd, proc)] = _decimal_float(r.get("current_plan"))
         await _merge_current_plan_from_summary(db, start_date, end_date, process_name or None, current_plan_map)
 
-        actual_sql = text("""
+        filt_proc = (process_name or "").strip() or None
+        welding_split_needed = filt_proc is None or filt_proc in WELDING_SPLIT_PROCESS_NAMES
+        actual_map: Dict[Tuple[str, str], float] = {}
+
+        if filt_proc not in WELDING_SPLIT_PROCESS_NAMES:
+            extra_exclude = (
+                "AND (pr.process_name IS NULL OR pr.process_name <> :weld_exclude)"
+                if welding_split_needed
+                else ""
+            )
+            actual_sql = text(
+                f"""
             SELECT
                 DATE(l.transaction_time) AS plan_date_value,
                 COALESCE(pr.process_name, '') AS process_name_value,
@@ -491,20 +640,30 @@ async def build_plan_baseline_comparison(
             WHERE l.transaction_time >= :start_date AND l.transaction_time < :next_month_start
               AND l.transaction_type = '実績'
               AND (:process_name IS NULL OR pr.process_name = :process_name)
+              {extra_exclude}
             GROUP BY DATE(l.transaction_time), COALESCE(pr.process_name, '')
-        """)
-        actual_result = await db.execute(
-            actual_sql,
-            {
+                """
+            )
+            actual_params: dict[str, Any] = {
                 "start_date": start_date,
                 "next_month_start": next_month_start_str,
-                "process_name": process_name or None,
-            },
-        )
-        actual_map = {}
-        for r in actual_result.mappings().fetchall():
-            k = (_date_str(r.get("plan_date_value")), (r.get("process_name_value") or "").strip())
-            actual_map[k] = _decimal_float(r.get("total_actual"))
+                "process_name": filt_proc,
+            }
+            if welding_split_needed:
+                actual_params["weld_exclude"] = WELDING_PROCESS_NAME
+            actual_result = await db.execute(actual_sql, actual_params)
+            for r in actual_result.mappings().fetchall():
+                k = (_date_str(r.get("plan_date_value")), (r.get("process_name_value") or "").strip())
+                actual_map[k] = _decimal_float(r.get("total_actual"))
+
+        if welding_split_needed:
+            split_map = await _fetch_welding_split_actual_map(
+                db,
+                start_date=start_date,
+                next_month_start=next_month_start_str,
+                process_name_filter=filt_proc,
+            )
+            actual_map.update(split_map)
 
         date_keys = set(base_rows.keys()) | set(current_plan_map.keys()) | set(actual_map.keys())
         today_str = date.today().isoformat()

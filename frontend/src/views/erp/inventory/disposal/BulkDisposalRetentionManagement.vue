@@ -511,7 +511,7 @@
     <el-dialog
       v-model="notifyDialogVisible"
       title="未処理データ メール通知"
-      width="720px"
+      width="860px"
       destroy-on-close
       append-to-body
       align-center
@@ -550,14 +550,6 @@
             送信メールには処理期限を強調表示し、至急対応の提醒を自動挿入します。
           </p>
         </el-alert>
-        <el-alert
-          v-else-if="notifyPreview?.has_deadline_notice"
-          type="warning"
-          :closable="false"
-          show-icon
-          title="保留品の処理期限が通知メールに記載されます"
-          class="notify-alert notify-alert--deadline"
-        />
         <el-alert
           v-if="notifyPreview && !notifyPreview.can_send"
           type="warning"
@@ -609,6 +601,11 @@
                 <template v-if="row.is_overdue">⚠ </template>{{ row.processing_deadline_date }}
               </span>
               <span v-else class="cell-muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="remarks" label="備考" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="cell-muted">{{ row.remarks || '—' }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -1024,7 +1021,11 @@ async function handleSendNotify() {
       user_ids: notifyUserIds.value,
       record_ids: recordIds,
     })
-    ElMessage.success(res?.message || '送信しました')
+    if (!res?.success) {
+      ElMessage.error(res?.message || '送信に失敗しました')
+      return
+    }
+    ElMessage.success(res.message || '送信しました')
     notifyDialogVisible.value = false
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '送信に失敗しました')

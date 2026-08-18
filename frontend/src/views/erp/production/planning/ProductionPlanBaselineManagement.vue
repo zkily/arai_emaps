@@ -40,7 +40,7 @@
             </div>
             <div class="section-title">
               <h3>ベースライン生成</h3>
-              <span class="section-desc">計画を固定化して比較基準を作成（成型・溶接は production_summarys の molding_plan／welding_plan を基準計画に反映）</span>
+              <span class="section-desc">計画を固定化して比較基準を作成（成型は molding_plan、溶接／溶接SP は welding_plan。溶接SP は製品名 FE-7・CH2 RR）</span>
             </div>
           </div>
           <div class="section-controls">
@@ -57,7 +57,7 @@
               clearable
               placeholder="全工程"
               size="default"
-              style="width: 130px"
+              style="width: 148px"
             >
               <el-option
                 v-for="item in processOptions"
@@ -124,7 +124,7 @@
               clearable
               placeholder="工程"
               size="default"
-              style="width: 130px"
+              style="width: 148px"
             >
               <el-option
                 v-for="item in processOptions"
@@ -241,9 +241,9 @@
           :name="process.name"
         >
           <template #label>
-            <span class="tab-label">
+            <span class="tab-label" :data-tone="process.name">
+              <span class="tab-tone-dot" :style="{ background: processTabTone(process.name).accent }" />
               {{ process.label }}
-              <span class="tab-count">{{ process.count }}</span>
             </span>
           </template>
           <el-table
@@ -268,7 +268,7 @@
                 <div class="column-header">
                   <span>基準計画</span>
                   <el-tooltip
-                    content="ベースライン生成時に固定化された計画値。成型・溶接は production_summarys の molding_plan／welding_plan の日次合計。その他は Excel 取込（production_plan_updates）を優先し、無い日はサマリの各 plan 列で補完。"
+                    content="ベースライン生成時に固定化された計画値。成型は molding_plan、溶接／溶接SP は welding_plan の日次合計（溶接SP は製品名 FE-7・CH2 RR、それ以外は溶接）。その他は Excel 取込（production_plan_updates）を優先し、無い日はサマリの各 plan 列で補完。"
                     placement="top"
                     effect="dark"
                   >
@@ -287,7 +287,7 @@
                 <div class="column-header">
                   <span>現行計画</span>
                   <el-tooltip
-                    content="切断・面取・メッキ・検査・外注メッキ・外注溶接・外注倉庫は現行計画＝基準計画（常に同期）。成型は molding_plan、溶接は welding_actual_plan（サマリのみ、Excel は使用しない。合計 0 の日も反映、該当日サマリが無い日は 0）。上記以外は production_plan_updates を優先し、無い日はサマリの各 plan 列で補完。"
+                    content="切断・面取・メッキ・検査・外注メッキ・外注溶接・外注倉庫は現行計画＝基準計画（常に同期）。成型は molding_plan、溶接／溶接SP は welding_actual_plan（溶接SP は製品名 FE-7・CH2 RR、サマリのみ、Excel は使用しない。合計 0 の日も反映、該当日サマリが無い日は 0）。上記以外は production_plan_updates を優先し、無い日はサマリの各 plan 列で補完。"
                     placement="top"
                     effect="dark"
                   >
@@ -327,7 +327,7 @@
                 <div class="column-header">
                   <span>現行実績合計</span>
                   <el-tooltip
-                    content="stock_transaction_logs から当月の日次実績を再集計"
+                    content="stock_transaction_logs から当月の日次実績を再集計。溶接／溶接SP は製品名 FE-7・CH2 RR を溶接SP、それ以外を溶接に分割"
                     placement="top"
                     effect="dark"
                   >
@@ -880,6 +880,7 @@ const processOptions = [
   { label: '成型', value: '成型' },
   { label: 'メッキ', value: 'メッキ' },
   { label: '溶接', value: '溶接' },
+  { label: '溶接SP', value: '溶接SP' },
   { label: '検査', value: '検査' },
   { label: '外注メッキ', value: '外注メッキ' },
   { label: '外注溶接', value: '外注溶接' },
@@ -1072,6 +1073,7 @@ const BASELINE_COMPARISON_PROCESS_ORDER = [
   '成型',
   'メッキ',
   '溶接',
+  '溶接SP',
   '検査',
   '外注メッキ',
   '外注溶接',
@@ -1088,6 +1090,23 @@ const BASELINE_COMPARISON_EXCLUDED_PROCESS_NAMES = new Set([
 function baselineComparisonProcessOrderIndex(name: string): number {
   const i = (BASELINE_COMPARISON_PROCESS_ORDER as readonly string[]).indexOf(name)
   return i >= 0 ? i : 1000
+}
+
+/** 工程タブの色分け（溶接と溶接SPを明確に区別） */
+const PROCESS_TAB_TONES: Record<string, string> = {
+  切断: '#2563eb',
+  面取: '#16a34a',
+  成型: '#d97706',
+  メッキ: '#dc2626',
+  溶接: '#0284c7',
+  溶接SP: '#7c3aed',
+  検査: '#0d9488',
+  外注メッキ: '#ea580c',
+  外注溶接: '#4f46e5',
+}
+
+function processTabTone(name: string) {
+  return { accent: PROCESS_TAB_TONES[name] ?? '#64748b' }
 }
 
 // 工程別にデータをグループ化
@@ -1118,7 +1137,6 @@ const processTabs = computed(() => {
     return {
       name: processName,
       label: processName,
-      count: sortedItems.length,
       items: sortedItems,
     }
   })
@@ -2343,7 +2361,7 @@ const handleExportPdfToFolder = async () => {
 
   if (!comparisonResult.value?.baselineMonth || pdfExportTargetTabs.value.length === 0) {
     ElMessage.warning(
-      '切断・面取・成型・メッキ・溶接・検査・外注メッキ・外注溶接のいずれにも比較データがありません。条件を確認し、先に検索を実行してください。',
+      '切断・面取・成型・メッキ・溶接・溶接SP・検査・外注メッキ・外注溶接のいずれにも比較データがありません。条件を確認し、先に検索を実行してください。',
     )
     return
   }
@@ -3587,16 +3605,12 @@ function handlePrintOperationRate() {
 }
 
 .baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__item.is-active) {
-  color: #4338ca !important;
   font-weight: 750;
-  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
-  border-color: #a5b4fc !important;
-  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.12);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 .baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__item:hover) {
-  color: #4f46e5;
-  border-color: #c7d2fe !important;
+  filter: brightness(0.98);
 }
 
 .baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__nav-scroll) {
@@ -3609,19 +3623,111 @@ function handlePrintOperationRate() {
   gap: 6px;
 }
 
-.tab-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  margin-left: 2px;
-  font-size: 10px;
-  font-weight: 700;
+.tab-tone-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='切断'])) {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='切断']).is-active) {
+  color: #1e40af !important;
+  background: linear-gradient(180deg, #ffffff 0%, #dbeafe 100%) !important;
+  border-color: #60a5fa !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='面取'])) {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #86efac !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='面取']).is-active) {
+  color: #166534 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #dcfce7 100%) !important;
+  border-color: #4ade80 !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='成型'])) {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fcd34d !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='成型']).is-active) {
+  color: #92400e !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fef3c7 100%) !important;
+  border-color: #fbbf24 !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='メッキ'])) {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fca5a5 !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='メッキ']).is-active) {
+  color: #991b1b !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fee2e2 100%) !important;
+  border-color: #f87171 !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='溶接'])) {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-color: #7dd3fc !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='溶接']).is-active) {
+  color: #075985 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%) !important;
+  border-color: #38bdf8 !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='溶接SP'])) {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #c4b5fd !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='溶接SP']).is-active) {
+  color: #5b21b6 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ede9fe 100%) !important;
+  border-color: #a78bfa !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='検査'])) {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #5eead4 !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='検査']).is-active) {
+  color: #115e59 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ccfbf1 100%) !important;
+  border-color: #2dd4bf !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='外注メッキ'])) {
+  color: #c2410c;
+  background: #fff7ed;
+  border-color: #fdba74 !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='外注メッキ']).is-active) {
+  color: #9a3412 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ffedd5 100%) !important;
+  border-color: #fb923c !important;
+}
+
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='外注溶接'])) {
   color: #4338ca;
-  background: rgba(99, 102, 241, 0.12);
-  border-radius: 999px;
+  background: #eef2ff;
+  border-color: #a5b4fc !important;
+}
+.baseline-comparison-card :deep(.el-tabs__item:has([data-tone='外注溶接']).is-active) {
+  color: #3730a3 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #e0e7ff 100%) !important;
+  border-color: #818cf8 !important;
 }
 
 /* 合計区域（工程タブ下・コンパクト） */

@@ -138,5 +138,7 @@ export function previewBulkDisposalRetentionNotification(params?: { record_ids?:
 }
 
 export function sendBulkDisposalRetentionNotification(data: BulkDisposalRetentionNotifySendParams) {
-  return request.post<BulkDisposalRetentionNotifySendResult>(`${BASE_URL}/notify/send`, data)
+  return request.post<BulkDisposalRetentionNotifySendResult>(`${BASE_URL}/notify/send`, data, {
+    timeout: 180000,
+  })
 }

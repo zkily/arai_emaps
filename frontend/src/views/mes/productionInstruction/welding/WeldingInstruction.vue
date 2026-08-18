@@ -486,7 +486,7 @@ import {
 import request from '@/shared/api/request'
 import { fetchWorkingDays } from '@/api/erp/budget'
 import { fetchScheduledWorkdaysForDateIso } from '@/api/master/companyWorkCalendar'
-import { fetchPlanBaselineComparison } from '@/api/planBaseline'
+import { fetchPlanBaselineComparison, type PlanBaselineComparisonResult } from '@/api/planBaseline'
 import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
@@ -1053,6 +1053,35 @@ type LoadComparisonSummaryOptions = {
   workingDays?: number | null // 指定工作日天数，如果提供则使用此值，否则自动计算
 }
 
+function addNullableTotals(a: number | null | undefined, b: number | null | undefined): number | null {
+  const hasA = a !== null && a !== undefined
+  const hasB = b !== null && b !== undefined
+  if (!hasA && !hasB) return null
+  return (hasA ? Number(a) : 0) + (hasB ? Number(b) : 0)
+}
+
+/** 段取予定表の計画対実績は溶接＋溶接SPの合計（ベースライン管理のタブ分割とは別） */
+function mergeWeldingAndWeldingSpComparison(
+  weld: PlanBaselineComparisonResult | null,
+  weldSp: PlanBaselineComparisonResult | null,
+): PlanBaselineComparisonResult | null {
+  const s1 = weld?.summary
+  const s2 = weldSp?.summary
+  if (!s1 && !s2) return null
+  return {
+    success: true,
+    baselineMonth: weld?.baselineMonth || weldSp?.baselineMonth,
+    items: [...(weld?.items || []), ...(weldSp?.items || [])],
+    summary: {
+      baselinePlanTotal: addNullableTotals(s1?.baselinePlanTotal, s2?.baselinePlanTotal),
+      currentPlanTotal: addNullableTotals(s1?.currentPlanTotal, s2?.currentPlanTotal),
+      planDifference: addNullableTotals(s1?.planDifference, s2?.planDifference),
+      currentActualTotal: addNullableTotals(s1?.currentActualTotal, s2?.currentActualTotal),
+      actualDifference: addNullableTotals(s1?.actualDifference, s2?.actualDifference),
+    },
+  }
+}
+
 const loadWeldingPlanComparisonSummary = async (
   options: LoadComparisonSummaryOptions = {},
 ): Promise<PlanComparisonSummary | null> => {
@@ -1066,10 +1095,17 @@ const loadWeldingPlanComparisonSummary = async (
   }
 
   try {
-    const result = await fetchPlanBaselineComparison({
-      baselineMonth: targetBaselineMonth,
-      processName: '溶接',
-    })
+    const [weldResult, weldSpResult] = await Promise.all([
+      fetchPlanBaselineComparison({
+        baselineMonth: targetBaselineMonth,
+        processName: '溶接',
+      }),
+      fetchPlanBaselineComparison({
+        baselineMonth: targetBaselineMonth,
+        processName: '溶接SP',
+      }),
+    ])
+    const result = mergeWeldingAndWeldingSpComparison(weldResult, weldSpResult)
 
     if (result?.summary) {
       const summary = result.summary

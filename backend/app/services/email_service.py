@@ -192,12 +192,33 @@ async def send_html_email(
     subject: str,
     html_body: str,
 ) -> EmailSendResult:
-    try:
-        await asyncio.to_thread(_send_smtp_sync, smtp, to_email, subject, html_body)
-        return EmailSendResult(email=to_email, success=True)
-    except Exception as exc:
-        logger.warning("メール送信失敗 to={} err={}", to_email, exc)
-        return EmailSendResult(email=to_email, success=False, error=str(exc))
+    last_exc: Exception | None = None
+    for attempt, delay in enumerate((0, *SMTP_RATE_LIMIT_RETRY_DELAYS_SEC)):
+        if delay > 0:
+            logger.info(
+                "SMTP レート制限のため {} 秒待機後に再送: to={} attempt={}",
+                delay,
+                to_email,
+                attempt,
+            )
+            await asyncio.sleep(delay)
+        try:
+            await asyncio.to_thread(_send_smtp_sync, smtp, to_email, subject, html_body)
+            return EmailSendResult(email=to_email, success=True)
+        except Exception as exc:
+            last_exc = exc
+            if not is_smtp_rate_limit_error(exc):
+                logger.warning("メール送信失敗 to={} err={}", to_email, exc)
+                return EmailSendResult(email=to_email, success=False, error=str(exc))
+            logger.warning(
+                "メール送信レート制限 to={} attempt={} err={}",
+                to_email,
+                attempt + 1,
+                exc,
+            )
+    err = str(last_exc) if last_exc else "送信失敗"
+    logger.warning("メール送信失敗 to={} err={}", to_email, err)
+    return EmailSendResult(email=to_email, success=False, error=err)
 
 
 async def send_bulk_html_email(
@@ -205,9 +226,13 @@ async def send_bulk_html_email(
     recipients: list[str],
     subject: str,
     html_body: str,
+    *,
+    interval_sec: float = DEFAULT_BULK_EMAIL_INTERVAL_SEC,
 ) -> list[EmailSendResult]:
     results: list[EmailSendResult] = []
-    for email in recipients:
+    for idx, email in enumerate(recipients):
+        if idx > 0 and interval_sec > 0:
+            await asyncio.sleep(interval_sec)
         results.append(await send_html_email(smtp, email, subject, html_body))
     return results
 

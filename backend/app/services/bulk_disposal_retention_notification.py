@@ -1,6 +1,8 @@
 """大量廃棄・保留品 未処理通知メール"""
 from __future__ import annotations
 
+import asyncio
+import html
 from datetime import date, datetime
 
 from fastapi import HTTPException
@@ -12,6 +14,8 @@ from app.modules.auth.models import User
 from app.modules.erp.bulk_disposal_retention_models import BulkDisposalRetentionRecord
 from app.modules.system.settings_models import EmailSendLog, NotificationSetting
 from app.services.email_service import (
+    DEFAULT_BULK_EMAIL_INTERVAL_SEC,
+    is_smtp_rate_limit_message,
     load_email_template,
     load_smtp_config,
     render_template,
@@ -21,6 +25,26 @@ from app.services.email_service import (
 EVENT_CODE = "BULK_DISPOSAL_RETENTION_PENDING"
 REFERENCE_PREFIX = "bulk_disposal_retention_pending"
 SYSTEM_SENDER_LABEL = "Smart-EMAP"
+EMAIL_SEND_INTERVAL_SEC = DEFAULT_BULK_EMAIL_INTERVAL_SEC
+
+
+def _build_send_result_message(
+    *,
+    email_sent_count: int,
+    email_failed: list[dict[str, str]],
+) -> str:
+    if email_sent_count <= 0:
+        if any(is_smtp_rate_limit_message(item.get("error") or "") for item in email_failed):
+            return (
+                "メールサーバーが送信頻度を制限しています（too much mail）。"
+                "数分待ってから再送信してください。"
+            )
+        first = email_failed[0].get("error") if email_failed else ""
+        return first or "送信に失敗しました"
+    msg = f"{email_sent_count} 件のメールを送信しました"
+    if email_failed:
+        msg += f"（{len(email_failed)} 件失敗）"
+    return msg
 
 
 async def _get_notification_setting(db: AsyncSession) -> NotificationSetting | None:
@@ -84,63 +108,48 @@ def _format_deadline_text(row: dict) -> str:
     return deadline
 
 
+def _format_remarks_html(remarks: object) -> str:
+    text = str(remarks or "").strip()
+    if not text:
+        return "—"
+    return html.escape(text).replace("\n", "<br>")
+
+
+def _format_remarks_text(remarks: object) -> str:
+    text = str(remarks or "").strip()
+    if not text:
+        return "—"
+    return " ".join(text.split())
+
+
 def _build_deadline_notice(rows: list[dict]) -> tuple[str, str]:
-    retention_rows = [
-        r
-        for r in rows
-        if r.get("report_category") == "保留品" and r.get("processing_deadline_date")
-    ]
-    if not retention_rows:
+    overdue_rows = [r for r in rows if r.get("is_overdue")]
+    if not overdue_rows:
         return "", ""
 
-    overdue_rows = [r for r in retention_rows if r.get("is_overdue")]
-    upcoming_rows = [r for r in retention_rows if not r.get("is_overdue")]
-
-    html_parts: list[str] = []
-    text_parts: list[str] = []
-
-    if overdue_rows:
+    html_parts: list[str] = [
+        '<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:6px;'
+        'padding:12px 16px;margin:12px 0;">'
+        '<p style="margin:0 0 8px;color:#dc2626;font-weight:bold;font-size:16px;">'
+        f"⚠ 重要：処理期限超過の保留品が {len(overdue_rows)} 件あります</p>"
+        '<p style="margin:0 0 8px;color:#991b1b;font-size:13px;">'
+        "至急、期間内処理を実施してください。</p>"
+        '<ul style="margin:0;padding-left:20px;color:#991b1b;">'
+    ]
+    text_parts: list[str] = [f"【重要】処理期限超過の保留品: {len(overdue_rows)} 件（至急対応）"]
+    for row in overdue_rows:
+        product = (row.get("product_name") or row.get("product_cd") or "—").strip() or "—"
+        mgmt = row.get("management_no") or "—"
+        deadline = row.get("processing_deadline_date") or "—"
+        remarks_html = _format_remarks_html(row.get("remarks"))
+        remarks_text = _format_remarks_text(row.get("remarks"))
         html_parts.append(
-            '<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:6px;'
-            'padding:12px 16px;margin:12px 0;">'
-            '<p style="margin:0 0 8px;color:#dc2626;font-weight:bold;font-size:16px;">'
-            f"⚠ 重要：処理期限超過の保留品が {len(overdue_rows)} 件あります</p>"
-            '<p style="margin:0 0 8px;color:#991b1b;font-size:13px;">'
-            "至急、期間内処理を実施してください。</p>"
-            '<ul style="margin:0;padding-left:20px;color:#991b1b;">'
+            f"<li><strong>処理期限: {deadline}</strong> — {html.escape(product)} "
+            f"（管理No: {html.escape(str(mgmt))} / 本数: {int(row.get('quantity') or 0):,} "
+            f"/ 備考: {remarks_html}）</li>"
         )
-        text_parts.append(f"【重要】処理期限超過の保留品: {len(overdue_rows)} 件（至急対応）")
-        for row in overdue_rows:
-            product = (row.get("product_name") or row.get("product_cd") or "—").strip() or "—"
-            mgmt = row.get("management_no") or "—"
-            deadline = row.get("processing_deadline_date") or "—"
-            html_parts.append(
-                f"<li><strong>処理期限: {deadline}</strong> — {product} "
-                f"（管理No: {mgmt} / 本数: {int(row.get('quantity') or 0):,}）</li>"
-            )
-            text_parts.append(f"  期限:{deadline} 製品:{product} 管理No:{mgmt}")
-        html_parts.append("</ul></div>")
-
-    if upcoming_rows:
-        html_parts.append(
-            '<div style="background:#fffbeb;border:2px solid #d97706;border-radius:6px;'
-            'padding:12px 16px;margin:12px 0;">'
-            '<p style="margin:0 0 8px;color:#b45309;font-weight:bold;font-size:15px;">'
-            f"📅 処理期限の確認が必要な保留品: {len(upcoming_rows)} 件</p>"
-            '<ul style="margin:0;padding-left:20px;color:#92400e;">'
-        )
-        text_parts.append(f"【確認】処理期限内の保留品: {len(upcoming_rows)} 件")
-        for row in upcoming_rows:
-            product = (row.get("product_name") or row.get("product_cd") or "—").strip() or "—"
-            mgmt = row.get("management_no") or "—"
-            deadline = row.get("processing_deadline_date") or "—"
-            html_parts.append(
-                f"<li><strong>処理期限: {deadline}</strong> — {product} "
-                f"（管理No: {mgmt} / 本数: {int(row.get('quantity') or 0):,}）</li>"
-            )
-            text_parts.append(f"  期限:{deadline} 製品:{product} 管理No:{mgmt}")
-        html_parts.append("</ul></div>")
-
+        text_parts.append(f"  期限:{deadline} 製品:{product} 管理No:{mgmt} 備考:{remarks_text}")
+    html_parts.append("</ul></div>")
     return "".join(html_parts), "\n".join(text_parts)
 
 
@@ -161,20 +170,24 @@ def _build_item_summaries(rows: list[dict]) -> tuple[str, str, int]:
         total_qty += qty
         deadline_html = _format_deadline_html(row)
         deadline_text = _format_deadline_text(row)
+        remarks_html = _format_remarks_html(row.get("remarks"))
+        remarks_text = _format_remarks_text(row.get("remarks"))
         html_lines.append(
-            f"<tr><td>{occurred}</td><td>{category}</td><td>{process}</td>"
-            f"<td>{product}</td><td align='right'>{qty:,}</td>"
-            f"<td align='center'>{deadline_html}</td><td>{mgmt}</td></tr>"
+            f"<tr><td>{html.escape(str(occurred))}</td><td>{html.escape(str(category))}</td>"
+            f"<td>{html.escape(str(process))}</td><td>{html.escape(str(product))}</td>"
+            f"<td align='right'>{qty:,}</td><td align='center'>{deadline_html}</td>"
+            f"<td>{html.escape(str(mgmt))}</td><td>{remarks_html}</td></tr>"
         )
         text_lines.append(
             f"  発生日:{occurred}  区分:{category}  工程:{process}  "
-            f"製品:{product}  本数:{qty:,}  処理期限:{deadline_text}  管理No:{mgmt}"
+            f"製品:{product}  本数:{qty:,}  処理期限:{deadline_text}  "
+            f"管理No:{mgmt}  備考:{remarks_text}"
         )
 
     item_table = (
         "<table border='1' cellpadding='6' cellspacing='0'>"
         "<tr><th>発生日</th><th>報告区分</th><th>発生工程</th>"
-        "<th>製品名</th><th>発生本数</th><th>処理期限</th><th>管理No</th></tr>"
+        "<th>製品名</th><th>発生本数</th><th>処理期限</th><th>管理No</th><th>備考</th></tr>"
         f"{''.join(html_lines)}</table>"
     )
     item_list_text = "明細:\n" + "\n".join(text_lines)
@@ -306,7 +319,9 @@ async def send_bulk_disposal_retention_notification(
     email_sent_count = 0
     email_failed: list[dict[str, str]] = []
 
-    for recipient in recipients:
+    for idx, recipient in enumerate(recipients):
+        if idx > 0:
+            await asyncio.sleep(EMAIL_SEND_INTERVAL_SEC)
         result = await send_html_email(smtp, recipient["email"], subject, body)
         log = EmailSendLog(
             event_code=EVENT_CODE,
@@ -327,8 +342,10 @@ async def send_bulk_disposal_retention_notification(
 
     return {
         "success": email_sent_count > 0,
-        "message": f"{email_sent_count} 件のメールを送信しました"
-        + (f"（{len(email_failed)} 件失敗）" if email_failed else ""),
+        "message": _build_send_result_message(
+            email_sent_count=email_sent_count,
+            email_failed=email_failed,
+        ),
         "item_count": len(rows),
         "total_quantity": variables["total_quantity"],
         "email_sent_count": email_sent_count,
