@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class SupplyItemBase(BaseModel):
-    item_cd: str = Field(..., min_length=1, max_length=50)
+    item_cd: str = Field("", max_length=50)
     item_name: str = Field(..., min_length=1, max_length=200)
     specification: Optional[str] = None
     unit: str = "個"

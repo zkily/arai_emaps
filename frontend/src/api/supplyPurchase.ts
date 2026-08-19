@@ -78,6 +78,13 @@ export async function fetchSupplyItems(params: {
   return { list: res.data?.list ?? [], total: res.data?.total ?? 0 }
 }
 
+export async function fetchNextSupplyItemCd(): Promise<string> {
+  const res = (await request.get(`${PREFIX}/items/next-cd`)) as {
+    data?: { item_cd?: string }
+  }
+  return res.data?.item_cd || 'B0001'
+}
+
 export async function createSupplyItem(body: SupplyItemPayload): Promise<SupplyItem> {
   const res = (await request.post(`${PREFIX}/items`, body)) as { data: SupplyItem }
   return res.data

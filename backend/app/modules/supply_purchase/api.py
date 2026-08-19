@@ -1,4 +1,5 @@
 """備品購入 API：カタログ CRUD と発注ヘッダ/明細"""
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -118,6 +119,20 @@ async def _next_order_no(db: AsyncSession, order_date: date) -> str:
     return f"{prefix}{seq:03d}"
 
 
+_ITEM_CD_RE = re.compile(r"^B(\d+)$", re.IGNORECASE)
+
+
+async def _next_item_cd(db: AsyncSession) -> str:
+    """備品マスタ全体の最大 B#### から +1（例: B0005 → B0006）。"""
+    rows = (await db.execute(select(SupplyItem.item_cd))).scalars().all()
+    max_n = 0
+    for cd in rows:
+        m = _ITEM_CD_RE.match((cd or "").strip())
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"B{max_n + 1:04d}"
+
+
 @router.get("/items")
 async def list_supply_items(
     supplierCd: Optional[str] = Query(None),
@@ -167,6 +182,15 @@ async def list_supply_items(
     }
 
 
+@router.get("/items/next-cd")
+async def get_next_supply_item_cd(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    _ = current_user
+    return {"success": True, "data": {"item_cd": await _next_item_cd(db)}}
+
+
 @router.post("/items")
 async def create_supply_item(
     body: SupplyItemCreate,
@@ -174,19 +198,23 @@ async def create_supply_item(
     current_user: User = Depends(require_master_operation("create")),
 ):
     supplier_cd = body.supplier_cd.strip()
-    item_cd = body.item_cd.strip()
+    item_cd = (body.item_cd or "").strip() or await _next_item_cd(db)
     name = await _supplier_name(db, supplier_cd)
     if not name:
         raise HTTPException(status_code=400, detail="仕入先マスタに該当する仕入先CDがありません")
-    exists = (
-        await db.execute(
-            select(SupplyItem.id).where(
-                SupplyItem.supplier_cd == supplier_cd, SupplyItem.item_cd == item_cd
+    for _ in range(8):
+        exists = (
+            await db.execute(
+                select(SupplyItem.id).where(
+                    SupplyItem.supplier_cd == supplier_cd, SupplyItem.item_cd == item_cd
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if exists:
-        raise HTTPException(status_code=400, detail="同じ仕入先に同じ備品CDが既に登録されています")
+        ).scalar_one_or_none()
+        if not exists:
+            break
+        item_cd = await _next_item_cd(db)
+    else:
+        raise HTTPException(status_code=400, detail="備品CDの採番に失敗しました。再試行してください")
     row = SupplyItem(
         item_cd=item_cd,
         item_name=body.item_name.strip(),

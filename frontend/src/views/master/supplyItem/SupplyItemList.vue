@@ -149,7 +149,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="備品CD" prop="item_cd">
-          <el-input v-model="form.item_cd" maxlength="50" show-word-limit />
+          <el-input v-model="form.item_cd" maxlength="50" disabled placeholder="自動採番" />
         </el-form-item>
         <el-form-item label="品名" prop="item_name">
           <el-input v-model="form.item_name" maxlength="200" show-word-limit />
@@ -198,6 +198,7 @@ import { getSupplierList } from '@/api/master/supplierMaster'
 import {
   createSupplyItem,
   deleteSupplyItem,
+  fetchNextSupplyItemCd,
   fetchSupplyItems,
   updateSupplyItem,
   type SupplyItem,
@@ -305,7 +306,7 @@ function clearFilter() {
   handleSearch()
 }
 
-function openDialog(row?: SupplyItem) {
+async function openDialog(row?: SupplyItem) {
   if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   form.id = row?.id ?? 0
   form.supplier_cd = row?.supplier_cd ?? filters.supplierCd ?? ''
@@ -319,6 +320,13 @@ function openDialog(row?: SupplyItem) {
   form.is_discontinued = row?.is_discontinued ?? false
   form.remarks = row?.remarks ?? ''
   dialogVisible.value = true
+  if (!row) {
+    try {
+      form.item_cd = await fetchNextSupplyItemCd()
+    } catch {
+      form.item_cd = 'B0001'
+    }
+  }
 }
 
 async function handleSubmit() {

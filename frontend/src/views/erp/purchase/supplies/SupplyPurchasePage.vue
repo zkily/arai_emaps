@@ -254,8 +254,8 @@
 
     <el-dialog v-model="itemDialogVisible" :title="itemForm.id ? '備品を編集' : '備品を登録'" width="480px">
       <el-form :model="itemForm" label-width="96px" size="small">
-        <el-form-item label="備品CD" required>
-          <el-input v-model="itemForm.item_cd" />
+        <el-form-item label="備品CD">
+          <el-input v-model="itemForm.item_cd" disabled placeholder="自動採番" />
         </el-form-item>
         <el-form-item label="品名" required>
           <el-input v-model="itemForm.item_name" />
@@ -403,6 +403,7 @@ import {
   createSupplyItem,
   createSupplyOrder,
   deleteSupplyItem,
+  fetchNextSupplyItemCd,
   fetchSupplyItems,
   fetchSupplyOrder,
   fetchSupplyOrders,
@@ -573,7 +574,7 @@ function onSupplierChange() {
   void loadOrders()
 }
 
-function openItemDialog(row?: SupplyItem) {
+async function openItemDialog(row?: SupplyItem) {
   if (row ? !guardMasterOperation(canEditMaster) : !guardMasterOperation(canCreateMaster)) return
   if (!supplierCd.value) {
     ElMessage.warning('仕入先を選択してください')
@@ -590,6 +591,13 @@ function openItemDialog(row?: SupplyItem) {
   itemForm.is_discontinued = row?.is_discontinued ?? false
   itemForm.remarks = row?.remarks ?? ''
   itemDialogVisible.value = true
+  if (!row) {
+    try {
+      itemForm.item_cd = await fetchNextSupplyItemCd()
+    } catch {
+      itemForm.item_cd = 'B0001'
+    }
+  }
 }
 
 async function saveItem() {
