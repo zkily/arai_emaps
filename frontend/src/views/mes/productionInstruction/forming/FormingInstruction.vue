@@ -1225,8 +1225,30 @@ const getRowKey = (row: any): string => {
   return `${row.plan_date}_${row.machine_name}_${row.product_cd}_${row.process_name || '成型'}`
 }
 
+const normalizePlanDateKey = (value: unknown): string => {
+  if (!value) return ''
+  return JapanDateUtils.normalizeDate(String(value)).replace(/\//g, '-')
+}
+
+/** 備考は設備名×生産日で共有する */
+const syncMachineDateRemarks = (row: any) => {
+  const planDate = normalizePlanDateKey(row?.plan_date)
+  const machineName = String(row?.machine_name || '').trim()
+  if (!planDate || !machineName) return
+  const remarks = row?.remarks || ''
+  allFilteredPlanData.value.forEach((item: any) => {
+    if (
+      normalizePlanDateKey(item?.plan_date) === planDate &&
+      String(item?.machine_name || '').trim() === machineName
+    ) {
+      item.remarks = remarks
+    }
+  })
+}
+
 // 处理備考输入（防抖自动保存）
 const handleRemarksInput = (row: any) => {
+  syncMachineDateRemarks(row)
   const rowKey = getRowKey(row)
 
   // 清除之前的定时器
@@ -1243,7 +1265,7 @@ const handleRemarksInput = (row: any) => {
   remarksSaveTimers.set(rowKey, timer)
 }
 
-// 保存備考（remarks）
+// 保存備考（remarks）— 設備名×生産日
 const saveRemarks = async (row: any, showSuccessMessage = true) => {
   if (!guardMesOperation(canEdit)) return
   try {
@@ -1254,55 +1276,25 @@ const saveRemarks = async (row: any, showSuccessMessage = true) => {
       remarksSaveTimers.delete(rowKey)
     }
 
-    // 检查是否有必要的字段来标识记录
-    if (!row.id && !row.plan_date && !row.machine_name && !row.product_cd) {
-      console.warn('无法保存備考：缺少必要的标识字段')
+    const planDate = normalizePlanDateKey(row?.plan_date)
+    const machineName = String(row?.machine_name || '').trim()
+    if (!planDate || !machineName) {
+      console.warn('无法保存備考：設備名または生産日がありません')
       return
     }
 
-    // 准备更新数据
-    const updateData: any = {
+    syncMachineDateRemarks(row)
+
+    const result = (await request.put('/api/mes/forming-plan-data/remarks', {
+      plan_date: planDate,
+      machine_name: machineName,
+      process_name: row.process_name || '成型',
       remarks: row.remarks || '',
-    }
-
-    // 如果有id，使用id更新
-    if (row.id) {
-      updateData.id = row.id
-    } else {
-      // 否则使用组合字段来标识记录
-      updateData.plan_date = row.plan_date
-      updateData.machine_name = row.machine_name
-      updateData.product_cd = row.product_cd
-      updateData.process_name = row.process_name || '成型'
-    }
-
-    // スケジュール由来データに備考列が無いため API 更新なし（画面入力のみ）
-    if (planDataApiPath.value === '/api/mes/forming-plan-data') {
-      return
-    }
-
-    // 调用后端API更新remarks
-    const result = (await request.put('/api/excel-monitor/plan-data/remarks', updateData)) as ApiResponse
+    })) as ApiResponse
 
     if (result.success) {
       if (showSuccessMessage) {
         ElMessage.success('備考を保存しました')
-      }
-      // 更新本地数据
-      const index = planData.value.findIndex((item: any) => {
-        if (row.id) {
-          return item.id === row.id
-        } else {
-          return (
-            item.plan_date === row.plan_date &&
-            item.machine_name === row.machine_name &&
-            item.product_cd === row.product_cd &&
-            (item.process_name || '成型') === (row.process_name || '成型')
-          )
-        }
-      })
-      if (index !== -1) {
-        planData.value[index].remarks = row.remarks
       }
     } else {
       ElMessage.error((result.message as string) || '備考の保存に失敗しました')
@@ -5297,6 +5289,24 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
   // 全ての非同期処理の完了を待機
   const tableRows = await Promise.all(tableRowsPromises)
+
+  // 手入力備考（設備名×生産日）があれば既存備考を上書き。段替アルゴリズム自体は変更しない
+  const remarksByMachine = new Map<string, string>()
+  for (const item of planData || []) {
+    const itemDate = JapanDateUtils.normalizeDate(item?.plan_date || '').replace(/\//g, '-')
+    if (itemDate !== filterDateForTotal) continue
+    const machine = String(item?.machine_name || '').trim()
+    const remarks = String(item?.remarks || '').trim()
+    if (machine && remarks && !remarksByMachine.has(machine)) {
+      remarksByMachine.set(machine, remarks)
+    }
+  }
+  for (const row of tableRows) {
+    const saved = remarksByMachine.get(String(row?.line || '').trim())
+    if (saved) {
+      row.remarks = saved
+    }
+  }
 
   return { tableRows, productionDate, totalQuantity, currentDateTime }
 }

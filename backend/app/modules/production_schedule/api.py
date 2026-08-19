@@ -2198,9 +2198,186 @@ async def get_mes_forming_plan_data_from_schedule(
     result = await db.execute(sql, params)
     rows = result.mappings().fetchall()
     records = [_mes_schedule_plan_row_to_record(dict(r)) for r in rows]
+    await _apply_mes_plan_machine_remarks(
+        db,
+        records,
+        process_label,
+        startDate,
+        endDate,
+        (machineName or "").strip() or None,
+    )
     return {
         "success": True,
         "data": {"records": records, "total": total},
+        "message": "OK",
+    }
+
+
+MES_PLAN_MACHINE_REMARKS_MAX_LEN = 500
+
+
+def _mes_plan_date_key(v: Any) -> str:
+    if v is None:
+        return ""
+    if hasattr(v, "isoformat"):
+        return str(v.isoformat())[:10]
+    return str(v).strip()[:10].replace("/", "-")
+
+
+async def _apply_mes_plan_machine_remarks(
+    db: AsyncSession,
+    records: list[dict],
+    process_label: str,
+    start_date: str,
+    end_date: str,
+    machine_name: Optional[str],
+) -> None:
+    """計画行へ設備名×生産日の手入力備考を載せる（テーブル未作成時は無視）。"""
+    if not records:
+        return
+    try:
+        result = await db.execute(
+            text(
+                """
+                SELECT plan_date, machine_name, remarks
+                FROM mes_plan_machine_remarks
+                WHERE process_name = :process_name
+                  AND plan_date BETWEEN :start_date AND :end_date
+                  AND (:machine_name IS NULL OR machine_name = :machine_name)
+                """
+            ),
+            {
+                "process_name": process_label,
+                "start_date": start_date,
+                "end_date": end_date,
+                "machine_name": machine_name,
+            },
+        )
+    except Exception as e:
+        logger.warning("mes_plan_machine_remarks 読取失敗: %s", e)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return
+
+    overlay: dict[tuple[str, str], str] = {}
+    for row in result.mappings().all():
+        d = _mes_plan_date_key(row.get("plan_date"))
+        m = str(row.get("machine_name") or "").strip()
+        remarks = str(row.get("remarks") or "").strip()
+        if d and m and remarks:
+            overlay[(d, m)] = remarks
+    if not overlay:
+        return
+    for rec in records:
+        key = (
+            _mes_plan_date_key(rec.get("plan_date")),
+            str(rec.get("machine_name") or "").strip(),
+        )
+        saved = overlay.get(key)
+        if saved:
+            rec["remarks"] = saved
+
+
+class MesPlanMachineRemarksBody(BaseModel):
+    plan_date: str
+    machine_name: str
+    process_name: Optional[str] = None
+    remarks: Optional[str] = ""
+
+
+def _reraise_mes_plan_machine_remarks_db_error(e: Exception) -> None:
+    msg = str(e).lower()
+    if "mes_plan_machine_remarks" in msg and (
+        "doesn't exist" in msg or "not exist" in msg or "unknown table" in msg
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="mes_plan_machine_remarks テーブルが存在しません。"
+            "マイグレーション 115_mes_plan_machine_remarks.sql を実行してください。",
+        ) from e
+
+
+@router.put("/mes/forming-plan-data/remarks")
+async def upsert_mes_plan_machine_remarks(
+    body: MesPlanMachineRemarksBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """成型指示の備考を設備名×生産日で保存（空文字は削除）。"""
+    d = _parse_date_ymd((body.plan_date or "").replace("/", "-"))
+    if d is None:
+        raise HTTPException(status_code=400, detail="plan_date は YYYY-MM-DD 形式で指定してください")
+    machine_name = (body.machine_name or "").strip()
+    if not machine_name:
+        raise HTTPException(status_code=400, detail="設備名を指定してください")
+    pn = (body.process_name or "").strip()
+    process_name = pn if pn in ("成型", "溶接") else "成型"
+    remarks = (body.remarks or "").strip()
+    if len(remarks) > MES_PLAN_MACHINE_REMARKS_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"備考は{MES_PLAN_MACHINE_REMARKS_MAX_LEN}文字以内で入力してください",
+        )
+    updater = getattr(current_user, "username", None)
+    try:
+        if not remarks:
+            await db.execute(
+                text(
+                    """
+                    DELETE FROM mes_plan_machine_remarks
+                    WHERE process_name = :process_name
+                      AND plan_date = :plan_date
+                      AND machine_name = :machine_name
+                    """
+                ),
+                {
+                    "process_name": process_name,
+                    "plan_date": d,
+                    "machine_name": machine_name,
+                },
+            )
+        else:
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO mes_plan_machine_remarks
+                      (process_name, plan_date, machine_name, remarks, updated_by)
+                    VALUES
+                      (:process_name, :plan_date, :machine_name, :remarks, :updated_by)
+                    ON DUPLICATE KEY UPDATE
+                      remarks = VALUES(remarks),
+                      updated_by = VALUES(updated_by)
+                    """
+                ),
+                {
+                    "process_name": process_name,
+                    "plan_date": d,
+                    "machine_name": machine_name,
+                    "remarks": remarks,
+                    "updated_by": updater,
+                },
+            )
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        _reraise_mes_plan_machine_remarks_db_error(e)
+        logger.exception("mes_plan_machine_remarks 保存失敗")
+        raise HTTPException(status_code=500, detail="備考の保存に失敗しました") from e
+    return {
+        "success": True,
+        "data": {
+            "plan_date": d.isoformat(),
+            "machine_name": machine_name,
+            "process_name": process_name,
+            "remarks": remarks,
+        },
         "message": "OK",
     }
 
