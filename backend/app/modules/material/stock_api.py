@@ -54,6 +54,95 @@ from app.modules.material.schemas import (
 
 router = APIRouter()
 
+# current_stock 再計算の入力（これらの更新後は当該材料を日付順に再計算する）
+_STOCK_RECALC_FIELDS = frozenset(
+    {"initial_stock", "order_quantity", "adjustment_quantity", "planned_usage"}
+)
+
+
+def _int_qty(v: Any) -> int:
+    """在庫計算用。None / 空は 0。"""
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _apply_current_stock_formula(sorted_rows: list[MaterialStock]) -> int:
+    """
+    1 材料分の current_stock を日付昇順で再計算する（in-place）。
+
+    計算式:
+      current_stock = initial_stock + order_quantity + adjustment_quantity
+                      - planned_usage + 前日の current_stock
+
+    開始日:
+      - initial_stock > 0 の行があれば、その最終日（スナップショット日）。前日結転は 0。
+      - 一度も初期在庫が無い材料は先頭日から計算する（前日結転 0）。
+        ※ 従来は initial_stock>0 が無い材料を丸ごとスキップしており、
+          使用数反映後も current_stock が減らない原因になっていた。
+    """
+    if not sorted_rows:
+        return 0
+    rows_with_initial = [r for r in sorted_rows if _int_qty(r.initial_stock) > 0]
+    if rows_with_initial:
+        start_date = max(r.date for r in rows_with_initial)
+        to_calc = [r for r in sorted_rows if r.date >= start_date]
+    else:
+        to_calc = list(sorted_rows)
+
+    prev_current = 0
+    updated = 0
+    for r in to_calc:
+        new_current = (
+            _int_qty(r.initial_stock)
+            + _int_qty(r.order_quantity)
+            + _int_qty(r.adjustment_quantity)
+            - _int_qty(r.planned_usage)
+            + prev_current
+        )
+        if _int_qty(r.current_stock) != new_current:
+            r.current_stock = new_current
+            updated += 1
+        prev_current = new_current
+    return updated
+
+
+async def recalculate_material_current_stock(
+    db: AsyncSession,
+    material_cds: Optional[list[str]] = None,
+) -> tuple[int, int]:
+    """
+    material_stock.current_stock を再計算する（commit しない）。
+
+    Returns:
+        (calculated_count, updated_count)
+        calculated_count: 計算対象材料数
+        updated_count: current_stock が変わった行数
+    """
+    q = select(MaterialStock)
+    if material_cds is not None:
+        unique_cds = list(dict.fromkeys(cd for cd in material_cds if cd))
+        if not unique_cds:
+            return 0, 0
+        q = q.where(MaterialStock.material_cd.in_(unique_cds))
+    q = q.order_by(MaterialStock.material_cd, MaterialStock.date.asc())
+    rows = (await db.execute(q)).scalars().all()
+    if not rows:
+        return 0, 0
+
+    by_material: dict[str, list[MaterialStock]] = defaultdict(list)
+    for r in rows:
+        by_material[r.material_cd].append(r)
+
+    calculated_count = 0
+    updated_count = 0
+    for list_rows in by_material.values():
+        sorted_rows = sorted(list_rows, key=lambda x: x.date)
+        updated_count += _apply_current_stock_formula(sorted_rows)
+        calculated_count += 1
+    return calculated_count, updated_count
+
 
 # ─────────────────────────────────────────────
 # material_stock  メイン在庫
@@ -209,42 +298,13 @@ async def calculate_material_stock(
     """
     在庫計算: material_stock の current_stock を再計算する。
     材料ごとに initial_stock > 0 である最終日を開始計算日とし、その日以降を計算する。
+    初期在庫が一度も無い材料は先頭日から計算する（スキップしない）。
     開始計算日の前日結転は 0 とする。
     空または 0 の項目はすべて 0 として計算に用いる。
     計算式: current_stock = initial_stock + order_quantity + adjustment_quantity - planned_usage + 前日の current_stock
     （半端転送分は adjustment_quantity に負数で記録され、再計算でも再現される）
     """
-    q = select(MaterialStock).order_by(MaterialStock.material_cd, MaterialStock.date.asc())
-    rows = (await db.execute(q)).scalars().all()
-    if not rows:
-        return {"success": True, "data": {"calculated_count": 0, "updated_count": 0}}
-
-    by_material: dict[str, list[MaterialStock]] = defaultdict(list)
-    for r in rows:
-        by_material[r.material_cd].append(r)
-
-    calculated_count = 0
-    updated_count = 0
-    for _material_cd, list_rows in by_material.items():
-        sorted_rows = sorted(list_rows, key=lambda x: x.date)
-        rows_with_initial = [r for r in sorted_rows if (r.initial_stock or 0) > 0]
-        if not rows_with_initial:
-            continue
-        start_date = max(r.date for r in rows_with_initial)
-        to_calc = [r for r in sorted_rows if r.date >= start_date]
-        prev_current = 0
-        for r in to_calc:
-            init = int(r.initial_stock or 0)
-            order_qty = int(r.order_quantity or 0)
-            adj = int(r.adjustment_quantity or 0)
-            usage = int(r.planned_usage or 0)
-            new_current = init + order_qty + adj - usage + prev_current
-            if r.current_stock != new_current:
-                r.current_stock = new_current
-                updated_count += 1
-            prev_current = new_current
-        calculated_count += 1
-
+    calculated_count, updated_count = await recalculate_material_current_stock(db)
     await db.commit()
     return {
         "success": True,
@@ -490,9 +550,11 @@ async def transfer_to_sub(
         remarks=row.remarks,
     )
     db.add(sub_row)
-    # 再計算式に含めるため調整数へ記録（負数）。即時表示用に current_stock も減算。
+    # 再計算式に含めるため調整数へ記録（負数）。即時表示用に current_stock も減算し、続けて日付順再計算。
     row.adjustment_quantity = int(row.adjustment_quantity or 0) - body.quantity
     row.current_stock = (row.current_stock or 0) - body.quantity
+    await db.flush()
+    await recalculate_material_current_stock(db, [row.material_cd])
     await db.commit()
     await db.refresh(sub_row)
     return {"success": True, "data": _sub_to_dict(sub_row)}
@@ -505,13 +567,17 @@ async def update_material_stock(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
-    """材料在庫更新"""
+    """材料在庫更新。使用数・注文・初期在庫・調整数が変わった場合は current_stock を再計算する。"""
     result = await db.execute(select(MaterialStock).where(MaterialStock.id == item_id))
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="レコードが見つかりません")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changed = body.model_dump(exclude_unset=True)
+    for field, value in changed.items():
         setattr(row, field, value)
+    if _STOCK_RECALC_FIELDS & set(changed.keys()):
+        await db.flush()
+        await recalculate_material_current_stock(db, [row.material_cd])
     await db.commit()
     await db.refresh(row)
     return {"success": True, "data": _stock_to_dict(row)}

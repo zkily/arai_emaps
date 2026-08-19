@@ -146,6 +146,12 @@ const routes: RouteRecordRaw[] = [
           { path: 'order', name: 'PartOrder', component: () => import('@/views/erp/purchase/part/partOrder/PartOrderPage.vue'), meta: { title: '部品在庫管理', group: '発注管理', requiresAuth: true } },
         ],
       },
+      {
+        path: 'erp/purchase/supplies',
+        name: 'SupplyPurchase',
+        component: () => import('@/views/erp/purchase/supplies/SupplyPurchasePage.vue'),
+        meta: { title: '備品購入', group: '購買・外注管理', requiresAuth: true },
+      },
 
       // ========== ERP - 在庫管理 (Inventory / WMS) ==========
       { path: 'erp/inventory', name: 'Inventory', component: () => import('@/views/erp/Inventory.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
@@ -286,6 +292,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/material-inspection', name: 'MaterialInspectionMaster', component: () => import('@/views/master/materialInspection/MaterialInspectionMaster.vue'), meta: { title: '材料検品マスタ', requiresAuth: true } },
       { path: 'master/part', name: 'PartMasterList', component: () => import('@/views/master/part/PartList.vue'), meta: { title: '部品マスタ', requiresAuth: true } },
       { path: 'master/supplier', name: 'SupplierList', component: () => import('@/views/master/supplier/SupplierList.vue'), meta: { title: '仕入先マスタ', requiresAuth: true } },
+      { path: 'master/supply-item', name: 'SupplyItemList', component: () => import('@/views/master/supplyItem/SupplyItemList.vue'), meta: { title: '備品マスタ', requiresAuth: true } },
       { path: 'master/process', name: 'ProcessList', component: () => import('@/views/master/process/ProcessList.vue'), meta: { title: '工程マスタ', requiresAuth: true } },
       { path: 'master/process-route', name: 'ProcessRouteList', component: () => import('@/views/master/processRoute/ProcessRouteList.vue'), meta: { title: '工程ルートマスタ', requiresAuth: true } },
       { path: 'master/process-route/:route_cd/steps', name: 'RouteStepList', component: () => import('@/views/master/processRoute/ProcessRouteStepEditor.vue'), meta: { title: 'ルートステップ編集', requiresAuth: true } },

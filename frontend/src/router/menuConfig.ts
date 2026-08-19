@@ -62,6 +62,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_OUTSOURCING_SUPPLIED_STOCK', name: '支給材料在庫', icon: 'Goods', path: '/erp/purchase/outsourcing/supplied-material-stock', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 9 },
   { code: 'ERP_OUTSOURCING_USAGE', name: '使用数管理', icon: 'DataLine', path: '/erp/purchase/outsourcing/usage', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 10 },
   { code: 'ERP_OUTSOURCING_MATERIAL_ISSUE', name: '支給材料出庫', icon: 'Upload', path: '/erp/purchase/outsourcing/material-issue', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 11 },
+  { code: 'ERP_PURCHASE_SUPPLIES', name: '備品購入', icon: 'Box', path: '/erp/purchase/supplies', parentCode: 'ERP_PURCHASE', sortOrder: 4 },
 
   // ===== 3. 在庫管理 (Inventory / WMS) =====
   { code: 'ERP_INVENTORY', name: '在庫管理', path: '/erp/inventory', icon: 'TakeawayBox', parentCode: 'ERP', sortOrder: 5 },
@@ -214,6 +215,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_MATERIAL_INSPECTION', name: '材料検品マスタ', icon: 'CircleCheck', path: '/master/material-inspection', parentCode: 'MASTER_LIST', sortOrder: 2.5 },
   { code: 'MASTER_PART', name: '部品マスタ', icon: 'Grid', path: '/master/part', parentCode: 'MASTER_LIST', sortOrder: 2.75 },
   { code: 'MASTER_SUPPLIER', name: '仕入先マスタ', icon: 'OfficeBuilding', path: '/master/supplier', parentCode: 'MASTER_LIST', sortOrder: 3 },
+  { code: 'MASTER_SUPPLY_ITEM', name: '備品マスタ', icon: 'Box', path: '/master/supply-item', parentCode: 'MASTER_LIST', sortOrder: 3.5 },
   { code: 'MASTER_PROCESS', name: '工程マスタ', icon: 'Operation', path: '/master/process', parentCode: 'MASTER_LIST', sortOrder: 4 },
   { code: 'MASTER_PROCESS_ROUTE', name: '工程ルートマスタ', icon: 'Share', path: '/master/process-route', parentCode: 'MASTER_LIST', sortOrder: 5 },
   { code: 'MASTER_PRODUCT_PROCESS_ROUTE', name: '製品ルートマスタ', icon: 'Guide', path: '/master/product-process-route', parentCode: 'MASTER_LIST', sortOrder: 6 },

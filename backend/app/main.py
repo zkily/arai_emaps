@@ -40,6 +40,7 @@ from app.modules import (
     part,
     part_data_generation,
     part_order,
+    supply_purchase,
     fin,
     ai,
     reports,
@@ -384,6 +385,7 @@ app.include_router(
     tags=["部品在庫データ生成"],
 )
 app.include_router(part_order.router, prefix="/api/part-order", tags=["部品注文"])
+app.include_router(supply_purchase.router, prefix="/api/supply-purchase", tags=["備品購入"])
 app.include_router(shipping.router, prefix="/api/shipping", tags=["出荷管理"])
 app.include_router(excel_monitor.router, prefix="/api/excel-monitor", tags=["Excel監視・計画データ"])
 app.include_router(machine_work_time_config.router, prefix="/api/machine-work-time-config", tags=["設備運行時間設定"])

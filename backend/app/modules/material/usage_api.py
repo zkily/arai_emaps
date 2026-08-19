@@ -380,6 +380,8 @@ async def commit_material_usage(
             → material_stock.planned_usage を更新
 
     Step 3: Step 2 で material_stock 更新に成功した材料のみ reflected / 切断「反映済」を付ける
+
+    最後に更新した材料の current_stock を再計算する。
     """
     today_d = _parse_date(body.today_date)
     if today_d is None:
@@ -582,6 +584,21 @@ async def commit_material_usage(
             raise HTTPException(
                 status_code=500,
                 detail=f"Step 3 reflected 更新に失敗しました: {e}",
+            ) from e
+
+    # planned_usage 反映後、当該材料の current_stock を再計算する
+    if unique_updated_cds:
+        try:
+            from app.modules.material.stock_api import recalculate_material_current_stock
+
+            await db.flush()
+            await recalculate_material_current_stock(db, unique_updated_cds)
+        except Exception as e:
+            logger.warning("usage commit: current_stock 再計算失敗: %s", e)
+            await db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"現在在庫の再計算に失敗しました: {e}",
             ) from e
 
     try:

@@ -1,7 +1,7 @@
 /**
  * 材料在庫計算
  * - getCurrentMaterialStockStatus: 現在の在庫状態取得
- * - calculateMaterialStock: 在庫再計算（initial_stock>0 の最終日から current_stock を算出し DB 更新）
+ * - calculateMaterialStock: 在庫再計算（initial_stock>0 の最終日、無い場合は先頭日から current_stock を算出し DB 更新）
  */
 import request from '@/shared/api/request'
 
@@ -30,7 +30,7 @@ export interface CalculateMaterialStockResult {
   }
 }
 
-/** 材料在庫計算: 各材料で initial_stock>0 の最終日から current_stock を再計算し DB を更新 */
+/** 材料在庫計算: 各材料で initial_stock>0 の最終日（無い場合は先頭日）から current_stock を再計算し DB を更新 */
 export async function calculateMaterialStock(): Promise<CalculateMaterialStockResult> {
   try {
     const res = await request.post(`${PREFIX}/calculate`)
