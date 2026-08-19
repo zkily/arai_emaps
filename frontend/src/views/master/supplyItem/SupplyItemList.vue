@@ -85,7 +85,7 @@
             <span class="code-cell">{{ row.item_cd }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="備品名" prop="item_name" min-width="150" show-overflow-tooltip />
+        <el-table-column label="品名" prop="item_name" min-width="150" show-overflow-tooltip />
         <el-table-column label="規格" prop="specification" min-width="120" show-overflow-tooltip />
         <el-table-column label="単位" prop="unit" width="64" align="center" />
         <el-table-column label="個数" prop="pack_qty" width="70" align="right" />
@@ -151,7 +151,7 @@
         <el-form-item label="備品CD" prop="item_cd">
           <el-input v-model="form.item_cd" maxlength="50" show-word-limit />
         </el-form-item>
-        <el-form-item label="備品名" prop="item_name">
+        <el-form-item label="品名" prop="item_name">
           <el-input v-model="form.item_name" maxlength="200" show-word-limit />
         </el-form-item>
         <el-form-item label="規格">
@@ -244,7 +244,7 @@ const form = reactive({
 const formRules: FormRules = {
   supplier_cd: [{ required: true, message: '仕入先を選択してください', trigger: 'change' }],
   item_cd: [{ required: true, message: '備品CDを入力してください', trigger: 'blur' }],
-  item_name: [{ required: true, message: '備品名を入力してください', trigger: 'blur' }],
+  item_name: [{ required: true, message: '品名を入力してください', trigger: 'blur' }],
 }
 
 function formatMoney(v: number) {

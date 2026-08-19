@@ -131,7 +131,7 @@
         >
           <el-table-column type="selection" width="42" :selectable="canSelectItem" />
           <el-table-column prop="item_cd" label="備品CD" width="110" show-overflow-tooltip />
-          <el-table-column prop="item_name" label="備品名" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="item_name" label="品名" min-width="140" show-overflow-tooltip />
           <el-table-column prop="specification" label="規格" min-width="110" show-overflow-tooltip />
           <el-table-column prop="unit" label="単位" width="64" align="center" />
           <el-table-column prop="pack_qty" label="個数" width="70" align="right" />
@@ -257,7 +257,7 @@
         <el-form-item label="備品CD" required>
           <el-input v-model="itemForm.item_cd" />
         </el-form-item>
-        <el-form-item label="備品名" required>
+        <el-form-item label="品名" required>
           <el-input v-model="itemForm.item_name" />
         </el-form-item>
         <el-form-item label="規格">
@@ -301,7 +301,7 @@
         </el-descriptions>
         <el-table :data="orderDetail.lines || []" size="small" border class="detail-table">
           <el-table-column prop="item_cd" label="CD" width="90" />
-          <el-table-column prop="item_name" label="備品名" min-width="120" />
+          <el-table-column prop="item_name" label="品名" min-width="120" />
           <el-table-column prop="order_qty" label="数量" width="70" align="right" />
           <el-table-column label="金額" width="90" align="right">
             <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
@@ -594,7 +594,7 @@ function openItemDialog(row?: SupplyItem) {
 
 async function saveItem() {
   if (!itemForm.item_cd.trim() || !itemForm.item_name.trim()) {
-    ElMessage.warning('備品CDと備品名を入力してください')
+    ElMessage.warning('備品CDと品名を入力してください')
     return
   }
   itemSaving.value = true
@@ -749,7 +749,6 @@ function generatePrintHtml(detail: SupplyPurchaseOrder) {
     .map(
       (ln) => `
       <tr>
-        <td class="text-center">${escapeHtml(ln.item_cd)}</td>
         <td>${escapeHtml(ln.item_name)}</td>
         <td class="text-center">${escapeHtml(ln.specification || '')}</td>
         <td class="text-center">${escapeHtml(ln.unit)}</td>
@@ -801,13 +800,12 @@ function generatePrintHtml(detail: SupplyPurchaseOrder) {
       <table>
         <thead>
           <tr>
-            <th width="12%">備品CD</th>
-            <th width="20%">備品名</th>
-            <th width="16%">規格</th>
-            <th width="8%">単位</th>
-            <th width="10%">数量</th>
-            <th width="14%">単価</th>
-            <th width="20%">金額</th>
+            <th width="26%">品名</th>
+            <th width="18%">規格</th>
+            <th width="10%">単位</th>
+            <th width="12%">数量</th>
+            <th width="16%">単価</th>
+            <th width="18%">金額</th>
           </tr>
         </thead>
         <tbody>
