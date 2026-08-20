@@ -348,6 +348,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            row-key="id"
             stripe
             border
             class="modern-table"
@@ -408,13 +409,16 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
+                  :key="`usage-${row.id}`"
+                  :model-value="emptyIfZero(row.usage_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="usage-quantity-input"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
+                  @change="() => handleUsageQuantityChange(row)"
+                  @wheel.prevent
                 />
               </template>
             </el-table-column>
@@ -426,26 +430,32 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.order_quantity === 0 ? undefined : row.order_quantity)"
+                  :key="`order-${row.id}`"
+                  :model-value="emptyIfZero(row.order_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="order-quantity-input"
-                  @update:model-value="(val) => { row.order_quantity = val ?? 0; handleOrderQuantityChange(row); }"
+                  @update:model-value="(val) => { row.order_quantity = val ?? 0 }"
+                  @change="() => handleOrderQuantityChange(row)"
+                  @wheel.prevent
                 />
               </template>
             </el-table-column>
             <el-table-column label="注文本数" width="140" align="center">
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.order_bundle_quantity === 0 ? undefined : row.order_bundle_quantity)"
+                  :key="`bundle-${row.id}`"
+                  v-model="row.order_bundle_quantity"
                   :min="0"
                   :max="999999"
                   :precision="0"
+                  :value-on-clear="0"
                   size="small"
                   :controls="false"
-                  @update:model-value="(val) => { row.order_bundle_quantity = val ?? 0; handleOrderBundleQuantityChange(row); }"
+                  @change="() => handleOrderBundleQuantityChange(row)"
+                  @wheel.prevent
                 />
               </template>
             </el-table-column>
@@ -476,6 +486,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            row-key="id"
             stripe
             border
             class="modern-table"
@@ -523,13 +534,16 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
+                  :key="`usage-${row.id}`"
+                  :model-value="emptyIfZero(row.usage_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="usage-quantity-input"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
+                  @change="() => handleUsageQuantityChange(row)"
+                  @wheel.prevent
                 />
               </template>
             </el-table-column>
@@ -541,6 +555,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            row-key="id"
             stripe
             border
             class="modern-table"
@@ -619,13 +634,16 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.order_quantity === 0 ? undefined : row.order_quantity)"
+                  :key="`order-${row.id}`"
+                  :model-value="emptyIfZero(row.order_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="order-quantity-input"
-                  @update:model-value="(val) => { row.order_quantity = val ?? 0; handleOrderQuantityChange(row); }"
+                  @update:model-value="(val) => { row.order_quantity = val ?? 0 }"
+                  @change="() => handleOrderQuantityChange(row)"
+                  @wheel.prevent
                 />
               </template>
             </el-table-column>
@@ -869,14 +887,17 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
+                  :key="`sub-usage-${row.id}`"
+                  :model-value="emptyIfZero(row.usage_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   :controls="true"
                   :step="1"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
+                  @change="() => handleUsageQuantityChange(row)"
+                  @wheel.prevent
                   class="usage-quantity-input"
                 />
               </template>
@@ -1246,7 +1267,7 @@
             <div class="manual-order-grid manual-order-grid--order">
               <el-form-item label="注文束数" prop="order_quantity" class="manual-order-field manual-order-field--bundle">
                 <el-input-number
-                  v-model="manualOrderForm.order_quantity"
+                  :model-value="emptyIfZero(manualOrderForm.order_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
@@ -1254,6 +1275,7 @@
                   class="manual-order-input"
                   size="small"
                   controls-position="right"
+                  @update:model-value="(val) => { manualOrderForm.order_quantity = val ?? 0 }"
                   @change="calculateOrderDetails"
                 />
               </el-form-item>
@@ -1693,13 +1715,14 @@
           <div class="sub-edit-grid">
             <el-form-item label="注文束数" class="sub-edit-field">
               <el-input-number
-                v-model="subEditForm.order_quantity"
+                :model-value="emptyIfZero(subEditForm.order_quantity)"
                 :min="0"
                 :max="999999"
                 :precision="0"
                 size="default"
                 controls-position="right"
                 class="sub-edit-input"
+                @update:model-value="(val) => { subEditForm.order_quantity = val ?? 0 }"
               />
             </el-form-item>
             <el-form-item label="注文本数" class="sub-edit-field">
@@ -1715,13 +1738,14 @@
             </el-form-item>
             <el-form-item label="使用数" class="sub-edit-field">
               <el-input-number
-                v-model="subEditForm.usage_quantity"
+                :model-value="emptyIfZero(subEditForm.usage_quantity)"
                 :min="0"
                 :max="999999"
                 :precision="0"
                 size="default"
                 controls-position="right"
                 class="sub-edit-input"
+                @update:model-value="(val) => { subEditForm.usage_quantity = val ?? 0 }"
               />
             </el-form-item>
             <el-form-item label="ラベル色" class="sub-edit-field">
@@ -1941,6 +1965,10 @@ const materialOptions = ref<Material[]>([])
 const selectedMaterial = ref<Material | null>(null)
 const manualOrderFormRef = ref()
 const tableData = ref<MaterialOrderItem[]>([])
+/** 手入力確定前の値。再描画で保存しないための比較用 */
+const lastSavedOrderQty = new Map<number, number>()
+const lastSavedBundleQty = new Map<number, number>()
+const lastSavedUsageQty = new Map<number, number>()
 const subTableData = ref<MaterialOrderItem[]>([])
 const initialStockData = ref<InitialStockItem[]>([])
 /** 材料注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
@@ -2370,6 +2398,14 @@ const fetchData = async () => {
 
     if ((result as any)?.success !== false && list) {
       tableData.value = list.map((item: any) => mapMaterialStockRow(item))
+      lastSavedOrderQty.clear()
+      lastSavedBundleQty.clear()
+      lastSavedUsageQty.clear()
+      for (const row of tableData.value) {
+        lastSavedOrderQty.set(row.id, Number(row.order_quantity) || 0)
+        lastSavedBundleQty.set(row.id, Number(row.order_bundle_quantity) || 0)
+        lastSavedUsageQty.set(row.id, Number(row.usage_quantity) || 0)
+      }
       pagination.total = total
       updateStats()
     } else {
@@ -2754,11 +2790,13 @@ const handleUsageStatusSearch = () => {
 // 处理使用数编辑（材料一覧用 main stock / 半端材料用 sub）
 const handleUsageQuantityChange = async (row: any) => {
   if (!guardPurchaseOperation(canEdit)) return
+  const next = Number(row.usage_quantity) || 0
+  if (row.id && lastSavedUsageQty.get(row.id) === next) return
 
   try {
     console.log('更新使用数:', row.id, row.usage_quantity)
 
-    const body = { planned_usage: row.usage_quantity ?? 0 }
+    const body = { planned_usage: next }
     const isSubTab = activeTab.value === 'sub'
     const response = isSubTab
       ? await updateMaterialStockSub(row.id, body)
@@ -2768,6 +2806,7 @@ const handleUsageQuantityChange = async (row: any) => {
 
     if ((response as any)?.success) {
       ElMessage.success('使用数を更新しました')
+      if (row.id) lastSavedUsageQty.set(row.id, next)
       if (isSubTab) {
         await fetchSubData()
       } else {
@@ -3078,6 +3117,12 @@ const formatValue = (value: number | null | undefined): string => {
   return value.toString()
 }
 
+/** 数字入力: 0 は空欄表示（保存は @change のみ） */
+const emptyIfZero = (value: number | null | undefined): number | undefined => {
+  const n = Number(value)
+  return !n ? undefined : n
+}
+
 // 格式化数值，如果为0则不显示，但保留单位
 const formatValueWithUnit = (value: number | null | undefined, unit: string = ''): string => {
   if (value === null || value === undefined || value === 0) {
@@ -3158,9 +3203,11 @@ const handleTabChange = (tabName: string | number) => {
 
 const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
   if (!guardPurchaseOperation(canEdit)) return
+  const next = Number(row.order_quantity) || 0
+  if (row.id && lastSavedOrderQty.get(row.id) === next) return
 
   // 计算受注捆数和捆重量
-  if (row.order_quantity > 0 && row.pieces_per_bundle && row.long_weight) {
+  if (next > 0 && row.pieces_per_bundle && row.long_weight) {
     row.order_bundle_quantity = row.order_quantity * row.pieces_per_bundle
     row.bundle_weight = row.order_bundle_quantity * row.long_weight
     // 计算注文金額：注文金額 = bundle_weight * unit_price
@@ -3173,13 +3220,19 @@ const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
 
   updateStats()
   await saveQuantityToDatabase(row)
+  if (row.id) {
+    lastSavedOrderQty.set(row.id, next)
+    lastSavedBundleQty.set(row.id, Number(row.order_bundle_quantity) || 0)
+  }
 }
 
 const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
   if (!guardPurchaseOperation(canEdit)) return
+  const nextBundle = Number(row.order_bundle_quantity) || 0
+  if (row.id && lastSavedBundleQty.get(row.id) === nextBundle) return
 
   // 根据注文本数计算重量和注文金額
-  if (row.order_bundle_quantity > 0 && row.long_weight) {
+  if (nextBundle > 0 && row.long_weight) {
     row.bundle_weight = row.order_bundle_quantity * row.long_weight
     // 计算注文金額：注文金額 = bundle_weight * unit_price
     row.order_amount = row.bundle_weight * (row.unit_price || 0)
@@ -3190,14 +3243,20 @@ const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
 
   updateStats()
   await saveQuantityToDatabase(row)
+  if (row.id) lastSavedBundleQty.set(row.id, nextBundle)
 }
 
 // 保存数量到数据库
 const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
   if (!guardPurchaseOperation(canEdit)) return
+  if (!row.id) {
+    ElMessage.warning('該当レコードが見つかりません')
+    return
+  }
 
   try {
     console.log('开始保存数量到数据库:', {
+      id: row.id,
       material_cd: row.material_cd,
       date: row.date,
       usage_quantity: row.usage_quantity || 0,
@@ -3207,14 +3266,12 @@ const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
       order_amount: row.order_amount || 0,
     })
 
-    const response = await updateMaterialQuantities({
-      material_cd: row.material_cd,
-      date: row.date,
+    const response = await updateMaterialStock(row.id, {
       order_quantity: row.order_quantity || 0,
       order_bundle_quantity: row.order_bundle_quantity || 0,
       // bundle_weight はマスタの束重量列。注文重量は画面側で算出するため上書きしない
       order_amount: row.order_amount || 0,
-    })
+    }) as { success?: boolean; message?: string }
 
     console.log('API响应:', response)
 
