@@ -1669,6 +1669,7 @@ async def get_scheduling_grid(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
+    """日別ガント。lineId 指定（計画作成）時のみ実績を順位瀑布配分する。一覧は保存済みを返す。"""
     try:
         sd = date.fromisoformat(startDate)
         ed = date.fromisoformat(endDate)
@@ -1731,6 +1732,16 @@ async def get_scheduling_grid(
         sid = int(ps.id)
         sid_to_line_id[sid] = lid
         all_schedule_ids.append(sid)
+
+    # 計画作成（lineId）は表示前に 1 設備分を同期。一覧（工程一括）は保存済みを読む。
+    # 全設備の実績再配分は「ライン順で再計算」側で行う。
+    if lineId is not None and all_schedules:
+        machine_by_id = {int(ln.id): ln for ln in lines}
+        for lid, scheds in schedules_by_line.items():
+            line_machine = machine_by_id.get(int(lid))
+            for ps in scheds:
+                await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+        await db.flush()
 
     ee_by_line = await _load_equipment_efficiency_rows_for_machines(db, lines)
 
@@ -1945,7 +1956,7 @@ async def get_scheduling_grid(
             else:
                 # 非完了工単の実績は明細実績を全量表示する。
                 # 日付フィルタは「実績が見えない」不具合を招きやすいため適用しない。
-                # なお、他工単への実績にじみは _sync_actual_from_stock_logs 側の前順位控除で抑制する。
+                # なお、他工単への実績にじみは _sync_actual_from_stock_logs 側の順位瀑布配分で抑制する。
                 actual_daily = dict(actual_daily_raw)
 
             defect_daily = dict(defect_daily_raw)
@@ -2561,8 +2572,10 @@ async def replan_sequence(
     await _purge_pre_forced_start_schedule_rows(db, replannable_on_line)
 
     # 在庫同期（活動判定前）：stock_transaction_logs → schedule_details
-    for ps in replannable_on_line:
-        await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+    # COMPLETED も含め順位昇順に配分する（同製品の上下工単へ瀑布するため）。
+    for ps in all_line_schedules:
+        if (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS", "COMPLETED"):
+            await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
     await db.flush()
     await _purge_pre_forced_start_schedule_rows(db, replannable_on_line)
 
@@ -2607,8 +2620,9 @@ async def replan_sequence(
         )
         await db.flush()
 
-    for ps in updated:
-        await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+    for ps in all_line_schedules:
+        if (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS", "COMPLETED"):
+            await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
     await db.flush()
     await _purge_pre_forced_start_schedule_rows(db, updated)
 
@@ -3830,6 +3844,20 @@ async def _stock_log_defect_process_cd_for_machine(
     return None
 
 
+def _good_actual_by_order_waterfall(
+    leftover: int, planned_today: int, pass_overflow_to_later: bool
+) -> int:
+    """同一ライン・連続する上下（同製品が順に並ぶ）工単へ良品実績を瀑布配分するときの当順位取り分。
+
+    当日、後順位（直下の同製品）にも計画がある場合のみ計画数で頭打ちし、溢出を下位へ。
+    後順位に当日計画が無い／間に別製品がある場合は当順位が当日分を取り込み、未来順位へ書かない。
+    """
+    qty = max(0, int(leftover or 0))
+    if pass_overflow_to_later:
+        return min(qty, max(0, int(planned_today or 0)))
+    return qty
+
+
 async def _sync_actual_from_stock_logs(
     db: AsyncSession, ps: ProductionSchedule, *, machine: Optional[Machine] = None
 ):
@@ -3839,7 +3867,10 @@ async def _sync_actual_from_stock_logs(
     - transaction_type='不良' かつ process_cd=当設備工程（成型 KT04 / 溶接 KT07）→ defect_qty
       マッチ：TRIM(ps.product_cd)=TRIM(target_cd)、DATE(transaction_time)=schedule_date、
       SUM(quantity)。不良は在庫ログに machine_cd が無い場合があるため device 一致は課さない。
-    同一ライン・同一製品の前順位工単に配賦済みの良品/不良を控除し、二重計上を防ぐ。
+    同一ライン・同一製品は順位（order_no）順に良品を瀑布配分する。
+    上下関係は「順位が連続して同製品」の場合のみ（間に別製品があればそこで途切れる）。
+    当日、下位にも計画がある日は上位を計画数まで満たし、残りを下位へ書く。
+    下位に当日計画が無い未来工単へは実績を回さない。
     remaining_qty は 計画 − 良品実績 − 不良 で上書きする。
     """
     from sqlalchemy import func as sa_func
@@ -4004,9 +4035,8 @@ async def _sync_actual_from_stock_logs(
             continue
         prior_defect_by_date[d0] = int(q0 or 0)
 
-    # 同一ライン・同一製品・同日で「後順位」に計画がある日を集める。
-    # 当該日が含まれる場合、自順位は当日計画数で頭打ちし、溢出（計画超過分）を後順位へ回す。
-    # 含まれない（後順位に同製品の計画が無い）場合は最終順位として溢出も取り込む。
+    # 後順位は「順位リストで直後から連続して同製品」の工単だけを上下関係とみなす。
+    # 間に別製品があればそこで途切れ、より後の同製品（未着手の未来順位）へは溢出を回さない。
     if ps_order is None:
         later_cond = and_(
             ProductionSchedule.order_no.is_(None), ProductionSchedule.id > ps.id
@@ -4017,23 +4047,74 @@ async def _sync_actual_from_stock_logs(
             ProductionSchedule.order_no > ps_order,
             and_(ProductionSchedule.order_no == ps_order, ProductionSchedule.id > ps.id),
         )
-    later_planned_res = await db.execute(
-        select(ScheduleDetail.schedule_date)
-        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+    later_all_res = await db.execute(
+        select(ProductionSchedule)
         .where(
             ProductionSchedule.line_id == ps.line_id,
-            sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
-            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS"]),
-            ScheduleDetail.schedule_date <= max_d,
-            ScheduleDetail.schedule_id != ps.id,
-            ScheduleDetail.planned_qty > 0,
+            ProductionSchedule.id != ps.id,
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
             later_cond,
         )
-        .group_by(ScheduleDetail.schedule_date)
+        .order_by(
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no.asc(),
+            ProductionSchedule.id.asc(),
+        )
     )
-    later_planned_dates: set[date] = {
-        d0 for (d0,) in later_planned_res.all() if d0 is not None
-    }
+    consecutive_later_ids: list[int] = []
+    for later_ps in later_all_res.scalars().all():
+        if (later_ps.product_cd or "").strip() != product_cd_norm:
+            break
+        consecutive_later_ids.append(int(later_ps.id))
+
+    later_planned_dates: set[date] = set()
+    if consecutive_later_ids:
+        later_planned_res = await db.execute(
+            select(ScheduleDetail.schedule_date)
+            .where(
+                ScheduleDetail.schedule_id.in_(consecutive_later_ids),
+                ScheduleDetail.planned_qty > 0,
+            )
+            .group_by(ScheduleDetail.schedule_date)
+        )
+        later_planned_dates = {d0 for (d0,) in later_planned_res.all() if d0 is not None}
+
+    # 間に別製品を挟んだ後の同製品ラン（例: 順位7の後に8,9が別製品、順位10が同製品）は、
+    # 前の同製品ランがまだ完了していなければ実績を受け取らない。
+    prev_res = await db.execute(
+        select(ProductionSchedule)
+        .where(
+            ProductionSchedule.line_id == ps.line_id,
+            ProductionSchedule.id != ps.id,
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
+            prior_cond,
+        )
+        .order_by(
+            ProductionSchedule.order_no.is_(None).asc(),
+            ProductionSchedule.order_no.desc(),
+            ProductionSchedule.id.desc(),
+        )
+        .limit(1)
+    )
+    prev_ps = prev_res.scalar_one_or_none()
+    is_new_same_product_run = prev_ps is None or (
+        (prev_ps.product_cd or "").strip() != product_cd_norm
+    )
+    block_future_run_actual = False
+    if is_new_same_product_run:
+        earlier_open_res = await db.execute(
+            select(ProductionSchedule.id)
+            .where(
+                ProductionSchedule.line_id == ps.line_id,
+                ProductionSchedule.id != ps.id,
+                sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, ""))
+                == product_cd_norm,
+                ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS"]),
+                prior_cond,
+            )
+            .limit(1)
+        )
+        block_future_run_actual = earlier_open_res.scalar_one_or_none() is not None
 
     details_to_drop: list[ScheduleDetail] = []
     for det in details:
@@ -4046,27 +4127,26 @@ async def _sync_actual_from_stock_logs(
         raw_defect = defect_by_date.get(dte, 0)
         already_assigned = prior_assigned_by_date.get(dte, 0)
         already_defect = prior_defect_by_date.get(dte, 0)
-        actual = max(0, raw_actual - already_assigned)
+        leftover = max(0, raw_actual - already_assigned)
         defect = max(0, raw_defect - already_defect)
         planned_today = int(det.planned_qty or 0)
 
-        owner_id = await _schedule_id_owning_actual_on_date(db, ps.line_id, product_cd_norm, dte)
-
-        if planned_today > 0:
-            # 同一ライン・同一製品・同日で順位（order_no）順に良品実績を瀑布配分する。
-            # 前順位が既に取り込んだ分（already_assigned）を控除した残りを当順位へ。
-            # 後順位に同製品の計画があれば自順位の計画数で頭打ちし、溢出を後順位へ回す。
-            # 後順位に計画が無ければ最終順位として溢出（計画超過分）も取り込む。
-            if dte in later_planned_dates:
-                actual = min(actual, planned_today)
+        # 良品: 連続上下かつ下位に当日計画がある日だけ、上位を計画まで満たして溢出を下位へ。
+        # 当日計画が無い行・未着手の未来ラン（間に別製品）には実績を書かない。
+        if block_future_run_actual or planned_today <= 0:
+            actual = 0
         else:
-            # 当該日に自工単の計画が無い場合は、従来どおり最小順位の計画工単（owner）へ寄せる。
-            if owner_id is not None and int(owner_id) != int(ps.id):
-                actual = 0
+            actual = _good_actual_by_order_waterfall(
+                leftover, planned_today, dte in later_planned_dates
+            )
 
         # 不良は従来どおり最小順位の計画工単（owner）へ集約する。
-        if owner_id is not None and int(owner_id) != int(ps.id):
-            defect = 0
+        if defect > 0:
+            owner_id = await _schedule_id_owning_actual_on_date(
+                db, ps.line_id, product_cd_norm, dte
+            )
+            if owner_id is not None and int(owner_id) != int(ps.id):
+                defect = 0
 
         det.actual_qty = actual
         det.defect_qty = defect
