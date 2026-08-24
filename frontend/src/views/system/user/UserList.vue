@@ -76,6 +76,9 @@
         <el-button v-if="canExport" size="small" :icon="Printer" class="btn-print" @click="handlePrint">
           {{ t('systemUser.user.print') }}
         </el-button>
+        <el-button v-if="canExport" size="small" class="btn-qr" @click="handlePrintLoginQr()">
+          {{ t('systemUser.user.printLoginQr') }}
+        </el-button>
       </div>
     </div>
 
@@ -155,7 +158,7 @@
             <span class="login-time">{{ row.last_login || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('systemUser.user.actions')" width="118" fixed="right" align="center">
+        <el-table-column :label="t('systemUser.user.actions')" width="148" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-cell">
               <el-button v-if="canEdit" size="small" text type="primary" :icon="Edit" @click="handleEdit(row)" />
@@ -168,6 +171,9 @@
                 @click="handleToggleLock(row)"
               />
               <el-button v-if="canEdit" size="small" text type="info" :icon="Key" @click="handleResetPassword(row)" />
+              <el-button v-if="canEdit" size="small" text type="warning" @click="handlePrintLoginQr(row)">
+                {{ t('systemUser.user.loginQr') }}
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -815,6 +821,81 @@ const handlePrint = () => {
   }
 }
 
+const handlePrintLoginQr = async (row?: UserListItem) => {
+  const rows = row ? [row] : userList.value
+  if (!rows.length) {
+    ElMessage.warning(t('systemUser.user.printLoginQrEmpty'))
+    return
+  }
+  try {
+    const res = await systemApi.fetchUserLoginQr({ user_ids: rows.map((r) => r.id) })
+    const items = res?.items ?? []
+    if (!items.length) {
+      ElMessage.error(t('systemUser.user.printLoginQrFailed'))
+      return
+    }
+    const QRCode = (await import('qrcode')).default
+    const qrCodes: Array<{ dataUrl: string; username: string; fullName: string }> = []
+    for (const item of items) {
+      try {
+        const dataUrl = await QRCode.toDataURL(item.payload, { width: 220, margin: 1 })
+        qrCodes.push({
+          dataUrl,
+          username: item.username,
+          fullName: item.full_name || '',
+        })
+      } catch {
+        /* skip */
+      }
+    }
+    if (!qrCodes.length) {
+      ElMessage.error(t('systemUser.user.printLoginQrFailed'))
+      return
+    }
+    const perRow = 3
+    const perPage = 9
+    const pages = Math.ceil(qrCodes.length / perPage)
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(t('systemUser.user.printLoginQrTitle'))}</title>
+<style>
+@page { size: A4; margin: 0; }
+body { margin: 0; font-family: sans-serif; }
+.page { width: 210mm; height: 297mm; padding: 12mm; box-sizing: border-box; display: flex; flex-direction: column; }
+.page:not(:last-child) { page-break-after: always; }
+.page-title { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 8mm; }
+.qr-grid { display: grid; grid-template-columns: repeat(${perRow}, 1fr); gap: 6mm; flex: 1; }
+.qr-item { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #ddd; border-radius: 6px; padding: 4mm; }
+.qr-code { width: 38mm; height: 38mm; }
+.qr-user { font-size: 13px; font-weight: bold; margin-top: 2mm; }
+.qr-name { font-size: 11px; color: #475569; margin-top: 1mm; }
+</style></head><body>`
+    for (let i = 0; i < pages; i++) {
+      const pageItems = qrCodes.slice(i * perPage, (i + 1) * perPage)
+      html += `<div class="page"><div class="page-title">${escapeHtml(t('systemUser.user.printLoginQrTitle'))}</div><div class="qr-grid">`
+      pageItems.forEach(({ dataUrl, username, fullName }) => {
+        html += `<div class="qr-item"><img src="${dataUrl}" class="qr-code"/><div class="qr-user">${escapeHtml(username)}</div>${fullName ? `<div class="qr-name">${escapeHtml(fullName)}</div>` : ''}</div>`
+      })
+      html += '</div></div>'
+    }
+    html += '</body></html>'
+    const w = window.open('', '_blank')
+    if (!w) {
+      ElMessage.warning(t('systemUser.user.popupBlocked'))
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    w.onload = () => {
+      setTimeout(() => {
+        w.print()
+        w.addEventListener('afterprint', () => setTimeout(() => w.close(), 100))
+      }, 250)
+    }
+    ElMessage.success(t('systemUser.user.printLoginQrSuccess', { n: qrCodes.length }))
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.user.printLoginQrFailed'))
+  }
+}
+
 function escapeHtml(s: string): string {
   const el = document.createElement('div')
   el.textContent = s
@@ -1048,6 +1129,13 @@ onMounted(() => {
 
 .btn-print {
   color: #475569;
+}
+
+.btn-qr {
+  border: none;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  font-weight: 600;
+  color: #fff;
 }
 
 .table-card {

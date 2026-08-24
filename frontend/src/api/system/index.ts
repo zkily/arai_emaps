@@ -251,6 +251,18 @@ export function resetUserPassword(userId: number, data: { new_password: string }
   return request.post(`${BASE}/users/${userId}/reset-password`, data)
 }
 
+export interface UserLoginQrItem {
+  user_id: number
+  username: string
+  full_name: string | null
+  payload: string
+}
+
+/** ログインQRペイロード取得（未発行なら発行） */
+export function fetchUserLoginQr(data: { user_ids: number[] }) {
+  return request.post<{ items: UserLoginQrItem[] }>(`${BASE}/users/login-qr`, data)
+}
+
 // ========== 組織管理 API ==========
 
 /** 組織一覧取得 */

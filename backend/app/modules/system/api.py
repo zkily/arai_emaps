@@ -40,7 +40,11 @@ from app.modules.system.schemas import (
     MenuResponse, MenuTreeNode, MenuCreate, MenuUpdate, MenuSyncRequest,
     PasswordResetRequest,
     UserPasswordSet,
+    UserLoginQrRequest,
+    UserLoginQrItem,
+    UserLoginQrResponse,
 )
+from app.modules.auth.qr_login import encode_login_qr_payload, new_qr_login_token
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +276,55 @@ async def create_user(
         created_at=new_user.created_at,
         updated_at=new_user.updated_at,
     )
+
+
+def _ensure_qr_login_token(user: User) -> str:
+    token = getattr(user, "qr_login_token", None)
+    if token:
+        return token
+    user.qr_login_token = new_qr_login_token()
+    return user.qr_login_token
+
+
+@router.post("/users/login-qr", response_model=UserLoginQrResponse, summary="ログインQRペイロード取得")
+async def get_user_login_qr(
+    body: UserLoginQrRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """未発行ならトークンを生成し、印刷用ペイロードを返す"""
+    await assert_super_admin(db, current_user)
+
+    unique_ids = list(dict.fromkeys(body.user_ids))
+    result = await db.execute(select(User).where(User.id.in_(unique_ids)))
+    users = {u.id: u for u in result.scalars().all()}
+    missing = [uid for uid in unique_ids if uid not in users]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="指定されたユーザーが見つかりません",
+        )
+
+    items: list[UserLoginQrItem] = []
+    for uid in unique_ids:
+        user = users[uid]
+        token = _ensure_qr_login_token(user)
+        items.append(
+            UserLoginQrItem(
+                user_id=user.id,
+                username=user.username,
+                full_name=user.full_name,
+                payload=encode_login_qr_payload(user.username, token),
+            )
+        )
+
+    await db.commit()
+    logger.info(
+        "Login QR payload issued: count=%s by %s",
+        len(items),
+        current_user.username,
+    )
+    return UserLoginQrResponse(items=items)
 
 
 @router.put("/users/{user_id}", response_model=UserResponse, summary="ユーザー更新")

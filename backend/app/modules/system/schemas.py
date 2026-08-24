@@ -219,6 +219,21 @@ class PaginatedUserResponse(BaseModel):
     pages: int
 
 
+class UserLoginQrRequest(BaseModel):
+    user_ids: List[int] = Field(..., min_length=1, max_length=500)
+
+
+class UserLoginQrItem(BaseModel):
+    user_id: int
+    username: str
+    full_name: Optional[str] = None
+    payload: str
+
+
+class UserLoginQrResponse(BaseModel):
+    items: List[UserLoginQrItem]
+
+
 # ========== Menu Schemas ==========
 class MenuBase(BaseModel):
     code: str = Field(..., max_length=50, description="メニューコード")

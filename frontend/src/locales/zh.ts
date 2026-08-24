@@ -935,6 +935,12 @@ export default {
       printTitle: '用户列表',
       printDateCount: '打印时间: {date} &nbsp; 共 {n} 条',
       popupBlocked: '弹窗被拦截，请允许打印。',
+      printLoginQr: '登录二维码',
+      printLoginQrTitle: '登录二维码',
+      printLoginQrEmpty: '没有可打印的用户',
+      printLoginQrFailed: '生成登录二维码失败',
+      printLoginQrSuccess: '将打印 {n} 张登录二维码',
+      loginQr: 'QR',
     },
   },
   master: {

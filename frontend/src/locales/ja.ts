@@ -936,6 +936,12 @@ export default {
       printTitle: 'ユーザー一覧',
       printDateCount: '印刷日時: {date} &nbsp; 件数: {n}件',
       popupBlocked: 'ポップアップがブロックされています。印刷を許可してください。',
+      printLoginQr: 'ログインQR',
+      printLoginQrTitle: 'ログインQR',
+      printLoginQrEmpty: '印刷するユーザーがありません',
+      printLoginQrFailed: 'ログインQRの生成に失敗しました',
+      printLoginQrSuccess: '{n}件のログインQRを印刷します',
+      loginQr: 'QR',
     },
   },
   master: {

@@ -2,6 +2,8 @@
 認証APIエンドポイント
 ログイン、ログアウト、ユーザー情報取得
 """
+import hmac
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -16,6 +18,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, verify_password, get_password_hash, decode_access_token
 from app.core.database import get_db
 from app.modules.auth.models import User
+from app.modules.auth.qr_login import parse_login_qr_code
 
 router = APIRouter()
 
@@ -110,6 +113,10 @@ class Token(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class QrLoginRequest(BaseModel):
+    code: str
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
@@ -449,16 +456,73 @@ async def login(
             detail="ユーザー名またはパスワードが正しくありません",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # アクセストークンを生成
+
+    return await _issue_login_response(user, request, db)
+
+
+def _qr_login_unauthorized() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="QRコードが無効です。管理者にログインQRの再発行を依頼してください。",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@router.post("/qr-login", response_model=Token)
+async def qr_login(
+    login_data: QrLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """ログインQRで認証する（パスワードはQRに含めない）"""
+    parsed = parse_login_qr_code(login_data.code)
+    if not parsed:
+        logger.info(
+            "[AUTH] QR登录失败: 无效码 | client={} | ip={}",
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
+        raise _qr_login_unauthorized()
+
+    username, token = parsed
+    user = await get_user_by_username(db, username)
+    stored = (getattr(user, "qr_login_token", None) or "") if user else ""
+    if not user or not stored or not hmac.compare_digest(stored, token):
+        logger.info(
+            "[AUTH] QR登录失败: 令牌不匹配 | username={} | client={} | ip={}",
+            username,
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
+        raise _qr_login_unauthorized()
+
+    if not user.is_active:
+        logger.info(
+            "[AUTH] QR登录失败: 账号已停用 | {} | client={} | ip={}",
+            _user_display(user),
+            _client_label(request),
+            _client_ip(request) or "-",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="このアカウントは無効化されています",
+        )
+
+    return await _issue_login_response(user, request, db)
+
+
+async def _issue_login_response(
+    user: User,
+    request: Request,
+    db: AsyncSession,
+) -> dict:
+    """パスワード / QR 共通のセッショ発行"""
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username},
         expires_delta=access_token_expires
     )
-    
-    # トークンを直接データベースに保存（単一デバイスログイン用）
-    # これにより、他のデバイスでログインすると、このトークンが無効になる
+
     old_token = user.last_login_token
     user.last_login_token = access_token
     user.last_login_at = now_jst()
@@ -476,7 +540,6 @@ async def login(
         client_ip,
     )
 
-    # WebSocket経由で他のデバイスに通知（既にログインしていた場合）
     if old_token and old_token != access_token:
         try:
             from app.modules.websocket.api import notify_user_logged_in_elsewhere
@@ -488,7 +551,6 @@ async def login(
         except Exception as e:
             logger.error("[WebSocket] Failed to notify other devices: {}", e)
 
-    # 操作ログに記録（遅延 import で循環参照を回避、テーブル未作成時は無視）
     try:
         from app.modules.system.settings_models import OperationLog
         op_log = OperationLog(

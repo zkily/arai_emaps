@@ -14,6 +14,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True, comment="ユーザー名（ログインID、一意制約）")
     email = Column(String(100), unique=True, nullable=False, index=True, comment="メールアドレス（一意制約）")
     hashed_password = Column(String(255), nullable=False, comment="ハッシュ化されたパスワード")
+    qr_login_token = Column(String(64), unique=True, nullable=True, comment="ログインQRトークン（パスワードとは別）")
     full_name = Column(String(100), nullable=True, comment="氏名（フルネーム）")
     role = Column(String(20), default="user", nullable=False, comment="ユーザーロール（admin:管理者、user:一般ユーザー、manager:マネージャー、worker:作業者、guest:ゲスト、viewer:閲覧者）")
     is_active = Column(Boolean, default=True, nullable=False, comment="アカウント有効フラグ（TRUE:有効、FALSE:無効）")

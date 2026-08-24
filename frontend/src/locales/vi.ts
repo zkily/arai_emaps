@@ -810,6 +810,12 @@ export default {
       printTitle: 'Danh sách người dùng',
       printDateCount: 'In: {date} &nbsp; Số: {n}',
       popupBlocked: 'Popup bị chặn. Cho phép popup để in.',
+      printLoginQr: 'QR đăng nhập',
+      printLoginQrTitle: 'QR đăng nhập',
+      printLoginQrEmpty: 'Không có người dùng để in',
+      printLoginQrFailed: 'Không tạo được QR đăng nhập',
+      printLoginQrSuccess: 'In {n} mã QR đăng nhập',
+      loginQr: 'QR',
     },
   },
   master: {

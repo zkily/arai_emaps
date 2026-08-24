@@ -937,6 +937,12 @@ export default {
       printTitle: 'User list',
       printDateCount: 'Printed: {date} &nbsp; Count: {n}',
       popupBlocked: 'Popup blocked. Allow popups to print.',
+      printLoginQr: 'Login QR',
+      printLoginQrTitle: 'Login QR',
+      printLoginQrEmpty: 'No users to print',
+      printLoginQrFailed: 'Failed to generate login QR',
+      printLoginQrSuccess: 'Printing {n} login QR code(s)',
+      loginQr: 'QR',
     },
   },
   master: {
