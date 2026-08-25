@@ -76,7 +76,13 @@
         <el-button v-if="canExport" size="small" :icon="Printer" class="btn-print" @click="handlePrint">
           {{ t('systemUser.user.print') }}
         </el-button>
-        <el-button v-if="canExport" size="small" class="btn-qr" @click="handlePrintLoginQr()">
+        <el-button
+          v-if="canExport"
+          size="small"
+          class="btn-qr"
+          :loading="printQrLoading"
+          @click="handlePrintLoginQr()"
+        >
           {{ t('systemUser.user.printLoginQr') }}
         </el-button>
       </div>
@@ -483,6 +489,7 @@ const tableRowClassName = ({ row }: { row: UserListItem }) => {
 }
 
 const loading = ref(false)
+const printQrLoading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -821,28 +828,83 @@ const handlePrint = () => {
   }
 }
 
-const handlePrintLoginQr = async (row?: UserListItem) => {
-  const rows = row ? [row] : userList.value
-  if (!rows.length) {
-    ElMessage.warning(t('systemUser.user.printLoginQrEmpty'))
-    return
+const LOGIN_QR_FETCH_SIZE = 500
+
+async function fetchAllMatchingUsers(): Promise<UserListItem[]> {
+  const base = {
+    keyword: searchForm.keyword?.trim() || undefined,
+    department_id: searchForm.department_id ?? undefined,
+    section_id: searchForm.section_id ?? undefined,
+    status: (searchForm.status || undefined) as systemApi.UserStatus | undefined,
   }
+  const first = (await systemApi.getUsers({
+    ...base,
+    page: 1,
+    page_size: LOGIN_QR_FETCH_SIZE,
+  })) as unknown as PaginatedUserResponse
+  const items = [...(first.items ?? [])]
+  const total = first.total ?? items.length
+  const pages = Math.max(1, Math.ceil(total / LOGIN_QR_FETCH_SIZE))
+  for (let page = 2; page <= pages; page++) {
+    const res = (await systemApi.getUsers({
+      ...base,
+      page,
+      page_size: LOGIN_QR_FETCH_SIZE,
+    })) as unknown as PaginatedUserResponse
+    items.push(...(res.items ?? []))
+  }
+  return items
+}
+
+async function fetchLoginQrItems(userIds: number[]) {
+  const items: systemApi.UserLoginQrItem[] = []
+  for (let i = 0; i < userIds.length; i += LOGIN_QR_FETCH_SIZE) {
+    const chunk = userIds.slice(i, i + LOGIN_QR_FETCH_SIZE)
+    const res = await systemApi.fetchUserLoginQr({ user_ids: chunk })
+    items.push(...(res?.items ?? []))
+  }
+  return items
+}
+
+const handlePrintLoginQr = async (row?: UserListItem) => {
+  printQrLoading.value = !row
   try {
-    const res = await systemApi.fetchUserLoginQr({ user_ids: rows.map((r) => r.id) })
-    const items = res?.items ?? []
+    const rows = row ? [row] : await fetchAllMatchingUsers()
+    if (!rows.length) {
+      ElMessage.warning(t('systemUser.user.printLoginQrEmpty'))
+      return
+    }
+    const items = await fetchLoginQrItems(rows.map((r) => r.id))
     if (!items.length) {
       ElMessage.error(t('systemUser.user.printLoginQrFailed'))
       return
     }
+    const rowById = new Map(rows.map((r) => [r.id, r]))
     const QRCode = (await import('qrcode')).default
-    const qrCodes: Array<{ dataUrl: string; username: string; fullName: string }> = []
+    type LoginQrCard = {
+      dataUrl: string
+      username: string
+      fullName: string
+      email: string
+      department: string
+      section: string
+    }
+    const qrCodes: LoginQrCard[] = []
     for (const item of items) {
       try {
-        const dataUrl = await QRCode.toDataURL(item.payload, { width: 220, margin: 1 })
+        const dataUrl = await QRCode.toDataURL(item.payload, {
+          width: 280,
+          margin: 1,
+          color: { dark: '#1a1040', light: '#ffffff' },
+        })
+        const row = rowById.get(item.user_id)
         qrCodes.push({
           dataUrl,
           username: item.username,
-          fullName: item.full_name || '',
+          fullName: (item.full_name || row?.full_name || '').trim(),
+          email: (item.email || row?.email || '').trim(),
+          department: (item.department || row?.department || '').trim(),
+          section: (item.section || row?.section || '').trim(),
         })
       } catch {
         /* skip */
@@ -852,31 +914,7 @@ const handlePrintLoginQr = async (row?: UserListItem) => {
       ElMessage.error(t('systemUser.user.printLoginQrFailed'))
       return
     }
-    const perRow = 3
-    const perPage = 9
-    const pages = Math.ceil(qrCodes.length / perPage)
-    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(t('systemUser.user.printLoginQrTitle'))}</title>
-<style>
-@page { size: A4; margin: 0; }
-body { margin: 0; font-family: sans-serif; }
-.page { width: 210mm; height: 297mm; padding: 12mm; box-sizing: border-box; display: flex; flex-direction: column; }
-.page:not(:last-child) { page-break-after: always; }
-.page-title { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 8mm; }
-.qr-grid { display: grid; grid-template-columns: repeat(${perRow}, 1fr); gap: 6mm; flex: 1; }
-.qr-item { display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #ddd; border-radius: 6px; padding: 4mm; }
-.qr-code { width: 38mm; height: 38mm; }
-.qr-user { font-size: 13px; font-weight: bold; margin-top: 2mm; }
-.qr-name { font-size: 11px; color: #475569; margin-top: 1mm; }
-</style></head><body>`
-    for (let i = 0; i < pages; i++) {
-      const pageItems = qrCodes.slice(i * perPage, (i + 1) * perPage)
-      html += `<div class="page"><div class="page-title">${escapeHtml(t('systemUser.user.printLoginQrTitle'))}</div><div class="qr-grid">`
-      pageItems.forEach(({ dataUrl, username, fullName }) => {
-        html += `<div class="qr-item"><img src="${dataUrl}" class="qr-code"/><div class="qr-user">${escapeHtml(username)}</div>${fullName ? `<div class="qr-name">${escapeHtml(fullName)}</div>` : ''}</div>`
-      })
-      html += '</div></div>'
-    }
-    html += '</body></html>'
+    const html = buildLoginQrCardPrintHtml(qrCodes)
     const w = window.open('', '_blank')
     if (!w) {
       ElMessage.warning(t('systemUser.user.popupBlocked'))
@@ -888,12 +926,167 @@ body { margin: 0; font-family: sans-serif; }
       setTimeout(() => {
         w.print()
         w.addEventListener('afterprint', () => setTimeout(() => w.close(), 100))
-      }, 250)
+      }, 280)
     }
     ElMessage.success(t('systemUser.user.printLoginQrSuccess', { n: qrCodes.length }))
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || t('systemUser.user.printLoginQrFailed'))
+  } finally {
+    printQrLoading.value = false
   }
+}
+
+function formatCardOrg(department: string, section: string): string {
+  if (department && section) return `${department} / ${section}`
+  return department || section || '—'
+}
+
+function buildLoginQrCardPrintHtml(
+  cards: Array<{
+    dataUrl: string
+    username: string
+    fullName: string
+    email: string
+    department: string
+    section: string
+  }>,
+): string {
+  const title = escapeHtml(t('systemUser.user.printLoginQrTitle'))
+  const nameLabel = escapeHtml(t('systemUser.user.fullName'))
+  const userLabel = escapeHtml(t('systemUser.user.username'))
+  const deptLabel = escapeHtml(t('systemUser.user.department'))
+  const emailLabel = escapeHtml(t('systemUser.user.formEmail'))
+  const perPage = 8
+  const pages = Math.ceil(cards.length / perPage)
+  const cardHtml = (card: {
+    dataUrl: string
+    username: string
+    fullName: string
+    email: string
+    department: string
+    section: string
+  }) => `
+    <article class="card">
+      <div class="card-body">
+        <div class="card-main">
+          <div class="brand-row">
+            <div class="logo-mark"><span>S</span></div>
+            <div class="brand-text">
+              <div class="brand-name">SMART-EMAP</div>
+              <div class="brand-sub">LOGIN CARD</div>
+            </div>
+          </div>
+          <dl class="fields">
+            <div class="row">
+              <dt>${nameLabel}</dt>
+              <dd class="name">${escapeHtml(card.fullName || '—')}</dd>
+            </div>
+            <div class="row">
+              <dt>${userLabel}</dt>
+              <dd>${escapeHtml(card.username || '—')}</dd>
+            </div>
+            <div class="row">
+              <dt>${deptLabel}</dt>
+              <dd>${escapeHtml(formatCardOrg(card.department, card.section))}</dd>
+            </div>
+            <div class="row">
+              <dt>${emailLabel}</dt>
+              <dd class="email">${escapeHtml(card.email || '—')}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="qr-panel">
+          <img class="qr-code" src="${card.dataUrl}" alt="QR"/>
+        </div>
+      </div>
+    </article>`
+
+  let pagesHtml = ''
+  for (let i = 0; i < pages; i++) {
+    const pageItems = cards.slice(i * perPage, (i + 1) * perPage)
+    pagesHtml += `<section class="page">${pageItems.map(cardHtml).join('')}</section>`
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>${title}</title>
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif; }
+    .page {
+      width: 210mm; height: 297mm; padding: 14mm 11mm;
+      display: grid; grid-template-columns: 85.6mm 85.6mm;
+      grid-auto-rows: 54mm; gap: 7mm 10.8mm; justify-content: center;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+    .card {
+      position: relative; width: 85.6mm; height: 54mm; overflow: hidden;
+      border-radius: 3.2mm;
+      background: transparent;
+      border: 0.45mm solid #1e293b;
+      color: #0f172a;
+    }
+    .card-body {
+      position: relative; z-index: 1; height: 100%;
+      display: flex; padding: 2.8mm 3mm 2.8mm 3.4mm; gap: 2.4mm;
+    }
+    .card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .brand-row { display: flex; align-items: center; gap: 1.8mm; flex-shrink: 0; }
+    .logo-mark {
+      width: 6.4mm; height: 6.4mm; border-radius: 1.4mm; flex-shrink: 0;
+      border: 0.3mm solid #1e293b;
+      background: transparent;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-mark span { font-size: 3.7mm; font-weight: 800; color: #1e293b; line-height: 1; }
+    .brand-text { flex: 1; min-width: 0; }
+    .brand-name {
+      font-size: 3mm; font-weight: 800; letter-spacing: 0.22mm; line-height: 1.1;
+      color: #0f172a;
+    }
+    .brand-sub { font-size: 1.8mm; letter-spacing: 0.5mm; color: #64748b; margin-top: 0.3mm; }
+    .fields {
+      margin: auto 0 0; display: flex; flex-direction: column; gap: 1.05mm;
+    }
+    .row {
+      display: grid; grid-template-columns: 15.5mm minmax(0, 1fr); gap: 1.2mm;
+      align-items: start;
+    }
+    .row dt {
+      font-size: 1.7mm; letter-spacing: 0.12mm; color: #64748b; font-weight: 700;
+      line-height: 1.35; padding-top: 0.15mm;
+    }
+    .row dd {
+      margin: 0; font-size: 2.55mm; font-weight: 700; line-height: 1.25;
+      color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .row dd.name { font-size: 3.15mm; font-weight: 800; }
+    .row dd.email {
+      font-size: 2.05mm; font-weight: 600; color: #334155;
+      white-space: normal; word-break: break-all; line-height: 1.2;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
+    .qr-panel {
+      position: relative; width: 26.8mm; height: 26.8mm; align-self: center; flex-shrink: 0;
+      background: transparent; border: 0.35mm solid #1e293b; border-radius: 1.8mm; padding: 1.2mm;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .qr-code { width: 24.2mm; height: 24.2mm; display: block; }
+    @media print {
+      .page { box-shadow: none; }
+      .card { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+  ${pagesHtml}
+</body>
+</html>`
 }
 
 function escapeHtml(s: string): string {

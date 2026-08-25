@@ -227,6 +227,9 @@ class UserLoginQrItem(BaseModel):
     user_id: int
     username: str
     full_name: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
+    section: Optional[str] = None
     payload: str
 
 

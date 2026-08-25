@@ -414,10 +414,12 @@
                   :min="0"
                   :max="999999"
                   :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
                   size="small"
                   class="usage-quantity-input"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
-                  @change="() => handleUsageQuantityChange(row)"
+                  @change="(val) => handleUsageQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
               </template>
@@ -435,10 +437,12 @@
                   :min="0"
                   :max="999999"
                   :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
                   size="small"
                   class="order-quantity-input"
-                  @update:model-value="(val) => { row.order_quantity = val ?? 0 }"
-                  @change="() => handleOrderQuantityChange(row)"
+                  @change="(val) => handleOrderQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
               </template>
@@ -447,14 +451,15 @@
               <template #default="{ row }">
                 <el-input-number
                   :key="`bundle-${row.id}`"
-                  v-model="row.order_bundle_quantity"
+                  :model-value="emptyIfZero(row.order_bundle_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
-                  :value-on-clear="0"
-                  size="small"
                   :controls="false"
-                  @change="() => handleOrderBundleQuantityChange(row)"
+                  :value-on-clear="null"
+                  size="small"
+                  @change="(val) => handleOrderBundleQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
               </template>
@@ -539,10 +544,12 @@
                   :min="0"
                   :max="999999"
                   :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
                   size="small"
                   class="usage-quantity-input"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
-                  @change="() => handleUsageQuantityChange(row)"
+                  @change="(val) => handleUsageQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
               </template>
@@ -639,10 +646,12 @@
                   :min="0"
                   :max="999999"
                   :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
                   size="small"
                   class="order-quantity-input"
-                  @update:model-value="(val) => { row.order_quantity = val ?? 0 }"
-                  @change="() => handleOrderQuantityChange(row)"
+                  @change="(val) => handleOrderQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
               </template>
@@ -842,6 +851,7 @@
           <el-table
             v-loading="loading"
             :data="subTableData"
+            row-key="id"
             stripe
             border
             class="modern-table"
@@ -893,10 +903,10 @@
                   :max="999999"
                   :precision="0"
                   size="small"
-                  :controls="true"
-                  :step="1"
-                  @update:model-value="(val) => { row.usage_quantity = val ?? 0 }"
-                  @change="() => handleUsageQuantityChange(row)"
+                  :controls="false"
+                  :value-on-clear="null"
+                  @change="(val) => handleUsageQuantityChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                   class="usage-quantity-input"
                 />
@@ -970,6 +980,7 @@
           <el-table
             v-loading="loading"
             :data="initialStockData"
+            row-key="id"
             stripe
             border
             class="modern-table"
@@ -1000,7 +1011,10 @@
                   :min="0"
                   :precision="0"
                   :step="1"
+                  :controls="false"
                   @change="handleInitialStockChange(row)"
+                  @keydown.capture="preventNumberSpinnerKeys"
+                  @wheel.prevent
                   :class="[
                     'initial-stock-input',
                     { 'positive-stock': (row.initial_stock || 0) > 0 },
@@ -1014,7 +1028,10 @@
                   v-model="row.adjustment_quantity"
                   :precision="0"
                   :step="1"
+                  :controls="false"
                   @change="handleAdjustmentQuantityChange(row)"
+                  @keydown.capture="preventNumberSpinnerKeys"
+                  @wheel.prevent
                   class="adjustment-quantity-input"
                 />
               </template>
@@ -1881,8 +1898,7 @@ import { jsPDF } from 'jspdf'
 import { MARUICHI_ORDER_SHEET_STYLES } from '@/utils/maruichiOrderSheetStyles'
 import { calculateMaterialStock } from '@/api/materialStockCalculation'
 import { generateMaterialStockData } from '@/api/materialDataGeneration'
-import { updateMaterialQuantities, updateMaterialRemarks } from '@/api/materialStockUpdate'
-import type { MaterialQuantityUpdate } from '@/api/materialStockUpdate'
+import { updateMaterialRemarks } from '@/api/materialStockUpdate'
 import { getProductList } from '@/api/master/productMaster'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
@@ -1946,6 +1962,7 @@ interface InitialStockItem {
   material_name: string
   initial_stock: number
   adjustment_quantity: number
+  current_stock?: number
 }
 
 // 响应式数据
@@ -1965,10 +1982,42 @@ const materialOptions = ref<Material[]>([])
 const selectedMaterial = ref<Material | null>(null)
 const manualOrderFormRef = ref()
 const tableData = ref<MaterialOrderItem[]>([])
-/** 手入力確定前の値。再描画で保存しないための比較用 */
-const lastSavedOrderQty = new Map<number, number>()
-const lastSavedBundleQty = new Map<number, number>()
-const lastSavedUsageQty = new Map<number, number>()
+/** 手入力確定前の値。main/sub で id が衝突しないよう scope 付きキー */
+const lastSavedOrderQty = new Map<string, number>()
+const lastSavedBundleQty = new Map<string, number>()
+const lastSavedUsageQty = new Map<string, number>()
+const lastSavedRemarks = new Map<string, string>()
+
+const qtyKey = (scope: 'main' | 'sub', id: number | string | undefined | null): string =>
+  `${scope}:${id ?? ''}`
+
+/** 数字入力: 0 は空欄表示（null。undefined は el-input-number と相性が悪い） */
+const emptyIfZero = (value: number | null | undefined): number | null => {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return null
+  return n
+}
+
+/** el-input-number の ↑↓ / PageUp/Down による値改変を防止（手入力のみ） */
+const preventNumberSpinnerKeys = (e: Event) => {
+  const ke = e as KeyboardEvent
+  if (
+    ke.key === 'ArrowUp' ||
+    ke.key === 'ArrowDown' ||
+    ke.key === 'PageUp' ||
+    ke.key === 'PageDown'
+  ) {
+    ke.preventDefault()
+    ke.stopPropagation()
+  }
+}
+
+const commitQty = (val: number | null | undefined): number => {
+  if (val === null || val === undefined) return 0
+  const n = Number(val)
+  return Number.isFinite(n) ? n : 0
+}
+
 const subTableData = ref<MaterialOrderItem[]>([])
 const initialStockData = ref<InitialStockItem[]>([])
 /** 材料注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
@@ -2401,10 +2450,12 @@ const fetchData = async () => {
       lastSavedOrderQty.clear()
       lastSavedBundleQty.clear()
       lastSavedUsageQty.clear()
+      lastSavedRemarks.clear()
       for (const row of tableData.value) {
-        lastSavedOrderQty.set(row.id, Number(row.order_quantity) || 0)
-        lastSavedBundleQty.set(row.id, Number(row.order_bundle_quantity) || 0)
-        lastSavedUsageQty.set(row.id, Number(row.usage_quantity) || 0)
+        lastSavedOrderQty.set(qtyKey('main', row.id), Number(row.order_quantity) || 0)
+        lastSavedBundleQty.set(qtyKey('main', row.id), Number(row.order_bundle_quantity) || 0)
+        lastSavedUsageQty.set(qtyKey('main', row.id), Number(row.usage_quantity) || 0)
+        lastSavedRemarks.set(qtyKey('main', row.id), String(row.remarks ?? ''))
       }
       pagination.total = total
       updateStats()
@@ -2416,6 +2467,35 @@ const fetchData = async () => {
     ElMessage.error('データ取得に失敗しました')
   } finally {
     loading.value = false
+  }
+}
+
+/** 在庫再計算後の current_stock だけ差し替える（入力欄を再生成しない） */
+const patchCurrentStockForMaterial = async (materialCd: string) => {
+  if (!materialCd) return
+  try {
+    const apiParams: Record<string, unknown> = {
+      page: 1,
+      pageSize: 500,
+      material_cd: materialCd,
+    }
+    if (searchForm.dateRange && searchForm.dateRange.length === 2) {
+      apiParams.start_date = searchForm.dateRange[0]
+      apiParams.end_date = searchForm.dateRange[1]
+    }
+    const result = await getMaterialStockList(apiParams)
+    const list = (result as any)?.data?.list ?? []
+    if (!Array.isArray(list) || list.length === 0) return
+    const byId = new Map<number, any>(list.map((item: any) => [item.id, item]))
+    for (const row of tableData.value) {
+      const fresh = byId.get(row.id)
+      if (fresh && fresh.current_stock !== undefined) {
+        row.current_stock = fresh.current_stock
+      }
+    }
+    updateStats()
+  } catch (error) {
+    console.warn('現在在庫の再取得に失敗:', error)
   }
 }
 
@@ -2533,6 +2613,12 @@ const fetchSubData = async () => {
       })
 
       subTableData.value = filteredData
+      lastSavedUsageQty.clear()
+      lastSavedRemarks.clear()
+      for (const row of filteredData) {
+        lastSavedUsageQty.set(qtyKey('sub', row.id), Number(row.usage_quantity) || 0)
+        lastSavedRemarks.set(qtyKey('sub', row.id), String(row.remarks ?? ''))
+      }
       // サーバ total を優先（クライアントフィルタ時は当該ページ内件数）
       pagination.total = searchForm.usageStatus ? filteredData.length : total
       console.log('半端材料リストデータ取得成功:', subTableData.value.length, '件')
@@ -2646,6 +2732,14 @@ const fetchInitialStockData = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const listDataSource = (tab: string) => {
+  if (tab === 'sub') return 'sub'
+  if (tab === 'initial') return 'initial'
+  if (tab === 'orderHistory') return 'orderHistory'
+  if (tab === 'unusedReceiving') return 'unusedReceiving'
+  return 'main'
 }
 
 const refreshListForActiveTab = () => {
@@ -2788,10 +2882,15 @@ const handleUsageStatusSearch = () => {
 }
 
 // 处理使用数编辑（材料一覧用 main stock / 半端材料用 sub）
-const handleUsageQuantityChange = async (row: any) => {
+const handleUsageQuantityChange = async (
+  row: any,
+  committed?: number | null,
+) => {
   if (!guardPurchaseOperation(canEdit)) return
-  const next = Number(row.usage_quantity) || 0
-  if (row.id && lastSavedUsageQty.get(row.id) === next) return
+  const next = commitQty(committed)
+  row.usage_quantity = next
+  const scope = activeTab.value === 'sub' ? 'sub' : 'main'
+  if (row.id && lastSavedUsageQty.get(qtyKey(scope, row.id)) === next) return
 
   try {
     console.log('更新使用数:', row.id, row.usage_quantity)
@@ -2806,11 +2905,17 @@ const handleUsageQuantityChange = async (row: any) => {
 
     if ((response as any)?.success) {
       ElMessage.success('使用数を更新しました')
-      if (row.id) lastSavedUsageQty.set(row.id, next)
-      if (isSubTab) {
+      if (row.id) lastSavedUsageQty.set(qtyKey(scope, row.id), next)
+      const data = (response as any)?.data
+      if (!isSubTab && data?.current_stock !== undefined) {
+        row.current_stock = data.current_stock
+      }
+      if (isSubTab && searchForm.usageStatus) {
         await fetchSubData()
+      } else if (!isSubTab) {
+        await patchCurrentStockForMaterial(row.material_cd)
       } else {
-        await fetchData()
+        updateStats()
       }
     } else {
       console.error('API返却失敗:', response)
@@ -2826,16 +2931,19 @@ const handleUsageQuantityChange = async (row: any) => {
 const handleRemarksChange = async (row: any) => {
   if (!guardPurchaseOperation(canEdit)) return
 
-  try {
-    console.log('備考更新:', row.id, row.remarks)
+  const scope = activeTab.value === 'sub' ? 'sub' : 'main'
+  const next = String(row.remarks ?? '')
+  if (row.id && lastSavedRemarks.get(qtyKey(scope, row.id)) === next) return
 
-    const body = { remarks: row.remarks ?? '' }
+  try {
+    const body = { remarks: next }
     const isSubTab = activeTab.value === 'sub'
     const response = isSubTab
       ? await updateMaterialStockSub(row.id, body)
       : await updateMaterialStock(row.id, body)
 
     if ((response as any)?.success) {
+      if (row.id) lastSavedRemarks.set(qtyKey(scope, row.id), next)
       ElMessage.success('備考を更新しました')
     } else {
       ElMessage.error('備考の更新に失敗しました')
@@ -2917,31 +3025,23 @@ const confirmTransfer = async () => {
 // 初期在庫変化処理
 const handleInitialStockChange = async (row: InitialStockItem) => {
   if (!guardPurchaseOperation(canEdit)) return
+  if (!row.id) {
+    ElMessage.warning('該当レコードが見つかりません')
+    return
+  }
 
   try {
-    console.log('初期在庫更新:', row.material_cd, row.initial_stock)
+    const response = await updateMaterialStock(row.id, {
+      initial_stock: row.initial_stock || 0,
+    })
 
-    // 材料日別在庫と同じAPIを使用してデータを更新
-    const updateParams: MaterialQuantityUpdate = {
-      material_cd: row.material_cd,
-      date: row.date,
-      initial_stock: row.initial_stock || 0, // initial_stockフィールドを更新
-    }
-
-    try {
-      const response = await updateMaterialQuantities(updateParams)
-
-      if (response && (response as any).success) {
-        console.log(`材料 ${row.material_cd} の初期在庫を更新しました`)
-        ElMessage.success('初期在庫を更新しました')
-      } else {
-        const errorMessage = (response as any)?.message || '不明なエラー'
-        console.error(`材料 ${row.material_cd} の初期在庫更新失敗:`, errorMessage)
-        ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
-      }
-    } catch (apiError: any) {
-      console.warn('初期在庫更新APIは未実装のため代替処理を使用:', apiError)
-      ElMessage.info('初期在庫管理機能は開発中です。変更は一時的に保存されています。')
+    if (response && (response as any).success) {
+      ElMessage.success('初期在庫を更新しました')
+      const data = (response as any)?.data
+      if (data?.current_stock !== undefined) row.current_stock = data.current_stock
+    } else {
+      const errorMessage = (response as any)?.message || '不明なエラー'
+      ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
     }
   } catch (error: any) {
     console.error(`材料 ${row.material_cd} の初期在庫更新エラー:`, error)
@@ -2952,31 +3052,23 @@ const handleInitialStockChange = async (row: InitialStockItem) => {
 // 調整数変更処理
 const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
   if (!guardPurchaseOperation(canEdit)) return
+  if (!row.id) {
+    ElMessage.warning('該当レコードが見つかりません')
+    return
+  }
 
   try {
-    console.log('更新調整数:', row.material_cd, row.adjustment_quantity)
-
-    // 材料日別在庫と同じAPIで更新
-    const updateParams: MaterialQuantityUpdate = {
-      material_cd: row.material_cd,
-      date: row.date,
+    const response = await updateMaterialStock(row.id, {
       adjustment_quantity: row.adjustment_quantity ?? 0,
-    }
+    })
 
-    try {
-      const response = await updateMaterialQuantities(updateParams)
-
-      if (response && (response as any).success) {
-        console.log(`材料 ${row.material_cd} の調整数を更新しました`)
-        ElMessage.success('調整数を更新しました')
-      } else {
-        const errorMessage = (response as any)?.message || '不明なエラー'
-        console.error(`材料 ${row.material_cd} の調整数更新失敗:`, errorMessage)
-        ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
-      }
-    } catch (apiError: any) {
-      console.warn('調整数更新APIは未実装のため、代替処理を使用:', apiError)
-      ElMessage.info('初期在庫管理機能は開発中です。変更は一時的に保存されています。')
+    if (response && (response as any).success) {
+      ElMessage.success('調整数を更新しました')
+      const data = (response as any)?.data
+      if (data?.current_stock !== undefined) row.current_stock = data.current_stock
+    } else {
+      const errorMessage = (response as any)?.message || '不明なエラー'
+      ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
     }
   } catch (error: any) {
     console.error(`更新材料 ${row.material_cd} 的調整数时发生错误:`, error)
@@ -3117,12 +3209,6 @@ const formatValue = (value: number | null | undefined): string => {
   return value.toString()
 }
 
-/** 数字入力: 0 は空欄表示（保存は @change のみ） */
-const emptyIfZero = (value: number | null | undefined): number | undefined => {
-  const n = Number(value)
-  return !n ? undefined : n
-}
-
 // 格式化数值，如果为0则不显示，但保留单位
 const formatValueWithUnit = (value: number | null | undefined, unit: string = ''): string => {
   if (value === null || value === undefined || value === 0) {
@@ -3194,47 +3280,65 @@ const _formatDateTime = (dateTime: string): string => {
 }
 
 const handleTabChange = (tabName: string | number) => {
-  activeTab.value = String(tabName)
-  if (activeTab.value === 'order') {
+  const next = String(tabName)
+  const prev = activeTab.value
+  activeTab.value = next
+  if (next === 'order') {
     void ensureMaterialProductsMap()
+  }
+  // 材料日別/使用/注文は同じ tableData。タブ切替で再取得すると入力欄が再生成され誤保存の温床になる
+  if (listDataSource(prev) === 'main' && listDataSource(next) === 'main') return
+  if (listDataSource(prev) !== listDataSource(next)) {
+    pagination.page = 1
   }
   refreshListForActiveTab()
 }
 
-const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
+const handleOrderQuantityChange = async (
+  row: MaterialOrderItem,
+  committed?: number | null,
+) => {
   if (!guardPurchaseOperation(canEdit)) return
-  const next = Number(row.order_quantity) || 0
-  if (row.id && lastSavedOrderQty.get(row.id) === next) return
+  // @change の第1引数を正とする（クリア時は null/NaN → 0）
+  const next = commitQty(committed)
+  row.order_quantity = next
+  if (row.id && lastSavedOrderQty.get(qtyKey('main', row.id)) === next) return
 
-  // 计算受注捆数和捆重量
-  if (next > 0 && row.pieces_per_bundle && row.long_weight) {
-    row.order_bundle_quantity = row.order_quantity * row.pieces_per_bundle
-    row.bundle_weight = row.order_bundle_quantity * row.long_weight
-    // 计算注文金額：注文金額 = bundle_weight * unit_price
-    row.order_amount = row.bundle_weight * (row.unit_price || 0)
-  } else {
+  if (next <= 0) {
     row.order_bundle_quantity = 0
     row.bundle_weight = 0
     row.order_amount = 0
+  } else {
+    // 束当たり本数があれば注文本数を再計算。long_weight が無くても本数は消さない
+    if (row.pieces_per_bundle) {
+      row.order_bundle_quantity = next * row.pieces_per_bundle
+    }
+    if (row.order_bundle_quantity && row.long_weight) {
+      row.bundle_weight = row.order_bundle_quantity * row.long_weight
+      row.order_amount = row.bundle_weight * (row.unit_price || 0)
+    }
   }
 
   updateStats()
-  await saveQuantityToDatabase(row)
-  if (row.id) {
-    lastSavedOrderQty.set(row.id, next)
-    lastSavedBundleQty.set(row.id, Number(row.order_bundle_quantity) || 0)
+  const saved = await saveQuantityToDatabase(row)
+  if (saved && row.id) {
+    lastSavedOrderQty.set(qtyKey('main', row.id), next)
+    lastSavedBundleQty.set(qtyKey('main', row.id), Number(row.order_bundle_quantity) || 0)
+    await patchCurrentStockForMaterial(row.material_cd)
   }
 }
 
-const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
+const handleOrderBundleQuantityChange = async (
+  row: MaterialOrderItem,
+  committed?: number | null,
+) => {
   if (!guardPurchaseOperation(canEdit)) return
-  const nextBundle = Number(row.order_bundle_quantity) || 0
-  if (row.id && lastSavedBundleQty.get(row.id) === nextBundle) return
+  const nextBundle = commitQty(committed)
+  row.order_bundle_quantity = nextBundle
+  if (row.id && lastSavedBundleQty.get(qtyKey('main', row.id)) === nextBundle) return
 
-  // 根据注文本数计算重量和注文金額
   if (nextBundle > 0 && row.long_weight) {
-    row.bundle_weight = row.order_bundle_quantity * row.long_weight
-    // 计算注文金額：注文金額 = bundle_weight * unit_price
+    row.bundle_weight = nextBundle * row.long_weight
     row.order_amount = row.bundle_weight * (row.unit_price || 0)
   } else {
     row.bundle_weight = 0
@@ -3242,49 +3346,39 @@ const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
   }
 
   updateStats()
-  await saveQuantityToDatabase(row)
-  if (row.id) lastSavedBundleQty.set(row.id, nextBundle)
+  const saved = await saveQuantityToDatabase(row)
+  if (saved && row.id) lastSavedBundleQty.set(qtyKey('main', row.id), nextBundle)
 }
 
 // 保存数量到数据库
-const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
-  if (!guardPurchaseOperation(canEdit)) return
+const saveQuantityToDatabase = async (row: MaterialOrderItem): Promise<boolean> => {
+  if (!guardPurchaseOperation(canEdit)) return false
   if (!row.id) {
     ElMessage.warning('該当レコードが見つかりません')
-    return
+    return false
   }
 
   try {
-    console.log('开始保存数量到数据库:', {
-      id: row.id,
-      material_cd: row.material_cd,
-      date: row.date,
-      usage_quantity: row.usage_quantity || 0,
-      order_quantity: row.order_quantity || 0,
-      order_bundle_quantity: row.order_bundle_quantity || 0,
-      bundle_weight: row.bundle_weight || 0,
-      order_amount: row.order_amount || 0,
-    })
-
     const response = await updateMaterialStock(row.id, {
       order_quantity: row.order_quantity || 0,
       order_bundle_quantity: row.order_bundle_quantity || 0,
       // bundle_weight はマスタの束重量列。注文重量は画面側で算出するため上書きしない
       order_amount: row.order_amount || 0,
-    }) as { success?: boolean; message?: string }
-
-    console.log('API响应:', response)
+    }) as { success?: boolean; message?: string; data?: { current_stock?: number } }
 
     if (response && response.success) {
-      console.log(`成功保存材料 ${row.material_cd} 的数量到数据库`)
-    } else {
-      const errorMessage = response?.message || '不明なエラー'
-      console.error(`保存材料 ${row.material_cd} 的数量失败:`, errorMessage)
-      ElMessage.warning(`保存失败: ${errorMessage}`)
+      if (response.data?.current_stock !== undefined) {
+        row.current_stock = response.data.current_stock
+      }
+      return true
     }
+    const errorMessage = response?.message || '不明なエラー'
+    ElMessage.warning(`保存失败: ${errorMessage}`)
+    return false
   } catch (error: any) {
     console.error(`保存材料 ${row.material_cd} 的数量时发生错误:`, error)
     ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
+    return false
   }
 }
 
@@ -6914,7 +7008,6 @@ ${groupBlocks}
 
 :deep(.el-table__body tr:hover td) {
   background-color: #e0f2fe !important;
-  transform: scale(1.001);
 }
 
 :deep(.el-input-number) {
@@ -6922,12 +7015,12 @@ ${groupBlocks}
 }
 
 :deep(.el-input-number .el-input__inner) {
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 12px;
-  height: 20px;
+  height: 28px;
   border-radius: 5px;
   border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 :deep(.el-input-number .el-input__inner):focus {

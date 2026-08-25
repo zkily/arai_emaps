@@ -306,14 +306,29 @@ async def get_user_login_qr(
         )
 
     items: list[UserLoginQrItem] = []
+    org_ids = {
+        oid
+        for u in users.values()
+        for oid in (getattr(u, "department_id", None), getattr(u, "section_id", None))
+        if oid
+    }
+    org_map: dict[int, str] = {}
+    if org_ids:
+        org_rows = await db.execute(select(Organization).where(Organization.id.in_(org_ids)))
+        org_map = {ob.id: ob.name for ob in org_rows.scalars().all()}
     for uid in unique_ids:
         user = users[uid]
         token = _ensure_qr_login_token(user)
+        dept_id = getattr(user, "department_id", None)
+        sect_id = getattr(user, "section_id", None)
         items.append(
             UserLoginQrItem(
                 user_id=user.id,
                 username=user.username,
                 full_name=user.full_name,
+                email=user.email,
+                department=org_map.get(dept_id) if dept_id else None,
+                section=org_map.get(sect_id) if sect_id else None,
                 payload=encode_login_qr_payload(user.username, token),
             )
         )
