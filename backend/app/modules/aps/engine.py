@@ -49,19 +49,82 @@ def hourly_piece_rate_from_daily_capacity(daily_capacity: int) -> float:
     return float(daily_capacity) / SCHEDULE_STANDARD_DAY_HOURS
 
 
+def match_efficiency_period_override_rate(
+    product_cd: Optional[str],
+    machine_cd: Optional[str],
+    work_date: Optional[date],
+    override_rows: Optional[Sequence[Any]] = None,
+) -> Optional[float]:
+    """
+    期間指定能率が work_date に命中すれば本/H を返す。未命中は None（従来ロジックへ）。
+    同一日に複数ある場合は period_from 新しい → id 大きいを優先。
+    """
+    if work_date is None or not override_rows:
+        return None
+    pcd = (product_cd or "").strip()
+    mcd = (machine_cd or "").strip()
+    if not pcd or not mcd:
+        return None
+    hits: List[tuple[date, int, float]] = []
+    for r in override_rows:
+        status = getattr(r, "status", 1)
+        if status is not None and int(status) == 0:
+            continue
+        if (getattr(r, "machine_cd", None) or "").strip() != mcd:
+            continue
+        if (getattr(r, "product_cd", None) or "").strip() != pcd:
+            continue
+        pf = getattr(r, "period_from", None)
+        pt = getattr(r, "period_to", None)
+        if pf is None or pt is None:
+            continue
+        if not (pf <= work_date <= pt):
+            continue
+        try:
+            rate = float(getattr(r, "efficiency_rate", 0) or 0)
+        except (TypeError, ValueError):
+            rate = 0.0
+        if rate <= 0:
+            continue
+        rid = int(getattr(r, "id", 0) or 0)
+        hits.append((pf, rid, rate))
+    if not hits:
+        return None
+    hits.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return hits[0][2]
+
+
 def resolve_schedule_piece_rate(
     ps: ProductionSchedule,
     ee_rows: Optional[Sequence[Any]] = None,
+    *,
+    work_date: Optional[date] = None,
+    machine_cd: Optional[str] = None,
+    override_rows: Optional[Sequence[Any]] = None,
 ) -> tuple[float, bool]:
     """
     排産用の個/h を決定する。
 
-    優先: equipment_efficiency.efficiency_rate（ガント「能率」列と同一ソース）。
-    無い場合のみ production_schedules.daily_capacity ÷ 15.3。
+    優先:
+      1. 期間指定能率（製品+設備+期間）が work_date に命中
+      2. equipment_efficiency.efficiency_rate（ガント「能率」列と同一ソース）
+      3. production_schedules.daily_capacity ÷ 15.3
+
+    work_date / override_rows 未指定時は従来どおり（2→3）。
 
     Returns:
         (hourly_piece_rate, from_equipment_efficiency)
+        ※期間指定ヒット時も from_equipment_efficiency=True（能率%を再乗算しない）
     """
+    ov = match_efficiency_period_override_rate(
+        getattr(ps, "product_cd", None),
+        machine_cd,
+        work_date,
+        override_rows,
+    )
+    if ov is not None:
+        return float(ov), True
+
     pcd = (ps.product_cd or "").strip()
     iname = (ps.item_name or "").strip()
     name_hits: List[float] = []
@@ -85,6 +148,28 @@ def resolve_schedule_piece_rate(
     if dc > 0:
         return hourly_piece_rate_from_daily_capacity(dc), False
     return 0.0, False
+
+
+def resolve_day_piece_rate(
+    ps: ProductionSchedule,
+    ee_rows: Optional[Sequence[Any]] = None,
+    *,
+    work_date: date,
+    machine_cd: Optional[str] = None,
+    override_rows: Optional[Sequence[Any]] = None,
+) -> tuple[float, bool]:
+    """1 日分の個/h。期間指定 → EE → daily_capacity の順。"""
+    rate, from_ee = resolve_schedule_piece_rate(
+        ps,
+        ee_rows,
+        work_date=work_date,
+        machine_cd=machine_cd,
+        override_rows=override_rows,
+    )
+    if rate <= 0:
+        rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+        from_ee = False
+    return rate, from_ee
 
 
 def capacity_efficiency_factor(from_equipment_efficiency: bool, efficiency_pct: float) -> float:
@@ -549,6 +634,7 @@ async def run_engine(
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
     ee_rows_preloaded: Optional[Sequence[Any]] = None,
+    override_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> ProductionSchedule:
     """
     指定された工単に対して排産推算を実行する。
@@ -655,11 +741,16 @@ async def run_engine(
 
     efficiency_pct = float(ps.efficiency or 100)
     setup_minutes = int(ps.setup_time or 0) if use_setup_time else 0
+    machine_cd = (getattr(line, "machine_cd", None) or "").strip()
 
-    hourly_piece_rate, rate_from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
-    if hourly_piece_rate <= 0:
-        hourly_piece_rate = hourly_piece_rate_from_daily_capacity(daily_capacity)
-        rate_from_ee = False
+    # 初日の能率でガード（日ループ内で work_date ごとに再解決）
+    hourly_piece_rate, rate_from_ee = resolve_day_piece_rate(
+        ps,
+        ee_rows_preloaded,
+        work_date=start,
+        machine_cd=machine_cd,
+        override_rows=override_rows_preloaded,
+    )
     if hourly_piece_rate <= 0:
         raise ValueError("hourly_piece_rate must be > 0")
     cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
@@ -737,6 +828,17 @@ async def run_engine(
             current_date += timedelta(days=1)
             continue
 
+        hourly_piece_rate, rate_from_ee = resolve_day_piece_rate(
+            ps,
+            ee_rows_preloaded,
+            work_date=current_date,
+            machine_cd=machine_cd,
+            override_rows=override_rows_preloaded,
+        )
+        if hourly_piece_rate <= 0:
+            current_date += timedelta(days=1)
+            continue
+        cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
         rate = float(hourly_piece_rate)
         if rate <= 0 or cap_eff_factor <= 0:
             current_date += timedelta(days=1)
@@ -846,6 +948,7 @@ async def run_engine_append_qty(
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
     ee_rows_preloaded: Optional[Sequence[Any]] = None,
+    override_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> tuple[ProductionSchedule, date, time, int]:
     """
     既存の日別・スライス計画を維持したまま、末尾から additional_qty 本だけ追記する。
@@ -880,15 +983,18 @@ async def run_engine_append_qty(
     if last is None:
         raise ValueError("no existing slice plan to append to")
 
-    hourly_piece_rate, rate_from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
-    daily_capacity = int(ps.daily_capacity or 0)
-    if hourly_piece_rate <= 0:
-        hourly_piece_rate = hourly_piece_rate_from_daily_capacity(daily_capacity)
-        rate_from_ee = False
+    machine_cd = (getattr(line, "machine_cd", None) or "").strip()
+    efficiency_pct = float(ps.efficiency or 100)
+    hourly_piece_rate, rate_from_ee = resolve_day_piece_rate(
+        ps,
+        ee_rows_preloaded,
+        work_date=last.work_date,
+        machine_cd=machine_cd,
+        override_rows=override_rows_preloaded,
+    )
     if hourly_piece_rate <= 0:
         raise ValueError("hourly_piece_rate must be > 0")
 
-    efficiency_pct = float(ps.efficiency or 100)
     cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
     ps_rate = hourly_piece_rate
     ps_eff = cap_eff_factor * 100.0
@@ -969,6 +1075,17 @@ async def run_engine_append_qty(
             current_date += timedelta(days=1)
             continue
 
+        hourly_piece_rate, rate_from_ee = resolve_day_piece_rate(
+            ps,
+            ee_rows_preloaded,
+            work_date=current_date,
+            machine_cd=machine_cd,
+            override_rows=override_rows_preloaded,
+        )
+        if hourly_piece_rate <= 0:
+            current_date += timedelta(days=1)
+            continue
+        cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
         rate = float(hourly_piece_rate)
         if rate <= 0 or cap_eff_factor <= 0:
             current_date += timedelta(days=1)
@@ -1058,6 +1175,7 @@ async def replan_following_schedules_on_line(
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
     ee_rows_preloaded: Optional[Sequence[Any]] = None,
+    override_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> List[ProductionSchedule]:
     """指定工単の後続（順位）のみ、游标から再排産。"""
     anchor = await db.get(ProductionSchedule, after_schedule_id)
@@ -1086,6 +1204,7 @@ async def replan_following_schedules_on_line(
     line = machine_obj or await db.get(Machine, line_id)
     if line is None:
         raise ValueError(f"Machine id={line_id} not found")
+    machine_cd = (getattr(line, "machine_cd", None) or "").strip()
 
     cursor_d = cursor_date
     cursor_t = cursor_time
@@ -1106,10 +1225,13 @@ async def replan_following_schedules_on_line(
             )
             last = last_q.scalars().first()
             if last is not None:
-                ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
-                if ps_rate <= 0:
-                    ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
-                    from_ee = False
+                ps_rate, from_ee = resolve_day_piece_rate(
+                    ps,
+                    ee_rows_preloaded,
+                    work_date=last.work_date,
+                    machine_cd=machine_cd,
+                    override_rows=override_rows_preloaded,
+                )
                 ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
                 cand_d, cand_t = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
                 if (cand_d, cand_t) > (cursor_d, cursor_t):
@@ -1135,6 +1257,7 @@ async def replan_following_schedules_on_line(
             cal_map_preloaded=cal_map_preloaded,
             slots_by_date_preloaded=slots_by_date_preloaded,
             ee_rows_preloaded=ee_rows_preloaded,
+            override_rows_preloaded=override_rows_preloaded,
         )
         updated.append(ps)
         await db.flush()
@@ -1151,10 +1274,13 @@ async def replan_following_schedules_on_line(
         )
         last = last_q.scalars().first()
         if last is not None:
-            ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
-            if ps_rate <= 0:
-                ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
-                from_ee = False
+            ps_rate, from_ee = resolve_day_piece_rate(
+                ps,
+                ee_rows_preloaded,
+                work_date=last.work_date,
+                machine_cd=machine_cd,
+                override_rows=override_rows_preloaded,
+            )
             ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
             cursor_d, cursor_t = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
 
@@ -1204,6 +1330,7 @@ async def replan_line_sequential(
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
     ee_rows_preloaded: Optional[Sequence[Any]] = None,
+    override_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> List[ProductionSchedule]:
     """
     指定産線の全工単（PLANNING / IN_PROGRESS / COMPLETED）を order_no 順に串接重算する。
@@ -1215,6 +1342,7 @@ async def replan_line_sequential(
     line = machine_obj or await db.get(Machine, line_id)
     if line is None:
         raise ValueError(f"Machine id={line_id} not found")
+    machine_cd = (getattr(line, "machine_cd", None) or "").strip()
 
     default_hours = float(line.default_work_hours or 0)
     if default_hours <= 0:
@@ -1289,6 +1417,7 @@ async def replan_line_sequential(
                 cal_map_preloaded=shared_cal_map,
                 slots_by_date_preloaded=shared_slots,
                 ee_rows_preloaded=ee_rows_preloaded,
+                override_rows_preloaded=override_rows_preloaded,
             )
             updated.append(ps)
             await db.flush()
@@ -1307,10 +1436,13 @@ async def replan_line_sequential(
         cand_date = None
         cand_time = time(0, 0, 0)
         if last is not None:
-            ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
-            if ps_rate <= 0:
-                ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
-                from_ee = False
+            ps_rate, from_ee = resolve_day_piece_rate(
+                ps,
+                ee_rows_preloaded,
+                work_date=last.work_date,
+                machine_cd=machine_cd,
+                override_rows=override_rows_preloaded,
+            )
             ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
             cand_date, cand_time = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
         else:

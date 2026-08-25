@@ -299,6 +299,15 @@
             管理コード所在
           </el-button>
           <el-button
+            type="primary"
+            size="small"
+            plain
+            :disabled="!selectedLineId"
+            @click="openEfficiencyOverrideDialog"
+          >
+            能率期間指定
+          </el-button>
+          <el-button
             type="warning"
             size="small"
             class="schedule-replan-btn btn-accent btn-accent--warning"
@@ -827,6 +836,137 @@
       </el-tabs>
     </div>
 
+    <!-- 能率期間指定 -->
+    <el-dialog
+      v-model="efficiencyOverrideDialogVisible"
+      class="plan-eff-override-dialog"
+      width="min(820px, 96vw)"
+      top="5vh"
+      append-to-body
+      destroy-on-close
+      :close-on-click-modal="false"
+      @open="onEfficiencyOverrideDialogOpen"
+    >
+      <template #header>
+        <div class="line-anchor-dlg-header">
+          <div class="line-anchor-dlg-header-text">
+            <div class="line-anchor-dlg-title-row">
+              <span class="line-anchor-dlg-title">能率期間指定</span>
+              <span class="line-anchor-dlg-badge">製品×設備</span>
+            </div>
+            <div class="line-anchor-dlg-meta">
+              <el-tag size="small" type="primary" effect="dark" round>
+                {{ selectedLineDisplayName }}
+              </el-tag>
+              <span class="line-anchor-dlg-meta-note">指定期間内のみ本/Hを上書き。終了日必須。未指定日は設備能率マスタ。</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="eff-ov-dlg-inner">
+        <el-form :inline="true" class="eff-ov-form" label-position="left">
+          <el-form-item label="製品" required>
+            <el-select
+              v-model="effOverrideForm.product_cd"
+              filterable
+              clearable
+              placeholder="製品を選択"
+              style="width: 220px"
+              :loading="loadingEeProducts"
+            >
+              <el-option
+                v-for="row in eeProducts"
+                :key="row.id"
+                :value="(row.product_cd || '').trim()"
+                :label="eeOptionLabel(row)"
+                :disabled="!(row.product_cd || '').trim()"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="能率" required>
+            <el-input-number
+              v-model="effOverrideForm.efficiency_rate"
+              :min="0.1"
+              :step="1"
+              :precision="1"
+              controls-position="right"
+              style="width: 120px"
+            />
+            <span class="eff-ov-unit">本/H</span>
+          </el-form-item>
+          <el-form-item label="開始日" required>
+            <el-date-picker
+              v-model="effOverrideForm.period_from"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="開始"
+              style="width: 140px"
+            />
+          </el-form-item>
+          <el-form-item label="終了日" required>
+            <el-date-picker
+              v-model="effOverrideForm.period_to"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="終了"
+              style="width: 140px"
+            />
+          </el-form-item>
+          <el-form-item label="備考">
+            <el-input v-model="effOverrideForm.remarks" clearable style="width: 160px" maxlength="200" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="savingEffOverride" @click="saveEfficiencyOverride">
+              {{ effOverrideEditingId != null ? '更新' : '追加' }}
+            </el-button>
+            <el-button v-if="effOverrideEditingId != null" @click="resetEfficiencyOverrideForm">取消</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-table
+          v-loading="loadingEffOverrides"
+          :data="effOverrideRows"
+          border
+          stripe
+          size="small"
+          max-height="360"
+          empty-text="この設備の期間指定はありません"
+        >
+          <el-table-column label="製品" min-width="140">
+            <template #default="{ row }">
+              <div>{{ row.product_name || '—' }}</div>
+              <div class="eff-ov-sub">{{ row.product_cd }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="能率" width="88" align="right">
+            <template #default="{ row }">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</template>
+          </el-table-column>
+          <el-table-column label="開始" width="110" prop="period_from" />
+          <el-table-column label="終了" width="110" prop="period_to" />
+          <el-table-column label="備考" min-width="120" show-overflow-tooltip prop="remarks" />
+          <el-table-column label="操作" width="120" fixed="right" align="center">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="editEfficiencyOverride(row)">編集</el-button>
+              <el-button link type="danger" size="small" @click="removeEfficiencyOverride(row)">削除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <template #footer>
+        <el-button @click="efficiencyOverrideDialogVisible = false">閉じる</el-button>
+        <el-button
+          type="warning"
+          :loading="replanning"
+          :disabled="!selectedLineId"
+          @click="replanAfterEfficiencyOverride"
+        >
+          保存後にライン再計算
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- ガント未表示時も DOM に存在させる（v-if 内だとガント未取得の間はダイアログが無く反応しない） -->
     <el-dialog
       v-model="lineReplanAnchorDialogVisible"
@@ -1298,6 +1438,10 @@ import {
   fetchLineCapacities,
   updateScheduleDailyPlannedQty,
   productionLineOptionLabel,
+  fetchEfficiencyPeriodOverrides,
+  createEfficiencyPeriodOverride,
+  updateEfficiencyPeriodOverride,
+  deleteEfficiencyPeriodOverride,
   type ProductionLine,
   type LineReplanAnchorRow,
   type ScheduleOut,
@@ -1306,6 +1450,7 @@ import {
   type HourlyGridRow,
   type EquipmentEfficiencyProduct,
   type ProgressLotItem,
+  type EfficiencyPeriodOverride,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
@@ -1387,6 +1532,18 @@ const DEFAULT_ANCHOR_MONTH = '2026-04'
 const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
 const lineReplanAnchorDialogVisible = ref(false)
+const efficiencyOverrideDialogVisible = ref(false)
+const loadingEffOverrides = ref(false)
+const savingEffOverride = ref(false)
+const effOverrideRows = ref<EfficiencyPeriodOverride[]>([])
+const effOverrideEditingId = ref<number | null>(null)
+const effOverrideForm = ref({
+  product_cd: '',
+  efficiency_rate: 45 as number,
+  period_from: '' as string,
+  period_to: '' as string,
+  remarks: '' as string,
+})
 const lineReplanAnchorRows = ref<LineReplanAnchorRow[]>([])
 const loadingLineReplanAnchors = ref(false)
 const savingLineReplanAnchors = ref(false)
@@ -2761,6 +2918,158 @@ function openLineReplanAnchorDialog() {
     return
   }
   lineReplanAnchorDialogVisible.value = true
+}
+
+function selectedLineMachineCd(): string {
+  const ln = lines.value.find((l) => l.id === selectedLineId.value)
+  return (ln?.line_code || '').trim()
+}
+
+function resetEfficiencyOverrideForm() {
+  effOverrideEditingId.value = null
+  const today = formatYmdInJapan(new Date())
+  effOverrideForm.value = {
+    product_cd: (newEntry.value.product_cd || '').trim(),
+    efficiency_rate: 45,
+    period_from: today,
+    period_to: today,
+    remarks: '',
+  }
+}
+
+function openEfficiencyOverrideDialog() {
+  if (!selectedLineId.value) {
+    ElMessage.warning('ラインを選択してください')
+    return
+  }
+  resetEfficiencyOverrideForm()
+  efficiencyOverrideDialogVisible.value = true
+}
+
+async function onEfficiencyOverrideDialogOpen() {
+  if (!selectedLineId.value) return
+  if (eeProducts.value.length === 0) {
+    try {
+      eeProducts.value = await fetchEquipmentEfficiencyProducts(selectedLineId.value)
+    } catch {
+      /* ignore */
+    }
+  }
+  await loadEfficiencyOverrides()
+}
+
+async function loadEfficiencyOverrides() {
+  const mcd = selectedLineMachineCd()
+  if (!mcd) {
+    effOverrideRows.value = []
+    return
+  }
+  loadingEffOverrides.value = true
+  try {
+    const res = await fetchEfficiencyPeriodOverrides({ machineCd: mcd, activeOnly: true })
+    const list = res?.data
+    effOverrideRows.value = Array.isArray(list) ? list : []
+  } catch (e: unknown) {
+    effOverrideRows.value = []
+    ElMessage.error(formatApiError(e) || '能率期間指定の取得に失敗しました')
+  } finally {
+    loadingEffOverrides.value = false
+  }
+}
+
+function editEfficiencyOverride(row: EfficiencyPeriodOverride) {
+  effOverrideEditingId.value = row.id
+  effOverrideForm.value = {
+    product_cd: (row.product_cd || '').trim(),
+    efficiency_rate: Number(row.efficiency_rate) || 0,
+    period_from: row.period_from || '',
+    period_to: row.period_to || '',
+    remarks: row.remarks || '',
+  }
+}
+
+async function saveEfficiencyOverride() {
+  if (!guardApsOperation(canEdit)) return
+  const mcd = selectedLineMachineCd()
+  if (!mcd) {
+    ElMessage.warning('設備コードが取得できません')
+    return
+  }
+  const productCd = (effOverrideForm.value.product_cd || '').trim()
+  const from = (effOverrideForm.value.period_from || '').trim()
+  const to = (effOverrideForm.value.period_to || '').trim()
+  const rate = Number(effOverrideForm.value.efficiency_rate)
+  if (!productCd) {
+    ElMessage.warning('製品を選択してください')
+    return
+  }
+  if (!from || !to) {
+    ElMessage.warning('開始日と終了日は必須です')
+    return
+  }
+  if (from > to) {
+    ElMessage.warning('開始日は終了日以前にしてください')
+    return
+  }
+  if (!(rate > 0)) {
+    ElMessage.warning('能率（本/H）は 0 より大きい値にしてください')
+    return
+  }
+  const ee = eeProducts.value.find((r) => (r.product_cd || '').trim() === productCd)
+  const ln = lines.value.find((l) => l.id === selectedLineId.value)
+  const body = {
+    machine_cd: mcd,
+    machines_name: (ln?.line_name || '').trim() || null,
+    product_cd: productCd,
+    product_name: (ee?.product_name || '').trim() || null,
+    efficiency_rate: rate,
+    period_from: from,
+    period_to: to,
+    remarks: (effOverrideForm.value.remarks || '').trim() || null,
+    status: 1,
+  }
+  savingEffOverride.value = true
+  try {
+    if (effOverrideEditingId.value != null) {
+      await updateEfficiencyPeriodOverride(effOverrideEditingId.value, body)
+      ElMessage.success('能率期間指定を更新しました')
+    } else {
+      await createEfficiencyPeriodOverride(body)
+      ElMessage.success('能率期間指定を追加しました')
+    }
+    resetEfficiencyOverrideForm()
+    await loadEfficiencyOverrides()
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '保存に失敗しました')
+  } finally {
+    savingEffOverride.value = false
+  }
+}
+
+async function removeEfficiencyOverride(row: EfficiencyPeriodOverride) {
+  if (!guardApsOperation(canEdit)) return
+  try {
+    await ElMessageBox.confirm(
+      `${row.product_name || row.product_cd}（${row.period_from}〜${row.period_to}）を削除しますか？`,
+      '能率期間指定の削除',
+      { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteEfficiencyPeriodOverride(row.id)
+    ElMessage.success('削除しました')
+    if (effOverrideEditingId.value === row.id) resetEfficiencyOverrideForm()
+    await loadEfficiencyOverrides()
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '削除に失敗しました')
+  }
+}
+
+async function replanAfterEfficiencyOverride() {
+  efficiencyOverrideDialogVisible.value = false
+  await replanAll()
 }
 
 const anchorDialogProcessTag = computed(() => {
@@ -4911,6 +5220,29 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   background-color: rgba(64, 158, 255, 0.1) !important;
 }
 /* ─── 再計算アンカー日（コンパクト・配色付き） ─── */
+.plan-eff-override-dialog :deep(.el-dialog__body) {
+  padding-top: 8px;
+}
+.eff-ov-dlg-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.eff-ov-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: flex-end;
+}
+.eff-ov-unit {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.eff-ov-sub {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
 .plan-line-anchor-dialog :deep(.el-dialog) {
   border-radius: 14px;
   overflow: hidden;

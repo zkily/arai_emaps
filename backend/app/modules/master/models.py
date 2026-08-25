@@ -457,6 +457,29 @@ class EquipmentEfficiency(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class EquipmentEfficiencyPeriodOverride(Base):
+    """設備能率の期間指定（equipment_efficiency_period_override）
+
+    製品+設備+期間で本/H を上書き。未指定日は従来の equipment_efficiency を使用。
+    """
+
+    __tablename__ = "equipment_efficiency_period_override"
+    __table_args__ = ({"mysql_comment": "設備能率の期間指定（製品+設備+期間）"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    machine_cd = Column(String(50), nullable=False, index=True)
+    machines_name = Column(String(100), nullable=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(100), nullable=True)
+    efficiency_rate = Column(Numeric(10, 1), nullable=False)
+    period_from = Column(Date, nullable=False)
+    period_to = Column(Date, nullable=False)
+    status = Column(Integer, nullable=True, default=1)  # 1=有効, 0=無効
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class MachineWorkTimeConfig(Base):
     """設備運行時間設定（machine_work_time_config）"""
     __tablename__ = "machine_work_time_config"

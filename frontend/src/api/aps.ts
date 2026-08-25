@@ -558,6 +558,61 @@ export function replanLineSequence(
   return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
 }
 
+/** 製品+設備+期間の能率指定（本/H）。未指定日は設備能率マスタ。 */
+export interface EfficiencyPeriodOverride {
+  id: number
+  machine_cd: string
+  machines_name?: string | null
+  product_cd: string
+  product_name?: string | null
+  efficiency_rate: number
+  period_from: string
+  period_to: string
+  status?: number | null
+  remarks?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface EfficiencyPeriodOverrideBody {
+  machine_cd: string
+  product_cd: string
+  efficiency_rate: number
+  period_from: string
+  period_to: string
+  machines_name?: string | null
+  product_name?: string | null
+  remarks?: string | null
+  status?: number
+}
+
+export function fetchEfficiencyPeriodOverrides(params: {
+  machineCd?: string
+  productCd?: string
+  from?: string
+  to?: string
+  activeOnly?: boolean
+}): Promise<{ success?: boolean; data?: EfficiencyPeriodOverride[] }> {
+  return request.get(`${BASE}/efficiency-period-overrides`, { params })
+}
+
+export function createEfficiencyPeriodOverride(
+  body: EfficiencyPeriodOverrideBody,
+): Promise<{ success?: boolean; data?: EfficiencyPeriodOverride }> {
+  return request.post(`${BASE}/efficiency-period-overrides`, body)
+}
+
+export function updateEfficiencyPeriodOverride(
+  id: number,
+  body: EfficiencyPeriodOverrideBody,
+): Promise<{ success?: boolean; data?: EfficiencyPeriodOverride }> {
+  return request.put(`${BASE}/efficiency-period-overrides/${id}`, body)
+}
+
+export function deleteEfficiencyPeriodOverride(id: number): Promise<{ success?: boolean }> {
+  return request.delete(`${BASE}/efficiency-period-overrides/${id}`)
+}
+
 /** 再計算 API レスポンスを画面向け短文に（開発時は経路・耗時を付与） */
 export function formatReplanSequenceSuccessMessage(
   res: ReplanSequenceResponse | undefined,

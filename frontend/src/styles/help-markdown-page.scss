@@ -485,11 +485,20 @@
     margin-bottom: 6px !important;
   }
 
+  /* A4 縦（297mm）− 余白 6mm×2 ≒ 285mm。見出し分を残し 1 枚に収める */
   body.manual-print-active .help-content :deep(img),
   .help-content :deep(img) {
-    max-width: 100% !important;
+    max-width: 160mm !important;
+    max-height: 220mm !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
     box-shadow: none !important;
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 
   body.manual-print-active .help-content :deep(table) {

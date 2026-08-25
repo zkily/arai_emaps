@@ -26,6 +26,7 @@ from app.modules.auth.models import User
 from app.modules.master.models import (
     Machine,
     EquipmentEfficiency,
+    EquipmentEfficiencyPeriodOverride,
     Process,
     Product,
     ProductRouteStep,
@@ -87,6 +88,7 @@ from app.modules.aps.engine import (
     productive_hours_from_slot_rows,
     hourly_piece_rate_from_daily_capacity,
     resolve_schedule_piece_rate,
+    resolve_day_piece_rate,
     capacity_efficiency_factor,
     advance_line_cursor_after_slice,
     _fetch_slots_by_date,
@@ -168,12 +170,56 @@ async def _load_equipment_efficiency_rows_for_machine(
     return rows_by_machine.get(int(machine.id), [])
 
 
+async def _load_efficiency_period_overrides_for_machine(
+    db: AsyncSession,
+    machine: Optional[Machine],
+    *,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+) -> List[EquipmentEfficiencyPeriodOverride]:
+    """設備の有効な期間指定能率。テーブル未作成時は空（従来ロジック維持）。"""
+    if machine is None:
+        return []
+    mcd = (machine.machine_cd or "").strip()
+    if not mcd:
+        return []
+    clauses = [
+        EquipmentEfficiencyPeriodOverride.machine_cd == mcd,
+        or_(
+            EquipmentEfficiencyPeriodOverride.status.is_(None),
+            EquipmentEfficiencyPeriodOverride.status == 1,
+        ),
+    ]
+    if date_from is not None and date_to is not None:
+        clauses.append(EquipmentEfficiencyPeriodOverride.period_from <= date_to)
+        clauses.append(EquipmentEfficiencyPeriodOverride.period_to >= date_from)
+    elif date_from is not None:
+        clauses.append(EquipmentEfficiencyPeriodOverride.period_to >= date_from)
+    elif date_to is not None:
+        clauses.append(EquipmentEfficiencyPeriodOverride.period_from <= date_to)
+    try:
+        res = await db.execute(select(EquipmentEfficiencyPeriodOverride).where(and_(*clauses)))
+        return list(res.scalars().all())
+    except (OperationalError, ProgrammingError):
+        return []
+
+
 def _resolve_efficiency_rate_pieces_per_hour(
     ps: ProductionSchedule,
     ee_rows: List[EquipmentEfficiency],
+    *,
+    work_date: Optional[date] = None,
+    machine_cd: Optional[str] = None,
+    override_rows: Optional[Sequence[Any]] = None,
 ) -> Optional[float]:
-    """表示用：equipment_efficiency.efficiency_rate（本/H）。排産エンジンと同一ロジック。"""
-    rate, _from_ee = resolve_schedule_piece_rate(ps, ee_rows)
+    """表示用：期間指定 → equipment_efficiency.efficiency_rate（本/H）。排産エンジンと同一ロジック。"""
+    rate, _from_ee = resolve_schedule_piece_rate(
+        ps,
+        ee_rows,
+        work_date=work_date or now_jst().date(),
+        machine_cd=machine_cd,
+        override_rows=override_rows,
+    )
     if rate > 0:
         return round(float(rate), 2)
     return None
@@ -294,6 +340,9 @@ async def _line_cursor_after_schedule(
     ee_rows: Optional[Sequence[Any]],
     cursor_date: date,
     cursor_time: time,
+    *,
+    machine_cd: Optional[str] = None,
+    override_rows: Optional[Sequence[Any]] = None,
 ) -> tuple[date, time]:
     """ライン順次排産（Step1/3）：工単終了位置で游标を前進（既存游标より前には戻さない）。"""
     last_q = await db.execute(
@@ -310,10 +359,13 @@ async def _line_cursor_after_schedule(
     cand_date = cursor_date
     cand_time = cursor_time
     if last is not None:
-        ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows)
-        if ps_rate <= 0:
-            ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
-            from_ee = False
+        ps_rate, from_ee = resolve_day_piece_rate(
+            ps,
+            ee_rows,
+            work_date=last.work_date,
+            machine_cd=machine_cd,
+            override_rows=override_rows,
+        )
         ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
         cand_date, cand_time = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
     elif ps.end_date is not None:
@@ -444,12 +496,14 @@ async def _replan_line_sequential_residual_aware(
     shared_cal_map: dict[date, float],
     shared_slots: Dict[date, List[Any]],
     ee_rows: List[EquipmentEfficiency],
+    override_rows: Optional[Sequence[Any]] = None,
     include_debug: bool = False,
 ) -> tuple[List[ProductionSchedule], list[dict[str, Any]]]:
     """
     実績/不良ありライン向けの単一遍次排産（旧 Step3）。
     COMPLETED 占位 + 残数 run_engine。Step1 の全量無残数排産は行わない。
     """
+    machine_cd = (getattr(line_machine, "machine_cd", None) or "").strip() if line_machine else ""
     cursor_date_r = (
         replan_start_anchor
         or (all_line_schedules[0].start_date if all_line_schedules else None)
@@ -463,7 +517,13 @@ async def _replan_line_sequential_residual_aware(
         replannable = (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS")
         if not replannable:
             cursor_date_r, cursor_time_r = await _line_cursor_after_schedule(
-                db, ps, ee_rows, cursor_date_r, cursor_time_r
+                db,
+                ps,
+                ee_rows,
+                cursor_date_r,
+                cursor_time_r,
+                machine_cd=machine_cd,
+                override_rows=override_rows,
             )
             continue
 
@@ -548,6 +608,7 @@ async def _replan_line_sequential_residual_aware(
                 cal_map_preloaded=shared_cal_map,
                 slots_by_date_preloaded=shared_slots,
                 ee_rows_preloaded=ee_rows,
+                override_rows_preloaded=override_rows,
             )
         else:
             if include_debug:
@@ -576,12 +637,19 @@ async def _replan_line_sequential_residual_aware(
                 cal_map_preloaded=shared_cal_map,
                 slots_by_date_preloaded=shared_slots,
                 ee_rows_preloaded=ee_rows,
+                override_rows_preloaded=override_rows,
             )
 
         replanned_ids.add(int(ps.id))
         await db.flush()
         cursor_date_r, cursor_time_r = await _line_cursor_after_schedule(
-            db, ps, ee_rows, cursor_date_r, cursor_time_r
+            db,
+            ps,
+            ee_rows,
+            cursor_date_r,
+            cursor_time_r,
+            machine_cd=machine_cd,
+            override_rows=override_rows,
         )
 
     updated = [ps for ps in all_line_schedules if int(ps.id) in replanned_ids]
@@ -1375,11 +1443,23 @@ async def create_schedule(
 
     if body.run_immediately:
         try:
+            ee_rows: List[EquipmentEfficiency] = []
+            override_rows: List[EquipmentEfficiencyPeriodOverride] = []
+            if machine is not None:
+                ee_rows = await _load_equipment_efficiency_rows_for_machine(db, machine)
+                override_rows = await _load_efficiency_period_overrides_for_machine(
+                    db,
+                    machine,
+                    date_from=body.start_date or now_jst().date(),
+                )
             ps = await run_engine(
                 db,
                 ps.id,
                 override_start_date=body.start_date,
                 use_setup_time=int(ps.order_no or 0) != 1,
+                machine_obj=machine,
+                ee_rows_preloaded=ee_rows,
+                override_rows_preloaded=override_rows,
             )
             await db.flush()
             # 計画一覧へ計画を追加した直後にバッチ番号（aps_batch_plans）と
@@ -1447,11 +1527,24 @@ async def update_schedule(
     await db.flush()
 
     if body.run_immediately:
+        ee_rows: List[EquipmentEfficiency] = []
+        override_rows: List[EquipmentEfficiencyPeriodOverride] = []
+        machine = await db.get(Machine, ps.line_id)
+        if machine is not None:
+            ee_rows = await _load_equipment_efficiency_rows_for_machine(db, machine)
+            override_rows = await _load_efficiency_period_overrides_for_machine(
+                db,
+                machine,
+                date_from=body.start_date or ps.start_date or now_jst().date(),
+            )
         ps = await run_engine(
             db,
             ps.id,
             override_start_date=body.start_date or ps.start_date,
             use_setup_time=int(ps.order_no or 0) != 1,
+            machine_obj=machine,
+            ee_rows_preloaded=ee_rows,
+            override_rows_preloaded=override_rows,
         )
         await db.flush()
         # 計画一覧の数量/順位等が変わった際、aps_batch_plans / instruction_plans を追従させる
@@ -1484,6 +1577,9 @@ async def append_schedule_planned_qty(
     ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
     cal_start = ps.start_date or now_jst().date()
     cal_end_d = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+    override_rows = await _load_efficiency_period_overrides_for_machine(
+        db, line_machine, date_from=cal_start, date_to=cal_end_d
+    )
     cal_result = await db.execute(
         select(LineCapacity)
         .where(
@@ -1507,6 +1603,7 @@ async def append_schedule_planned_qty(
             cal_map_preloaded=shared_cal_map,
             slots_by_date_preloaded=shared_slots,
             ee_rows_preloaded=ee_rows,
+            override_rows_preloaded=override_rows,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -1522,6 +1619,7 @@ async def append_schedule_planned_qty(
         cal_map_preloaded=shared_cal_map,
         slots_by_date_preloaded=shared_slots,
         ee_rows_preloaded=ee_rows,
+        override_rows_preloaded=override_rows,
     )
     for fps in following:
         await _sync_actual_from_stock_logs(db, fps, machine=line_machine)
@@ -1642,11 +1740,24 @@ async def run_schedule(
     ps = await db.get(ProductionSchedule, schedule_id)
     if ps is None:
         raise HTTPException(404, "工単が見つかりません")
+    line_machine = await db.get(Machine, ps.line_id)
+    ee_rows: List[EquipmentEfficiency] = []
+    override_rows: List[EquipmentEfficiencyPeriodOverride] = []
+    if line_machine is not None:
+        ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+        override_rows = await _load_efficiency_period_overrides_for_machine(
+            db,
+            line_machine,
+            date_from=ps.start_date or now_jst().date(),
+        )
     ps = await run_engine(
         db,
         schedule_id,
         override_start_date=ps.start_date,
         use_setup_time=int(ps.order_no or 0) != 1,
+        machine_obj=line_machine,
+        ee_rows_preloaded=ee_rows,
+        override_rows_preloaded=override_rows,
     )
     await db.flush()
     # エンジン再計算後は aps_batch_plans / instruction_plans のロット行を計画一覧と整合させる。
@@ -1852,6 +1963,10 @@ async def get_scheduling_grid(
     for line in lines:
         schedules = schedules_by_line.get(int(line.id), [])
         ee_rows = ee_by_line.get(int(line.id), [])
+        override_rows = await _load_efficiency_period_overrides_for_machine(
+            db, line, date_from=sd, date_to=ed
+        )
+        line_mcd = (line.machine_cd or "").strip()
         calendar_map = dict(calendar_by_line.get(int(line.id), {}))
         line_slice_dates = line_slice_dates_by_line.get(int(line.id), set())
 
@@ -2015,7 +2130,13 @@ async def get_scheduling_grid(
                 material_date=ps.material_date.isoformat() if ps.material_date else None,
                 setup_time=int(ps.setup_time or 0),
                 efficiency=_dec(ps.efficiency),
-                efficiency_rate=_resolve_efficiency_rate_pieces_per_hour(ps, ee_rows),
+                efficiency_rate=_resolve_efficiency_rate_pieces_per_hour(
+                    ps,
+                    ee_rows,
+                    work_date=now_jst().date(),
+                    machine_cd=line_mcd,
+                    override_rows=override_rows,
+                ),
                 daily_capacity=int(ps.daily_capacity),
                 planned_output_qty=int(ps.planned_output_qty or 0),
                 start_date=ps.start_date.isoformat() if ps.start_date else None,
@@ -2093,6 +2214,10 @@ async def get_scheduling_hourly_grid(
     schedules = sched_result.scalars().all()
     schedule_ids = [ps.id for ps in schedules]
     ee_rows = await _load_equipment_efficiency_rows_for_machine(db, machine)
+    override_rows = await _load_efficiency_period_overrides_for_machine(
+        db, machine, date_from=sd, date_to=ed
+    )
+    line_mcd = (machine.machine_cd or "").strip()
 
     col_keys: set[str] = set()
     per_sched: dict[int, dict[str, int]] = defaultdict(dict)
@@ -2134,7 +2259,13 @@ async def get_scheduling_hourly_grid(
             planned_batch_count=int(getattr(ps, "planned_batch_count", 0) or 0),
             lot_size_snapshot=int(getattr(ps, "lot_size_snapshot", 0) or 0),
             planned_process_qty=int(ps.planned_process_qty or 0),
-            efficiency_rate=_resolve_efficiency_rate_pieces_per_hour(ps, ee_rows),
+            efficiency_rate=_resolve_efficiency_rate_pieces_per_hour(
+                ps,
+                ee_rows,
+                work_date=now_jst().date(),
+                machine_cd=line_mcd,
+                override_rows=override_rows,
+            ),
             item_name=ps.item_name or "",
             slice_qty=dict(per_sched.get(ps.id, {})),
         )
@@ -2550,8 +2681,12 @@ async def replan_sequence(
     shared_slots = await _fetch_slots_by_date(db, line_id, cal_start, cal_end_d)
 
     ee_rows: List[EquipmentEfficiency] = []
+    override_rows: List[EquipmentEfficiencyPeriodOverride] = []
     if line_machine is not None:
         ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+        override_rows = await _load_efficiency_period_overrides_for_machine(
+            db, line_machine, date_from=cal_start, date_to=cal_end_d
+        )
     all_line_sched_res = await db.execute(
         select(ProductionSchedule).where(
             ProductionSchedule.line_id == line_id,
@@ -2605,6 +2740,7 @@ async def replan_sequence(
             shared_cal_map=shared_cal_map,
             shared_slots=shared_slots,
             ee_rows=ee_rows,
+            override_rows=override_rows,
             include_debug=includeDebug,
         )
         await db.flush()
@@ -2617,6 +2753,7 @@ async def replan_sequence(
             cal_map_preloaded=shared_cal_map,
             slots_by_date_preloaded=shared_slots,
             ee_rows_preloaded=ee_rows,
+            override_rows_preloaded=override_rows,
         )
         await db.flush()
 
