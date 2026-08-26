@@ -24,6 +24,16 @@
               アンカー日設定
             </el-button>
           </el-form-item>
+          <el-form-item v-if="selectedLineId" label-width="0" class="setup-fi setup-fi--eff-override">
+            <el-button
+              type="primary"
+              plain
+              class="setup-eff-override-btn"
+              @click="onOpenEfficiencyOverrideDialog"
+            >
+              能率期間指定
+            </el-button>
+          </el-form-item>
           <el-form-item label="工程" required class="setup-fi setup-fi--process">
             <el-select
               v-model="selectedProcessCd"
@@ -289,15 +299,6 @@
             :inactive-text="'未完のみ'"
             class="schedule-completed-switch"
           />
-          <el-button
-            type="primary"
-            size="small"
-            plain
-            :disabled="!selectedLineId"
-            @click="openEfficiencyOverrideDialog"
-          >
-            能率期間指定
-          </el-button>
           <el-button
             type="warning"
             size="small"
@@ -761,8 +762,8 @@
 
     <EfficiencyPeriodOverrideDialog
       v-model="efficiencyOverrideDialogVisible"
-      :machine-cd="selectedLineMachineCd()"
-      :machines-name="selectedLineMachineName()"
+      :machine-cd="selectedLineMachineCd"
+      :machines-name="selectedLineMachineName"
       :line-label="selectedLineDisplayName"
       :product-options="efficiencyOverrideProductOptions"
       :loading-products="loadingEeProducts"
@@ -1069,6 +1070,7 @@ import { useApsOperationPermission } from '@/composables/useApsOperationPermissi
 import { guardApsOperation } from '@/utils/apsOperationGuard'
 import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
 import EfficiencyPeriodOverrideDialog from '@/views/aps/shared/EfficiencyPeriodOverrideDialog.vue'
+import { useEfficiencyPeriodOverrideDialog } from '@/views/aps/shared/useEfficiencyPeriodOverrideDialog'
 import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import { getProductionSummarysList } from '@/api/database'
 import request from '@/shared/api/request'
@@ -1139,7 +1141,6 @@ const DEFAULT_ANCHOR_MONTH = '2026-04'
 const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
 const lineReplanAnchorDialogVisible = ref(false)
-const efficiencyOverrideDialogVisible = ref(false)
 const lineReplanAnchorRows = ref<LineReplanAnchorRow[]>([])
 const loadingLineReplanAnchors = ref(false)
 const savingLineReplanAnchors = ref(false)
@@ -2273,55 +2274,6 @@ function buildSingleLineReplanConfirmMessage() {
   ])
 }
 
-function selectedLineMachineCd(): string {
-  const ln = lines.value.find((l) => l.id === selectedLineId.value)
-  return (ln?.line_code || '').trim()
-}
-
-function selectedLineMachineName(): string {
-  const ln = lines.value.find((l) => l.id === selectedLineId.value)
-  return (ln?.line_name || '').trim()
-}
-
-const efficiencyOverrideProductOptions = computed(() =>
-  eeProducts.value
-    .map((row) => {
-      const product_cd = (row.product_cd || '').trim()
-      return {
-        product_cd,
-        product_name: row.product_name,
-        label: eeOptionLabel(row),
-      }
-    })
-    .filter((r) => !!r.product_cd),
-)
-
-function openEfficiencyOverrideDialog() {
-  if (!selectedLineId.value) {
-    ElMessage.warning('ラインを選択してください')
-    return
-  }
-  if (eeProducts.value.length === 0 && selectedLineId.value) {
-    loadingEeProducts.value = true
-    fetchEquipmentEfficiencyProducts(selectedLineId.value)
-      .then((list) => {
-        eeProducts.value = list
-      })
-      .catch(() => {
-        eeProducts.value = []
-      })
-      .finally(() => {
-        loadingEeProducts.value = false
-      })
-  }
-  efficiencyOverrideDialogVisible.value = true
-}
-
-async function replanAfterEfficiencyOverride() {
-  efficiencyOverrideDialogVisible.value = false
-  await replanAll()
-}
-
 async function replanAll() {
   if (!guardApsOperation(canEdit)) return
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
@@ -2349,6 +2301,28 @@ async function replanAll() {
     ElMessage.error(formatApiError(e) || '再計算に失敗しました')
   } finally {
     replanning.value = false
+  }
+}
+
+const {
+  efficiencyOverrideDialogVisible,
+  selectedLineMachineCd,
+  selectedLineMachineName,
+  efficiencyOverrideProductOptions,
+  openEfficiencyOverrideDialog,
+  replanAfterEfficiencyOverride,
+} = useEfficiencyPeriodOverrideDialog({
+  selectedLineId,
+  lines,
+  eeProducts,
+  loadingEeProducts,
+  defaultProductCd: computed(() => newEntry.value.product_cd),
+  replanAll,
+})
+
+function onOpenEfficiencyOverrideDialog() {
+  if (!openEfficiencyOverrideDialog()) {
+    ElMessage.warning('ラインを選択してください')
   }
 }
 

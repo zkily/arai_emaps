@@ -188,7 +188,7 @@
           type="warning"
           class="epd-btn-replan"
           :loading="replanning"
-          :disabled="!machineCd"
+          :disabled="!machineCd || !canEdit"
           @click="emit('request-replan')"
         >
           ライン順で再計算
@@ -214,6 +214,8 @@ export interface EfficiencyPeriodProductOption {
   product_cd: string
   product_name?: string | null
   label: string
+  /** 設備能率マスタの本/H（新規フォーム初期値用） */
+  efficiency_rate?: number | null
 }
 
 const props = withDefaults(
@@ -300,12 +302,21 @@ function rowClassName({ row }: { row: EfficiencyPeriodOverride }): string {
   return `epd-row--${periodStatus(row)}`
 }
 
+function masterRateForProduct(productCd: string): number {
+  const cd = (productCd || '').trim()
+  if (!cd) return 45
+  const opt = props.productOptions.find((r) => r.product_cd === cd)
+  const rate = Number(opt?.efficiency_rate)
+  return rate > 0 ? rate : 45
+}
+
 function resetForm() {
   editingId.value = null
   const today = todayIso()
+  const productCd = (props.defaultProductCd || '').trim()
   form.value = {
-    product_cd: (props.defaultProductCd || '').trim(),
-    efficiency_rate: 45,
+    product_cd: productCd,
+    efficiency_rate: masterRateForProduct(productCd),
     period_from: today,
     period_to: today,
     remarks: '',
@@ -433,8 +444,28 @@ async function removeRow(row: EfficiencyPeriodOverride) {
 watch(
   () => props.defaultProductCd,
   (cd) => {
-    if (editingId.value == null && props.modelValue) {
-      form.value.product_cd = (cd || '').trim()
+    if (editingId.value != null || !props.modelValue) return
+    form.value.product_cd = (cd || '').trim()
+    form.value.efficiency_rate = masterRateForProduct(form.value.product_cd)
+  },
+)
+
+watch(
+  () => form.value.product_cd,
+  (cd) => {
+    if (editingId.value != null) return
+    const rate = masterRateForProduct(cd || '')
+    if (rate > 0) form.value.efficiency_rate = rate
+  },
+)
+
+watch(
+  () => props.machineCd,
+  (mcd, prev) => {
+    if (!props.modelValue) return
+    if ((mcd || '').trim() && mcd !== prev) {
+      resetForm()
+      void loadRows()
     }
   },
 )

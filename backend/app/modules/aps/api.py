@@ -2915,7 +2915,23 @@ async def run_all_schedules(
     current_user: User = Depends(require_aps_operation("edit")),
 ):
     if sequential and lineId is not None:
-        updated = await replan_line_sequential(db, lineId)
+        line_machine = await db.get(Machine, lineId)
+        override_rows: List[EquipmentEfficiencyPeriodOverride] = []
+        ee_rows: List[EquipmentEfficiency] = []
+        if line_machine is not None:
+            ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+            cal_start = now_jst().date()
+            cal_end_d = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+            override_rows = await _load_efficiency_period_overrides_for_machine(
+                db, line_machine, date_from=cal_start, date_to=cal_end_d
+            )
+        updated = await replan_line_sequential(
+            db,
+            lineId,
+            machine_obj=line_machine,
+            ee_rows_preloaded=ee_rows,
+            override_rows_preloaded=override_rows,
+        )
         return {"success": True, "data": {"count": len(updated)}, "message": f"{len(updated)}件の工単を順次再計算しました"}
 
     q = select(ProductionSchedule).where(
@@ -2927,11 +2943,24 @@ async def run_all_schedules(
     schedules = result.scalars().all()
     count = 0
     for ps in schedules:
+        line_machine = await db.get(Machine, ps.line_id)
+        ee_rows: List[EquipmentEfficiency] = []
+        override_rows: List[EquipmentEfficiencyPeriodOverride] = []
+        if line_machine is not None:
+            ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+            cal_start = ps.start_date or now_jst().date()
+            cal_end_d = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+            override_rows = await _load_efficiency_period_overrides_for_machine(
+                db, line_machine, date_from=cal_start, date_to=cal_end_d
+            )
         await run_engine(
             db,
             ps.id,
             override_start_date=ps.start_date,
             use_setup_time=int(ps.order_no or 0) != 1,
+            machine_obj=line_machine,
+            ee_rows_preloaded=ee_rows,
+            override_rows_preloaded=override_rows,
         )
         count += 1
     await db.flush()

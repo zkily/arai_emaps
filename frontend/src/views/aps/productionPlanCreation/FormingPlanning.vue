@@ -24,6 +24,16 @@
               アンカー日設定
             </el-button>
           </el-form-item>
+          <el-form-item v-if="selectedLineId" label-width="0" class="setup-fi setup-fi--eff-override">
+            <el-button
+              type="primary"
+              plain
+              class="setup-eff-override-btn"
+              @click="onOpenEfficiencyOverrideDialog"
+            >
+              能率期間指定
+            </el-button>
+          </el-form-item>
           <el-form-item label="工程" required class="setup-fi setup-fi--process">
             <el-select
               v-model="selectedProcessCd"
@@ -297,15 +307,6 @@
             @click="openManagementCodeTraceDialog"
           >
             管理コード所在
-          </el-button>
-          <el-button
-            type="primary"
-            size="small"
-            plain
-            :disabled="!selectedLineId"
-            @click="openEfficiencyOverrideDialog"
-          >
-            能率期間指定
           </el-button>
           <el-button
             type="warning"
@@ -838,8 +839,8 @@
 
     <EfficiencyPeriodOverrideDialog
       v-model="efficiencyOverrideDialogVisible"
-      :machine-cd="selectedLineMachineCd()"
-      :machines-name="selectedLineMachineName()"
+      :machine-cd="selectedLineMachineCd"
+      :machines-name="selectedLineMachineName"
       :line-label="selectedLineDisplayName"
       :product-options="efficiencyOverrideProductOptions"
       :loading-products="loadingEeProducts"
@@ -1338,6 +1339,7 @@ import {
   runFormingLineReplanSequence,
 } from '@/views/aps/shared/formingLineReplan'
 import EfficiencyPeriodOverrideDialog from '@/views/aps/shared/EfficiencyPeriodOverrideDialog.vue'
+import { useEfficiencyPeriodOverrideDialog } from '@/views/aps/shared/useEfficiencyPeriodOverrideDialog'
 import type { ProcessItem } from '@/types/master'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
 import { guardApsOperation } from '@/utils/apsOperationGuard'
@@ -1410,7 +1412,6 @@ const DEFAULT_ANCHOR_MONTH = '2026-04'
 const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
 const lineReplanAnchorDialogVisible = ref(false)
-const efficiencyOverrideDialogVisible = ref(false)
 const lineReplanAnchorRows = ref<LineReplanAnchorRow[]>([])
 const loadingLineReplanAnchors = ref(false)
 const savingLineReplanAnchors = ref(false)
@@ -2752,6 +2753,28 @@ async function replanAll() {
   }
 }
 
+const {
+  efficiencyOverrideDialogVisible,
+  selectedLineMachineCd,
+  selectedLineMachineName,
+  efficiencyOverrideProductOptions,
+  openEfficiencyOverrideDialog,
+  replanAfterEfficiencyOverride,
+} = useEfficiencyPeriodOverrideDialog({
+  selectedLineId,
+  lines,
+  eeProducts,
+  loadingEeProducts,
+  defaultProductCd: computed(() => newEntry.value.product_cd),
+  replanAll,
+})
+
+function onOpenEfficiencyOverrideDialog() {
+  if (!openEfficiencyOverrideDialog()) {
+    ElMessage.warning('ラインを選択してください')
+  }
+}
+
 const todayIso = computed(() => formatYmdInJapan(new Date()))
 
 /** 日別ガントの日付列メタ（ヘッド／セルで同じ判定を共有し曜日文字も再利用） */
@@ -2785,55 +2808,6 @@ function openLineReplanAnchorDialog() {
     return
   }
   lineReplanAnchorDialogVisible.value = true
-}
-
-function selectedLineMachineCd(): string {
-  const ln = lines.value.find((l) => l.id === selectedLineId.value)
-  return (ln?.line_code || '').trim()
-}
-
-function selectedLineMachineName(): string {
-  const ln = lines.value.find((l) => l.id === selectedLineId.value)
-  return (ln?.line_name || '').trim()
-}
-
-const efficiencyOverrideProductOptions = computed(() =>
-  eeProducts.value
-    .map((row) => {
-      const product_cd = (row.product_cd || '').trim()
-      return {
-        product_cd,
-        product_name: row.product_name,
-        label: eeOptionLabel(row),
-      }
-    })
-    .filter((r) => !!r.product_cd),
-)
-
-function openEfficiencyOverrideDialog() {
-  if (!selectedLineId.value) {
-    ElMessage.warning('ラインを選択してください')
-    return
-  }
-  if (eeProducts.value.length === 0 && selectedLineId.value) {
-    loadingEeProducts.value = true
-    fetchEquipmentEfficiencyProducts(selectedLineId.value)
-      .then((list) => {
-        eeProducts.value = list
-      })
-      .catch(() => {
-        eeProducts.value = []
-      })
-      .finally(() => {
-        loadingEeProducts.value = false
-      })
-  }
-  efficiencyOverrideDialogVisible.value = true
-}
-
-async function replanAfterEfficiencyOverride() {
-  efficiencyOverrideDialogVisible.value = false
-  await replanAll()
 }
 
 const anchorDialogProcessTag = computed(() => {
