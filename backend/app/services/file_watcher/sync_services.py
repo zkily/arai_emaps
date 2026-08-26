@@ -42,11 +42,14 @@ MATERIAL_FILES = list(settings.get_material_receiving_watch_filenames())
 PART_FILES = list(settings.get_part_receiving_watch_filenames())
 
 # ピッキングログファイル → shipping_log（fileWatcherService.js と同等）
-# Partslog.csv も同一フォーマットで配置された場合に監視し、取込後は picking_log_matched を API と同様に全件再計算
+# Partslog.csv も同一フォーマットで配置された場合に監視し、取込後は対象 picking_no 分の picking_log_matched を更新
 PICKING_FILES = [
     "PickingLog.csv",
     "Partslog.csv",
 ]
+
+# 全件再計算時に shipping_items を長時間ロックしないよう id 範囲で分割コミット
+_PICKING_MATCHED_REFRESH_CHUNK = 800
 
 # 材料切断ログ（MATERIAL_CUTTING_CSV_PATH / materialCutting.csv）→ material_cutting_logs
 MATERIAL_CUTTING_CSV_BASENAME = "materialCutting.csv"
@@ -1223,37 +1226,76 @@ class PickingLogService:
 
 
 def execute_full_picking_log_matched_refresh_sync() -> int:
-    """shipping_items.picking_log_matched を全件再計算（POST refresh-picking-log-matched と同一 SQL）。"""
+    """shipping_items.picking_log_matched を全件再計算（POST refresh-picking-log-matched と同等）。
+
+    旧実装は全行を 2 回 UPDATE し、長時間の行ロックで print-record 等と競合（errno=1205）していた。
+    ここでは突合せ結果を一時表に載せ、id 範囲ごとに短トランザクションで更新する。
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     affected = 0
     try:
         cursor.execute(
             """
-            UPDATE shipping_items
-            SET picking_log_matched = 0
-            WHERE shipping_no_p IS NOT NULL AND shipping_no_p != ''
+            CREATE TEMPORARY TABLE IF NOT EXISTS tmp_shipping_matched_picking_nos (
+                picking_no VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+                PRIMARY KEY (picking_no)
+            )
             """
         )
-        affected = cursor.rowcount or 0
+        cursor.execute("TRUNCATE TABLE tmp_shipping_matched_picking_nos")
         cursor.execute(
             """
-            UPDATE shipping_items si
-            INNER JOIN (
-                SELECT DISTINCT picking_no
-                FROM shipping_log
-                WHERE picking_no IS NOT NULL AND picking_no != ''
-            ) sl ON sl.picking_no = si.shipping_no_p
-            SET si.picking_log_matched = 1
+            INSERT IGNORE INTO tmp_shipping_matched_picking_nos (picking_no)
+            SELECT DISTINCT picking_no
+            FROM shipping_log
+            WHERE picking_no IS NOT NULL AND picking_no != ''
             """
         )
         conn.commit()
-        logger.info("picking_log_matched 全件再計算完了（リセット対象行数: %s）", affected)
+
+        cursor.execute(
+            "SELECT COALESCE(MIN(id), 0), COALESCE(MAX(id), 0) FROM shipping_items"
+        )
+        row = cursor.fetchone() or (0, 0)
+        min_id, max_id = int(row[0] or 0), int(row[1] or 0)
+        if max_id <= 0:
+            return 0
+
+        start = min_id
+        while start <= max_id:
+            end = start + _PICKING_MATCHED_REFRESH_CHUNK - 1
+            cursor.execute(
+                """
+                UPDATE shipping_items si
+                LEFT JOIN tmp_shipping_matched_picking_nos m
+                  ON m.picking_no = si.shipping_no_p
+                SET si.picking_log_matched = IF(m.picking_no IS NULL, 0, 1)
+                WHERE si.id BETWEEN %s AND %s
+                  AND si.shipping_no_p IS NOT NULL
+                  AND si.shipping_no_p != ''
+                """,
+                (start, end),
+            )
+            affected += int(cursor.rowcount or 0)
+            conn.commit()
+            start = end + 1
+
+        logger.info(
+            "picking_log_matched 全件再計算完了（更新行数: %s, id範囲: %s-%s）",
+            affected,
+            min_id,
+            max_id,
+        )
     except Exception as e:
         conn.rollback()
         logger.error("picking_log_matched 全件再計算失敗: %s", e, exc_info=True)
         raise
     finally:
+        try:
+            cursor.execute("DROP TEMPORARY TABLE IF EXISTS tmp_shipping_matched_picking_nos")
+        except Exception:
+            pass
         cursor.close()
         conn.close()
     return affected
@@ -1261,12 +1303,14 @@ def execute_full_picking_log_matched_refresh_sync() -> int:
 
 def run_picking_sync_and_refresh_matched(filepath: str, filename: str) -> None:
     """
-    PickingLog.csv / Partslog.csv 変更時：CSV を shipping_log に取り込み、その後 picking_log_matched を全件再計算する。
-    フロントの「データ読込・更新」と同じ結果になる（手動 API と同様の 2 段 UPDATE）。
+    PickingLog.csv / Partslog.csv 変更時：CSV を shipping_log に取り込む。
+
+    picking_log_matched は sync 内で当該 picking_no（= shipping_no_p）分だけ更新する。
+    全件 UPDATE は shipping_items を長時間ロックし印刷記録保存と競合するため行わない。
+    全件整合が必要な場合は POST /items/refresh-picking-log-matched を使う。
     """
     svc = PickingLogService()
     svc.sync(filepath, filename, raise_on_error=False)
-    execute_full_picking_log_matched_refresh_sync()
 
 
 def sync_material_csv_files_from_watch_folder() -> dict:

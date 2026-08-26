@@ -4,6 +4,7 @@
 """
 import asyncio
 import logging
+import random
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import OperationalError
@@ -24,8 +25,13 @@ _INSERT_RECORD = text(
     "INSERT INTO shipping_records (shipping_no, status) VALUES (:shipping_no, '印刷済') "
     "ON DUPLICATE KEY UPDATE status = '印刷済'"
 )
-_LOCK_WAIT_TIMEOUT_SEC = 5
-_TX_RETRIES = 3
+_UPDATE_ITEM_STATUS = text(
+    "UPDATE shipping_items SET status = '発行済' "
+    "WHERE shipping_no = :shipping_no "
+    "AND COALESCE(status, '') NOT IN ('発行済', 'キャンセル')"
+)
+_LOCK_WAIT_TIMEOUT_SEC = 3
+_TX_RETRIES = 5
 # MySQL: 1205 = Lock wait timeout, 1213 = Deadlock
 _RETRYABLE_LOCK_ERRNOS = {1205, 1213}
 
@@ -46,6 +52,17 @@ def _is_retryable_lock_error(exc: OperationalError) -> bool:
     return _mysql_errno(exc) in _RETRYABLE_LOCK_ERRNOS
 
 
+async def _set_lock_wait_timeout(db: AsyncSession) -> None:
+    # OperationalError 後に接続が張り直されると SESSION 設定が消えるため、試行ごとに再設定する
+    await db.execute(
+        text(f"SET SESSION innodb_lock_wait_timeout = {_LOCK_WAIT_TIMEOUT_SEC}")
+    )
+
+
+async def _sleep_lock_backoff(attempt: int) -> None:
+    await asyncio.sleep(0.15 * (2**attempt) + random.uniform(0, 0.25))
+
+
 @router.post("")
 async def save_print_record(
     body: PrintRecordBody,
@@ -56,6 +73,8 @@ async def save_print_record(
     if not body.shipping_numbers:
         return {"success": True, "count": 0}
     numbers = [str(n).strip() for n in body.shipping_numbers if n and str(n).strip()]
+    # 同一番号の重複を除き、ロック取得順を安定させる
+    numbers = sorted(dict.fromkeys(numbers))
     if not numbers:
         return {"success": True, "count": 0}
 
@@ -63,6 +82,7 @@ async def save_print_record(
         # 1) shipping_records に印刷済を保存（先にコミットし、shipping_items のロック待ちと分離）
         for attempt in range(_TX_RETRIES):
             try:
+                await _set_lock_wait_timeout(db)
                 for no in numbers:
                     await db.execute(_INSERT_RECORD, {"shipping_no": no})
                 await db.commit()
@@ -76,50 +96,53 @@ async def save_print_record(
                         attempt + 1,
                         _TX_RETRIES,
                     )
-                    await asyncio.sleep(0.5 * (attempt + 1))
+                    await _sleep_lock_backoff(attempt)
                     continue
                 raise
 
-        # 2) 該当出荷番号の shipping_items の status を「発行済」に更新
-        placeholders = ", ".join([f":n{i}" for i in range(len(numbers))])
-        params = {f"n{i}": no for i, no in enumerate(numbers)}
-        upd_items = text(
-            "UPDATE shipping_items SET status = '発行済' "
-            f"WHERE shipping_no IN ({placeholders}) "
-            "AND COALESCE(status, '') NOT IN ('発行済', 'キャンセル')"
-        )
-
-        await db.execute(
-            text(f"SET SESSION innodb_lock_wait_timeout = {_LOCK_WAIT_TIMEOUT_SEC}")
-        )
-
-        for attempt in range(_TX_RETRIES):
-            try:
-                await db.execute(upd_items, params)
-                await db.commit()
-                return {"success": True, "count": len(numbers), "status_updated": True}
-            except OperationalError as exc:
-                await db.rollback()
-                if _is_retryable_lock_error(exc):
-                    if attempt < _TX_RETRIES - 1:
+        # 2) 出荷番号ごとに短トランザクションで status 更新（全番号一括 UPDATE で広い行ロックを取らない）
+        failed_nos: List[str] = []
+        for no in numbers:
+            updated = False
+            for attempt in range(_TX_RETRIES):
+                try:
+                    await _set_lock_wait_timeout(db)
+                    await db.execute(_UPDATE_ITEM_STATUS, {"shipping_no": no})
+                    await db.commit()
+                    updated = True
+                    break
+                except OperationalError as exc:
+                    await db.rollback()
+                    if _is_retryable_lock_error(exc) and attempt < _TX_RETRIES - 1:
                         logger.warning(
-                            "print-record shipping_items ロック競合 (errno=%s) 再試行 %s/%s",
+                            "print-record shipping_items ロック競合 (errno=%s) shipping_no=%s 再試行 %s/%s",
                             _mysql_errno(exc),
+                            no,
                             attempt + 1,
                             _TX_RETRIES,
                         )
-                        await asyncio.sleep(0.5 * (attempt + 1))
+                        await _sleep_lock_backoff(attempt)
                         continue
-                    return {
-                        "success": True,
-                        "count": len(numbers),
-                        "status_updated": False,
-                        "warning": (
-                            "印刷記録は保存しましたが、出荷状態の更新が他処理のロック競合で"
-                            "完了しませんでした。一覧を更新するか、しばらくしてから再度お試しください。"
-                        ),
-                    }
-                raise
+                    if _is_retryable_lock_error(exc):
+                        failed_nos.append(no)
+                        break
+                    raise
+            if not updated and no not in failed_nos:
+                failed_nos.append(no)
+
+        if failed_nos:
+            return {
+                "success": True,
+                "count": len(numbers),
+                "status_updated": False,
+                "failed_shipping_numbers": failed_nos,
+                "warning": (
+                    "印刷記録は保存しましたが、出荷状態の更新が他処理のロック競合で"
+                    f"一部未完了です（{len(failed_nos)}件）。"
+                    "一覧を更新するか、しばらくしてから再度お試しください。"
+                ),
+            }
+        return {"success": True, "count": len(numbers), "status_updated": True}
     except Exception as e:
         await db.rollback()
         raise HTTPException(

@@ -4,6 +4,7 @@
 - GET  /history: ピッキング履歴（shipping_items）
 - GET  /performance-by-destination: 担当者別パフォーマンス（shipping_items）
 """
+import asyncio
 import json
 import logging
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -17,23 +18,12 @@ from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.shipping.shipping_items_api import _shipping_item_to_picking_display_dict
+from app.services.file_watcher.sync_services import execute_full_picking_log_matched_refresh_sync
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# shipping_log 突合せ後に picking_api / items API から再利用
-REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL = text("""
-UPDATE shipping_items si
-LEFT JOIN (
-    SELECT picking_no
-    FROM shipping_log
-    WHERE picking_no IS NOT NULL AND picking_no != ''
-    GROUP BY picking_no
-) sl ON sl.picking_no = si.shipping_no_p
-SET si.picking_log_matched = IF(sl.picking_no IS NULL, 0, 1)
-WHERE si.shipping_no_p IS NOT NULL AND si.shipping_no_p != ''
-""")
 
 
 def _parse_group_destinations(raw: Any) -> List[str]:
@@ -420,8 +410,9 @@ async def cleanup_shipping_logs(
         "DELETE FROM shipping_log WHERE date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
     ))
     deleted = result.rowcount
-    await db.execute(REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL)
+    # 削除を先に確定し、突合せは分割コミットで更新（長時間の全表ロックを避ける）
     await db.commit()
+    await asyncio.to_thread(execute_full_picking_log_matched_refresh_sync)
     return {"success": True, "message": f"{deleted} 件の古いログを削除しました", "deleted": deleted}
 
 
@@ -475,8 +466,8 @@ async def perform_deduplicate(
                 AND sl.id < dup.max_id
     """))
     deleted = result.rowcount
-    await db.execute(REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL)
     await db.commit()
+    await asyncio.to_thread(execute_full_picking_log_matched_refresh_sync)
     return {"success": True, "message": f"{deleted} 件の重複を削除しました", "deleted": deleted}
 
 
