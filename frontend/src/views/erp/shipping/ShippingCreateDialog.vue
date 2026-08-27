@@ -1833,6 +1833,39 @@ const saveBoxSettings = () => {
 const MAX_MIXED_PRODUCTS = 6 // 混載パレットの製品種類上限
 const MERGE_SMALL_PALLET_RATIO = 0.25 // この割合以下の箱数は「小托盘」としてマージ対象
 
+/** 品種×製品タイプ（量産品/試作品等）を分けて明細を残すためのキー */
+function productTypeGroupKey(item: {
+  product_cd?: string
+  product_type?: string
+  originalId?: string
+}): string {
+  const cd = item.product_cd || item.originalId || ''
+  return `${cd}||${item.product_type || ''}`
+}
+
+function itemProductCd(item: { product_cd?: string; originalId?: string; id?: string }): string {
+  if (item.product_cd) return item.product_cd
+  if (item.originalId) return item.originalId
+  const id = String(item.id || '')
+  return id.includes('||') ? id.split('||')[0] : id.replace(/_split_\d+$/, '')
+}
+
+function mixedVarietyCount(
+  items: { product_cd?: string; originalId?: string; id?: string }[],
+): number {
+  return new Set(items.map((i) => itemProductCd(i)).filter(Boolean)).size
+}
+
+function wouldExceedMixedLimit(
+  items: { product_cd?: string; originalId?: string; id?: string }[],
+  incoming: { product_cd?: string; originalId?: string; id?: string },
+): boolean {
+  const incomingCd = itemProductCd(incoming)
+  const cds = new Set(items.map((i) => itemProductCd(i)).filter(Boolean))
+  if (incomingCd && cds.has(incomingCd)) return false
+  return cds.size >= MAX_MIXED_PRODUCTS
+}
+
 // 优化算法选项
 const optimizationOptions = [
   { label: '欲張り法 (優化版)', value: 'heuristic' },
@@ -3353,7 +3386,7 @@ function recalculatePallets() {
   selectedItems.value.forEach((item) => {
     // console.log('处理选择项目:', item)
     const boxType = item.box_type || 'default'
-    const key = `${boxType}-${item.product_cd}-${item.destination_cd}`
+    const key = `${boxType}-${item.product_cd}-${item.destination_cd}-${item.product_type || ''}`
     if (!groups[key]) {
       groups[key] = {
         product_cd: item.product_cd,
@@ -3786,9 +3819,11 @@ function sortPalletNumbers() {
  *    - 提高适应度计算精度，增加容量优化权重
  *
  * 3. 通用约束条件:
- *    - 混載製品种类 ≤ 6种
+ *    - 混載製品种类 ≤ 6种（同一品番の製品タイプ違いは1種類として扱う）
  *    - 同一产品总箱数 ≤ 设定条件的箱数
  *    - 优先生成满载托盘
+ *    - 同一品番でも製品タイプ（量産品/試作品等）が異なれば明細を分け、
+ *      容量内なら同一パレット番号に載せる
  */
 
 // 智能托盘分配算法 (欲張り法 - 优化版)
@@ -3810,11 +3845,12 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
     // 获取该箱型的最大容量
     const maxBoxesPerPallet = boxCapacitySettings[boxType] || boxCapacitySettings.default
 
-    // 按产品分组，将同一产品的项目合并
+    // 按品番×製品タイプ分组（量産品と試作品は明細を分け、後で同一パレットに載せられる）
     const productGroups: { [key: string]: any } = {}
     typeItems.forEach((item: DailyOrder) => {
-      if (!productGroups[item.product_cd]) {
-        productGroups[item.product_cd] = {
+      const groupKey = productTypeGroupKey(item)
+      if (!productGroups[groupKey]) {
+        productGroups[groupKey] = {
           ...item,
           totalBoxes: 0,
           totalUnits: 0,
@@ -3830,8 +3866,8 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
           ? item.confirmed_units
           : parseInt(item.confirmed_units) || 0
 
-      productGroups[item.product_cd].totalBoxes += boxes
-      productGroups[item.product_cd].totalUnits += units
+      productGroups[groupKey].totalBoxes += boxes
+      productGroups[groupKey].totalUnits += units
     })
 
     // 将产品按箱数从大到小排序
@@ -3916,22 +3952,23 @@ function optimizePalletAllocation(
 ): Pallet[] {
   const pallets = []
 
-  // 按产品代码分组，确保同一品种尽量放在一起
+  // 按品番×製品タイプ分组（同一品番でも製品タイプが違えば明細を分けたまま）
   const productCodeGroups: { [key: string]: any[] } = {}
   products.forEach((product) => {
-    if (!productCodeGroups[product.product_cd]) {
-      productCodeGroups[product.product_cd] = []
+    const groupKey = productTypeGroupKey(product)
+    if (!productCodeGroups[groupKey]) {
+      productCodeGroups[groupKey] = []
     }
-    productCodeGroups[product.product_cd].push(product)
+    productCodeGroups[groupKey].push(product)
   })
 
   // console.log('按产品代码分组:', Object.keys(productCodeGroups).length, '个不同产品')
 
-  // 处理每个产品组
-  Object.entries(productCodeGroups).forEach(([productCd, productGroup]: [string, any[]]) => {
-    // 如果同一产品有多个项目，先合并它们
+  // 处理每个产品组（同一品番×製品タイプのみ箱数を合算）
+  Object.entries(productCodeGroups).forEach(([groupKey, productGroup]: [string, any[]]) => {
+    // 如果同一品番×製品タイプ有多个项目，先合并它们
     if (productGroup.length > 1) {
-      //  console.log(`合并同一产品 ${productCd} 的 ${productGroup.length} 个项目`)
+      //  console.log(`合并同一产品 ${groupKey} 的 ${productGroup.length} 个项目`)
       const mergedProduct = {
         ...productGroup[0],
         remainderBoxes: 0,
@@ -3991,9 +4028,9 @@ function optimizePalletAllocation(
     if (remainingBoxes > 0) {
       product.remainderBoxes = remainingBoxes
       product.remainderUnits = remainingUnits
-      productCodeGroups[productCd] = [product]
+      productCodeGroups[groupKey] = [product]
     } else {
-      productCodeGroups[productCd] = []
+      productCodeGroups[groupKey] = []
     }
   })
 
@@ -4068,8 +4105,19 @@ function createOptimizedMixedPallets(
     remainingProducts.splice(bestIdx, 1)
 
     const available = () => maxBoxesPerPallet - currentPallet.totalBoxes
-    const productVarieties = () =>
-      new Set(currentPallet.items.map((x: any) => x.product_cd)).size
+    const productVarieties = () => mixedVarietyCount(currentPallet.items)
+
+    // 2a) 同一品種（量産品+試作品など製品タイプ違い）を優先して同じパレットへ載せる
+    const firstCd = first.product_cd
+    for (let i = remainingProducts.length - 1; i >= 0; i--) {
+      const sameVariety = remainingProducts[i]
+      if (sameVariety.product_cd !== firstCd) continue
+      if (sameVariety.remainderBoxes > available()) continue
+      currentPallet.items.push(sameVariety)
+      currentPallet.totalBoxes += sameVariety.remainderBoxes
+      currentPallet.totalUnits += sameVariety.remainderUnits
+      remainingProducts.splice(i, 1)
+    }
 
     // 2) 残り空間に Best-Fit：入る中で「余り空間が最小」のものを繰り返し追加（種類数上限まで）
     while (available() > 0 && productVarieties() < MAX_MIXED_PRODUCTS) {
@@ -4223,11 +4271,6 @@ function fillRemainingSpaceOptimized(
     return
   }
 
-  // 检查混载产品种类限制（設定の上限）
-  if (currentPallet.items.length >= MAX_MIXED_PRODUCTS) {
-    return
-  }
-
   // 计算可用空间
   const availableSpace = maxBoxesPerPallet - currentPallet.totalBoxes
 
@@ -4237,6 +4280,8 @@ function fillRemainingSpaceOptimized(
 
   for (let i = 0; i < remainingProducts.length; i++) {
     const product = remainingProducts[i]
+
+    if (wouldExceedMixedLimit(currentPallet.items, product)) continue
 
     // 如果产品与托盘中已有的产品相同，优先选择
     const hasSameProduct = currentPallet.items.some(
@@ -4472,10 +4517,14 @@ async function submitShipping() {
             (s) =>
               s.product_cd === detailItem.product_cd &&
               s.destination_cd === destCd &&
-              formatShippingDateForPallet(s) === palletDateStr,
+              formatShippingDateForPallet(s) === palletDateStr &&
+              (s.product_type || '') === (detailItem.product_type || ''),
           )
           for (const m of matched) {
-            const key = m.id != null ? String(m.id) : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}`
+            const key =
+              m.id != null
+                ? String(m.id)
+                : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}_${m.product_type || ''}`
             if (!itemPalletMap.has(key)) itemPalletMap.set(key, shippingNo)
           }
         }
@@ -4486,10 +4535,14 @@ async function submitShipping() {
           (s) =>
             s.product_cd === mainItem.product_cd &&
             s.destination_cd === mainItem.destination_cd &&
-            formatShippingDateForPallet(s) === palletDateStr,
+            formatShippingDateForPallet(s) === palletDateStr &&
+            (s.product_type || '') === (mainItem.product_type || ''),
         )
         for (const m of matched) {
-          const key = m.id != null ? String(m.id) : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}`
+          const key =
+            m.id != null
+              ? String(m.id)
+              : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}_${m.product_type || ''}`
           if (!itemPalletMap.has(key)) itemPalletMap.set(key, shippingNo)
         }
       }
@@ -4497,10 +4550,14 @@ async function submitShipping() {
 
     const palletProductCountMap = new Map<string, number>()
     for (const item of selectedItems.value) {
-      const key = item.id != null ? String(item.id) : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}`
+      const key =
+        item.id != null
+          ? String(item.id)
+          : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}_${item.product_type || ''}`
       const shippingNo = itemPalletMap.get(key)
       if (shippingNo) {
-        const countKey = `${shippingNo}_${item.product_cd}`
+        const ptype = (item.product_type || '').trim()
+        const countKey = `${shippingNo}_${item.product_cd}_${ptype}`
         palletProductCountMap.set(countKey, (palletProductCountMap.get(countKey) || 0) + 1)
       }
     }
@@ -4508,18 +4565,23 @@ async function submitShipping() {
 
     const updatePayload = selectedItems.value
       .map((item) => {
-        const key = item.id != null ? String(item.id) : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}`
+        const key =
+          item.id != null
+            ? String(item.id)
+            : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}_${item.product_type || ''}`
         const shippingNo = itemPalletMap.get(key)
         if (!shippingNo) return null
-        const countKey = `${shippingNo}_${item.product_cd}`
+        const ptype = (item.product_type || '').trim()
+        const typeSuffix = !ptype || ptype === '量産品' ? '' : `_${ptype}`
+        const countKey = `${shippingNo}_${item.product_cd}_${ptype}`
         const totalCount = palletProductCountMap.get(countKey) || 1
         let shippingNoWithSuffix: string
         if (totalCount > 1) {
           const currentIndex = (palletProductIndexMap.get(countKey) || 0) + 1
           palletProductIndexMap.set(countKey, currentIndex)
-          shippingNoWithSuffix = `${shippingNo}_${item.product_cd}_${currentIndex}`
+          shippingNoWithSuffix = `${shippingNo}_${item.product_cd}${typeSuffix}_${currentIndex}`
         } else {
-          shippingNoWithSuffix = `${shippingNo}_${item.product_cd}`
+          shippingNoWithSuffix = `${shippingNo}_${item.product_cd}${typeSuffix}`
         }
         const shipDateRaw = formatShippingDateForPallet(item)
         if (!shipDateRaw) return null
@@ -4534,6 +4596,7 @@ async function submitShipping() {
           destination_cd: item.destination_cd,
           shipping_date,
           shipping_no: shippingNoWithSuffix,
+          product_type: item.product_type || '',
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null && !!x.shipping_no)
@@ -4777,11 +4840,12 @@ function allocatePalletsGeneticAlgorithm(
     // 获取该箱型的最大容量
     const maxBoxesPerPallet = boxCapacitySettings[boxType] || boxCapacitySettings.default
 
-    // 按产品分组，将同一产品的项目合并
+    // 按品番×製品タイプ分组（量産品と試作品は明細を分けたまま）
     const productGroups: { [key: string]: any } = {}
     typeItems.forEach((item) => {
-      if (!productGroups[item.product_cd]) {
-        productGroups[item.product_cd] = {
+      const groupKey = productTypeGroupKey(item)
+      if (!productGroups[groupKey]) {
+        productGroups[groupKey] = {
           ...item,
           totalBoxes: 0,
           totalUnits: 0,
@@ -4797,8 +4861,8 @@ function allocatePalletsGeneticAlgorithm(
           ? item.confirmed_units
           : parseInt(item.confirmed_units) || 0
 
-      productGroups[item.product_cd].totalBoxes += boxes
-      productGroups[item.product_cd].totalUnits += units
+      productGroups[groupKey].totalBoxes += boxes
+      productGroups[groupKey].totalUnits += units
     })
 
     // 在转换为遗传算法格式之前，先处理大于32箱的产品拆分
@@ -4834,7 +4898,7 @@ function allocatePalletsGeneticAlgorithm(
         // 创建32箱的组
         for (let i = 0; i < fullGroups; i++) {
           splitProducts.push({
-            id: `${product.product_cd}_split_${i + 1}`,
+            id: `${productTypeGroupKey(product)}_split_${i + 1}`,
             originalId: product.product_cd,
             name: product.product_name,
             product_type: product.product_type,
@@ -4854,7 +4918,7 @@ function allocatePalletsGeneticAlgorithm(
         // 如果有剩余，创建剩余组
         if (remainder > 0) {
           splitProducts.push({
-            id: `${product.product_cd}_split_${fullGroups + 1}`,
+            id: `${productTypeGroupKey(product)}_split_${fullGroups + 1}`,
             originalId: product.product_cd,
             name: product.product_name,
             product_type: product.product_type,
@@ -4877,7 +4941,7 @@ function allocatePalletsGeneticAlgorithm(
       } else {
         // 不需要拆分的产品直接添加
         splitProducts.push({
-          id: product.product_cd,
+          id: productTypeGroupKey(product),
           originalId: product.product_cd,
           name: product.product_name,
           product_type: product.product_type,
@@ -4961,7 +5025,7 @@ function allocatePalletsGeneticAlgorithm(
           delivery_date: any
           shipping_date: any
         }) => {
-          const key = item.product_cd
+          const key = productTypeGroupKey(item)
           if (!mergedItems[key]) {
             mergedItems[key] = {
               product_cd: item.product_cd,
@@ -5571,7 +5635,8 @@ function bestFitDecreasing(products: any[], maxBoxesPerPallet: number): any[] {
 
       // 检查混载产品种类限制（設定の上限）
       const existingProduct = pallet.items.find((item) => item.id === currentProduct.id)
-      const wouldExceedProductLimit = !existingProduct && pallet.items.length >= MAX_MIXED_PRODUCTS
+      const wouldExceedProductLimit =
+        !existingProduct && wouldExceedMixedLimit(pallet.items, currentProduct)
 
       if (
         !wouldExceedProductLimit &&
@@ -5704,11 +5769,33 @@ function firstFitDecreasing(products: any[], maxBoxesPerPallet: number): any[] {
       }
     }
 
+    // 同一品種・製品タイプ違いは別明細のまま、同一パレットへ載せる
+    if (!placed) {
+      for (const pallet of pallets) {
+        const sameVariety = pallet.items.some(
+          (item) => itemProductCd(item) === itemProductCd(currentProduct),
+        )
+        if (
+          sameVariety &&
+          !wouldExceedMixedLimit(pallet.items, currentProduct) &&
+          pallet.totalBoxes + currentProduct.boxes <= maxBoxesPerPallet
+        ) {
+          pallet.totalBoxes += currentProduct.boxes
+          pallet.totalUnits += currentProduct.units
+          pallet.items.push({
+            ...currentProduct,
+          })
+          placed = true
+          break
+        }
+      }
+    }
+
     // 如果没有放入同一产品的托盘，尝试放入任何有空间的托盘
     if (!placed) {
       for (const pallet of pallets) {
         // 检查混载产品种类限制（設定の上限）
-        if (pallet.items.length >= MAX_MIXED_PRODUCTS) {
+        if (wouldExceedMixedLimit(pallet.items, currentProduct)) {
           continue
         }
 
@@ -6384,6 +6471,7 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
                 {
                   product_cd: targetPallet.product_cd,
                   product_name: targetPallet.product_name,
+                  product_type: targetPallet.product_type,
                   box_type: targetPallet.box_type,
                   confirmed_boxes: targetPallet.confirmed_boxes - smallPallet.confirmed_boxes,
                   confirmed_units: targetPallet.confirmed_units - smallPallet.confirmed_units,
@@ -6399,6 +6487,7 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
               targetPallet.detail.push({
                 product_cd: smallPallet.product_cd,
                 product_name: smallPallet.product_name,
+                product_type: smallPallet.product_type,
                 box_type: smallPallet.box_type,
                 confirmed_boxes: smallPallet.confirmed_boxes,
                 confirmed_units: smallPallet.confirmed_units,
@@ -6407,15 +6496,21 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
               })
             }
 
-            // 更新托盘信息
+            // 更新托盘信息（同一品番の製品タイプ違いは混載種類に数えない）
             if (targetPallet.detail.length > 1) {
-              targetPallet.product_name = targetPallet.detail
-                .map((item: { product_name: unknown }) => item.product_name)
-                .join(',')
-              targetPallet.product_cd = targetPallet.detail
-                .map((item: { product_cd: unknown }) => item.product_cd)
-                .join(',')
-              targetPallet.remarks = '混載パレット'
+              const uniqueCds = [
+                ...new Set(targetPallet.detail.map((item: { product_cd: unknown }) => item.product_cd)),
+              ]
+              const uniqueNames = [
+                ...new Set(
+                  targetPallet.detail.map((item: { product_name: unknown }) => item.product_name),
+                ),
+              ]
+              targetPallet.product_cd = uniqueCds.join(',')
+              targetPallet.product_name = uniqueNames.join(',')
+              if (uniqueCds.length > 1) {
+                targetPallet.remarks = '混載パレット'
+              }
             }
 
             // 从待合并列表中移除
@@ -6442,6 +6537,7 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
           {
             product_cd: basePallet.product_cd,
             product_name: basePallet.product_name,
+            product_type: basePallet.product_type,
             box_type: basePallet.box_type,
             confirmed_boxes: basePallet.confirmed_boxes,
             confirmed_units: basePallet.confirmed_units,
@@ -6490,6 +6586,7 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
               basePallet.detail.push({
                 product_cd: candidatePallet.product_cd,
                 product_name: candidatePallet.product_name,
+                product_type: candidatePallet.product_type,
                 box_type: candidatePallet.box_type,
                 confirmed_boxes: candidatePallet.confirmed_boxes,
                 confirmed_units: candidatePallet.confirmed_units,
@@ -6503,15 +6600,19 @@ function optimizePalletsByMerging(pallets: Pallet[]) {
         }
       }
 
-      // 更新合并后的托盘信息
+      // 更新合并后的托盘信息（同一品番の製品タイプ違いは混載種類に数えない）
       if (basePallet.detail.length > 1) {
-        basePallet.product_name = basePallet.detail
-          .map((item: { product_name: unknown }) => item.product_name)
-          .join(',')
-        basePallet.product_cd = basePallet.detail
-          .map((item: { product_cd: unknown }) => item.product_cd)
-          .join(',')
-        basePallet.remarks = '混載パレット'
+        const uniqueCds = [
+          ...new Set(basePallet.detail.map((item: { product_cd: unknown }) => item.product_cd)),
+        ]
+        const uniqueNames = [
+          ...new Set(basePallet.detail.map((item: { product_name: unknown }) => item.product_name)),
+        ]
+        basePallet.product_cd = uniqueCds.join(',')
+        basePallet.product_name = uniqueNames.join(',')
+        if (uniqueCds.length > 1) {
+          basePallet.remarks = '混載パレット'
+        }
       }
 
       mergedSmallPallets.push(basePallet)

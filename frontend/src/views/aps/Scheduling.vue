@@ -1163,7 +1163,7 @@ function getCellToneClass(row: MatrixRow, date: string, displayValue?: number): 
 const PRINT_FIXED_COL_PCT = {
   line: 3.5,
   order: 3,
-  item: 11,
+  item: 7.7,
   eff: 4,
   total: 4.5,
 } as const
@@ -1227,8 +1227,19 @@ function buildSchedulingPrintHtml(): string {
     })
     .join('')
 
+  const theadHtml = `<thead>
+      <tr>
+        <th>ライン</th>
+        <th>順位</th>
+        <th>製品</th>
+        <th>能率(本/H)</th>
+        <th>生産計画</th>
+        ${dateHeaders}
+      </tr>
+    </thead>`
+
   const sectionsHtml = matrixSections.value
-    .map((section) => {
+    .map((section, sectionIdx) => {
       const rowsHtml = section.rows
         .map((row) => {
           if (row.type === 'group') {
@@ -1275,7 +1286,13 @@ function buildSchedulingPrintHtml(): string {
           </tr>`
         })
         .join('')
-      return `<tbody class="line-section">${rowsHtml}</tbody>`
+      return `<div class="line-block${sectionIdx === 0 ? ' is-first' : ''}">
+  <table>
+    ${colgroup}
+    ${sectionIdx === 0 ? theadHtml : ''}
+    <tbody>${rowsHtml}</tbody>
+  </table>
+</div>`
     })
     .join('')
 
@@ -1340,13 +1357,17 @@ function buildSchedulingPrintHtml(): string {
     .swatch--actual { background: rgba(254, 249, 195, 0.95); }
     .swatch--cm { background: rgba(254, 202, 202, 0.9); }
     .swatch--plan { background: rgba(187, 247, 208, 0.75); }
+    .line-block {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .line-block:not(.is-first) table { margin-top: -1px; }
     table {
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
     }
     thead { display: table-header-group; }
-    tfoot { display: table-row-group; }
     th, td {
       border: 1px solid #cbd5e1;
       padding: 2px 3px;
@@ -1409,6 +1430,10 @@ function buildSchedulingPrintHtml(): string {
       @page { size: A3 landscape; margin: 8mm; }
       html, body { margin: 0 !important; padding: 0 !important; width: auto !important; }
       .hd { break-inside: avoid; page-break-inside: avoid; }
+      .line-block {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
     }
   </style>
 </head>
@@ -1426,30 +1451,22 @@ function buildSchedulingPrintHtml(): string {
       <span class="legend-item"><span class="swatch swatch--plan"></span>計画</span>
     </div>
   </div>
-  <table>
-    ${colgroup}
-    <thead>
-      <tr>
-        <th>ライン</th>
-        <th>順位</th>
-        <th>製品</th>
-        <th>能率(本/H)</th>
-        <th>生産計画</th>
-        ${dateHeaders}
-      </tr>
-    </thead>
-    ${sectionsHtml}
-    <tfoot>
-      <tr class="total-row">
-        <td class="left">合計</td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td class="num">${escHtml(formatQty(overallPlannedOutputTotal.value))}</td>
-        ${footerDayCells}
-      </tr>
-    </tfoot>
-  </table>
+  ${sectionsHtml}
+  <div class="line-block">
+    <table>
+      ${colgroup}
+      <tbody>
+        <tr class="total-row">
+          <td class="left">合計</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="num">${escHtml(formatQty(overallPlannedOutputTotal.value))}</td>
+          ${footerDayCells}
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </body>
 </html>`
 }

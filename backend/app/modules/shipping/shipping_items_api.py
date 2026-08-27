@@ -429,13 +429,15 @@ async def bulk_create_shipping_items(
 ):
     """
     パレット割当て案から送られた配列を shipping_items に一括 INSERT。
-    各要素について shipping_no_p を生成（shipping_no + product_cd、同組は _1, _2...）。
+    各要素について shipping_no_p を生成（shipping_no + product_cd、
+    同一品番でも製品タイプが違えば別番号。同組は _1, _2...）。
     既存 shipping_no_p と衝突しないよう検索してから挿入。
     """
     if not body:
         return {"success": True, "count": 0}
     try:
-        # 1) 候補 shipping_no_p: 同一 (shipping_no, product_cd) は base_productCd, base_productCd_1, ...
+        # 1) 候補 shipping_no_p: 同一 (shipping_no, product_cd, product_type) は
+        #    量産品: base_productCd / その他: base_productCd_製品タイプ、重複は _1, _2...
         seen: dict = {}
         candidates: List[str] = []
         rows_norm: List[dict] = []
@@ -443,24 +445,25 @@ async def bulk_create_shipping_items(
             base = (row.shipping_no or "").strip()
             shipping_date_str = (row.shipping_date or "").strip()
             product_cd = (row.product_cd or "").strip()
+            product_type_val = (row.product_type or "").strip() if row.product_type else ""
             if not base or not shipping_date_str:
                 raise HTTPException(status_code=400, detail=f"出荷番号・出荷日は必須です（行{idx + 1}）")
             if not product_cd:
                 raise HTTPException(status_code=400, detail=f"製品コードは必須です（行{idx + 1}）")
-            key = (base, product_cd)
+            key = (base, product_cd, product_type_val)
+            type_suffix = "" if not product_type_val or product_type_val == "量産品" else f"_{product_type_val}"
             if key not in seen:
                 seen[key] = 0
-                candidate = f"{base}_{product_cd}"
+                candidate = f"{base}_{product_cd}{type_suffix}"
             else:
                 seen[key] += 1
-                candidate = f"{base}_{product_cd}_{seen[key]}"
+                candidate = f"{base}_{product_cd}{type_suffix}_{seen[key]}"
             candidates.append(candidate)
             dest_name = (row.destination_name or "").strip() if row.destination_name else ""
             prod_name = (row.product_name or "").strip() if row.product_name else ""
             unit_val = (row.unit or "本").strip() or "本"
             remarks_val = (row.remarks or "").strip() if row.remarks else ""
             box_type_val = (row.box_type or "").strip() if row.box_type else ""
-            product_type_val = (row.product_type or "").strip() if row.product_type else ""
             product_alias_val = (row.product_alias or "").strip() if row.product_alias else ""
             delivery_date_val = None
             if row.delivery_date is not None and str(row.delivery_date).strip():

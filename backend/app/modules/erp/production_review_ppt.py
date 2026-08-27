@@ -363,13 +363,15 @@ def _build_performance_slide(prs: Presentation, performance: Dict[str, Any]) -> 
     slide = _blank_slide(prs)
     _add_accent_bar(slide, ACCENT)
     month = performance.get("month_label") or ""
+    as_of = str(performance.get("as_of_label") or "").strip()
+    title = f"{month} 工程別実績一覧" + (f"（{as_of}）" if as_of else "")
     _add_textbox(
         slide,
         Inches(0.5),
         Inches(0.28),
         Inches(12),
         Inches(0.45),
-        f"{month} 工程別実績一覧",
+        title,
         font_size=22,
         bold=True,
         color=PRIMARY,

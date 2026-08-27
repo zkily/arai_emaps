@@ -135,7 +135,12 @@
 
           <section class="pr-card pr-card--blue pr-card--performance">
             <div class="pr-card__head pr-card__head--performance">
-              <h2>{{ payload.part01.performance.month_label }} 工程別実績一覧</h2>
+              <h2>
+                {{ payload.part01.performance.month_label }} 工程別実績一覧
+                <span v-if="payload.part01.performance.as_of_label" class="pr-as-of">
+                  {{ payload.part01.performance.as_of_label }}
+                </span>
+              </h2>
               <div class="pr-col-toggles">
                 <button
                   type="button"
@@ -4969,6 +4974,12 @@ watch(
 }
 .pr-card--performance .pr-card__head h2 {
   font-size: 18px;
+}
+.pr-as-of {
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
 }
 .pr-card__head--performance {
   align-items: center;

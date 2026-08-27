@@ -408,6 +408,24 @@
             </template>
           </el-table-column>
           <el-table-column
+            label="製品タイプ"
+            prop="product_type"
+            width="90"
+            align="center"
+            v-if="columnVisible.product_type"
+            key="product_type"
+          >
+            <template #default="{ row }">
+              <el-tag
+                :type="getProductTypeTagType(row.product_type)"
+                size="small"
+                effect="light"
+              >
+                {{ row.product_type || '-' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
             label="箱数"
             prop="confirmed_boxes"
             width="60"
@@ -452,13 +470,13 @@
           <el-table-column label="コード" width="120" v-if="columnVisible.code" key="code">
             <template #default="{ row }">
               <el-tooltip
-                :content="`${row.shipping_no}_${row.product_cd}`"
+                :content="row.shipping_no_p || `${row.shipping_no}_${row.product_cd}`"
                 placement="top"
                 :show-after="500"
                 effect="light"
               >
                 <el-tag :type="statusColor(row.status)" effect="light" class="code-tag">
-                  {{ row.shipping_no.substring(0, 6) }}_{{ row.product_cd }}
+                  {{ row.shipping_no_p || `${row.shipping_no.substring(0, 6)}_${row.product_cd}` }}
                 </el-tag>
               </el-tooltip>
             </template>
@@ -774,6 +792,9 @@
           <el-checkbox v-model="columnVisible.product_name" class="modern-checkbox" size="large">
             製品名
           </el-checkbox>
+          <el-checkbox v-model="columnVisible.product_type" class="modern-checkbox" size="large">
+            製品タイプ
+          </el-checkbox>
           <el-checkbox v-model="columnVisible.confirmed_boxes" class="modern-checkbox" size="large">
             箱数
           </el-checkbox>
@@ -871,6 +892,8 @@ interface ShippingItem {
   destination_name: string
   product_cd: string
   product_name: string
+  product_type?: string
+  shipping_no_p?: string
   product_alias: string | null
   box_type: string | null
   confirmed_boxes: number
@@ -1251,6 +1274,27 @@ function getBoxTypeTagType(boxType: string): ElTagType {
   }
 }
 
+function getProductTypeTagType(productType: string): ElTagType {
+  switch (productType) {
+    case '量産品':
+      return 'success'
+    case '別注品':
+      return 'primary'
+    case '試作品':
+      return 'warning'
+    case '補給品':
+      return 'info'
+    case '代替品':
+      return 'danger'
+    case 'サンプル品':
+      return 'danger'
+    case '返却品':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
 // ステータス色（el-tag type 用）
 function statusColor(status: string): ElTagType {
   if (!status) return 'info'
@@ -1506,6 +1550,8 @@ async function fetchData(): Promise<void> {
             status: item.status || '未発行',
             // 製品名が設定されていない場合は製品CDを使用
             product_name: item.product_name || item.product_cd || '',
+            product_type: item.product_type || '',
+            shipping_no_p: item.shipping_no_p || '',
             // 単位が設定されていない場合は「本」を設定
             unit: item.unit || '本',
             // 備考がnullの場合は空文字列を設定
@@ -1884,7 +1930,7 @@ async function prepareQRCodes(items: ShippingItem[]): Promise<void> {
 
   // 必要なQRコードのテキストを収集
   items.forEach((item) => {
-    const qrText = `${item.shipping_no}_${item.product_cd}`
+    const qrText = item.shipping_no_p || `${item.shipping_no}_${item.product_cd}`
     if (!qrCodeCache[qrText]) {
       qrTexts.push(qrText)
     }
@@ -2293,8 +2339,9 @@ function generatePrintHTML(items: ShippingItem[]): string {
             <tbody>
     `
 
-    // 同じ出荷番号の製品を表示
+    // 同じ出荷番号の製品を表示（同一品番でも製品タイプが違えば別行）
     groupItems.forEach((item) => {
+      const qrText = item.shipping_no_p || `${shippingNo}_${item.product_cd}`
       html += `
         <tr>
 
@@ -2304,7 +2351,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
 
           <td class="text-center">
             <div class="qrcode-container">
-              <img src="data:image/png;base64,${generateQRCode(`${shippingNo}_${item.product_cd}`)}" alt="QRコード" width="40" height="40" />
+              <img src="data:image/png;base64,${generateQRCode(qrText)}" alt="QRコード" width="40" height="40" />
 
             </div>
           </td>
@@ -2479,29 +2526,29 @@ const columnVisible = ref(loadColumnVisibility())
 
 // 列表示設定の読み込み
 function loadColumnVisibility(): Record<string, boolean> {
-  try {
-    const savedSettings = localStorage.getItem('shippingListColumnSettings')
-    if (savedSettings) {
-      return JSON.parse(savedSettings)
-    }
-  } catch (error) {
-    // 設定読み込み失敗時はデフォルト設定を使用
-  }
-
-  // デフォルト設定
-  return {
+  const defaults = {
     shipping_no: true,
     shipping_date: true,
     delivery_date: true,
     destination_name: true,
     product_cd: true,
     product_name: true,
+    product_type: true,
     confirmed_boxes: true,
     confirmed_units: true,
     box_type: true,
     code: true,
     status: true,
   }
+  try {
+    const savedSettings = localStorage.getItem('shippingListColumnSettings')
+    if (savedSettings) {
+      return { ...defaults, ...JSON.parse(savedSettings) }
+    }
+  } catch (error) {
+    // 設定読み込み失敗時はデフォルト設定を使用
+  }
+  return defaults
 }
 
 // 列表示設定の保存
@@ -2522,6 +2569,7 @@ function resetColumnVisibility(): void {
     destination_name: true,
     product_cd: true,
     product_name: true,
+    product_type: true,
     confirmed_boxes: true,
     confirmed_units: true,
     box_type: true,

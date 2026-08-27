@@ -11,7 +11,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.company_work_calendar import count_scheduled_workdays, load_company_calendar_sets
+from app.core.company_work_calendar import (
+    count_scheduled_workdays,
+    is_scheduled_workday,
+    iter_dates_inclusive,
+    load_company_calendar_sets,
+)
+from app.core.datetime_utils import now_jst
 from app.modules.budget.models import BudgetWorkingDays
 from app.modules.database.models import ProductionSummary
 from app.modules.erp.models import OrderMonthly
@@ -292,24 +298,6 @@ async def build_inventory_qty_map_for_date(
     }
 
 
-async def _count_scheduled_workdays(
-    db: AsyncSession,
-    start_d: date,
-    end_d: date,
-) -> int:
-    if start_d > end_d:
-        return 0
-    scheduled, off = await load_company_calendar_sets(db, start_d, end_d)
-    return count_scheduled_workdays(
-        start_d,
-        end_d,
-        company_scheduled=scheduled,
-        company_off=off,
-        extra_workdays=set(),
-        extra_holidays=set(),
-    )
-
-
 async def _daily_actual_totals(
     db: AsyncSession,
     actual_col: str,
@@ -333,48 +321,111 @@ async def _daily_actual_totals(
     return out
 
 
+def _count_in_workdays(workdays: Set[date], start_d: date, end_d: date) -> int:
+    if start_d > end_d:
+        return 0
+    return sum(1 for d in iter_dates_inclusive(start_d, end_d) if d in workdays)
+
+
+async def _load_month_workdays(
+    db: AsyncSession,
+    start_d: date,
+    end_d: date,
+) -> Set[date]:
+    scheduled, off = await load_company_calendar_sets(db, start_d, end_d)
+    return {
+        d
+        for d in iter_dates_inclusive(start_d, end_d)
+        if is_scheduled_workday(
+            d,
+            company_scheduled=scheduled,
+            company_off=off,
+            extra_workdays=set(),
+            extra_holidays=set(),
+        )
+    }
+
+
+def _project_month_jitsumi(
+    daily_rows: Sequence[Tuple[date, int]],
+    *,
+    month_start: date,
+    month_end: date,
+    workdays: Set[date],
+    today: date,
+    planned_workdays: int,
+) -> Tuple[int, int]:
+    """実見・当月累計実績（本）を返す。
+
+    実績 = 月初〜基準日（min(今日, 月末)）までの実績。未来日は除外。
+    実見 = 実績 + 残り稼働日 × 完了稼働日の日平均。
+    日平均は当日を含めない（操業途中）。残り稼働日は基準日の翌日〜月末。
+    """
+    as_of = min(today, month_end)
+    known_rows = [
+        (day, int(qty or 0))
+        for day, qty in daily_rows
+        if month_start <= day <= as_of
+    ]
+    actual_to_date = sum(qty for _, qty in known_rows)
+    if actual_to_date <= 0:
+        return 0, 0
+
+    rate_through = as_of - timedelta(days=1) if as_of >= today else as_of
+    if rate_through < month_start:
+        return actual_to_date, actual_to_date
+
+    elapsed_workdays = _count_in_workdays(workdays, month_start, rate_through)
+    if elapsed_workdays <= 0:
+        return actual_to_date, actual_to_date
+
+    actuals_for_avg = sum(qty for day, qty in known_rows if day <= rate_through)
+    if actuals_for_avg <= 0:
+        return actual_to_date, actual_to_date
+
+    avg_daily = actuals_for_avg / float(elapsed_workdays)
+    remaining_start = as_of + timedelta(days=1)
+    calendar_remaining = _count_in_workdays(workdays, remaining_start, month_end)
+    known_elapsed = _count_in_workdays(workdays, month_start, as_of)
+    if planned_workdays > 0:
+        remaining_workdays = min(
+            calendar_remaining,
+            max(0, planned_workdays - known_elapsed),
+        )
+    else:
+        remaining_workdays = calendar_remaining
+
+    jitsumi = int(round(actual_to_date + remaining_workdays * avg_daily))
+    return jitsumi, actual_to_date
+
+
 async def _compute_process_jitsumi(
     db: AsyncSession,
     year: int,
     month: int,
     actual_col: str,
-) -> int:
-    """
-    実見（本）= 当月実績合計 + 残り稼働日数 × 当月実績の日平均。
-    日平均 = 実績合計 ÷ 実績が発生した稼働日数（月初～最終実績日）。
-    残り稼働日 = 最終実績日の翌日～月末の稼働日数。
-    """
+    *,
+    workdays: Optional[Set[date]] = None,
+    planned_workdays: Optional[int] = None,
+    today: Optional[date] = None,
+) -> Tuple[int, int]:
+    """実見（本）, 基準日までの実績（本）。"""
     start_d, end_d = _month_range(year, month)
     daily_rows = await _daily_actual_totals(db, actual_col, start_d, end_d)
-    actual_total = sum(qty for _, qty in daily_rows)
-    if actual_total <= 0:
-        return 0
-
-    production_days = [day for day, qty in daily_rows if qty > 0]
-    if not production_days:
-        return 0
-
-    last_actual_day = max(production_days)
-    total_workdays = await _working_days(db, year, month)
-    if total_workdays <= 0:
-        return actual_total
-
-    # 当月実績の日平均（稼働日ベース）
-    avg_daily = actual_total / float(total_workdays)
-    elapsed_workdays = await _count_scheduled_workdays(db, start_d, last_actual_day)
-    remaining_workdays = max(0, total_workdays - elapsed_workdays)
-
-    return int(round(actual_total + remaining_workdays * avg_daily))
-
-
-async def _compute_shipping_jitsumi(
-    db: AsyncSession,
-    year: int,
-    month: int,
-) -> int:
-    """出荷数の実見 = production_summarys.forecast_quantity 月合計。"""
-    start_d, end_d = _month_range(year, month)
-    return await _sum_column(db, "forecast_quantity", start_d, end_d)
+    if workdays is None:
+        workdays = await _load_month_workdays(db, start_d, end_d)
+    if planned_workdays is None:
+        planned_workdays = await _working_days(db, year, month)
+    if today is None:
+        today = now_jst().date()
+    return _project_month_jitsumi(
+        daily_rows,
+        month_start=start_d,
+        month_end=end_d,
+        workdays=workdays,
+        today=today,
+        planned_workdays=planned_workdays,
+    )
 
 
 async def _forecast_units(db: AsyncSession, year: int, month: int) -> int:
@@ -628,19 +679,36 @@ async def _build_performance_table(
     prev_py, prev_pm = _shift_month(year, month, -1)
     prod_prev_map = await get_process_monthly_efficiency_map(db, prev_py, prev_pm)
     prod_curr_map = await get_process_monthly_efficiency_map(db, year, month)
+    workdays = await _load_month_workdays(db, start_d, end_d)
+    planned_workdays = await _working_days(db, year, month)
+    today = now_jst().date()
+    as_of = min(today, end_d)
     rows: List[Dict[str, Any]] = []
     for key, name, plan_col, actual_col in _PERFORMANCE_PROCESSES:
         if key == "shipping":
             plan_qty = await _forecast_units(db, year, month)
-            # 出荷実績 = production_summarys.order_quantity の対象月合計
-            actual_qty = await _sum_column(db, "order_quantity", start_d, end_d)
-            forecast_qty = await _compute_shipping_jitsumi(db, year, month)
+            forecast_qty, actual_qty = await _compute_process_jitsumi(
+                db,
+                year,
+                month,
+                "order_quantity",
+                workdays=workdays,
+                planned_workdays=planned_workdays,
+                today=today,
+            )
             prod_prev = None
             prod_curr = None
         else:
             plan_qty = await _sum_column(db, plan_col, start_d, end_d) if plan_col else 0
-            actual_qty = await _sum_column(db, actual_col, start_d, end_d) if actual_col else 0
-            forecast_qty = await _compute_process_jitsumi(db, year, month, actual_col)
+            forecast_qty, actual_qty = await _compute_process_jitsumi(
+                db,
+                year,
+                month,
+                actual_col,
+                workdays=workdays,
+                planned_workdays=planned_workdays,
+                today=today,
+            )
             prod_prev = prod_prev_map.get(key)
             prod_curr = prod_curr_map.get(key)
         rows.append(
@@ -654,9 +722,12 @@ async def _build_performance_table(
                 curr_productivity=prod_curr,
             )
         )
+    in_progress = as_of < end_d
     return {
         "month": f"{year:04d}-{month:02d}",
         "month_label": _month_label(year, month),
+        "as_of": as_of.isoformat(),
+        "as_of_label": f"{as_of.month}月{as_of.day}日時点" if in_progress else "",
         "rows": rows,
         "comments": _generate_performance_comments(
             {"month_label": _month_label(year, month), "rows": rows}
@@ -1889,7 +1960,8 @@ async def build_meeting_data(
     """対象月の生産検討会資料データを組み立てる。
 
     例: target_month=2026-08 → 8月度検討会
-      PART01 = 7月実績, PART02 = 8月計画, PART03 = 9月計画
+      PART01 工程別実績 = 8月（当月実見：実績+残稼働日×日平均）
+      PART01 廃棄・在庫 = 7月, PART02 = 8月計画, PART03 = 9月計画
     """
     ty, tm = _parse_month(target_month)
     prev_y, prev_m = _shift_month(ty, tm, -1)
@@ -1899,7 +1971,7 @@ async def build_meeting_data(
     capacities_curr = await get_capacity_rows(db, f"{ty:04d}-{tm:02d}")
     capacities_next = await get_capacity_rows(db, f"{next_y:04d}-{next_m:02d}")
 
-    part01_performance = await _build_performance_table(db, prev_y, prev_m)
+    part01_performance = await _build_performance_table(db, ty, tm)
     part01_scrap = await _build_scrap_section(db, ty, tm)
     # 月末在庫 M 月 → 内示は当月(M)と翌月(M+1)
     part01_inventory = await _build_inventory_table(
