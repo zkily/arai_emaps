@@ -603,14 +603,24 @@ const handleExport = async () => {
     })
 
     const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(response.html)
-      printWindow.document.close()
-      printWindow.onload = () => {
-        printWindow.print()
-        printWindow.close()
-      }
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください。')
+      return
     }
+    printWindow.document.open()
+    printWindow.document.write(response.html)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      try {
+        const fit = (printWindow as Window & { fitPrintToPage?: () => void }).fitPrintToPage
+        if (typeof fit === 'function') fit()
+      } catch (e) {
+        console.warn('print fit scale failed', e)
+      }
+      printWindow.print()
+      printWindow.close()
+    }, 320)
     ElMessage.success('印刷用レポートを生成しました')
   } catch (error) {
     console.error('エクスポートエラー:', error)

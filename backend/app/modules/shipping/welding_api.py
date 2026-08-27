@@ -355,11 +355,13 @@ def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
   <meta charset="UTF-8">
   <title>出荷管理表</title>
   <style>
-    @page {{ size: A4 landscape; margin-left: 5mm; margin-right: 5mm; margin-top: 12mm; margin-bottom: 12mm; }}
+    @page {{ size: A4 landscape; margin-left: 5mm; margin-right: 5mm; margin-top: 6mm; margin-bottom: 12mm; }}
     * {{ box-sizing: border-box; }}
-    body {{ font-family: 'Yu Gothic', 'Meiryo', 'Hiragino Sans', sans-serif; color: #000; background: #fff; margin: 0; padding-left: 5mm; padding-right: 5mm; padding-top: 12mm; padding-bottom: 12mm; font-size: 11px; }}
-    .header {{ text-align: center; margin-bottom: 12px; }}
-    .title {{ font-size: 18px; font-weight: bold; margin-bottom: 6px; }}
+    body {{ font-family: 'Yu Gothic', 'Meiryo', 'Hiragino Sans', sans-serif; color: #000; background: #fff; margin: 0; padding-left: 5mm; padding-right: 5mm; padding-top: 6mm; padding-bottom: 12mm; font-size: 11px; }}
+    .header {{ text-align: center; margin-bottom: 6px; position: relative; }}
+    .header-top {{ position: relative; min-height: 24px; margin-bottom: 6px; }}
+    .title {{ font-size: 18px; font-weight: bold; }}
+    .print-time {{ position: absolute; top: 0; right: 0; font-size: 10px; white-space: nowrap; }}
     .period {{ margin-bottom: 4px; }}
     .products {{ margin-bottom: 10px; }}
     table {{ border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 10px; }}
@@ -374,12 +376,14 @@ def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
     .td-empty:not([colspan]) {{ border-right: none; }}
     .td-product {{ font-weight: 600; text-align: left; white-space: nowrap; padding: 4px 8px; width: 11%; border-left: none; }}
     .td-num {{ text-align: center; white-space: normal; word-break: break-all; }}
-    .footer {{ position: fixed; bottom: 12mm; right: 5mm; font-size: 10px; }}
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="title">出荷管理表</div>
+    <div class="header-top">
+      <div class="title">出荷管理表</div>
+      <div class="print-time">出力日時: {print_time}</div>
+    </div>
     <div class="period">期間: {_escape(period)}</div>
     <div class="products">対象製品: {product_labels}</div>
     <div class="destinations">対象納入先: {dest_labels}</div>
@@ -396,7 +400,6 @@ def _build_export_html(table_data: dict, start_date: str, end_date: str) -> str:
       {''.join(tbody)}
     </tbody>
   </table>
-  <div class="footer">出力日時: {print_time}</div>
 </body>
 </html>"""
     return html
