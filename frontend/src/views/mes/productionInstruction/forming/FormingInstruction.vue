@@ -148,6 +148,19 @@
             >
               設備運行時間設定
             </el-button>
+            <el-tooltip
+              content="備考欄に「新聞紙をかける」を表示する製品を設定"
+              placement="top"
+            >
+              <el-button
+                size="small"
+                type="warning"
+                class="print-btn"
+                @click="openNewspaperProductsDialog"
+              >
+                新聞紙設定
+              </el-button>
+            </el-tooltip>
             <div class="forming-notes-btn-wrap">
               <el-button
                 type="default"
@@ -255,7 +268,7 @@
                 v-model="row.remarks"
                 size="small"
                 :placeholder="
-                  isHighlightProduct(row.product_name) ? '新聞紙をかける' : '備考を入力'
+                  isHighlightProduct(row.product_name) ? newspaperRemarkText : '備考を入力'
                 "
                 clearable
                 @input="handleRemarksInput(row)"
@@ -659,6 +672,83 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 新聞紙をかける — 対象製品設定 -->
+    <el-dialog
+      v-model="newspaperProductsDialogVisible"
+      title="新聞紙をかける — 対象製品設定"
+      width="520px"
+      class="forming-newspaper-products-dialog"
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+    >
+      <div class="newspaper-products-dialog-body">
+        <p class="newspaper-products-hint">
+          登録した製品は、備考が空の場合に「{{ newspaperRemarkText }}」を表示します。
+        </p>
+        <div class="newspaper-products-add">
+          <el-select
+            v-model="newspaperProductToAdd"
+            filterable
+            clearable
+            size="small"
+            class="newspaper-products-select"
+            placeholder="製品名を選択"
+            :loading="newspaperProductOptionsLoading"
+            no-data-text="選択可能な製品がありません"
+          >
+            <el-option
+              v-for="p in availableNewspaperProductOptions"
+              :key="p.product_cd"
+              :label="p.product_name"
+              :value="p.product_name"
+            />
+          </el-select>
+          <el-button
+            type="primary"
+            size="small"
+            :loading="newspaperProductsSaving"
+            @click="addNewspaperProduct"
+          >
+            追加
+          </el-button>
+        </div>
+
+        <el-scrollbar
+          v-loading="newspaperProductsLoading"
+          max-height="320"
+          class="newspaper-products-scrollbar"
+        >
+          <div
+            v-if="!newspaperProductsLoading && !newspaperProductsList.length"
+            class="newspaper-products-empty"
+          >
+            未登録
+          </div>
+          <div
+            v-for="item in newspaperProductsList"
+            :key="item.id"
+            class="newspaper-products-row"
+          >
+            <span class="newspaper-products-row-name">{{ item.product_name }}</span>
+            <el-button
+              type="danger"
+              link
+              size="small"
+              :disabled="newspaperProductsSaving"
+              @click="deleteNewspaperProduct(item)"
+            >
+              削除
+            </el-button>
+          </div>
+        </el-scrollbar>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button size="small" @click="newspaperProductsDialogVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -687,6 +777,8 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+import { getProductList } from '@/api/master/productMaster'
+import type { Product } from '@/types/master'
 import {
   fetchLines,
   fetchSchedulingGrid,
@@ -2586,7 +2678,7 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
                           <td>${plan.product_cd || ''}</td>
                           <td>${plan.product_name || ''}</td>
                           <td>${plan.quantity || ''}</td>
-                          <td>${plan.remarks ? plan.remarks : isHighlightProduct(plan.product_name) ? '新聞紙をかける' : ''}</td>
+                          <td>${plan.remarks ? plan.remarks : isHighlightProduct(plan.product_name) ? newspaperRemarkText : ''}</td>
                         </tr>
                       `
                   })
@@ -2711,8 +2803,10 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
   `
 }
 
-// 成型生産指示書：指定生産品種行使用浅黄色背景
-const HIGHLIGHT_PRODUCT_NAMES = new Set([
+// 成型生産指示書：備考「新聞紙をかける」対象製品（API で管理、未取得時は既定値）
+const NEWSPAPER_REMARK_TEXT = '新聞紙をかける'
+const newspaperRemarkText = NEWSPAPER_REMARK_TEXT
+const FALLBACK_NEWSPAPER_PRODUCT_NAMES = [
   '900B FR',
   '900B RR',
   '900B 対米',
@@ -2720,11 +2814,11 @@ const HIGHLIGHT_PRODUCT_NAMES = new Set([
   '410D FR1',
   '410D FR2',
   '410D RR',
-])
+] as const
+const newspaperProductNames = ref<Set<string>>(new Set(FALLBACK_NEWSPAPER_PRODUCT_NAMES))
 const isHighlightProduct = (name: string | null | undefined): boolean => {
   if (!name || typeof name !== 'string') return false
-  const trimmed = name.trim()
-  return HIGHLIGHT_PRODUCT_NAMES.has(trimmed)
+  return newspaperProductNames.value.has(name.trim())
 }
 
 // 表格行类名：指定生産品種行浅黄色背景
@@ -6451,6 +6545,124 @@ async function deleteFormingInstructionNote(note: FormingInstructionNote) {
   }
 }
 
+// 新聞紙をかける — 対象製品設定
+interface FormingNewspaperProduct {
+  id: number
+  product_name: string
+}
+
+const newspaperProductsDialogVisible = ref(false)
+const newspaperProductsLoading = ref(false)
+const newspaperProductsSaving = ref(false)
+const newspaperProductsList = ref<FormingNewspaperProduct[]>([])
+const newspaperProductToAdd = ref('')
+const newspaperProductOptions = ref<Product[]>([])
+const newspaperProductOptionsLoading = ref(false)
+
+const availableNewspaperProductOptions = computed(() => {
+  const registered = newspaperProductNames.value
+  const seen = new Set<string>()
+  return newspaperProductOptions.value.filter((p) => {
+    const name = (p.product_name || '').trim()
+    if (!name || registered.has(name) || seen.has(name)) return false
+    seen.add(name)
+    return true
+  })
+})
+
+function syncNewspaperProductNamesFromList(list: FormingNewspaperProduct[]) {
+  newspaperProductNames.value = new Set(
+    list.map((item) => (item.product_name || '').trim()).filter(Boolean)
+  )
+}
+
+async function loadNewspaperProducts() {
+  newspaperProductsLoading.value = true
+  try {
+    const res = await request.get('/api/mes/forming-newspaper-products')
+    const list = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as FormingNewspaperProduct[])
+      : []
+    newspaperProductsList.value = list
+    syncNewspaperProductNamesFromList(list)
+  } catch (e) {
+    console.error('新聞紙対象製品の取得に失敗:', e)
+    newspaperProductsList.value = []
+    newspaperProductNames.value = new Set(FALLBACK_NEWSPAPER_PRODUCT_NAMES)
+  } finally {
+    newspaperProductsLoading.value = false
+  }
+}
+
+function openNewspaperProductsDialog() {
+  newspaperProductsDialogVisible.value = true
+  newspaperProductToAdd.value = ''
+  loadNewspaperProducts()
+  loadNewspaperProductOptions()
+}
+
+async function loadNewspaperProductOptions() {
+  newspaperProductOptionsLoading.value = true
+  try {
+    const res = await getProductList({ page: 1, pageSize: 5000, status: 'active' })
+    newspaperProductOptions.value = res.data?.list ?? res.list ?? []
+  } catch (e) {
+    console.error('製品一覧の取得に失敗:', e)
+    newspaperProductOptions.value = []
+  } finally {
+    newspaperProductOptionsLoading.value = false
+  }
+}
+
+async function addNewspaperProduct() {
+  if (!guardMesOperation(canCreate)) return
+  const productName = newspaperProductToAdd.value.trim()
+  if (!productName) {
+    ElMessage.warning('製品名を選択してください')
+    return
+  }
+  if (newspaperProductNames.value.has(productName)) {
+    ElMessage.warning('この製品名は既に登録されています')
+    return
+  }
+  try {
+    newspaperProductsSaving.value = true
+    await request.post('/api/mes/forming-newspaper-products', { product_name: productName })
+    newspaperProductToAdd.value = ''
+    await loadNewspaperProducts()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('新聞紙対象製品の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    newspaperProductsSaving.value = false
+  }
+}
+
+async function deleteNewspaperProduct(item: FormingNewspaperProduct) {
+  if (!guardMesOperation(canDelete)) return
+  try {
+    await ElMessageBox.confirm(`「${item.product_name}」を削除しますか？`, '確認', {
+      type: 'warning',
+      confirmButtonText: '削除',
+      cancelButtonText: 'キャンセル',
+    })
+  } catch {
+    return
+  }
+  try {
+    newspaperProductsSaving.value = true
+    await request.delete(`/api/mes/forming-newspaper-products/${item.id}`)
+    await loadNewspaperProducts()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    console.error('新聞紙対象製品の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    newspaperProductsSaving.value = false
+  }
+}
+
 // ページ初期化
 onMounted(() => {
   // 先初始化搜索表单默认值
@@ -6460,6 +6672,7 @@ onMounted(() => {
   loadPlanData()
   loadInstructions()
   loadFormingInstructionNotes()
+  loadNewspaperProducts()
   // 日別計画チャート：当日往前2天 ～ 往后30天（JST）
   setDefaultPlanQtyChartRange()
 })
@@ -6880,6 +7093,73 @@ onUnmounted(() => {
   font-weight: 900;
   line-height: 1;
   text-align: center;
+}
+
+.forming-newspaper-products-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #fde68a;
+  box-shadow: 0 24px 48px -20px rgba(180, 83, 9, 0.35);
+}
+
+.forming-newspaper-products-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #fef3c7;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 55%, #fff7ed 100%);
+}
+
+.forming-newspaper-products-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.forming-newspaper-products-dialog :deep(.el-dialog__body) {
+  padding: 14px 16px 8px;
+}
+
+.newspaper-products-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #78716c;
+  line-height: 1.5;
+}
+
+.newspaper-products-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.newspaper-products-select {
+  flex: 1;
+}
+
+.newspaper-products-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.newspaper-products-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  margin-bottom: 8px;
+}
+
+.newspaper-products-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
 }
 
 .forming-instruction-notes-dialog :deep(.el-dialog) {

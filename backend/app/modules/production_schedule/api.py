@@ -2382,6 +2382,152 @@ async def upsert_mes_plan_machine_remarks(
     }
 
 
+# ============================
+# 成型指示：備考「新聞紙をかける」対象製品
+#   GET/POST/DELETE /api/mes/forming-newspaper-products
+# ============================
+
+FORMING_NEWSPAPER_REMARK_TEXT = "新聞紙をかける"
+FORMING_NEWSPAPER_PRODUCT_NAME_MAX_LEN = 200
+
+
+class FormingNewspaperProductCreateBody(BaseModel):
+    product_name: str
+
+
+def _reraise_mes_forming_newspaper_products_db_error(e: Exception) -> None:
+    msg = str(e).lower()
+    if "mes_forming_newspaper_products" in msg and (
+        "doesn't exist" in msg or "not exist" in msg or "unknown table" in msg
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="mes_forming_newspaper_products テーブルが存在しません。"
+            "マイグレーション 119_mes_forming_newspaper_products.sql を実行してください。",
+        ) from e
+
+
+def _serialize_forming_newspaper_product(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row.get("id")),
+        "product_name": row.get("product_name"),
+        "updated_by": row.get("updated_by"),
+        "created_at": _instruction_note_datetime_str(row.get("created_at")),
+        "updated_at": _instruction_note_datetime_str(row.get("updated_at")),
+    }
+
+
+@router.get("/mes/forming-newspaper-products")
+async def list_forming_newspaper_products(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """成型指示の備考「新聞紙をかける」対象製品一覧。"""
+    try:
+        rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT id, product_name, updated_by, created_at, updated_at
+                    FROM mes_forming_newspaper_products
+                    ORDER BY product_name ASC
+                    """
+                )
+            )
+        ).mappings().fetchall()
+    except Exception as e:
+        _reraise_mes_forming_newspaper_products_db_error(e)
+        logger.exception("mes_forming_newspaper_products 読取失敗")
+        raise HTTPException(status_code=500, detail="対象製品の取得に失敗しました") from e
+
+    items = [_serialize_forming_newspaper_product(dict(r)) for r in rows]
+    return {
+        "success": True,
+        "data": {
+            "list": items,
+            "remark_text": FORMING_NEWSPAPER_REMARK_TEXT,
+        },
+        "message": "OK",
+    }
+
+
+@router.post("/mes/forming-newspaper-products")
+async def create_forming_newspaper_product(
+    body: FormingNewspaperProductCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("create")),
+):
+    """成型指示の備考「新聞紙をかける」対象製品を追加。"""
+    product_name = (body.product_name or "").strip()
+    if not product_name:
+        raise HTTPException(status_code=400, detail="製品名を指定してください")
+    if len(product_name) > FORMING_NEWSPAPER_PRODUCT_NAME_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"製品名は{FORMING_NEWSPAPER_PRODUCT_NAME_MAX_LEN}文字以内で指定してください",
+        )
+    updater = getattr(current_user, "username", None)
+    try:
+        await db.execute(
+            text(
+                """
+                INSERT INTO mes_forming_newspaper_products (product_name, updated_by)
+                VALUES (:product_name, :updated_by)
+                """
+            ),
+            {"product_name": product_name, "updated_by": updater},
+        )
+        item_id = (await db.execute(text("SELECT LAST_INSERT_ID() AS id"))).scalar()
+        await db.commit()
+    except IntegrityError:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=409, detail="この製品名は既に登録されています") from None
+    except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        _reraise_mes_forming_newspaper_products_db_error(e)
+        logger.exception("mes_forming_newspaper_products 追加失敗")
+        raise HTTPException(status_code=500, detail="対象製品の追加に失敗しました") from e
+
+    return {
+        "success": True,
+        "data": {"id": int(item_id or 0), "product_name": product_name},
+        "message": "OK",
+    }
+
+
+@router.delete("/mes/forming-newspaper-products/{item_id}")
+async def delete_forming_newspaper_product(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("delete")),
+):
+    """成型指示の備考「新聞紙をかける」対象製品を削除。"""
+    try:
+        result = await db.execute(
+            text("DELETE FROM mes_forming_newspaper_products WHERE id = :id"),
+            {"id": item_id},
+        )
+        await db.commit()
+    except Exception as e:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        _reraise_mes_forming_newspaper_products_db_error(e)
+        logger.exception("mes_forming_newspaper_products 削除失敗")
+        raise HTTPException(status_code=500, detail="対象製品の削除に失敗しました") from e
+
+    if (result.rowcount or 0) < 1:
+        raise HTTPException(status_code=404, detail="対象製品が見つかりません")
+    return {"success": True, "data": {"id": item_id}, "message": "OK"}
+
+
 def _parse_month(month: str) -> tuple[date, str]:
     """Parse 'YYYY-MM' -> (production_month date, file_name month label e.g. '1月')."""
     parts = month.strip().split("-")
