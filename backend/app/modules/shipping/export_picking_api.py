@@ -76,6 +76,7 @@ async def export_picking_csv(
               AND DATE(shipping_date) >= CURDATE()
               AND DATE(shipping_date) < DATE_ADD(CURDATE(), INTERVAL {PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS} DAY)
               AND status != 'キャンセル'
+              AND (product_type IS NULL OR TRIM(product_type) = '' OR product_type = '量産品')
             ORDER BY shipping_no, product_cd
         """)
         result = await db.execute(sel)
@@ -109,6 +110,7 @@ async def export_picking_csv(
               ON pl.shipping_no_p = si.shipping_no_p AND pl.product_cd = si.product_cd
             WHERE DATE(si.shipping_date) >= CURDATE()
               AND DATE(si.shipping_date) < DATE_ADD(CURDATE(), INTERVAL {PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS} DAY)
+              AND (si.product_type IS NULL OR TRIM(si.product_type) = '' OR si.product_type = '量産品')
             ORDER BY si.shipping_no, si.product_cd
         """)
         join_result = await db.execute(join_sel)

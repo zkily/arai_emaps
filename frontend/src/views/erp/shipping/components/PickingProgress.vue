@@ -397,6 +397,7 @@ import request from '@/utils/request'
 import * as echarts from 'echarts'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
+import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -417,6 +418,7 @@ interface PalletItem {
   shipping_no_p: string
   shipping_date: string
   product_name: string
+  product_type?: string
   confirmed_boxes?: number
   destination_name: string
   status: string
@@ -505,18 +507,14 @@ const filteredPalletList = computed(() => {
   return palletList.value.filter((item) => item.status === statusFilter.value)
 })
 
-// 製品名に「加工」「アーチ」「料金」を含む行を除外する
-const excludeProductNameKeywords = (name: string) => {
-  const n = (name || '').trim()
-  return n.includes('加工') || n.includes('アーチ') || n.includes('料金')
-}
+// 製品名に「加工」「アーチ」「料金」を含む行、および量産品以外を除外する
+const excludeFromPickingDisplay = (item: PalletItem) => !shouldIncludeInPickingDisplay(item)
 
 // 详细列表的过滤逻辑
 const filteredDetailPalletList = computed(() => {
   let filtered = palletList.value
 
-  // 製品名に「加工」「アーチ」「料金」を含むデータを除外
-  filtered = filtered.filter((item) => !excludeProductNameKeywords(item.product_name))
+  filtered = filtered.filter((item) => !excludeFromPickingDisplay(item))
 
   // 按日期范围过滤
   if (detailFilters.value.dateRange && detailFilters.value.dateRange.length === 2) {
@@ -590,8 +588,10 @@ const fetchProgressData = async () => {
       return
     }
 
-    // palletList: API は配列を返す
-    palletList.value = Array.isArray(response.palletList) ? (response.palletList as PalletItem[]) : []
+    // palletList: API は配列を返す（量産品以外・製品名キーワードはフロントでも除外）
+    palletList.value = Array.isArray(response.palletList)
+      ? (response.palletList as PalletItem[]).filter((item) => shouldIncludeInPickingDisplay(item))
+      : []
 
     // todayOverview: API は todayOverview オブジェクトを返す
     const ov = response.todayOverview

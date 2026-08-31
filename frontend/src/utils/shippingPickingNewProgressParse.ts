@@ -15,6 +15,28 @@ export type NormalizedPickingProgressResult =
   | { ok: false; message?: string }
   | { ok: true; responseData: Record<string, unknown> }
 
+const PICKING_EXCLUDE_NAME_KEYWORDS = ['加工', 'アーチ', '料金'] as const
+
+/** 空・未設定は量産品扱い。試作品・代替品等はピッキング管理から除外 */
+export function isPickingMassProductionType(productType: unknown): boolean {
+  const t = String(productType ?? '').trim()
+  return t === '' || t === '量産品'
+}
+
+/** 製品名キーワード・製品タイプがピッキング管理の表示・集計対象か */
+export function shouldIncludeInPickingDisplay(item: {
+  product_name?: unknown
+  productName?: unknown
+  product_type?: unknown
+  productType?: unknown
+}): boolean {
+  const productName = String(item.product_name || item.productName || '')
+  if (productName && PICKING_EXCLUDE_NAME_KEYWORDS.some((keyword) => productName.includes(keyword))) {
+    return false
+  }
+  return isPickingMassProductionType(item.product_type ?? item.productType)
+}
+
 /** request インターセプタ後の生レスポンスを data オブジェクトに正規化 */
 export function normalizePickingProgressResponse(response: unknown): NormalizedPickingProgressResult {
   if (Array.isArray(response)) {
@@ -42,36 +64,30 @@ export function normalizePickingProgressResponse(response: unknown): NormalizedP
 }
 
 /**
- * 製品名フィルタ後、palletList から本日分を再集計して todayOverview を更新
+ * 製品名フィルタ・量産品以外除外後、palletList から本日分を再集計して todayOverview を更新
  */
 export function filterProductDataForPickingProgress(data: unknown): Record<string, unknown> | unknown[] {
   if (!data) return data as Record<string, unknown>
 
-  const excludeKeywords = ['加工', 'アーチ', '料金']
-  const shouldExclude = (productName: string) =>
-    Boolean(productName) && excludeKeywords.some((keyword) => productName.includes(keyword))
-
   if (Array.isArray(data)) {
-    return data.filter((item: Record<string, unknown>) => {
-      const productName = String(item.product_name || item.productName || '')
-      return !shouldExclude(productName)
-    })
+    return data.filter((item: Record<string, unknown>) => shouldIncludeInPickingDisplay(item))
   }
 
   if (typeof data === 'object') {
     const filtered = { ...(data as Record<string, unknown>) }
 
     if (Array.isArray(filtered.palletList)) {
-      filtered.palletList = filtered.palletList.filter((item: Record<string, unknown>) => {
-        const productName = String(item.product_name || item.productName || '')
-        return !shouldExclude(productName)
-      })
+      filtered.palletList = filtered.palletList.filter((item: Record<string, unknown>) =>
+        shouldIncludeInPickingDisplay(item),
+      )
     }
 
     if (Array.isArray(filtered.progressStats)) {
       filtered.progressStats = filtered.progressStats.filter((item: Record<string, unknown>) => {
-        const productName = String(item.product_name || item.productName || '')
-        return !shouldExclude(productName)
+        if (item.product_name || item.productName || item.product_type || item.productType) {
+          return shouldIncludeInPickingDisplay(item)
+        }
+        return true
       })
     }
 

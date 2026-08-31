@@ -153,6 +153,7 @@ def _shipping_item_to_picking_display_dict(r: dict) -> dict:
         else str(r.get("shipping_date") or ""),
         "product_cd": r.get("product_cd") or "",
         "product_name": r.get("product_name") or "",
+        "product_type": r.get("product_type") or "",
         "confirmed_boxes": int(r.get("confirmed_boxes") or 0),
         "destination_cd": r.get("destination_cd") or "",
         "destination_name": r.get("destination_name") or "",
@@ -248,8 +249,14 @@ async def list_shipping_items_for_picking_display(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """ピッキング一覧用。shipping_items のみ参照（picking_log_matched で完了判定）。"""
-    conditions = ["si.status != 'キャンセル'", "si.shipping_no_p IS NOT NULL", "si.shipping_no_p != ''"]
+    """ピッキング一覧用。shipping_items のみ参照（picking_log_matched で完了判定）。
+    製品タイプは量産品のみ（空は量産品扱い）。"""
+    conditions = [
+        "si.status != 'キャンセル'",
+        "si.shipping_no_p IS NOT NULL",
+        "si.shipping_no_p != ''",
+        "(si.product_type IS NULL OR TRIM(si.product_type) = '' OR si.product_type = '量産品')",
+    ]
     params: dict = {}
 
     if start_date and end_date:

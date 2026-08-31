@@ -104,6 +104,7 @@ import { getJSTToday } from '@/utils/dateFormat'
 import { getProductionSummarysList } from '@/api/database'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
+import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -142,13 +143,9 @@ async function fetchPickingOverview() {
     const response = (await request.get('/api/shipping/picking/new-progress')) as any
     let data = response?.data ?? response
     if (response?.success === false || !data) return
-    const excludeKeywords = ['加工', 'アーチ', '料金']
     const today = getJSTToday()
     if (Array.isArray(data.palletList)) {
-      const list = data.palletList.filter((item: any) => {
-        const name = item.product_name || item.productName || ''
-        return !excludeKeywords.some((k: string) => name.includes(k))
-      })
+      const list = data.palletList.filter((item: any) => shouldIncludeInPickingDisplay(item))
       const todayItems = list.filter((item: any) => {
         const d = item.shipping_date || item.date || ''
         return d === today || d.startsWith(today)

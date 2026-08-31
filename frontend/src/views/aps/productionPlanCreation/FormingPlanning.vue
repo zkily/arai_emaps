@@ -24,16 +24,6 @@
               アンカー日設定
             </el-button>
           </el-form-item>
-          <el-form-item v-if="selectedLineId" label-width="0" class="setup-fi setup-fi--eff-override">
-            <el-button
-              type="primary"
-              plain
-              class="setup-eff-override-btn"
-              @click="onOpenEfficiencyOverrideDialog"
-            >
-              能率期間指定
-            </el-button>
-          </el-form-item>
           <el-form-item label="工程" required class="setup-fi setup-fi--process">
             <el-select
               v-model="selectedProcessCd"
@@ -72,6 +62,17 @@
           <el-form-item class="setup-fi setup-fi-btn setup-fi--fetch" label-width="0">
             <el-button type="primary" class="btn-accent btn-accent--primary" :loading="loadingSchedules" @click="loadSchedules">
               計画を取得
+            </el-button>
+          </el-form-item>
+          <el-form-item label-width="0" class="setup-fi setup-fi--eff-override">
+            <el-button
+              type="primary"
+              plain
+              class="setup-eff-override-btn"
+              :disabled="!selectedLineId"
+              @click="onOpenEfficiencyOverrideDialog"
+            >
+              能率期間指定
             </el-button>
           </el-form-item>
           <el-form-item label-width="0" class="setup-fi-notes">
@@ -307,6 +308,15 @@
             @click="openManagementCodeTraceDialog"
           >
             管理コード所在
+          </el-button>
+          <el-button
+            type="primary"
+            size="small"
+            plain
+            :disabled="!selectedLineId"
+            @click="onOpenEfficiencyOverrideDialog"
+          >
+            能率期間指定
           </el-button>
           <el-button
             type="warning"
@@ -3750,6 +3760,26 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 .setup-section--toolbar .setup-fi--fetch {
   padding: 0 2px;
+}
+/* 能率期間指定（シアン） */
+.setup-section--toolbar .setup-fi--eff-override {
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: rgba(6, 182, 212, 0.07);
+  border: 1px solid rgba(6, 182, 212, 0.22);
+}
+.setup-section--toolbar .setup-eff-override-btn {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  padding: 0 12px;
+  font-size: var(--add-fs);
+  border-radius: var(--ctrl-r);
+  border-color: rgba(6, 182, 212, 0.35) !important;
+  color: #0e7490 !important;
+}
+.setup-section--toolbar .setup-eff-override-btn:not(:disabled):hover {
+  background: rgba(6, 182, 212, 0.1) !important;
+  border-color: rgba(6, 182, 212, 0.45) !important;
 }
 .setup-fi-btn :deep(.el-button),
 .setup-section--toolbar .setup-anchor-btn {

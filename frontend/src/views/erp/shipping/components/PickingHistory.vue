@@ -573,6 +573,7 @@ import ChartWrapper from '@/components/ChartWrapper.vue'
 import { registerChartJS, type ChartData, type ChartOptions } from '@/utils/chartRegistration'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
+import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -588,6 +589,7 @@ interface PickingTask {
   shipping_date?: string
   product_cd: string
   product_name: string
+  product_type?: string
   confirmed_boxes: number
   picked_quantity: number
   location_cd: string
@@ -1266,12 +1268,8 @@ async function fetchHistoryStats() {
             ? data
             : []
       if (Array.isArray(allTasks) && allTasks.length > 0) {
-        // 过滤掉产品名包含特定关键词的数据（与 PickingListGenerator / 進捗管理 一致）
-        const excludeKeywords = ['加工', 'アーチ', '料金']
-        const filteredTasks = allTasks.filter((task) => {
-          const productName = task.product_name || ''
-          return !excludeKeywords.some((keyword) => productName.includes(keyword))
-        })
+        // 製品名キーワード（加工・アーチ・料金）および量産品以外の製品タイプを除外
+        const filteredTasks = allTasks.filter((task) => shouldIncludeInPickingDisplay(task))
 
         // 按 shipping_no_p（パレット）分组，托盘状态与 PickingListGenerator 一致：
         // 全部 completed → completed；任一 picking → picking；否则 pending
@@ -1347,12 +1345,8 @@ function resetStats() {
 function generateTrendDataFromTasks(tasks: PickingTask[]): TrendDataPoint[] {
   const data: TrendDataPoint[] = []
 
-  // 过滤掉产品名包含特定关键词的数据
-  const excludeKeywords = ['加工', 'アーチ', '料金']
-  const filteredTasks = tasks.filter((task) => {
-    const productName = task.product_name || ''
-    return !excludeKeywords.some((keyword) => productName.includes(keyword))
-  })
+  // 製品名キーワード（加工・アーチ・料金）および量産品以外の製品タイプを除外
+  const filteredTasks = tasks.filter((task) => shouldIncludeInPickingDisplay(task))
 
   // 按日期/月分组，再按 shipping_no_p 判定托盘状态（与 PickingListGenerator 一致）
   const getDateKey = (task: PickingTask) =>
@@ -1428,11 +1422,9 @@ async function fetchTrendData() {
           ? data
           : []
 
-    const excludeKeywords = ['加工', 'アーチ', '料金']
-    const filtered = (allTasks as PickingTask[]).filter((task: PickingTask) => {
-      const productName = task.product_name || ''
-      return !excludeKeywords.some((keyword: string) => productName.includes(keyword))
-    })
+    const filtered = (allTasks as PickingTask[]).filter((task: PickingTask) =>
+      shouldIncludeInPickingDisplay(task),
+    )
     trendData.value = generateTrendDataFromTasks(filtered)
     rawTrendTasks.value = filtered
   } catch (error) {

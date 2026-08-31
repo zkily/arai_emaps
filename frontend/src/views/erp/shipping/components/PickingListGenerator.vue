@@ -258,6 +258,7 @@ import request from '@/utils/request'
 import { getProductList } from '@/api/master/productMaster'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
+import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -283,6 +284,7 @@ interface ShippingItem {
   shipping_no: string
   product_cd: string
   product_name: string
+  product_type?: string
   confirmed_units: number
   confirmed_boxes: number
   box_type: string
@@ -429,13 +431,8 @@ async function fetchShippingData() {
     const items = allItems
     console.log(`获取到 ${items.length} 条原始数据（全ページ取得）`)
 
-    // 过滤掉製品名包含特定关键词的数据
-    const excludeKeywords = ['加工', 'アーチ', '料金']
-    const filteredItems = items.filter((item: ShippingItem) => {
-      const productName = item.product_name || ''
-      const shouldExclude = excludeKeywords.some((keyword) => productName.includes(keyword))
-      return !shouldExclude
-    })
+    // 製品名キーワード（加工・アーチ・料金）および量産品以外の製品タイプを除外
+    const filteredItems = items.filter((item: ShippingItem) => shouldIncludeInPickingDisplay(item))
 
     console.log(
       `过滤后剩余 ${filteredItems.length} 条数据（过滤掉 ${items.length - filteredItems.length} 条包含特定关键词的数据）`,

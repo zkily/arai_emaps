@@ -56,6 +56,13 @@ def _safe_date(val) -> str:
     return str(val)
 
 
+# 出荷リストの製品タイプが量産品以外（試作品・代替品等）はピッキング管理の集計・一覧から除外。
+# NULL / 空は量産品扱い。
+_MASS_PRODUCTION_TYPE_SQL = (
+    "(si.product_type IS NULL OR TRIM(si.product_type) = '' OR si.product_type = '量産品')"
+)
+
+
 # ================================================================
 # 1. GET /new-progress  ─ ピッキング進捗（本日 or 指定期間）
 # ================================================================
@@ -66,10 +73,13 @@ async def get_new_progress(
     start_date: Optional[str] = Query(None, description="期間開始日 YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="期間終了日 YYYY-MM-DD"),
 ) -> dict:
-    """shipping_items の picking_log_matched を完了判定として進捗を返す。"""
+    """shipping_items の picking_log_matched を完了判定として進捗を返す。製品タイプは量産品のみ（空は量産品扱い）。"""
 
     use_range = start_date and end_date and start_date <= end_date
-    base_where = "si.status != 'キャンセル' AND si.shipping_no_p IS NOT NULL AND si.shipping_no_p != ''"
+    base_where = (
+        "si.status != 'キャンセル' AND si.shipping_no_p IS NOT NULL AND si.shipping_no_p != ''"
+        f" AND {_MASS_PRODUCTION_TYPE_SQL}"
+    )
 
     if use_range:
         pallet_result = await db.execute(
@@ -170,7 +180,8 @@ async def get_picking_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """ピッキング履歴を期間指定で返す（shipping_items + picking_log_matched）。デフォルトは過去30日"""
+    """ピッキング履歴を期間指定で返す（shipping_items + picking_log_matched）。デフォルトは過去30日。
+    製品タイプは量産品のみ（空は量産品扱い）。"""
     params: dict = {}
     if start_date and end_date:
         params["start_date"] = start_date
@@ -197,6 +208,7 @@ async def get_picking_history(
                 THEN COALESCE(si.confirmed_units, si.confirmed_boxes) ELSE 0 END) AS total_picked
         FROM shipping_items si
         WHERE {date_condition} AND si.status != 'キャンセル'
+          AND {_MASS_PRODUCTION_TYPE_SQL}
     """)
     stats_result = await db.execute(stats_q, params)
     stats_row = stats_result.mappings().first()
@@ -212,6 +224,7 @@ async def get_picking_history(
         SELECT si.*
         FROM shipping_items si
         WHERE {date_condition} AND si.status != 'キャンセル'
+          AND {_MASS_PRODUCTION_TYPE_SQL}
         ORDER BY si.shipping_date DESC, si.shipping_no_p ASC
     """)
     data_result = await db.execute(data_q, params)
@@ -251,7 +264,8 @@ async def get_performance_by_destination(
 ) -> dict:
     """担当者＝納入先グループ（destination_groups の1行＝1つの group_name）。
     各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で shipping_items を集計。
-    件数は出荷単位 COUNT(DISTINCT shipping_no_p)、完了は picking_log_matched = 1。品名 加工・アーチ・料金 除外。
+    件数は出荷単位 COUNT(DISTINCT shipping_no_p)、完了は picking_log_matched = 1。
+    品名 加工・アーチ・料金 除外。製品タイプは量産品のみ（空は量産品扱い）。
     """
     params: dict = {}
     if start_date and end_date:
@@ -288,6 +302,7 @@ async def get_performance_by_destination(
 
     product_exclude = (
         " AND (si.product_name NOT LIKE '%加工%' AND si.product_name NOT LIKE '%アーチ%' AND si.product_name NOT LIKE '%料金%')"
+        f" AND {_MASS_PRODUCTION_TYPE_SQL}"
     )
     completed_condition = "si.picking_log_matched = 1"
     out: List[dict] = []
@@ -492,6 +507,7 @@ async def get_sync_status(
               AND status != 'キャンセル'
               AND shipping_no_p IS NOT NULL
               AND shipping_no_p != ''
+              AND (product_type IS NULL OR TRIM(product_type) = '' OR product_type = '量産品')
         """))
         si_row = si_result.mappings().first()
         total_active_items = int(si_row["cnt"] or 0) if si_row else 0
