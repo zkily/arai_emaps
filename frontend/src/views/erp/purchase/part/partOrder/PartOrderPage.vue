@@ -322,6 +322,29 @@
               </template>
             </el-table-column>
             <el-table-column
+              label="手動使用数"
+              width="140"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  :key="`manual-usage-${row.id}`"
+                  :model-value="emptyIfZero(row.manual_usage)"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
+                  size="small"
+                  class="usage-quantity-input"
+                  @change="(val) => handleManualUsageChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
+                  @wheel.prevent
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
               label="使用計画"
               width="110"
               align="center"
@@ -415,6 +438,29 @@
             >
               <template #default="{ row }">
                 <span class="usage-quantity-readonly">{{ formatValue(row.usage_quantity) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="手動使用数"
+              width="140"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  :key="`manual-usage-${row.id}`"
+                  :model-value="emptyIfZero(row.manual_usage)"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  :controls="false"
+                  :value-on-clear="null"
+                  size="small"
+                  class="usage-quantity-input"
+                  @change="(val) => handleManualUsageChange(row, val)"
+                  @keydown.capture="preventNumberSpinnerKeys"
+                  @wheel.prevent
+                />
               </template>
             </el-table-column>
             <el-table-column
@@ -1141,6 +1187,7 @@ interface PartOrderItem {
   remarks: string
   order_amount: number
   usage_quantity: number
+  manual_usage: number
   usage_plan_qty: number
   stock_trend: number
   order_quantity: number
@@ -1196,6 +1243,7 @@ const partOptions = ref<PartMasterOption[]>([])
 const selectedPart = ref<PartMasterOption | null>(null)
 const manualOrderFormRef = ref()
 const tableData = ref<PartOrderItem[]>([])
+const lastSavedManualUsage = new Map<number, number>()
 const initialStockData = ref<InitialStockItem[]>([])
 /** 部品注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
 const orderHistoryData = ref<PartOrderItem[]>([])
@@ -1363,9 +1411,12 @@ const averageUnitPrice = computed(() => {
   return totalPrice / tableData.value.length
 })
 
-// 使用数合計：当前一覧（tableData）の usage_quantity 合計
+// 使用数合計：実績使用数 + 手動使用数
 const totalUsageQuantity = computed(() => {
-  return tableData.value.reduce((total, row) => total + (row.usage_quantity || 0), 0)
+  return tableData.value.reduce(
+    (total, row) => total + (row.usage_quantity || 0) + (row.manual_usage || 0),
+    0,
+  )
 })
 
 // 手入力：注文本数×梱本数×単価（参考金額）
@@ -1378,6 +1429,7 @@ const calculatedAmount = computed(() => {
 
 const mapPartStockRow = (item: any): PartOrderItem => {
   const usage_quantity = item.planned_usage || 0
+  const manual_usage = Number(item.manual_usage) || 0
   const order_quantity = item.order_quantity || 0
   const ppb = Number(item.pieces_per_bundle) || 1
   let order_bundle_quantity = 0
@@ -1389,6 +1441,7 @@ const mapPartStockRow = (item: any): PartOrderItem => {
   return {
     ...item,
     usage_quantity,
+    manual_usage,
     usage_plan_qty: Number(item.usage_plan_qty) || 0,
     stock_trend: Number(item.stock_trend) || 0,
     order_quantity,
@@ -1410,6 +1463,10 @@ const fetchData = async () => {
     if ((result as any)?.success !== false && list) {
       const filtered = list.filter((item: any) => excludePartsStatusZero(item))
       tableData.value = filtered.map((item: any) => mapPartStockRow(item))
+      lastSavedManualUsage.clear()
+      for (const row of tableData.value) {
+        if (row.id) lastSavedManualUsage.set(row.id, Number(row.manual_usage) || 0)
+      }
       pagination.total = total
       updateStats()
     } else {
@@ -1823,6 +1880,87 @@ const handleTabChange = (tabName: string | number) => {
   refreshListForActiveTab()
 }
 
+/** 数字入力: 0 は空欄表示 */
+const emptyIfZero = (value: number | null | undefined): number | null => {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return null
+  return n
+}
+
+/** el-input-number の ↑↓ / PageUp/Down による値改変を防止（手入力のみ） */
+const preventNumberSpinnerKeys = (e: Event) => {
+  const ke = e as KeyboardEvent
+  if (
+    ke.key === 'ArrowUp' ||
+    ke.key === 'ArrowDown' ||
+    ke.key === 'PageUp' ||
+    ke.key === 'PageDown'
+  ) {
+    ke.preventDefault()
+    ke.stopPropagation()
+  }
+}
+
+const commitQty = (val: number | null | undefined): number => {
+  if (val === null || val === undefined) return 0
+  const n = Number(val)
+  return Number.isFinite(n) ? n : 0
+}
+
+/** 同一部品の現在在庫を一覧へ反映（手動使用数・注文本数更新後） */
+const patchCurrentStockForPart = async (partCd: string) => {
+  if (!partCd) return
+  try {
+    const apiParams: Record<string, unknown> = {
+      page: 1,
+      pageSize: 500,
+      part_cd: partCd,
+    }
+    if (searchForm.dateRange && searchForm.dateRange.length === 2) {
+      apiParams.start_date = searchForm.dateRange[0]
+      apiParams.end_date = searchForm.dateRange[1]
+    }
+    const result = await getPartStockList(apiParams)
+    const list = (result as any)?.data?.list ?? []
+    if (!Array.isArray(list) || list.length === 0) return
+    const byId = new Map<number, any>(list.map((item: any) => [item.id, item]))
+    for (const row of tableData.value) {
+      const fresh = byId.get(row.id)
+      if (fresh && fresh.current_stock !== undefined) {
+        row.current_stock = fresh.current_stock
+      }
+    }
+    updateStats()
+  } catch (error) {
+    console.warn('現在在庫の再取得に失敗:', error)
+  }
+}
+
+const handleManualUsageChange = async (row: PartOrderItem, committed?: number | null) => {
+  if (!guardPurchaseOperation(canEdit)) return
+  const next = commitQty(committed)
+  row.manual_usage = next
+  if (row.id && lastSavedManualUsage.get(row.id) === next) return
+
+  try {
+    const response = await updatePartStock(row.id, { manual_usage: next })
+    if ((response as any)?.success) {
+      ElMessage.success('手動使用数を更新しました')
+      lastSavedManualUsage.set(row.id, next)
+      const data = (response as any)?.data
+      if (data?.current_stock !== undefined) {
+        row.current_stock = data.current_stock
+      }
+      await patchCurrentStockForPart(row.part_cd)
+    } else {
+      ElMessage.error('手動使用数の更新に失敗しました')
+    }
+  } catch (error: any) {
+    console.error('手動使用数更新失敗:', error)
+    ElMessage.error(`手動使用数の更新に失敗しました: ${error.message || 'ネットワークエラー'}`)
+  }
+}
+
 const handleOrderQuantityChange = async (row: PartOrderItem) => {
   if (!guardPurchaseOperation(canEdit)) return
 
@@ -1856,7 +1994,6 @@ const saveQuantityToDatabase = async (row: PartOrderItem) => {
     const response = await updatePartQuantities({
       part_cd: row.part_cd,
       date: row.date,
-      usage_quantity: row.usage_quantity || 0,
       order_quantity: row.order_quantity || 0,
       order_bundle_quantity: row.order_bundle_quantity || 0,
       order_amount: row.order_amount || 0,
@@ -1866,6 +2003,7 @@ const saveQuantityToDatabase = async (row: PartOrderItem) => {
 
     if (response && response.success) {
       console.log(`成功保存材料 ${row.part_cd} 的数量到数据库`)
+      await patchCurrentStockForPart(row.part_cd)
     } else {
       const errorMessage = response?.message || '不明なエラー'
       console.error(`保存材料 ${row.part_cd} 的数量失败:`, errorMessage)
@@ -2652,6 +2790,7 @@ const handleConfirmManualOrder = async () => {
       supplier_name: manualOrderForm.supplier_name || undefined,
       lead_time: manualOrderForm.lead_time ?? 0,
       planned_usage: 0,
+      manual_usage: 0,
       usage_plan_qty: 0,
       stock_trend: 0,
       order_quantity: oq,

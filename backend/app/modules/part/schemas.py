@@ -12,6 +12,7 @@ class PartStockBase(BaseModel):
     initial_stock: Optional[int] = 0
     current_stock: Optional[int] = 0
     planned_usage: Optional[int] = 0
+    manual_usage: Optional[int] = 0
     usage_plan_qty: Optional[int] = 0
     stock_trend: Optional[int] = 0
     adjustment_quantity: Optional[int] = 0
@@ -39,6 +40,7 @@ class PartStockUpdate(BaseModel):
     initial_stock: Optional[int] = None
     current_stock: Optional[int] = None
     planned_usage: Optional[int] = None
+    manual_usage: Optional[int] = None
     usage_plan_qty: Optional[int] = None
     stock_trend: Optional[int] = None
     adjustment_quantity: Optional[int] = None

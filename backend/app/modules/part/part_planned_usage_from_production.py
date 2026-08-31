@@ -4,6 +4,8 @@
 - 主ソース: stock_transaction_logs（process_cd=KT07、実績+不良）を日付× target_cd（製品）で合算し、
   当日有効の製品 BOM 明細のうち consume_process_cd='KT07' の行の component_product_cd（部品）へ、
   その合算数量をそのまま planned_usage とする（qty_per による換算はしない）。
+- 手動使用数（part_stock.manual_usage）は本モジュールでは扱わない。在庫減算は
+  planned_usage + manual_usage を実効使用数とする（stock_api 側）。
 - 使用計画（usage_plan_qty）: production_summarys.molding_actual_plan × BOM
   （ComponentRequirements「日別・部品別需要」と同じ算出式）
 """

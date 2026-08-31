@@ -194,6 +194,7 @@ const MATERIAL_STAT_KEYS: { key: string; label: string }[] = [
 const PART_STAT_KEYS: { key: string; label: string }[] = [
   { key: 'current_stock', label: '現在在庫' },
   { key: 'planned_usage', label: '使用数' },
+  { key: 'manual_usage', label: '手動使用数' },
   { key: 'usage_plan_qty', label: '計画使用' },
   { key: 'order_quantity', label: '注文数' }
 ]

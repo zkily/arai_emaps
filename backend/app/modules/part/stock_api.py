@@ -77,6 +77,122 @@ def _is_missing_part_stock_table_error(exc: BaseException) -> bool:
     return False
 
 
+def _is_missing_manual_usage_column_error(exc: BaseException) -> bool:
+    """MySQL 1054: Unknown column '...manual_usage'（マイグレーション 121 未適用時）"""
+    depth = 0
+    cur: BaseException | None = exc
+    while cur is not None and depth < 10:
+        depth += 1
+        args = getattr(cur, "args", ())
+        text = f"{cur!s} {args!r}".lower()
+        if "manual_usage" in text and ("1054" in text or "unknown column" in text):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
+_MISSING_MANUAL_USAGE_DETAIL = (
+    "part_stock.manual_usage 列がありません。"
+    "`backend/database/migrations/121_part_stock_manual_usage.sql` を適用してください。"
+)
+
+
+# current_stock 再計算の入力（これらの更新後は当該部品を日付順に再計算する）
+_STOCK_RECALC_FIELDS = frozenset(
+    {"initial_stock", "order_quantity", "adjustment_quantity", "planned_usage", "manual_usage"}
+)
+
+
+def _int_qty(v: Any) -> int:
+    """在庫計算用。None / 空は 0。"""
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _effective_usage(r: PartStock) -> int:
+    """実績使用数（溶接受払）+ 手動使用数。在庫減算に用いる。"""
+    return _int_qty(getattr(r, "planned_usage", 0)) + _int_qty(getattr(r, "manual_usage", 0))
+
+
+async def _global_initial_anchor_date(db: AsyncSession) -> Optional[date]:
+    """part_stock 全体で initial_stock>0 の最遅日。無ければ None。"""
+    return (
+        await db.execute(select(func.max(PartStock.date)).where(PartStock.initial_stock > 0))
+    ).scalar()
+
+
+def _apply_part_current_stock_formula(
+    sorted_rows: list[PartStock],
+    start_date: date,
+) -> int:
+    """
+    1 部品分の current_stock を日付昇順で再計算する（in-place）。
+
+    計算式:
+      current_stock = initial_stock + order_quantity + adjustment_quantity
+                      - (planned_usage + manual_usage) + 前日の current_stock
+    """
+    to_calc = [r for r in sorted_rows if r.date is not None and r.date >= start_date]
+    to_calc = sorted(to_calc, key=lambda x: x.date)
+    prev_current = 0
+    updated = 0
+    for r in to_calc:
+        new_current = (
+            _int_qty(r.initial_stock)
+            + _int_qty(r.order_quantity)
+            + _int_qty(r.adjustment_quantity)
+            - _effective_usage(r)
+            + prev_current
+        )
+        if _int_qty(r.current_stock) != new_current:
+            r.current_stock = new_current
+            updated += 1
+        prev_current = new_current
+    return updated
+
+
+async def recalculate_part_current_stock(
+    db: AsyncSession,
+    part_cds: Optional[list[str]] = None,
+) -> tuple[int, int]:
+    """
+    part_stock.current_stock を再計算する（commit しない）。
+    開始日は全部品の initial_stock>0 最遅日（在庫計算と同じ錨点）。
+    stock_trend は使用計画同期を含むためここでは更新しない。
+
+    Returns:
+        (calculated_count, updated_count)
+    """
+    global_start = await _global_initial_anchor_date(db)
+    if global_start is None:
+        return 0, 0
+
+    q = select(PartStock)
+    if part_cds is not None:
+        unique_cds = list(dict.fromkeys(cd for cd in part_cds if cd))
+        if not unique_cds:
+            return 0, 0
+        q = q.where(PartStock.part_cd.in_(unique_cds))
+    q = q.order_by(PartStock.part_cd, PartStock.date.asc())
+    rows = (await db.execute(q)).scalars().all()
+    if not rows:
+        return 0, 0
+
+    by_part: dict[str, list[PartStock]] = defaultdict(list)
+    for r in rows:
+        by_part[r.part_cd].append(r)
+
+    calculated_count = 0
+    updated_count = 0
+    for list_rows in by_part.values():
+        sorted_rows = sorted(list_rows, key=lambda x: x.date)
+        updated_count += _apply_part_current_stock_formula(sorted_rows, global_start)
+        calculated_count += 1
+    return calculated_count, updated_count
+
+
 # ─────────────────────────────────────────────
 # part_stock  メイン在庫
 # ─────────────────────────────────────────────
@@ -90,6 +206,7 @@ def _stock_to_dict(r: PartStock) -> dict:
         "initial_stock": getattr(r, "initial_stock", None),
         "current_stock": getattr(r, "current_stock", None),
         "planned_usage": getattr(r, "planned_usage", None),
+        "manual_usage": getattr(r, "manual_usage", None),
         "usage_plan_qty": getattr(r, "usage_plan_qty", None),
         "stock_trend": getattr(r, "stock_trend", None),
         "adjustment_quantity": getattr(r, "adjustment_quantity", None),
@@ -205,6 +322,9 @@ async def list_part_stocks(
                 "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             return {"success": True, "data": {"list": [], "total": 0}}
+        if _is_missing_manual_usage_column_error(e):
+            logger.warning(_MISSING_MANUAL_USAGE_DETAIL)
+            raise HTTPException(status_code=503, detail=_MISSING_MANUAL_USAGE_DETAIL) from e
         logger.exception("list_part_stocks failed: %s", e)
         raise HTTPException(status_code=500, detail=f"部品在庫一覧の取得に失敗しました: {str(e)}") from e
 
@@ -257,14 +377,15 @@ async def calculate_part_stock(
       2) planned_usage は常に次の区間で集計・反映:
          initial_stock>0 の行のうち最遅の date ～ part_stock の日付最大（画面の日付指定は使わない）。
       3) usage_plan_qty は ComponentRequirements「日別・部品別需要」と同じ算出式で、
-         planned_usage>0 の最終日 ～ part_stock の日付最大 の区間で集計・反映する。
-      4) 再計算前に上記四列を一括 0 にクリアする日付範囲の開始は、
-         part_stock 全体で initial_stock>0 の行のうち date が最も遅い日（ローリング開始日）。
-         終了は part_stock の日付最大。
-      5) stock_transaction_logs（KT07・実績+不良を日×製品で合算）× BOM（consume_process_cd=KT07 の部品行）→ planned_usage（合算値をそのまま部品×日に反映）
+         実効使用数(planned_usage+manual_usage)>0 の最終日 ～ part_stock の日付最大 の区間で集計・反映する。
+      4) 再計算前に四列（current_stock / planned_usage / usage_plan_qty / stock_trend）を一括 0 にクリアする。
+         日付範囲の開始は part_stock 全体で initial_stock>0 の最遅日。終了は日付最大。
+         manual_usage は手入力のためクリアしない。
+      5) stock_transaction_logs（KT07・実績+不良を日×製品で合算）× BOM（consume_process_cd=KT07 の部品行）→ planned_usage
       6) production_summarys.molding_actual_plan × BOM → usage_plan_qty
-      7) current_stock は -planned_usage、stock_trend は
-         「planned_usage の最終 >0 日までは -planned_usage、翌日以降は -usage_plan_qty」
+      7) 実効使用数 = planned_usage + manual_usage。
+         current_stock は -実効使用数、stock_trend は
+         「実効使用数の最終 >0 日までは -実効使用数、翌日以降は -usage_plan_qty」
          で部品ごとに日付順再計算する。
     """
     _ = body  # 互換のため受け取るが日付は使わない（集計は錨点日～最大日で固定）
@@ -286,6 +407,9 @@ async def calculate_part_stock(
                     "usage_period": None,
                 },
             }
+        if _is_missing_manual_usage_column_error(e):
+            logger.warning(_MISSING_MANUAL_USAGE_DETAIL)
+            raise HTTPException(status_code=503, detail=_MISSING_MANUAL_USAGE_DETAIL) from e
         raise
     if not rows:
         return {
@@ -346,7 +470,7 @@ async def calculate_part_stock(
 
     usage_plan_map = {}
 
-    # 再計算前に四列を「initial_stock>0 の行のうち最遅の date」～最大日で一括クリア（実テーブル UPDATE + ORM 同期）
+    # 再計算前に四列をクリア（manual_usage は手入力のため残す）
     clear_res = await db.execute(
         text(
             """
@@ -395,16 +519,16 @@ async def calculate_part_stock(
             usage_synced += 1
     await db.flush()
 
-    # usage_plan_qty の集計期間は「planned_usage が最後に > 0 となる日」～表内最大日
-    planned_usage_positive_dates = []
+    # usage_plan_qty の集計期間は「実効使用数(実績+手動) が最後に > 0 となる日」～表内最大日
+    effective_usage_positive_dates = []
     for r in rows:
         rd = calendar_date_only(r.date)
         if rd is None or rd < global_start_date or rd > data_max_date:
             continue
-        if int(r.planned_usage or 0) > 0:
-            planned_usage_positive_dates.append(rd)
-    if planned_usage_positive_dates:
-        usage_plan_start_date = max(planned_usage_positive_dates)
+        if _effective_usage(r) > 0:
+            effective_usage_positive_dates.append(rd)
+    if effective_usage_positive_dates:
+        usage_plan_start_date = max(effective_usage_positive_dates)
     else:
         usage_plan_start_date = global_start_date
     usage_plan_end_date = data_max_date
@@ -444,10 +568,10 @@ async def calculate_part_stock(
     await db.flush()
 
     # stock_trend の使用数切替日:
-    # planned_usage が最後に >0 となる日の「翌日」から usage_plan_qty を使う
+    # 実効使用数が最後に >0 となる日の「翌日」から usage_plan_qty を使う
     trend_switch_date: date | None = None
-    if planned_usage_positive_dates:
-        trend_switch_date = max(planned_usage_positive_dates) + timedelta(days=1)
+    if effective_usage_positive_dates:
+        trend_switch_date = max(effective_usage_positive_dates) + timedelta(days=1)
 
     usage_lookup_key_count = len(usage_map)
     usage_map_nonzero = sum(1 for v in usage_map.values() if int(v or 0) != 0)
@@ -478,11 +602,11 @@ async def calculate_part_stock(
         prev_current = 0
         prev_trend = 0
         for r in to_calc:
-            init = int(r.initial_stock or 0)
-            order_qty = int(r.order_quantity or 0)
-            adj = int(r.adjustment_quantity or 0)
-            usage = int(r.planned_usage or 0)
-            plan_qty = int(r.usage_plan_qty or 0)
+            init = _int_qty(r.initial_stock)
+            order_qty = _int_qty(r.order_quantity)
+            adj = _int_qty(r.adjustment_quantity)
+            usage = _effective_usage(r)
+            plan_qty = _int_qty(r.usage_plan_qty)
             new_current = init + adj + order_qty - usage + prev_current
             trend_usage = usage
             if trend_switch_date is not None:
@@ -728,13 +852,17 @@ async def update_part_stock(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
-    """部品在庫更新"""
+    """部品在庫更新。使用数・注文・初期在庫・調整数が変わった場合は current_stock を再計算する。"""
     result = await db.execute(select(PartStock).where(PartStock.id == item_id))
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="レコードが見つかりません")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changed = body.model_dump(exclude_unset=True)
+    for field, value in changed.items():
         setattr(row, field, value)
+    if _STOCK_RECALC_FIELDS & set(changed.keys()):
+        await db.flush()
+        await recalculate_part_current_stock(db, [row.part_cd])
     await db.commit()
     await db.refresh(row)
     return {"success": True, "data": _stock_to_dict(row)}

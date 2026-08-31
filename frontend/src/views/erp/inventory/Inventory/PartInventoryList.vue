@@ -151,6 +151,11 @@
             <span :class="numClass(row.planned_usage)">{{ formatNum(row.planned_usage) }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="manual_usage" label="手動使用数" width="92" align="right">
+          <template #default="{ row }">
+            <span :class="numClass(row.manual_usage)">{{ formatNum(row.manual_usage) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="usage_plan_qty" label="計画使用" width="88" align="right">
           <template #default="{ row }">
             <span :class="numClass(row.usage_plan_qty)">{{ formatNum(row.usage_plan_qty) }}</span>
@@ -210,6 +215,7 @@ export interface PartStockInquiryRow {
   initial_stock?: number | null
   current_stock?: number | null
   planned_usage?: number | null
+  manual_usage?: number | null
   usage_plan_qty?: number | null
   stock_trend?: number | null
   adjustment_quantity?: number | null
@@ -236,6 +242,7 @@ const totalCount = ref(0)
 const STAT_FIELDS: { key: keyof PartStockInquiryRow; label: string }[] = [
   { key: 'current_stock', label: '現在在庫' },
   { key: 'planned_usage', label: '使用数' },
+  { key: 'manual_usage', label: '手動使用数' },
   { key: 'usage_plan_qty', label: '計画使用' },
   { key: 'order_quantity', label: '注文数' }
 ]
@@ -252,6 +259,7 @@ const SUMMARY_NUM_KEYS = new Set([
   'initial_stock',
   'current_stock',
   'planned_usage',
+  'manual_usage',
   'usage_plan_qty',
   'stock_trend',
   'adjustment_quantity',
@@ -429,6 +437,7 @@ function exportCsv() {
     '初期在庫',
     '現在在庫',
     '使用数',
+    '手動使用数',
     '計画使用',
     '推移',
     '調整数',
@@ -461,6 +470,7 @@ function exportCsv() {
         row.initial_stock ?? '',
         row.current_stock ?? '',
         row.planned_usage ?? '',
+        row.manual_usage ?? '',
         row.usage_plan_qty ?? '',
         row.stock_trend ?? '',
         row.adjustment_quantity ?? '',

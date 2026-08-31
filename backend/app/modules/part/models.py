@@ -14,6 +14,7 @@ class PartStock(Base):
     initial_stock = Column(Integer, default=0)
     current_stock = Column(Integer, default=0, index=True)
     planned_usage = Column(Integer, default=0)
+    manual_usage = Column(Integer, nullable=False, default=0)
     usage_plan_qty = Column(Integer, nullable=False, default=0)
     stock_trend = Column(Integer, nullable=False, default=0)
     adjustment_quantity = Column(Integer, default=0)
