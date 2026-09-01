@@ -1226,7 +1226,7 @@ function formatProductCostRatio(row: ProductUnitPriceRow): string {
   return `${formatNumber(pct, 2)}%`
 }
 
-/** 製品単価表：売価・各工程単価は行数で算術平均、原価率は算出可能な行のみの％の算術平均 */
+/** 製品単価表：売価は行数で算術平均、各工程単価は >0 のセルのみで算術平均、原価率は算出可能な行のみの％の算術平均 */
 function computeProductUnitPriceAverages(
   rows: ProductUnitPriceRow[],
   procs: ProductCountProcess[],
@@ -1243,6 +1243,7 @@ function computeProductUnitPriceAverages(
   let ratioSum = 0
   let ratioCnt = 0
   const upSums: Record<string, number> = { ...upAvg }
+  const upCnts: Record<string, number> = { ...upAvg }
   for (const row of rows) {
     sellingSum += Number(row.selling_price) || 0
     const r = getProductUnitPriceCostRatioPercent(row)
@@ -1252,12 +1253,17 @@ function computeProductUnitPriceAverages(
     }
     for (const p of procs) {
       const k = `up_${p.process_cd}`
-      upSums[k] += Number(row[k]) || 0
+      const v = Number(row[k]) || 0
+      if (v > 0) {
+        upSums[k] += v
+        upCnts[k] += 1
+      }
     }
   }
   for (const p of procs) {
     const k = `up_${p.process_cd}`
-    upAvg[k] = upSums[k] / n
+    const cnt = upCnts[k]
+    upAvg[k] = cnt > 0 ? upSums[k] / cnt : 0
   }
   return {
     sellingAvg: sellingSum / n,

@@ -310,15 +310,6 @@
             管理コード所在
           </el-button>
           <el-button
-            type="primary"
-            size="small"
-            plain
-            :disabled="!selectedLineId"
-            @click="onOpenEfficiencyOverrideDialog"
-          >
-            能率期間指定
-          </el-button>
-          <el-button
             type="warning"
             size="small"
             class="schedule-replan-btn btn-accent btn-accent--warning"
