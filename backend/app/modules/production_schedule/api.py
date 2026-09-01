@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Any
@@ -3564,6 +3564,20 @@ async def get_cutting_management_list(
 
     try:
         data = [_cm_row(dict(r)) for r in rows]
+        # 別日で反映済の同一管理コードも「反映済」（順延コピー行の列は DEFAULT 未反映）
+        try:
+            from app.modules.material.usage_api import collect_reflected_management_codes
+
+            reflected_codes = await collect_reflected_management_codes(db)
+        except Exception:
+            reflected_codes = set()
+        if reflected_codes:
+            for d in data:
+                if str(d.get("material_usage_reflected") or "").strip() == "反映済":
+                    continue
+                code = str(d.get("management_code") or "").strip()
+                if code and code in reflected_codes:
+                    d["material_usage_reflected"] = "反映済"
         return {"success": True, "data": data, "message": "OK"}
     except Exception as e:
         return JSONResponse(
@@ -4746,7 +4760,7 @@ async def split_cutting_to_next_day(
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-               production_completed_check, remarks, use_material_stock_sub, usage_count
+               production_completed_check, remarks, use_material_stock_sub, usage_count, material_usage_reflected
         FROM cutting_management WHERE id = :cid
     """)
     res = await db.execute(sel, {"cid": cutting_id})
@@ -4840,6 +4854,19 @@ async def split_cutting_to_next_day(
             params["use_material_stock_sub"] = 0
         if params.get("usage_count") is None:
             params["usage_count"] = 1.0
+        src_flag = str(r.get("material_usage_reflected") or "").strip()
+        if src_flag == "反映済":
+            params["material_usage_reflected"] = "反映済"
+        else:
+            try:
+                from app.modules.material.usage_api import collect_reflected_management_codes
+                reflected_codes = await collect_reflected_management_codes(db)
+            except Exception:
+                reflected_codes = set()
+            mgmt = str(params.get("management_code") or "").strip()
+            params["material_usage_reflected"] = (
+                "反映済" if mgmt and mgmt in reflected_codes else "未反映"
+            )
         ins = text("""
             INSERT INTO cutting_management (
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
@@ -4847,14 +4874,14 @@ async def split_cutting_to_next_day(
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                 management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-                production_completed_check, remarks, use_material_stock_sub, usage_count
+                production_completed_check, remarks, use_material_stock_sub, usage_count, material_usage_reflected
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
                 :management_code, :aps_batch_plan_id, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
-                0, :remarks, :use_material_stock_sub, :usage_count
+                0, :remarks, :use_material_stock_sub, :usage_count, :material_usage_reflected
             )
         """)
         await db.execute(ins, params)

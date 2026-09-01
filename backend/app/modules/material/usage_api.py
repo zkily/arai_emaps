@@ -7,14 +7,17 @@
 
 【commit 3ステップ仕様】
   Step 1: cutting_management（指定日）の各行を material_usage_record に1行1件で書き込み
-          - usage_date = production_day, usage_count = 1, source = 'cutting_management'
-          - management_code で重複排除（INSERT IGNORE）
-          - material_cd は material_name → materials テーブルで解決
-          - 完了後 cutting_management.material_usage_reflected = '反映済' に更新
-  Step 2: material_usage_record（reflected=0）を (usage_date, material_cd) で集計
-          → material_stock.planned_usage を更新
-  Step 3: Step 2 で material_stock 更新に成功した material_cd のみ reflected = 1 に更新
+          - usage_date = production_day, usage_count = 行の usage_count（按分時は <1）
+          - サブ在庫行（use_material_stock_sub=1）は対象外
+          - 反映済（reflected=1）または別日に既に記録済みの管理コードは更新しない
+          - 同一日・未反映レコードは usage_count / material_cd を最新値で更新（再実行時の按分修正を反映）
+          - material_cd は products または material_name → materials で解決
+  Step 2: material_usage_record（reflected=0）を (usage_date, material_cd) で SUM(usage_count)
+          → material_stock.planned_usage を更新（四捨五入して整数束）
+  Step 3: Step 2 で material_stock 更新に成功した材料のレコードのみ reflected = 1
+          cutting_management は当該管理コード行のみ「反映済」にする
 """
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, bindparam
@@ -35,6 +38,77 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 SOURCE_CUTTING = "cutting_management"
+
+
+def _normalize_mgmt_code(value) -> str:
+    return str(value or "").strip()
+
+
+async def collect_reflected_management_codes(
+    db: AsyncSession,
+    source: str = SOURCE_CUTTING,
+    *,
+    other_than_day: Optional[date_type] = None,
+) -> set[str]:
+    """
+    既に使用数反映済みの management_code 集合（日付を問わない）。
+    - material_usage_record.reflected=1
+    - cutting_management.material_usage_reflected='反映済'
+      other_than_day 指定時は「その日以外」の切断行だけを見る（当日の再実行は妨げない）
+    """
+    codes: set[str] = set()
+    try:
+        mur = await db.execute(
+            text("""
+                SELECT management_code, management_codes
+                FROM material_usage_record
+                WHERE source = :source
+                  AND reflected = 1
+            """),
+            {"source": source},
+        )
+        for row in mur.fetchall():
+            mc = _normalize_mgmt_code(row[0])
+            if mc:
+                codes.add(mc)
+            extras = str(row[1] or "")
+            for part in extras.replace("，", ",").split(","):
+                p = part.strip()
+                if p:
+                    codes.add(p)
+    except Exception as e:
+        logger.warning("collect reflected codes from material_usage_record failed: %s", e)
+
+    try:
+        if other_than_day is not None:
+            cm = await db.execute(
+                text("""
+                    SELECT DISTINCT management_code
+                    FROM cutting_management
+                    WHERE material_usage_reflected = '反映済'
+                      AND management_code IS NOT NULL
+                      AND LENGTH(TRIM(management_code)) > 0
+                      AND production_day <> :other_than_day
+                """),
+                {"other_than_day": other_than_day},
+            )
+        else:
+            cm = await db.execute(
+                text("""
+                    SELECT DISTINCT management_code
+                    FROM cutting_management
+                    WHERE material_usage_reflected = '反映済'
+                      AND management_code IS NOT NULL
+                      AND LENGTH(TRIM(management_code)) > 0
+                """)
+            )
+        for row in cm.fetchall():
+            mc = _normalize_mgmt_code(row[0])
+            if mc:
+                codes.add(mc)
+    except Exception as e:
+        logger.warning("collect reflected codes from cutting_management failed: %s", e)
+    return codes
 
 
 # ─────────────────────────────────────────────
@@ -71,6 +145,44 @@ def _row_val(row: dict, *keys: str):
         if k in row and row[k] is not None:
             return row[k]
     return None
+
+
+def _is_sub_stock(row: dict) -> bool:
+    """use_material_stock_sub=1 は使用数反映対象外（サブ在庫は手動）。"""
+    v = _row_val(row, "use_material_stock_sub")
+    if v is True:
+        return True
+    if v is False or v is None:
+        return False
+    try:
+        return int(v) == 1
+    except (TypeError, ValueError):
+        return str(v).strip().lower() in ("1", "true")
+
+
+def _parse_usage_count(raw) -> Optional[float]:
+    """行の usage_count。未設定は 1。0 以下は対象外のため None。"""
+    if raw is None:
+        return 1.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 1.0
+    if value <= 0:
+        return None
+    return value
+
+
+def _qty_to_stock_int(value) -> int:
+    """
+    material_stock.planned_usage は整数束。
+    Python の round() は banker rounding（0.5→0, 1.5→2）のため使わず、四捨五入する。
+    """
+    try:
+        qty = Decimal(str(value if value is not None else 0))
+    except Exception:
+        return 0
+    return int(qty.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def _compute_management_code(row: dict, fallback_date: Optional[date_type] = None) -> str:
@@ -260,41 +372,51 @@ async def _aggregate_usage(
     today_rows = await resolve_material_cd(today_rows)
     tomorrow_rows_filtered = await resolve_material_cd(tomorrow_rows_filtered)
 
-    today_map: dict[tuple, set] = {}
-    for r in today_rows:
-        mat_cd = r["_resolved_material_cd"]
-        mat_name = r["_resolved_material_name"]
-        mgmt = r.get("management_code")
-        if not mgmt:
-            continue
-        key = (mat_cd or "__unknown__", mat_name or mat_cd or "不明")
-        today_map.setdefault(key, set()).add(mgmt)
+    def accumulate(rows: list) -> tuple[dict[tuple, float], dict[tuple, set]]:
+        """管理コード単位で1回だけ数え、材料別に usage_count を合計する。"""
+        by_code: dict[str, tuple[tuple, float]] = {}
+        for r in rows:
+            if _is_sub_stock(r):
+                continue
+            mgmt = str(r.get("management_code") or "").strip()
+            if not mgmt:
+                continue
+            usage = _parse_usage_count(r.get("usage_count"))
+            if usage is None:
+                continue
+            mat_cd = r.get("_resolved_material_cd") or ""
+            mat_name = r.get("_resolved_material_name") or ""
+            key = (mat_cd or "__unknown__", mat_name or mat_cd or "不明")
+            by_code[mgmt] = (key, usage)
+        qty_map: dict[tuple, float] = {}
+        code_map: dict[tuple, set] = {}
+        for mgmt, (key, usage) in by_code.items():
+            qty_map[key] = qty_map.get(key, 0.0) + usage
+            code_map.setdefault(key, set()).add(mgmt)
+        return qty_map, code_map
 
-    tomorrow_map: dict[tuple, set] = {}
-    for r in tomorrow_rows_filtered:
-        mat_cd = r["_resolved_material_cd"]
-        mat_name = r["_resolved_material_name"]
-        mgmt = r.get("management_code")
-        if not mgmt:
-            continue
-        key = (mat_cd or "__unknown__", mat_name or mat_cd or "不明")
-        tomorrow_map.setdefault(key, set()).add(mgmt)
+    today_qty, today_codes = accumulate(today_rows)
+    tomorrow_qty, tomorrow_codes = accumulate(tomorrow_rows_filtered)
 
     results: list[dict] = []
-    for (mat_cd, mat_name), codes in today_map.items():
+    for key, qty in today_qty.items():
+        mat_cd, mat_name = key
+        codes = today_codes.get(key, set())
         results.append({
             "usage_date": today_str,
             "material_cd": mat_cd,
             "material_name": mat_name,
-            "usage_count": len(codes),
+            "usage_count": _qty_to_stock_int(qty),
             "management_codes": ",".join(sorted(codes)) if codes else None,
         })
-    for (mat_cd, mat_name), codes in tomorrow_map.items():
+    for key, qty in tomorrow_qty.items():
+        mat_cd, mat_name = key
+        codes = tomorrow_codes.get(key, set())
         results.append({
             "usage_date": tomorrow_str,
             "material_cd": mat_cd,
             "material_name": mat_name,
-            "usage_count": len(codes),
+            "usage_count": _qty_to_stock_int(qty),
             "management_codes": ",".join(sorted(codes)) if codes else None,
         })
 
@@ -372,14 +494,12 @@ async def commit_material_usage(
     使用数反映 API（3ステップ処理）。
 
     Step 1: cutting_management（指定日）の各行を material_usage_record に1行1件で書き込み。
-            - management_code で重複排除（INSERT IGNORE）
-            - material_cd は material_name → materials テーブルで解決
-            - 完了後 cutting_management.material_usage_reflected = '反映済'
-
+            - サブ在庫行は対象外。usage_count は行の値（按分可）
+            - 反映済または別日記録済みの管理コードは更新しない
+            - 同一日・未反映は usage_count を最新値で更新
     Step 2: material_usage_record（reflected=0）を (usage_date, material_cd) で集計
-            → material_stock.planned_usage を更新
-
-    Step 3: Step 2 で material_stock 更新に成功した材料のみ reflected / 切断「反映済」を付ける
+            → material_stock.planned_usage を更新（四捨五入）
+    Step 3: stock 更新成功分のみ reflected / 切断「反映済」（当該管理コード行のみ）
 
     最後に更新した材料の current_stock を再計算する。
     """
@@ -407,31 +527,29 @@ async def commit_material_usage(
         }
 
     inserted = 0
+    updated_existing = 0
+    already_reflected_codes = await collect_reflected_management_codes(
+        db, source, other_than_day=today_d
+    )
     try:
         for row in rows:
-            # use_material_stock_sub=1 の行は使用数反映対象外（material_stock_sub は手動）
-            if _row_val(row, "use_material_stock_sub") == 1:
+            if _is_sub_stock(row):
                 continue
 
             mgmt_code = str(_row_val(row, "management_code") or "").strip()
             if not mgmt_code:
                 continue
+            # 別日で既に反映済の同一管理コードは再書き込みしない（順延コピー行）
+            if mgmt_code in already_reflected_codes:
+                continue
+
+            usage_count_val = _parse_usage_count(_row_val(row, "usage_count"))
+            if usage_count_val is None:
+                continue
 
             mat_name = str(_row_val(row, "material_name") or "").strip()
             production_day = _row_val(row, "production_day") or today_d
 
-            # usage_count: 行の値（デフォルト1、按分時は<1）
-            usage_count_val = _row_val(row, "usage_count")
-            if usage_count_val is None:
-                usage_count_val = 1
-            try:
-                usage_count_val = float(usage_count_val)
-            except (TypeError, ValueError):
-                usage_count_val = 1
-            if usage_count_val <= 0:
-                continue
-
-            # material_cd を material_name から解決（products 経由でも試みる）
             mat_cd = str(_row_val(row, "material_cd") or "").strip()
             if not mat_cd and mat_name:
                 mat_cd = await _resolve_material_cd_by_name(db, mat_name) or ""
@@ -442,19 +560,60 @@ async def commit_material_usage(
                     if not mat_name:
                         mat_name = resolved[1] or ""
 
-            if not mat_cd:
-                mat_cd = "__unknown__"
+            if not mat_cd or mat_cd == "__unknown__":
+                logger.warning(
+                    "usage commit: material_cd 未解決のためスキップ management_code=%s",
+                    mgmt_code,
+                )
+                continue
 
-            # INSERT IGNORE: management_code + source が一致する行は重複挿入しない
-            insert_sql = text("""
-                INSERT IGNORE INTO material_usage_record
+            if row.get("_mgmt_computed") and row.get("id") is not None:
+                await db.execute(
+                    text("""
+                        UPDATE cutting_management
+                        SET management_code = :mgmt
+                        WHERE id = :id
+                          AND (management_code IS NULL OR TRIM(management_code) = '')
+                    """),
+                    {"mgmt": mgmt_code, "id": row["id"]},
+                )
+
+            # 反映済 / 別日記録済みは据え置き。同一日・未反映のみ usage_count を更新
+            upsert_sql = text("""
+                INSERT INTO material_usage_record
                     (usage_date, material_cd, material_name, usage_count,
                      source, management_codes, management_code, reflected)
                 VALUES
                     (:usage_date, :material_cd, :material_name, :usage_count,
-                     :source, :management_code, :management_code, 0)
+                     :source, :management_code, :management_code, 0) AS new
+                ON DUPLICATE KEY UPDATE
+                    usage_count = IF(
+                        material_usage_record.reflected = 1
+                        OR material_usage_record.usage_date <> new.usage_date,
+                        material_usage_record.usage_count,
+                        new.usage_count
+                    ),
+                    material_cd = IF(
+                        material_usage_record.reflected = 1
+                        OR material_usage_record.usage_date <> new.usage_date,
+                        material_usage_record.material_cd,
+                        new.material_cd
+                    ),
+                    material_name = IF(
+                        material_usage_record.reflected = 1
+                        OR material_usage_record.usage_date <> new.usage_date,
+                        material_usage_record.material_name,
+                        new.material_name
+                    ),
+                    management_codes = IF(
+                        material_usage_record.reflected = 1
+                        OR material_usage_record.usage_date <> new.usage_date,
+                        material_usage_record.management_codes,
+                        new.management_codes
+                    ),
+                    reflected = material_usage_record.reflected
             """)
-            result = await db.execute(insert_sql, {
+            result = await db.execute(upsert_sql, {
                 "usage_date": production_day,
                 "material_cd": mat_cd,
                 "material_name": mat_name or "不明",
@@ -462,9 +621,11 @@ async def commit_material_usage(
                 "source": source,
                 "management_code": mgmt_code,
             })
-            inserted += result.rowcount
-
-        # cutting_management の「反映済」は Step 2 成功後に付ける（在庫未更新のまま済扱いにしない）
+            rc = int(result.rowcount or 0)
+            if rc == 1:
+                inserted += 1
+            elif rc >= 2:
+                updated_existing += 1
 
     except Exception as e:
         await db.rollback()
@@ -491,10 +652,7 @@ async def commit_material_usage(
     for agg_row in agg_rows:
         agg_date = agg_row[0]
         agg_mat_cd = agg_row[1]
-        try:
-            agg_count = int(round(float(agg_row[2] or 0)))
-        except (TypeError, ValueError):
-            agg_count = 0
+        agg_count = _qty_to_stock_int(agg_row[2] or 0)
 
         if not agg_mat_cd or agg_mat_cd == "__unknown__":
             continue
@@ -513,7 +671,7 @@ async def commit_material_usage(
                 "source": source,
                 "material_cd": agg_mat_cd,
             })
-            total_count = int(round(float(total_result.scalar() or agg_count or 0)))
+            total_count = _qty_to_stock_int(total_result.scalar() or agg_count or 0)
 
             update_stock_sql = text("""
                 UPDATE material_stock
@@ -545,7 +703,7 @@ async def commit_material_usage(
                 e,
             )
 
-    # ──────── Step 3: stock 更新成功分のみ reflected = 1、切断側も同様 ────────
+    # ──────── Step 3: stock 更新成功分のみ reflected = 1、切断側は当該管理コードのみ ────────
     unique_updated_cds = list(dict.fromkeys(updated_material_cds))
     if unique_updated_cds:
         try:
@@ -565,19 +723,6 @@ async def commit_material_usage(
                     "material_cds": unique_updated_cds,
                 },
             )
-            mark_cm_sql = text("""
-                UPDATE cutting_management cm
-                LEFT JOIN products p
-                  ON cm.product_cd COLLATE utf8mb4_unicode_ci = p.product_cd COLLATE utf8mb4_unicode_ci
-                SET cm.material_usage_reflected = '反映済'
-                WHERE cm.production_day = :prod_day
-                  AND COALESCE(cm.use_material_stock_sub, 0) = 0
-                  AND p.material_cd IN :material_cds
-            """).bindparams(bindparam("material_cds", expanding=True))
-            await db.execute(
-                mark_cm_sql,
-                {"prod_day": today_d, "material_cds": unique_updated_cds},
-            )
         except Exception as e:
             logger.warning("usage commit: reflected 更新失敗: %s", e)
             await db.rollback()
@@ -585,6 +730,49 @@ async def commit_material_usage(
                 status_code=500,
                 detail=f"Step 3 reflected 更新に失敗しました: {e}",
             ) from e
+
+    # 反映済フラグは未反映へ戻さない。指定日の切断行で既に reflected=1 の管理コードは列も反映済にする
+    try:
+        sync_cm_sql = text("""
+            UPDATE cutting_management cm
+            INNER JOIN material_usage_record mur
+              ON mur.source = :source
+             AND mur.reflected = 1
+             AND TRIM(cm.management_code) COLLATE utf8mb4_unicode_ci
+                 = TRIM(mur.management_code) COLLATE utf8mb4_unicode_ci
+            SET cm.material_usage_reflected = '反映済'
+            WHERE cm.production_day = :prod_day
+              AND COALESCE(cm.use_material_stock_sub, 0) = 0
+              AND cm.management_code IS NOT NULL
+              AND LENGTH(TRIM(cm.management_code)) > 0
+              AND COALESCE(cm.material_usage_reflected, '') <> '反映済'
+        """)
+        await db.execute(sync_cm_sql, {"prod_day": today_d, "source": source})
+        # 順延コピー：別日で既に反映済の同一管理コードも当日行へ写す
+        await db.execute(
+            text("""
+                UPDATE cutting_management cm
+                INNER JOIN cutting_management cm_src
+                  ON TRIM(cm.management_code) COLLATE utf8mb4_unicode_ci
+                     = TRIM(cm_src.management_code) COLLATE utf8mb4_unicode_ci
+                 AND cm_src.material_usage_reflected = '反映済'
+                 AND cm_src.production_day <> cm.production_day
+                SET cm.material_usage_reflected = '反映済'
+                WHERE cm.production_day = :prod_day
+                  AND COALESCE(cm.use_material_stock_sub, 0) = 0
+                  AND cm.management_code IS NOT NULL
+                  AND LENGTH(TRIM(cm.management_code)) > 0
+                  AND COALESCE(cm.material_usage_reflected, '') <> '反映済'
+            """),
+            {"prod_day": today_d},
+        )
+    except Exception as e:
+        logger.warning("usage commit: cutting_management 反映済同期失敗: %s", e)
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Step 3 reflected 更新に失敗しました: {e}",
+        ) from e
 
     # planned_usage 反映後、当該材料の current_stock を再計算する
     if unique_updated_cds:
@@ -613,8 +801,9 @@ async def commit_material_usage(
         if r[1] and r[1] != "__unknown__" and str(r[1]) not in set(updated_material_cds)
     }
     message = (
-        f"使用数を反映しました（{inserted} 件挿入、"
-        f"material_stock {stock_updated} 件更新）"
+        f"使用数を反映しました（{inserted} 件挿入"
+        + (f"、{updated_existing} 件更新" if updated_existing else "")
+        + f"、material_stock {stock_updated} 件更新）"
     )
     if skipped_cds:
         message += f"（未更新 {len(skipped_cds)} 材料分は reflected 未設定のため再実行可能）"
@@ -731,26 +920,17 @@ async def get_reflected_status(
 async def get_reflected_management_codes(
     source: str = Query("cutting_management", description="来源区分"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_purchase_operation("edit")),
+    current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    material_usage_record で reflected=1 のレコードに含まれる management_code の一覧を返す。
-    同一管理コードが別日に反映されていても、一覧に含まれていれば「反映済」と表示するために使用。
+    既に使用数反映済みの management_code 一覧。
+    別日の切断行が反映済でも、同一コードは「反映済」と表示するために使用。
     """
-    sql = text("""
-        SELECT DISTINCT management_code
-        FROM material_usage_record
-        WHERE source = :source
-          AND reflected = 1
-          AND management_code IS NOT NULL
-          AND LENGTH(TRIM(COALESCE(management_code, ''))) > 0
-    """)
     try:
-        result = await db.execute(sql, {"source": source})
-        codes = [row[0] for row in result.fetchall() if row[0]]
+        codes = sorted(await collect_reflected_management_codes(db, source))
         return {"success": True, "management_codes": codes}
     except Exception as e:
-        return {"success": False, "management_codes": [], "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ─────────────────────────────────────────────

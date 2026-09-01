@@ -627,6 +627,7 @@
               <span class="usage-summary-footer-item">合计件数：{{ usageSummaryTodayCounts.total }}</span>
               <span class="usage-summary-footer-item usage-summary-footer--reflected">反映済：{{ usageSummaryTodayCounts.reflected }}</span>
               <span class="usage-summary-footer-item usage-summary-footer--not-reflected">未反映：{{ usageSummaryTodayCounts.notReflected }}</span>
+              <span class="usage-summary-footer-item">未反映使用数：{{ formatUsageQty(usageSummaryTodayReflectQty) }} 束</span>
             </div>
           </div>
         </div>
@@ -4085,6 +4086,17 @@ function formatUsageCountDisplay(row: { usage_count?: number | null }): string {
   return num.toFixed(1)
 }
 
+function formatUsageQty(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+function rowUsageCountValue(row: CuttingManagementRow): number {
+  const v = (row as { usage_count?: number | null }).usage_count
+  const num = v != null && !isNaN(Number(v)) ? Number(v) : 1
+  return num > 0 ? num : 0
+}
+
 /** 日付文字列を YYYY-MM-DD で表示（ISO の先頭10文字） */
 const formatDateOnly = (v: string | null | undefined) => {
   if (v == null || v === '') return ''
@@ -4358,16 +4370,19 @@ async function loadReflectedManagementCodes() {
       '/api/material/usage/reflected-management-codes',
       { params: { source: 'cutting_management' } }
     )
-    const list = (res as any)?.management_codes ?? []
+    // 失敗時に空集合で上書きすると、反映済行が未反映に見えてしまう
+    if ((res as any)?.success === false) return
+    const list = (res as any)?.management_codes
+    if (!Array.isArray(list)) return
     reflectedManagementCodesSet.value = new Set(list.map((c: string) => String(c).trim()).filter(Boolean))
   } catch {
-    reflectedManagementCodesSet.value = new Set()
+    // 既存セットを維持
   }
 }
 
 /** 行が「反映済」と表示すべきか（当該日の反映済 or 別日で既に反映済の管理コード） */
 function isUsageRowReflected(row: CuttingManagementRow): boolean {
-  if (row.material_usage_reflected === '反映済') return true
+  if (String(row.material_usage_reflected ?? '').trim() === '反映済') return true
   const code = row.management_code != null ? String(row.management_code).trim() : ''
   return code !== '' && reflectedManagementCodesSet.value.has(code)
 }
@@ -4388,6 +4403,14 @@ const usageSummaryTodayCounts = computed(() => {
   const reflected = reflectTargetList.filter(row => isUsageRowReflected(row)).length
   return { total, reflected, notReflected: total - reflected }
 })
+
+/** 今日カードの未反映行の材料使用数合計（使用数反映で在庫に載る数量） */
+const usageSummaryTodayReflectQty = computed(() =>
+  filterNotReflectedUsageRows(usageSummaryCuttingList.value).reduce(
+    (sum, row) => sum + rowUsageCountValue(row),
+    0,
+  )
+)
 
 async function loadUsageSummaryCuttingList() {
   const dayStr = normalizeDateStr(usageSummaryDateToday.value)
@@ -4467,7 +4490,7 @@ async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number 
     await request.patch(`/api/plan/cutting-management/${id}`, { use_material_stock_sub: newVal })
     ;(row as { use_material_stock_sub?: number }).use_material_stock_sub = newVal
     // サマリの合計値・反映対象件数にも影響するため、最新状態を再取得
-    await loadUsageSummaryCuttingList()
+    await Promise.all([loadUsageSummaryCuttingList(), loadUsageSummaryCuttingListTomorrow()])
   } catch (e) {
     console.error('在庫区分の更新に失敗:', e)
     ElMessage.error('在庫区分の更新に失敗しました')
@@ -4749,13 +4772,15 @@ async function confirmUsageReflection() {
     ElMessage.warning('使用材料数（材料別）- 今日の日付を選択してください')
     return
   }
-  if (usageSummaryTodayCounts.value.total === 0) {
-    ElMessage.warning('反映対象のデータがありません（使用サブ在庫の行は対象外）。指定日に切断指示があるか確認してください。')
+  const notReflected = usageSummaryTodayCounts.value.notReflected
+  if (notReflected <= 0) {
+    ElMessage.warning('未反映の対象がありません（反映済の管理コードおよび使用サブ在庫の行は対象外です）。')
     return
   }
+  const qtyText = formatUsageQty(usageSummaryTodayReflectQty.value)
   try {
     await ElMessageBox.confirm(
-      `使用材料数（材料別）- 表示中の ${todayParam} のデータを材料在庫に反映します。反映済の管理コードは反映しません。よろしいですか？`,
+      `使用材料数（材料別）- 表示中の ${todayParam} の未反映 ${notReflected} 件（使用数合計 ${qtyText} 束）を材料在庫に反映します。反映済の管理コードは反映しません。よろしいですか？`,
       '使用数反映の確認',
       {
         confirmButtonText: '反映する',
@@ -7057,7 +7082,7 @@ async function onDblClickUsageSummaryUsageCount(row: CuttingManagementRow) {
     }
     await request.patch(`/api/plan/cutting-management/${id}`, { usage_count: num })
     ;(row as { usage_count?: number | null }).usage_count = num
-    await loadUsageSummaryCuttingList()
+    await Promise.all([loadUsageSummaryCuttingList(), loadUsageSummaryCuttingListTomorrow()])
   } catch {
     // キャンセル等は無視
   }
