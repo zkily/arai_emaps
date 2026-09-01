@@ -4387,6 +4387,34 @@ function isUsageRowReflected(row: CuttingManagementRow): boolean {
   return code !== '' && reflectedManagementCodesSet.value.has(code)
 }
 
+/** 別日で既に反映済の管理コード行は使用材料数一覧に出さない（順延コピー） */
+function filterOutCodesReflectedOnOtherDays(
+  rows: CuttingManagementRow[],
+  hiddenCodes: Set<string>,
+): CuttingManagementRow[] {
+  if (!hiddenCodes.size) return rows
+  return rows.filter((row) => {
+    const code = row.management_code != null ? String(row.management_code).trim() : ''
+    if (!code) return true
+    return !hiddenCodes.has(code)
+  })
+}
+
+async function fetchReflectedCodesExceptDate(dayStr: string): Promise<Set<string>> {
+  try {
+    const res = await request.get<{ success?: boolean; management_codes?: string[] }>(
+      '/api/material/usage/reflected-management-codes',
+      { params: { source: 'cutting_management', exclude_date: dayStr } }
+    )
+    if ((res as any)?.success === false) return new Set()
+    const list = (res as any)?.management_codes
+    if (!Array.isArray(list)) return new Set()
+    return new Set(list.map((c: string) => String(c).trim()).filter(Boolean))
+  } catch {
+    return new Set()
+  }
+}
+
 /** 使用数反映対象（サブ在庫以外）かつ未反映の行のみ */
 function filterNotReflectedUsageRows(rows: CuttingManagementRow[]): CuttingManagementRow[] {
   return rows.filter((row) => {
@@ -4420,12 +4448,16 @@ async function loadUsageSummaryCuttingList() {
   try {
     await loadReflectedManagementCodes()
     if (usageSummaryTodayLoadGuard.isStale(reqId)) return
-    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
-      '/api/plan/cutting-management/list',
-      { params: { production_day: dayStr, limit: 2000 } }
-    )
+    const [res, hiddenCodes] = await Promise.all([
+      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+        '/api/plan/cutting-management/list',
+        { params: { production_day: dayStr, limit: 2000 } }
+      ),
+      fetchReflectedCodesExceptDate(dayStr),
+    ])
     if (usageSummaryTodayLoadGuard.isStale(reqId)) return
-    usageSummaryCuttingList.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    usageSummaryCuttingList.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
   } catch {
     if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     usageSummaryCuttingList.value = []
@@ -4458,12 +4490,16 @@ async function loadUsageSummaryCuttingListTomorrow() {
   try {
     await loadReflectedManagementCodes()
     if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
-      '/api/plan/cutting-management/list',
-      { params: { production_day: dayStr, limit: 2000 } }
-    )
+    const [res, hiddenCodes] = await Promise.all([
+      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+        '/api/plan/cutting-management/list',
+        { params: { production_day: dayStr, limit: 2000 } }
+      ),
+      fetchReflectedCodesExceptDate(dayStr),
+    ])
     if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    usageSummaryCuttingListTomorrow.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    usageSummaryCuttingListTomorrow.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
   } catch {
     if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
     usageSummaryCuttingListTomorrow.value = []
@@ -4695,12 +4731,17 @@ async function loadSpecifiedDateUsage() {
   try {
     await loadReflectedManagementCodes()
     if (specifiedDateUsageLoadGuard.isStale(reqId)) return
-    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
-      '/api/plan/cutting-management/list',
-      { params: { production_day: specifiedDate.value, limit: 2000 } }
-    )
+    const dayStr = specifiedDate.value
+    const [res, hiddenCodes] = await Promise.all([
+      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+        '/api/plan/cutting-management/list',
+        { params: { production_day: dayStr, limit: 2000 } }
+      ),
+      fetchReflectedCodesExceptDate(dayStr),
+    ])
     if (specifiedDateUsageLoadGuard.isStale(reqId)) return
-    specifiedDateRows.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    specifiedDateRows.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
   } catch (e) {
     if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     specifiedDateRows.value = []

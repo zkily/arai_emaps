@@ -58,15 +58,17 @@ async def collect_reflected_management_codes(
     """
     codes: set[str] = set()
     try:
-        mur = await db.execute(
-            text("""
+        mur_sql = """
                 SELECT management_code, management_codes
                 FROM material_usage_record
                 WHERE source = :source
                   AND reflected = 1
-            """),
-            {"source": source},
-        )
+        """
+        mur_params: dict = {"source": source}
+        if other_than_day is not None:
+            mur_sql += " AND (usage_date IS NULL OR usage_date <> :other_than_day)"
+            mur_params["other_than_day"] = other_than_day
+        mur = await db.execute(text(mur_sql), mur_params)
         for row in mur.fetchall():
             mc = _normalize_mgmt_code(row[0])
             if mc:
@@ -919,15 +921,19 @@ async def get_reflected_status(
 @router.get("/reflected-management-codes")
 async def get_reflected_management_codes(
     source: str = Query("cutting_management", description="来源区分"),
+    exclude_date: Optional[str] = Query(None, description="この日以外で既に反映済のコード（使用数一覧から除外するため）"),
+    date: Optional[str] = Query(None, description="exclude_date の別名"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
     既に使用数反映済みの management_code 一覧。
-    別日の切断行が反映済でも、同一コードは「反映済」と表示するために使用。
+    exclude_date / date を指定すると、その日以外で反映済のコードだけを返す
+    （順延コピー行を使用材料数一覧から除外するため）。
     """
     try:
-        codes = sorted(await collect_reflected_management_codes(db, source))
+        other_day = _parse_date(exclude_date or date)
+        codes = sorted(await collect_reflected_management_codes(db, source, other_than_day=other_day))
         return {"success": True, "management_codes": codes}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
