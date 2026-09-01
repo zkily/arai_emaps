@@ -15,7 +15,7 @@
           </div>
           <div class="brand-text">
             <h1 class="toolbar-title">実績修正統計</h1>
-            <p class="toolbar-sub">実績修正 vs 実績集計の月次比較（手入力除外）</p>
+            <p class="toolbar-sub">実績修正 vs 実績集計の月次比較（手入力除外・稼働日22日換算）</p>
           </div>
         </div>
 
@@ -63,6 +63,23 @@
                   <el-option :value="6" label="6ヶ月" />
                   <el-option :value="12" label="12ヶ月" />
                 </el-select>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-group filter-group--display">
+            <span class="filter-group-tag">表示</span>
+            <div class="filter-group-fields">
+              <div class="filter-field filter-field--switch">
+                <el-switch
+                  v-model="adjOnly"
+                  size="small"
+                  inline-prompt
+                  active-text="換算"
+                  inactive-text="実数"
+                  class="tf-switch"
+                />
+                <span class="switch-caption">{{ adjOnly ? '22日換算のみ' : '実数＋換算' }}</span>
               </div>
             </div>
           </div>
@@ -192,19 +209,23 @@
           <div class="vs-side-head">
             <span class="vs-badge vs-badge--current">対象月</span>
             <strong class="vs-month">{{ stats.month }}</strong>
+            <span class="vs-wd-chip">稼働日 {{ current?.workingDays ?? '—' }}日</span>
           </div>
           <div class="vs-metric-grid">
             <div class="vs-metric vs-metric--prod">
               <span class="vs-metric-label">実績修正</span>
-              <span class="vs-metric-value">{{ fmtNum(current?.prodDataMgmt?.count) }}<small>件</small></span>
+              <span class="vs-metric-value">{{ fmtShownCount(current?.prodDataMgmt) }}<small>件</small></span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtAdj(current?.prodDataMgmt?.countAdj) }}件</span>
             </div>
             <div class="vs-metric vs-metric--auto">
               <span class="vs-metric-label">実績集計</span>
-              <span class="vs-metric-value">{{ fmtNum(current?.auto?.count) }}<small>件</small></span>
+              <span class="vs-metric-value">{{ fmtShownCount(current?.auto) }}<small>件</small></span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtAdj(current?.auto?.countAdj) }}件</span>
             </div>
             <div class="vs-metric vs-metric--ratio">
               <span class="vs-metric-label">修正比率</span>
               <span class="vs-metric-value">{{ fmtPct(current?.prodDataMgmtCountRatio) }}</span>
+              <span class="vs-metric-adj">補正係数 ×{{ fmtFactor(current?.workdayFactor) }}</span>
             </div>
           </div>
           <div class="vs-section-divider">
@@ -214,11 +235,13 @@
           <div class="vs-metric-grid">
             <div class="vs-metric vs-metric--prod">
               <span class="vs-metric-label">実績修正</span>
-              <span class="vs-metric-value">{{ fmtQty(current?.prodDataMgmt?.quantity) }}</span>
+              <span class="vs-metric-value">{{ fmtShownQty(current?.prodDataMgmt) }}</span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtQty(current?.prodDataMgmt?.quantityAdj) }}</span>
             </div>
             <div class="vs-metric vs-metric--auto">
               <span class="vs-metric-label">実績集計</span>
-              <span class="vs-metric-value">{{ fmtQty(current?.auto?.quantity) }}</span>
+              <span class="vs-metric-value">{{ fmtShownQty(current?.auto) }}</span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtQty(current?.auto?.quantityAdj) }}</span>
             </div>
             <div class="vs-metric vs-metric--ratio">
               <span class="vs-metric-label">修正数量比率</span>
@@ -234,19 +257,23 @@
           <div class="vs-side-head">
             <span class="vs-badge vs-badge--compare">比較月</span>
             <strong class="vs-month">{{ stats.compareMonth }}</strong>
+            <span class="vs-wd-chip vs-wd-chip--muted">稼働日 {{ compare?.workingDays ?? '—' }}日</span>
           </div>
           <div class="vs-metric-grid">
             <div class="vs-metric">
               <span class="vs-metric-label">実績修正</span>
-              <span class="vs-metric-value">{{ fmtNum(compare?.prodDataMgmt?.count) }}<small>件</small></span>
+              <span class="vs-metric-value">{{ fmtShownCount(compare?.prodDataMgmt) }}<small>件</small></span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtAdj(compare?.prodDataMgmt?.countAdj) }}件</span>
             </div>
             <div class="vs-metric">
               <span class="vs-metric-label">実績集計</span>
-              <span class="vs-metric-value">{{ fmtNum(compare?.auto?.count) }}<small>件</small></span>
+              <span class="vs-metric-value">{{ fmtShownCount(compare?.auto) }}<small>件</small></span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtAdj(compare?.auto?.countAdj) }}件</span>
             </div>
             <div class="vs-metric">
               <span class="vs-metric-label">修正比率</span>
               <span class="vs-metric-value">{{ fmtPct(compare?.prodDataMgmtCountRatio) }}</span>
+              <span class="vs-metric-adj">補正係数 ×{{ fmtFactor(compare?.workdayFactor) }}</span>
             </div>
           </div>
           <div class="vs-section-divider vs-section-divider--ghost" aria-hidden="true">
@@ -256,11 +283,13 @@
           <div class="vs-metric-grid">
             <div class="vs-metric">
               <span class="vs-metric-label">実績修正</span>
-              <span class="vs-metric-value">{{ fmtQty(compare?.prodDataMgmt?.quantity) }}</span>
+              <span class="vs-metric-value">{{ fmtShownQty(compare?.prodDataMgmt) }}</span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtQty(compare?.prodDataMgmt?.quantityAdj) }}</span>
             </div>
             <div class="vs-metric">
               <span class="vs-metric-label">実績集計</span>
-              <span class="vs-metric-value">{{ fmtQty(compare?.auto?.quantity) }}</span>
+              <span class="vs-metric-value">{{ fmtShownQty(compare?.auto) }}</span>
+              <span v-if="!adjOnly" class="vs-metric-adj">22日換算 {{ fmtQty(compare?.auto?.quantityAdj) }}</span>
             </div>
             <div class="vs-metric">
               <span class="vs-metric-label">修正数量比率</span>
@@ -276,7 +305,7 @@
           <div class="panel-head">
             <span class="panel-accent panel-accent--blue" />
             <span class="panel-title">月次比較</span>
-            <span class="panel-meta">件数</span>
+            <span class="panel-meta">件数（22日換算）</span>
           </div>
           <div class="chart-canvas-wrap">
             <div ref="monthCompareChartRef" class="chart-canvas" />
@@ -286,7 +315,7 @@
           <div class="panel-head">
             <span class="panel-accent panel-accent--purple" />
             <span class="panel-title">月次数量比較</span>
-            <span class="panel-meta">単位：千</span>
+            <span class="panel-meta">単位：千（22日換算）</span>
           </div>
           <div class="chart-canvas-wrap">
             <div ref="qtyCompareChartRef" class="chart-canvas" />
@@ -296,7 +325,7 @@
           <div class="panel-head panel-head--chart-export">
             <span class="panel-accent panel-accent--orange" />
             <span class="panel-title">修正比率推移</span>
-            <span class="panel-meta">件数</span>
+            <span class="panel-meta">件数は22日換算</span>
             <el-button
               size="small"
               type="success"
@@ -318,7 +347,7 @@
           <div class="panel-head">
             <span class="panel-accent panel-accent--purple" />
             <span class="panel-title">修正数量比率推移</span>
-            <span class="panel-meta">{{ filters.trendMonths }}ヶ月</span>
+            <span class="panel-meta">{{ filters.trendMonths }}ヶ月・数量は22日換算</span>
           </div>
           <div class="chart-canvas-wrap">
             <div ref="qtyTrendChartRef" class="chart-canvas" />
@@ -328,7 +357,7 @@
           <div class="panel-head">
             <span class="panel-accent panel-accent--teal" />
             <span class="panel-title">工程別比較</span>
-            <span class="panel-meta">{{ stats?.compareMonth }} vs {{ stats?.month }}</span>
+            <span class="panel-meta">{{ stats?.compareMonth }} vs {{ stats?.month }}（22日換算）</span>
           </div>
           <div class="chart-canvas-wrap chart-canvas-wrap--tall">
             <div ref="processCompareChartRef" class="chart-canvas chart-canvas--tall" />
@@ -338,7 +367,7 @@
           <div class="panel-head">
             <span class="panel-accent panel-accent--green" />
             <span class="panel-title">工程別内訳</span>
-            <span class="panel-meta">{{ stats?.month }}</span>
+            <span class="panel-meta">{{ stats?.month }}{{ adjOnly ? '（22日換算）' : '' }}</span>
           </div>
           <div class="chart-canvas-wrap chart-canvas-wrap--tall">
             <div ref="processChartRef" class="chart-canvas chart-canvas--tall" />
@@ -351,7 +380,7 @@
         <div class="panel-head panel-head--table">
           <div class="panel-head-left">
             <span class="panel-title">工程別比較一覧</span>
-            <span class="panel-hint">{{ stats?.compareMonth }} → {{ stats?.month }}</span>
+            <span class="panel-hint">{{ stats?.compareMonth }} → {{ stats?.month }}{{ adjOnly ? '　22日換算のみ' : '　件数下段は22日換算' }}</span>
           </div>
           <el-button
             size="small"
@@ -398,7 +427,13 @@
                 label-class-name="cmp-th-sub cmp-th-sub--current cmp-th-sub--prod"
                 class-name="cmp-td cmp-td--current cmp-td--prod"
               >
-                <template #default="{ row }">{{ fmtNum(row.current.prodDataMgmt.count) }}</template>
+                <template #default="{ row }">
+                  <template v-if="adjOnly">{{ fmtAdj(adjCount(row.current.prodDataMgmt)) }}</template>
+                  <div v-else class="cell-stack">
+                    <span>{{ fmtNum(row.current.prodDataMgmt.count) }}</span>
+                    <small class="cell-adj">{{ fmtAdj(row.current.prodDataMgmt.countAdj) }}</small>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column
                 label="数量"
@@ -407,7 +442,13 @@
                 label-class-name="cmp-th-sub cmp-th-sub--current cmp-th-sub--prod"
                 class-name="cmp-td cmp-td--current cmp-td--prod"
               >
-                <template #default="{ row }">{{ fmtQty(row.current.prodDataMgmt.quantity) }}</template>
+                <template #default="{ row }">
+                  <template v-if="adjOnly">{{ fmtQty(adjQty(row.current.prodDataMgmt)) }}</template>
+                  <div v-else class="cell-stack">
+                    <span>{{ fmtQty(row.current.prodDataMgmt.quantity) }}</span>
+                    <small class="cell-adj">{{ fmtQty(row.current.prodDataMgmt.quantityAdj) }}</small>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column
                 label="比率"
@@ -437,7 +478,13 @@
                 label-class-name="cmp-th-sub cmp-th-sub--compare cmp-th-sub--prod"
                 class-name="cmp-td cmp-td--compare cmp-td--prod"
               >
-                <template #default="{ row }">{{ fmtNum(row.compare.prodDataMgmt.count) }}</template>
+                <template #default="{ row }">
+                  <template v-if="adjOnly">{{ fmtAdj(adjCount(row.compare.prodDataMgmt)) }}</template>
+                  <div v-else class="cell-stack">
+                    <span>{{ fmtNum(row.compare.prodDataMgmt.count) }}</span>
+                    <small class="cell-adj">{{ fmtAdj(row.compare.prodDataMgmt.countAdj) }}</small>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column
                 label="数量"
@@ -446,7 +493,13 @@
                 label-class-name="cmp-th-sub cmp-th-sub--compare cmp-th-sub--prod"
                 class-name="cmp-td cmp-td--compare cmp-td--prod"
               >
-                <template #default="{ row }">{{ fmtQty(row.compare.prodDataMgmt.quantity) }}</template>
+                <template #default="{ row }">
+                  <template v-if="adjOnly">{{ fmtQty(adjQty(row.compare.prodDataMgmt)) }}</template>
+                  <div v-else class="cell-stack">
+                    <span>{{ fmtQty(row.compare.prodDataMgmt.quantity) }}</span>
+                    <small class="cell-adj">{{ fmtQty(row.compare.prodDataMgmt.quantityAdj) }}</small>
+                  </div>
+                </template>
               </el-table-column>
               <el-table-column
                 label="比率"
@@ -460,7 +513,7 @@
                 </template>
               </el-table-column>
             </el-table-column>
-            <el-table-column label="前月比" align="center" min-width="120" label-class-name="cmp-th cmp-th--delta">
+            <el-table-column label="前月比(22日換算)" align="center" min-width="120" label-class-name="cmp-th cmp-th--delta">
               <el-table-column
                 label="件数"
                 min-width="56"
@@ -469,8 +522,8 @@
                 class-name="cmp-td cmp-td--delta"
               >
                 <template #default="{ row }">
-                  <span class="cmp-delta" :class="deltaClass(row.prodCountChange)">
-                    {{ fmtSignedNum(row.prodCountChange) }}
+                  <span class="cmp-delta" :class="deltaClass(row.prodCountAdjChange)">
+                    {{ fmtSignedNum(row.prodCountAdjChange) }}
                   </span>
                 </template>
               </el-table-column>
@@ -482,8 +535,8 @@
                 class-name="cmp-td cmp-td--delta"
               >
                 <template #default="{ row }">
-                  <span class="cmp-delta" :class="deltaClass(row.prodQtyChange)">
-                    {{ fmtSignedQty(row.prodQtyChange) }}
+                  <span class="cmp-delta" :class="deltaClass(row.prodQtyAdjChange)">
+                    {{ fmtSignedQty(row.prodQtyAdjChange) }}
                   </span>
                 </template>
               </el-table-column>
@@ -502,7 +555,7 @@
                 label-class-name="cmp-th-sub cmp-th-sub--current cmp-th-sub--auto"
                 class-name="cmp-td cmp-td--current cmp-td--auto"
               >
-                <template #default="{ row }">{{ fmtNum(row.current.auto.count) }}</template>
+                <template #default="{ row }">{{ fmtShownCount(row.current.auto) }}</template>
               </el-table-column>
             </el-table-column>
             <el-table-column align="center" min-width="72" label-class-name="cmp-th cmp-th--compare cmp-th--auto">
@@ -519,7 +572,7 @@
                 label-class-name="cmp-th-sub cmp-th-sub--compare cmp-th-sub--auto"
                 class-name="cmp-td cmp-td--compare cmp-td--auto"
               >
-                <template #default="{ row }">{{ fmtNum(row.compare.auto.count) }}</template>
+                <template #default="{ row }">{{ fmtShownCount(row.compare.auto) }}</template>
               </el-table-column>
             </el-table-column>
           </el-table>
@@ -531,7 +584,7 @@
         <div class="panel-head panel-head--table">
           <div class="panel-head-left">
             <span class="panel-title">工程別一覧</span>
-            <span class="panel-hint">行クリックで在庫取引記録へ</span>
+            <span class="panel-hint">{{ adjOnly ? '22日換算　行クリックで在庫取引記録へ' : '行クリックで在庫取引記録へ' }}</span>
           </div>
         </div>
         <div class="table-wrap table-wrap--fluid">
@@ -549,10 +602,10 @@
             <el-table-column prop="processName" label="工程" min-width="96" fixed="left" show-overflow-tooltip />
             <el-table-column label="実績修正" align="center" min-width="188">
               <el-table-column label="件数" min-width="52" align="center">
-                <template #default="{ row }">{{ fmtNum(row.prodDataMgmt?.count) }}</template>
+                <template #default="{ row }">{{ fmtShownCount(row.prodDataMgmt) }}</template>
               </el-table-column>
               <el-table-column label="数量" min-width="64" align="center">
-                <template #default="{ row }">{{ fmtQty(row.prodDataMgmt?.quantity) }}</template>
+                <template #default="{ row }">{{ fmtShownQty(row.prodDataMgmt) }}</template>
               </el-table-column>
               <el-table-column label="比率" min-width="52" align="center">
                 <template #default="{ row }">
@@ -564,14 +617,14 @@
             </el-table-column>
             <el-table-column label="実績集計" align="center" min-width="128">
               <el-table-column label="件数" min-width="52" align="center">
-                <template #default="{ row }">{{ fmtNum(row.auto?.count) }}</template>
+                <template #default="{ row }">{{ fmtShownCount(row.auto) }}</template>
               </el-table-column>
               <el-table-column label="数量" min-width="64" align="center">
-                <template #default="{ row }">{{ fmtQty(row.auto?.quantity) }}</template>
+                <template #default="{ row }">{{ fmtShownQty(row.auto) }}</template>
               </el-table-column>
             </el-table-column>
             <el-table-column label="総件数" min-width="56" align="center">
-              <template #default="{ row }">{{ fmtNum(row.total?.count) }}</template>
+              <template #default="{ row }">{{ fmtShownCount(row.total) }}</template>
             </el-table-column>
           </el-table>
         </div>
@@ -606,6 +659,8 @@ import { buildManualEntryStatisticsPrintHtml } from './manualEntryStatisticsPrin
 interface Bucket {
   count: number
   quantity: number
+  countAdj?: number
+  quantityAdj?: number
 }
 
 interface MonthSummary {
@@ -614,6 +669,9 @@ interface MonthSummary {
   total: Bucket
   prodDataMgmtCountRatio: number
   prodDataMgmtQuantityRatio: number
+  workingDays?: number
+  standardWorkdays?: number
+  workdayFactor?: number
 }
 
 interface ProcessRow {
@@ -623,10 +681,14 @@ interface ProcessRow {
   auto: Bucket
   total: Bucket
   prodDataMgmtCountRatio: number
+  workingDays?: number
+  workdayFactor?: number
 }
 
 interface TrendRow {
   month: string
+  workingDays?: number
+  workdayFactor?: number
   prodDataMgmtCount: number
   autoCount: number
   totalCount: number
@@ -635,6 +697,12 @@ interface TrendRow {
   autoQuantity: number
   totalQuantity: number
   prodDataMgmtQuantityRatio: number
+  prodDataMgmtCountAdj?: number
+  autoCountAdj?: number
+  totalCountAdj?: number
+  prodDataMgmtQuantityAdj?: number
+  autoQuantityAdj?: number
+  totalQuantityAdj?: number
 }
 
 interface ProcessCompareRow {
@@ -645,26 +713,39 @@ interface ProcessCompareRow {
   prodCountChange: number
   prodQtyChange: number
   autoCountChange: number
+  prodCountAdjChange: number
+  prodQtyAdjChange: number
+}
+
+interface MonthOverMonth {
+  prodDataMgmtCountChange: number
+  prodDataMgmtCountChangeRate: number | null
+  prodDataMgmtQuantityChange: number
+  prodDataMgmtQuantityChangeRate: number | null
+  prodDataMgmtCountAdjChange?: number
+  prodDataMgmtCountAdjChangeRate?: number | null
+  prodDataMgmtQuantityAdjChange?: number
+  prodDataMgmtQuantityAdjChangeRate?: number | null
+  prodDataMgmtCountRatioChange: number
+  prodDataMgmtQuantityRatioChange: number
+  autoCountChange: number
+  autoCountChangeRate: number | null
+  autoQuantityChange: number
+  autoQuantityChangeRate: number | null
+  autoCountAdjChange?: number
+  autoCountAdjChangeRate?: number | null
+  autoQuantityAdjChange?: number
+  autoQuantityAdjChangeRate?: number | null
 }
 
 interface StatsResponse {
   month: string
   compareMonth: string
   trendMonths: number
+  standardWorkdays?: number
   current: MonthSummary
   compare: MonthSummary
-  monthOverMonth: {
-    prodDataMgmtCountChange: number
-    prodDataMgmtCountChangeRate: number | null
-    prodDataMgmtQuantityChange: number
-    prodDataMgmtQuantityChangeRate: number | null
-    prodDataMgmtCountRatioChange: number
-    prodDataMgmtQuantityRatioChange: number
-    autoCountChange: number
-    autoCountChangeRate: number | null
-    autoQuantityChange: number
-    autoQuantityChangeRate: number | null
-  }
+  monthOverMonth: MonthOverMonth
   byProcess: ProcessRow[]
   byProcessCompare: ProcessRow[]
   byMonthTrend: TrendRow[]
@@ -701,6 +782,7 @@ const filters = ref({
   trendMonths: 6,
   processCd: '',
 })
+const adjOnly = ref(false)
 
 const current = computed(() => stats.value?.current)
 const compare = computed(() => stats.value?.compare)
@@ -711,11 +793,45 @@ function emptyProcessRow(processCd: string, processName: string): ProcessRow {
   return {
     processCd,
     processName,
-    prodDataMgmt: { count: 0, quantity: 0 },
-    auto: { count: 0, quantity: 0 },
-    total: { count: 0, quantity: 0 },
+    prodDataMgmt: { count: 0, quantity: 0, countAdj: 0, quantityAdj: 0 },
+    auto: { count: 0, quantity: 0, countAdj: 0, quantityAdj: 0 },
+    total: { count: 0, quantity: 0, countAdj: 0, quantityAdj: 0 },
     prodDataMgmtCountRatio: 0,
   }
+}
+
+function adjCount(b?: Bucket | null) {
+  if (!b) return 0
+  return b.countAdj ?? b.count ?? 0
+}
+
+function adjQty(b?: Bucket | null) {
+  if (!b) return 0
+  return b.quantityAdj ?? b.quantity ?? 0
+}
+
+function trendCountAdj(t: TrendRow) {
+  return t.prodDataMgmtCountAdj ?? t.prodDataMgmtCount
+}
+
+function trendQtyAdj(t: TrendRow) {
+  return t.prodDataMgmtQuantityAdj ?? t.prodDataMgmtQuantity
+}
+
+function shownCount(b?: Bucket | null) {
+  return adjOnly.value ? adjCount(b) : (b?.count ?? 0)
+}
+
+function shownQty(b?: Bucket | null) {
+  return adjOnly.value ? adjQty(b) : (b?.quantity ?? 0)
+}
+
+function fmtShownCount(b?: Bucket | null) {
+  return adjOnly.value ? fmtAdj(shownCount(b)) : fmtNum(shownCount(b))
+}
+
+function fmtShownQty(b?: Bucket | null) {
+  return fmtQty(shownQty(b))
 }
 
 const byProcessComparison = computed<ProcessCompareRow[]>(() => {
@@ -739,52 +855,65 @@ const byProcessComparison = computed<ProcessCompareRow[]>(() => {
         prodCountChange: current.prodDataMgmt.count - compare.prodDataMgmt.count,
         prodQtyChange: current.prodDataMgmt.quantity - compare.prodDataMgmt.quantity,
         autoCountChange: current.auto.count - compare.auto.count,
+        prodCountAdjChange: adjCount(current.prodDataMgmt) - adjCount(compare.prodDataMgmt),
+        prodQtyAdjChange: adjQty(current.prodDataMgmt) - adjQty(compare.prodDataMgmt),
       }
     })
     .sort((a, b) => b.current.prodDataMgmt.count - a.current.prodDataMgmt.count)
 })
 
-const kpiCards = computed(() => [
+const kpiCards = computed(() => {
+  const wd = current.value?.workingDays
+  const std = stats.value?.standardWorkdays || current.value?.standardWorkdays || 22
+  const wdLabel = wd == null ? '—' : String(wd)
+  const only = adjOnly.value
+  return [
   {
     key: 'prod',
     tone: 'prod',
     icon: EditPen,
     label: '実績修正',
-    desc: '生産データ管理由来',
-    countLabel: '修正件数',
-    value: fmtNum(current.value?.prodDataMgmt?.count),
+    desc: only ? `${std}日換算（生産データ管理由来）` : '生産データ管理由来',
+    countLabel: only ? '修正件数（22日換算）' : '修正件数',
+    value: only ? fmtAdj(adjCount(current.value?.prodDataMgmt)) : fmtNum(current.value?.prodDataMgmt?.count),
     unit: '件',
-    delta: `前月比 ${fmtDelta(mom.value?.prodDataMgmtCountChange, mom.value?.prodDataMgmtCountChangeRate)}`,
-    deltaRaw: mom.value?.prodDataMgmtCountChange,
-    qtyLabel: '修正数量',
-    qtyValue: fmtQty(current.value?.prodDataMgmt?.quantity),
-    qtyDelta: `前月比 ${fmtQtyDelta(mom.value?.prodDataMgmtQuantityChange, mom.value?.prodDataMgmtQuantityChangeRate)}`,
-    qtyDeltaRaw: mom.value?.prodDataMgmtQuantityChange,
+    delta: `前月比(${std}日換算) ${fmtDelta(mom.value?.prodDataMgmtCountAdjChange ?? mom.value?.prodDataMgmtCountChange, mom.value?.prodDataMgmtCountAdjChangeRate ?? mom.value?.prodDataMgmtCountChangeRate)}`,
+    deltaRaw: mom.value?.prodDataMgmtCountAdjChange ?? mom.value?.prodDataMgmtCountChange,
+    sub: only
+      ? `稼働日${wdLabel}日`
+      : `${std}日換算 ${fmtAdj(adjCount(current.value?.prodDataMgmt))}件（稼働日${wdLabel}日）`,
+    qtyLabel: only ? '修正数量（22日換算）' : '修正数量',
+    qtyValue: only ? fmtQty(adjQty(current.value?.prodDataMgmt)) : fmtQty(current.value?.prodDataMgmt?.quantity),
+    qtyDelta: `前月比(${std}日換算) ${fmtQtyDelta(mom.value?.prodDataMgmtQuantityAdjChange ?? mom.value?.prodDataMgmtQuantityChange, mom.value?.prodDataMgmtQuantityAdjChangeRate ?? mom.value?.prodDataMgmtQuantityChangeRate)}`,
+    qtyDeltaRaw: mom.value?.prodDataMgmtQuantityAdjChange ?? mom.value?.prodDataMgmtQuantityChange,
+    qtySub: only ? undefined : `${std}日換算 ${fmtQty(adjQty(current.value?.prodDataMgmt))}`,
   },
   {
     key: 'auto',
     tone: 'auto',
     icon: TrendCharts,
     label: '実績集計',
-    desc: '手入力を除く実績',
-    countLabel: '集計件数',
-    value: fmtNum(current.value?.auto?.count),
+    desc: only ? `${std}日換算（手入力を除く実績）` : '手入力を除く実績',
+    countLabel: only ? '集計件数（22日換算）' : '集計件数',
+    value: only ? fmtAdj(adjCount(current.value?.auto)) : fmtNum(current.value?.auto?.count),
     unit: '件',
-    delta: `前月比 ${fmtDelta(mom.value?.autoCountChange, mom.value?.autoCountChangeRate)}`,
-    deltaRaw: mom.value?.autoCountChange,
-    sub: `総件数 ${fmtNum(current.value?.total?.count)}`,
-    qtyLabel: '集計数量',
-    qtyValue: fmtQty(current.value?.auto?.quantity),
-    qtyDelta: `前月比 ${fmtQtyDelta(mom.value?.autoQuantityChange, mom.value?.autoQuantityChangeRate)}`,
-    qtyDeltaRaw: mom.value?.autoQuantityChange,
-    qtySub: `総数量 ${fmtQty(current.value?.total?.quantity)}`,
+    delta: `前月比(${std}日換算) ${fmtDelta(mom.value?.autoCountAdjChange ?? mom.value?.autoCountChange, mom.value?.autoCountAdjChangeRate ?? mom.value?.autoCountChangeRate)}`,
+    deltaRaw: mom.value?.autoCountAdjChange ?? mom.value?.autoCountChange,
+    sub: only
+      ? `総件数 ${fmtAdj(adjCount(current.value?.total))}件（稼働日${wdLabel}日）`
+      : `総件数 ${fmtNum(current.value?.total?.count)}　${std}日換算 ${fmtAdj(adjCount(current.value?.auto))}件`,
+    qtyLabel: only ? '集計数量（22日換算）' : '集計数量',
+    qtyValue: only ? fmtQty(adjQty(current.value?.auto)) : fmtQty(current.value?.auto?.quantity),
+    qtyDelta: `前月比(${std}日換算) ${fmtQtyDelta(mom.value?.autoQuantityAdjChange ?? mom.value?.autoQuantityChange, mom.value?.autoQuantityAdjChangeRate ?? mom.value?.autoQuantityChangeRate)}`,
+    qtyDeltaRaw: mom.value?.autoQuantityAdjChange ?? mom.value?.autoQuantityChange,
+    qtySub: only ? undefined : `総数量 ${fmtQty(current.value?.total?.quantity)}`,
   },
   {
     key: 'ratio',
     tone: 'ratio',
     icon: PieChart,
     label: '修正比率',
-    desc: '修正 ÷ 総計',
+    desc: '修正 ÷ 総計（稼働日補正なし）',
     countLabel: '件数比率',
     value: fmtPct(current.value?.prodDataMgmtCountRatio),
     delta: `前月比 ${fmtPctPoint(mom.value?.prodDataMgmtCountRatioChange)}`,
@@ -794,7 +923,8 @@ const kpiCards = computed(() => [
     qtyDelta: `前月比 ${fmtPctPoint(mom.value?.prodDataMgmtQuantityRatioChange)}`,
     qtyDeltaRaw: mom.value?.prodDataMgmtQuantityRatioChange,
   },
-])
+]
+})
 
 const monthCompareChartRef = ref<HTMLElement | null>(null)
 const qtyCompareChartRef = ref<HTMLElement | null>(null)
@@ -810,6 +940,9 @@ let processChart: echarts.ECharts | null = null
 let processCompareChart: echarts.ECharts | null = null
 
 const fmtNum = (v?: number | null) => (v == null ? '0' : Number(v).toLocaleString())
+const fmtAdj = (v?: number | null) =>
+  v == null ? '0' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
+const fmtFactor = (v?: number | null) => (v == null ? '—' : Number(v).toFixed(2))
 const fmtQty = (v?: number | null) =>
   v == null ? '0' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
 const toQtySen = (v?: number | null) => (v == null ? 0 : Number(v) / 1000)
@@ -830,10 +963,12 @@ const fmtPctPoint = (v?: number | null) => {
 }
 const fmtDelta = (change?: number | null, rate?: number | null) => {
   if (change == null) return '-'
-  const sign = change > 0 ? '+' : ''
+  const n = Number(change)
+  const sign = n > 0 ? '+' : ''
+  const body = n.toLocaleString(undefined, { maximumFractionDigits: 1 })
   const rateStr =
     rate == null ? '' : ` (${rate > 0 ? '+' : ''}${(Number(rate) * 100).toFixed(1)}%)`
-  return `${sign}${change}${rateStr}`
+  return `${sign}${body}${rateStr}`
 }
 const fmtQtyDelta = (change?: number | null, rate?: number | null) => {
   if (change == null) return '-'
@@ -845,7 +980,8 @@ const fmtQtyDelta = (change?: number | null, rate?: number | null) => {
 }
 const fmtSignedNum = (v?: number | null) => {
   if (v == null || v === 0) return v === 0 ? '0' : '-'
-  return `${v > 0 ? '+' : ''}${Number(v).toLocaleString()}`
+  const n = Number(v)
+  return `${n > 0 ? '+' : ''}${n.toLocaleString(undefined, { maximumFractionDigits: 1 })}`
 }
 const fmtSignedQty = (v?: number | null) => {
   if (v == null || v === 0) return v === 0 ? '0' : '-'
@@ -1116,7 +1252,7 @@ function renderCharts() {
               { offset: 1, color: '#94a3b8' },
             ]),
           },
-          data: [cmp.prodDataMgmt.count, cmp.auto.count, cmp.total.count],
+          data: [adjCount(cmp.prodDataMgmt), adjCount(cmp.auto), adjCount(cmp.total)],
         },
         {
           name: stats.value.month,
@@ -1131,7 +1267,7 @@ function renderCharts() {
               { offset: 1, color: '#2563eb' },
             ]),
           },
-          data: [cur.prodDataMgmt.count, cur.auto.count, cur.total.count],
+          data: [adjCount(cur.prodDataMgmt), adjCount(cur.auto), adjCount(cur.total)],
         },
       ],
     })
@@ -1182,9 +1318,9 @@ function renderCharts() {
             ]),
           },
           data: [
-            toQtySen(cmp.prodDataMgmt.quantity),
-            toQtySen(cmp.auto.quantity),
-            toQtySen(cmp.total.quantity),
+            toQtySen(adjQty(cmp.prodDataMgmt)),
+            toQtySen(adjQty(cmp.auto)),
+            toQtySen(adjQty(cmp.total)),
           ],
         },
         {
@@ -1201,9 +1337,9 @@ function renderCharts() {
             ]),
           },
           data: [
-            toQtySen(cur.prodDataMgmt.quantity),
-            toQtySen(cur.auto.quantity),
-            toQtySen(cur.total.quantity),
+            toQtySen(adjQty(cur.prodDataMgmt)),
+            toQtySen(adjQty(cur.auto)),
+            toQtySen(adjQty(cur.total)),
           ],
         },
       ],
@@ -1217,7 +1353,7 @@ function renderCharts() {
       ...anim,
       textStyle: chartTextStyle(),
       tooltip: chartTooltipBase(),
-      legend: chartLegendBase(['修正件数', '修正比率']),
+      legend: chartLegendBase(['修正件数(22日換算)', '修正比率']),
       grid: { ...baseChartGrid(), right: 48, bottom: 48 },
       xAxis: {
         type: 'category',
@@ -1246,7 +1382,7 @@ function renderCharts() {
       ],
       series: [
         {
-          name: '修正件数',
+          name: '修正件数(22日換算)',
           type: 'bar',
           barMaxWidth: 22,
           label: barTopLabel('#ca8a04', 10),
@@ -1258,7 +1394,7 @@ function renderCharts() {
               { offset: 1, color: '#fbbf24' },
             ]),
           },
-          data: trend.map((t) => t.prodDataMgmtCount),
+          data: trend.map((t) => trendCountAdj(t)),
         },
         {
           name: '修正比率',
@@ -1297,7 +1433,7 @@ function renderCharts() {
           return fmtQty(Number(v))
         },
       }),
-      legend: chartLegendBase(['修正数量', '修正数量比率']),
+      legend: chartLegendBase(['修正数量(22日換算)', '修正数量比率']),
       grid: { ...baseChartGrid(), right: 48, bottom: 48 },
       xAxis: {
         type: 'category',
@@ -1325,7 +1461,7 @@ function renderCharts() {
       ],
       series: [
         {
-          name: '修正数量',
+          name: '修正数量(22日換算)',
           type: 'bar',
           barMaxWidth: 22,
           label: barTopQtyLabel('#6d28d9', 10),
@@ -1337,7 +1473,7 @@ function renderCharts() {
               { offset: 1, color: '#a78bfa' },
             ]),
           },
-          data: trend.map((t) => t.prodDataMgmtQuantity),
+          data: trend.map((t) => trendQtyAdj(t)),
         },
         {
           name: '修正数量比率',
@@ -1409,7 +1545,7 @@ function renderCharts() {
               { offset: 1, color: '#94a3b8' },
             ]),
           },
-          data: rows.map((r) => r.compare.prodDataMgmt.count),
+          data: rows.map((r) => adjCount(r.compare.prodDataMgmt)),
         },
         {
           name: `${curLabel} 実績修正`,
@@ -1424,7 +1560,7 @@ function renderCharts() {
               { offset: 1, color: CHART_THEME.prod },
             ]),
           },
-          data: rows.map((r) => r.current.prodDataMgmt.count),
+          data: rows.map((r) => adjCount(r.current.prodDataMgmt)),
         },
         {
           name: `${cmpLabel} 実績集計`,
@@ -1439,7 +1575,7 @@ function renderCharts() {
               { offset: 1, color: '#cbd5e1' },
             ]),
           },
-          data: rows.map((r) => r.compare.auto.count),
+          data: rows.map((r) => adjCount(r.compare.auto)),
         },
         {
           name: `${curLabel} 実績集計`,
@@ -1454,7 +1590,7 @@ function renderCharts() {
               { offset: 1, color: CHART_THEME.auto },
             ]),
           },
-          data: rows.map((r) => r.current.auto.count),
+          data: rows.map((r) => adjCount(r.current.auto)),
         },
       ],
     })
@@ -1508,7 +1644,7 @@ function renderCharts() {
               { offset: 1, color: CHART_THEME.prod },
             ]),
           },
-          data: rows.map((r) => r.prodDataMgmt.count),
+          data: rows.map((r) => shownCount(r.prodDataMgmt)),
         },
         {
           name: '実績集計',
@@ -1523,7 +1659,7 @@ function renderCharts() {
               { offset: 1, color: CHART_THEME.auto },
             ]),
           },
-          data: rows.map((r) => r.auto.count),
+          data: rows.map((r) => shownCount(r.auto)),
         },
       ],
     })
@@ -1564,8 +1700,11 @@ async function exportRatioTrendExcel() {
   try {
     const exportRows = trend.map((row) => ({
       月: row.month,
+      稼働日: row.workingDays ?? '',
       修正件数: row.prodDataMgmtCount,
+      '修正件数(22日換算)': trendCountAdj(row),
       実績集計件数: row.autoCount,
+      '実績集計件数(22日換算)': row.autoCountAdj ?? row.autoCount,
       総件数: row.totalCount,
       '修正比率(%)': pct(row.prodDataMgmtCountRatio),
     }))
@@ -1601,13 +1740,17 @@ async function exportProcessCompareExcel() {
     const exportRows = rows.map((row) => ({
       工程: row.processName,
       [`実績修正件数_${month}`]: row.current.prodDataMgmt.count,
+      [`実績修正件数22日換算_${month}`]: adjCount(row.current.prodDataMgmt),
       [`実績修正数量_${month}`]: row.current.prodDataMgmt.quantity,
+      [`実績修正数量22日換算_${month}`]: adjQty(row.current.prodDataMgmt),
       [`実績修正比率%_${month}`]: pct(row.current.prodDataMgmtCountRatio),
       [`実績修正件数_${compareMonth}`]: row.compare.prodDataMgmt.count,
+      [`実績修正件数22日換算_${compareMonth}`]: adjCount(row.compare.prodDataMgmt),
       [`実績修正数量_${compareMonth}`]: row.compare.prodDataMgmt.quantity,
+      [`実績修正数量22日換算_${compareMonth}`]: adjQty(row.compare.prodDataMgmt),
       [`実績修正比率%_${compareMonth}`]: pct(row.compare.prodDataMgmtCountRatio),
-      前月比件数: row.prodCountChange,
-      前月比数量: row.prodQtyChange,
+      '前月比件数(22日換算)': row.prodCountAdjChange,
+      '前月比数量(22日換算)': row.prodQtyAdjChange,
       [`実績集計件数_${month}`]: row.current.auto.count,
       [`実績集計件数_${compareMonth}`]: row.compare.auto.count,
     }))
@@ -1640,6 +1783,8 @@ function handlePrintReport() {
       compareMonth: stats.value.compareMonth,
       trendMonths: stats.value.trendMonths,
       processLabel: selectedProcessLabel(),
+      standardWorkdays: stats.value.standardWorkdays,
+      adjOnly: adjOnly.value,
       current: stats.value.current,
       compare: stats.value.compare,
       monthOverMonth: stats.value.monthOverMonth,
@@ -1671,6 +1816,7 @@ function handlePrintReport() {
         fmtNum,
         fmtQty,
         fmtPct,
+        fmtAdj,
         fmtQtySen,
         fmtDelta,
         fmtQtyDelta,
@@ -1728,6 +1874,12 @@ watch(
     if (stats.value) fetchStats()
   }
 )
+
+watch(adjOnly, async () => {
+  if (!stats.value) return
+  await nextTick()
+  renderCharts()
+})
 
 onMounted(async () => {
   updateTableHeight()
@@ -2000,6 +2152,11 @@ onBeforeUnmount(() => {
   max-width: 280px;
 }
 
+.filter-group--display {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
 .filter-group-tag {
   flex-shrink: 0;
   font-size: 0.6rem;
@@ -2027,6 +2184,11 @@ onBeforeUnmount(() => {
   color: #6d28d9;
 }
 
+.filter-group--display .filter-group-tag {
+  background: rgba(5, 150, 105, 0.15);
+  color: #047857;
+}
+
 .filter-group-fields {
   display: flex;
   align-items: flex-end;
@@ -2034,10 +2196,34 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.filter-group--display .filter-group-fields {
+  align-items: center;
+}
+
 .filter-field {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.filter-field--switch {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.switch-caption {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #047857;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.tf-switch {
+  --el-switch-on-color: #059669;
+  --el-switch-off-color: #94a3b8;
 }
 
 .filter-label {
@@ -2555,6 +2741,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .vs-badge {
@@ -2582,6 +2769,24 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: #0f172a;
   letter-spacing: 0.02em;
+}
+
+.vs-wd-chip {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  border-radius: 999px;
+  padding: 2px 8px;
+  letter-spacing: 0.02em;
+}
+
+.vs-wd-chip--muted {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.28);
 }
 
 .vs-metric-grid {
@@ -2641,6 +2846,28 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: #94a3b8;
   margin-left: 1px;
+}
+
+.vs-metric-adj {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.cell-adj {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
 }
 
 .vs-section-divider {

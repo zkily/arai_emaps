@@ -42,7 +42,32 @@ C_RATIO = (234, 88, 12)  # 比率
 C_GRID = (226, 232, 240)
 C_AXIS = (100, 116, 139)
 C_BG = (255, 255, 255)
-C_PANEL = (248, 250, 252)
+def _bucket_adj_count(bucket: Any) -> float:
+    if not isinstance(bucket, dict):
+        return 0.0
+    if bucket.get("countAdj") is not None:
+        try:
+            return float(bucket.get("countAdj") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    try:
+        return float(bucket.get("count") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _bucket_adj_qty(bucket: Any) -> float:
+    if not isinstance(bucket, dict):
+        return 0.0
+    if bucket.get("quantityAdj") is not None:
+        try:
+            return float(bucket.get("quantityAdj") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    try:
+        return float(bucket.get("quantity") or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _fmt_num(v: Any) -> str:
@@ -50,6 +75,16 @@ def _fmt_num(v: Any) -> str:
         return f"{int(round(float(v))):,}"
     except (TypeError, ValueError):
         return "0"
+
+
+def _fmt_adj(v: Any) -> str:
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return "0"
+    if abs(n - round(n)) < 1e-9:
+        return f"{int(round(n)):,}"
+    return f"{n:,.1f}"
 
 
 def _fmt_qty(v: Any) -> str:
@@ -82,7 +117,7 @@ def _fmt_delta(change: Any, rate: Any = None) -> str:
     except (TypeError, ValueError):
         return "—"
     sign = "+" if c > 0 else ""
-    base = f"{sign}{_fmt_num(c)}"
+    base = f"{sign}{_fmt_adj(c)}"
     if rate is None:
         return base
     try:
@@ -480,7 +515,7 @@ def _build_cover(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(3.2),
         Inches(11.7),
         Inches(0.55),
-        "実績修正 vs 実績集計の月次比較（手入力除外）",
+        "実績修正 vs 実績集計の月次比較（手入力除外・稼働日22日換算）",
         font_size=20,
         color=ACCENT_SOFT,
         align=PP_ALIGN.CENTER,
@@ -517,6 +552,9 @@ def _build_kpi_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     mom = data.get("monthOverMonth") or {}
     month = data.get("month") or ""
     cmp_month = data.get("compareMonth") or ""
+    std = int(data.get("standardWorkdays") or 22)
+    cur_wd = cur.get("workingDays") if isinstance(cur, dict) else None
+    cur_wd_label = "—" if cur_wd is None else cur_wd
 
     _add_textbox(
         slide,
@@ -524,7 +562,7 @@ def _build_kpi_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(0.22),
         Inches(12.5),
         Inches(0.5),
-        f"KPIサマリ　{month} vs {cmp_month}",
+        f"KPIサマリ　{month} vs {cmp_month}（稼働日{std}日換算）",
         font_size=28,
         bold=True,
         color=PRIMARY,
@@ -535,14 +573,14 @@ def _build_kpi_slide(prs: Presentation, data: Dict[str, Any]) -> None:
             "実績修正",
             ACCENT,
             f"{_fmt_num(cur.get('prodDataMgmt', {}).get('count'))} 件",
-            f"数量 {_fmt_qty(cur.get('prodDataMgmt', {}).get('quantity'))}",
-            f"前月比 {_fmt_delta(mom.get('prodDataMgmtCountChange'), mom.get('prodDataMgmtCountChangeRate'))}",
+            f"{std}日換算 {_fmt_adj(_bucket_adj_count(cur.get('prodDataMgmt')))}件（稼働日{cur_wd_label}日）",
+            f"前月比({std}日換算) {_fmt_delta(mom.get('prodDataMgmtCountAdjChange', mom.get('prodDataMgmtCountChange')), mom.get('prodDataMgmtCountAdjChangeRate', mom.get('prodDataMgmtCountChangeRate')))}",
         ),
         (
             "実績集計",
             TEAL,
             f"{_fmt_num(cur.get('auto', {}).get('count'))} 件",
-            f"数量 {_fmt_qty(cur.get('auto', {}).get('quantity'))}",
+            f"{std}日換算 {_fmt_adj(_bucket_adj_count(cur.get('auto')))}件（稼働日{cur_wd_label}日）",
             f"総件数 {_fmt_num(cur.get('total', {}).get('count'))}",
         ),
         (
@@ -572,17 +610,17 @@ def _build_kpi_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     # VS panel
     _add_rect(slide, Inches(0.4), Inches(3.55), Inches(6.15), Inches(3.5), CARD_BG)
     _add_rect(slide, Inches(6.8), Inches(3.55), Inches(6.15), Inches(3.5), CARD_BG)
-    _add_textbox(slide, Inches(0.65), Inches(3.7), Inches(5.6), Inches(0.4), f"対象月 {month}", font_size=20, bold=True, color=ACCENT)
-    _add_textbox(slide, Inches(7.05), Inches(3.7), Inches(5.6), Inches(0.4), f"比較月 {cmp_month}", font_size=20, bold=True, color=TEXT_MUTED)
+    _add_textbox(slide, Inches(0.65), Inches(3.7), Inches(5.6), Inches(0.4), f"対象月 {month}　稼働日{cur.get('workingDays', '—')}日", font_size=18, bold=True, color=ACCENT)
+    _add_textbox(slide, Inches(7.05), Inches(3.7), Inches(5.6), Inches(0.4), f"比較月 {cmp_month}　稼働日{cmp.get('workingDays', '—')}日", font_size=18, bold=True, color=TEXT_MUTED)
 
     def _vs_block(left: float, summary: dict) -> None:
         rows = [
             ("実績修正（件）", _fmt_num(summary.get("prodDataMgmt", {}).get("count"))),
+            ("22日換算（件）", _fmt_adj(_bucket_adj_count(summary.get("prodDataMgmt")))),
             ("実績集計（件）", _fmt_num(summary.get("auto", {}).get("count"))),
             ("修正比率", _fmt_pct(summary.get("prodDataMgmtCountRatio"))),
             ("実績修正数量", _fmt_qty(summary.get("prodDataMgmt", {}).get("quantity"))),
-            ("実績集計数量", _fmt_qty(summary.get("auto", {}).get("quantity"))),
-            ("修正数量比率", _fmt_pct(summary.get("prodDataMgmtQuantityRatio"))),
+            ("修正数量(換算)", _fmt_qty(_bucket_adj_qty(summary.get("prodDataMgmt")))),
         ]
         y = 4.25
         for label, val in rows:
@@ -607,7 +645,7 @@ def _build_month_compare_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(0.2),
         Inches(12.5),
         Inches(0.45),
-        "月次比較（件数・数量）",
+        "月次比較（件数・数量／22日換算）",
         font_size=28,
         bold=True,
         color=PRIMARY,
@@ -617,12 +655,12 @@ def _build_month_compare_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     count_png = _draw_grouped_bars(
         cats,
         [
-            ("対象月", [cur.get("prodDataMgmt", {}).get("count", 0), cur.get("auto", {}).get("count", 0)], C_PROD),
-            ("比較月", [cmp.get("prodDataMgmt", {}).get("count", 0), cmp.get("auto", {}).get("count", 0)], C_CMP),
+            ("対象月", [_bucket_adj_count(cur.get("prodDataMgmt")), _bucket_adj_count(cur.get("auto"))], C_PROD),
+            ("比較月", [_bucket_adj_count(cmp.get("prodDataMgmt")), _bucket_adj_count(cmp.get("auto"))], C_CMP),
         ],
         width=1280,
         height=680,
-        title=f"件数比較  {month} vs {cmp_month}",
+        title=f"件数比較（22日換算）  {month} vs {cmp_month}",
     )
     qty_png = _draw_grouped_bars(
         cats,
@@ -630,16 +668,16 @@ def _build_month_compare_slide(prs: Presentation, data: Dict[str, Any]) -> None:
             (
                 "対象月",
                 [
-                    float(cur.get("prodDataMgmt", {}).get("quantity", 0)) / 1000,
-                    float(cur.get("auto", {}).get("quantity", 0)) / 1000,
+                    _bucket_adj_qty(cur.get("prodDataMgmt")) / 1000,
+                    _bucket_adj_qty(cur.get("auto")) / 1000,
                 ],
                 C_PROD,
             ),
             (
                 "比較月",
                 [
-                    float(cmp.get("prodDataMgmt", {}).get("quantity", 0)) / 1000,
-                    float(cmp.get("auto", {}).get("quantity", 0)) / 1000,
+                    _bucket_adj_qty(cmp.get("prodDataMgmt")) / 1000,
+                    _bucket_adj_qty(cmp.get("auto")) / 1000,
                 ],
                 C_CMP,
             ),
@@ -647,7 +685,7 @@ def _build_month_compare_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         width=1280,
         height=680,
         value_fmt=lambda v: f"{v:,.1f}",
-        title=f"数量比較（千）  {month} vs {cmp_month}",
+        title=f"数量比較（千・22日換算）  {month} vs {cmp_month}",
     )
     _add_picture(slide, count_png, Inches(0.35), Inches(0.8), Inches(6.3), Inches(6.3))
     _add_picture(slide, qty_png, Inches(6.75), Inches(0.8), Inches(6.3), Inches(6.3))
@@ -664,7 +702,7 @@ def _build_trend_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(0.2),
         Inches(12.5),
         Inches(0.45),
-        f"修正比率推移（直近 {data.get('trendMonths', 6)} ヶ月）",
+        f"修正比率推移（直近 {data.get('trendMonths', 6)} ヶ月・件数は22日換算）",
         font_size=28,
         bold=True,
         color=PRIMARY,
@@ -673,8 +711,8 @@ def _build_trend_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     count_png = _draw_combo_trend(
         months,
         [
-            ("実績修正", [r.get("prodDataMgmtCount", 0) for r in trend], C_PROD),
-            ("実績集計", [r.get("autoCount", 0) for r in trend], C_AUTO),
+            ("実績修正", [r.get("prodDataMgmtCountAdj", r.get("prodDataMgmtCount", 0)) for r in trend], C_PROD),
+            ("実績集計", [r.get("autoCountAdj", r.get("autoCount", 0)) for r in trend], C_AUTO),
         ],
         ("修正比率", [r.get("prodDataMgmtCountRatio", 0) for r in trend], C_RATIO),
         width=1280,
@@ -684,8 +722,8 @@ def _build_trend_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     qty_png = _draw_combo_trend(
         months,
         [
-            ("修正数量(千)", [float(r.get("prodDataMgmtQuantity", 0)) / 1000 for r in trend], C_PROD),
-            ("集計数量(千)", [float(r.get("autoQuantity", 0)) / 1000 for r in trend], C_AUTO),
+            ("修正数量(千)", [float(r.get("prodDataMgmtQuantityAdj", r.get("prodDataMgmtQuantity", 0))) / 1000 for r in trend], C_PROD),
+            ("集計数量(千)", [float(r.get("autoQuantityAdj", r.get("autoQuantity", 0))) / 1000 for r in trend], C_AUTO),
         ],
         ("数量比率", [r.get("prodDataMgmtQuantityRatio", 0) for r in trend], C_RATIO),
         width=1280,
@@ -709,11 +747,12 @@ def _build_process_chart_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     # merge top processes by current prod count
     rows = cur_list[:12]
     names = [str(r.get("processName") or r.get("processCd") or "")[:8] for r in rows]
-    cur_prod = [r.get("prodDataMgmt", {}).get("count", 0) for r in rows]
+    cur_prod = [_bucket_adj_count(r.get("prodDataMgmt")) for r in rows]
     cmp_prod = [
-        (cmp_map.get(r.get("processCd") or {}) or {}).get("prodDataMgmt", {}).get("count", 0) for r in rows
+        _bucket_adj_count((cmp_map.get(r.get("processCd") or "") or {}).get("prodDataMgmt"))
+        for r in rows
     ]
-    cur_auto = [r.get("auto", {}).get("count", 0) for r in rows]
+    cur_auto = [_bucket_adj_count(r.get("auto")) for r in rows]
 
     _add_textbox(
         slide,
@@ -735,7 +774,7 @@ def _build_process_chart_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         ],
         width=1600,
         height=620,
-        title=f"工程別 実績修正件数  {cmp_month} vs {month}",
+        title=f"工程別 実績修正件数（22日換算）  {cmp_month} vs {month}",
     )
     breakdown_png = _draw_grouped_bars(
         names,
@@ -745,7 +784,7 @@ def _build_process_chart_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         ],
         width=1600,
         height=620,
-        title=f"工程別内訳（件数）  {month}",
+        title=f"工程別内訳（件数・22日換算）  {month}",
     )
     _add_picture(slide, compare_png, Inches(0.35), Inches(0.75), Inches(12.6), Inches(3.2))
     _add_picture(slide, breakdown_png, Inches(0.35), Inches(4.05), Inches(12.6), Inches(3.2))
@@ -765,7 +804,7 @@ def _build_process_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(0.2),
         Inches(12.5),
         Inches(0.45),
-        f"工程別比較一覧　{cmp_month} → {month}",
+        f"工程別比較一覧　{cmp_month} → {month}（件数は22日換算）",
         font_size=26,
         bold=True,
         color=PRIMARY,
@@ -773,8 +812,8 @@ def _build_process_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
 
     header = [
         "工程",
-        f"修正件数\n{month}",
-        f"修正件数\n{cmp_month}",
+        f"修正件数\n{month}換算",
+        f"修正件数\n{cmp_month}換算",
         "件数差",
         f"修正数量\n{month}",
         "比率",
@@ -796,15 +835,15 @@ def _build_process_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
             "prodDataMgmtCountRatio": 0,
         }
         cmp = cmp_map.get(key) or {"prodDataMgmt": {"count": 0}}
-        c_cnt = int(cur.get("prodDataMgmt", {}).get("count", 0) or 0)
-        p_cnt = int(cmp.get("prodDataMgmt", {}).get("count", 0) or 0)
+        c_cnt = _bucket_adj_count(cur.get("prodDataMgmt"))
+        p_cnt = _bucket_adj_count(cmp.get("prodDataMgmt"))
         diff = c_cnt - p_cnt
         body.append(
             [
                 str(cur.get("processName") or key),
-                _fmt_num(c_cnt),
-                _fmt_num(p_cnt),
-                f"{'+' if diff > 0 else ''}{_fmt_num(diff)}",
+                _fmt_adj(c_cnt),
+                _fmt_adj(p_cnt),
+                f"{'+' if diff > 0 else ''}{_fmt_adj(diff)}",
                 _fmt_qty(cur.get("prodDataMgmt", {}).get("quantity")),
                 _fmt_pct(cur.get("prodDataMgmtCountRatio")),
                 _fmt_num(cur.get("auto", {}).get("count")),
@@ -842,7 +881,9 @@ def _build_trend_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
     )
     header = [
         "月",
+        "稼働日",
         "修正件数",
+        "22日換算",
         "集計件数",
         "総件数",
         "修正比率",
@@ -854,7 +895,9 @@ def _build_trend_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         body.append(
             [
                 str(r.get("month") or ""),
+                str(r.get("workingDays") if r.get("workingDays") is not None else "—"),
                 _fmt_num(r.get("prodDataMgmtCount")),
+                _fmt_adj(r.get("prodDataMgmtCountAdj", r.get("prodDataMgmtCount"))),
                 _fmt_num(r.get("autoCount")),
                 _fmt_num(r.get("totalCount")),
                 _fmt_pct(r.get("prodDataMgmtCountRatio")),
@@ -872,7 +915,7 @@ def _build_trend_table_slide(prs: Presentation, data: Dict[str, Any]) -> None:
         Inches(min(0.5 + 0.42 * n, 6.2)),
         header_color=PRIMARY,
         body_size=16,
-        col_widths=[1.4, 1.5, 1.5, 1.4, 1.5, 2.0, 1.5],
+        col_widths=[1.2, 1.1, 1.3, 1.3, 1.3, 1.2, 1.4, 1.6, 1.4],
     )
 
 

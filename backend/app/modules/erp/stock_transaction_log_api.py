@@ -6,13 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, case, or_
 from typing import Optional, List, Any
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, date
 from calendar import monthrange
 
 from app.core.database import get_db
+from app.core.company_work_calendar import (
+    count_scheduled_workdays,
+    load_company_calendar_sets,
+)
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
+from app.modules.budget.models import BudgetWorkingDays
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.master.models import Process, Product
 
@@ -22,6 +27,8 @@ SOURCE_PROD_DATA_MGMT = "生産データ管理"
 SOURCE_HAND_INPUT = "手入力"
 # 社内検査（検査管理指標の非SD行と同じ工程）
 INSPECTION_PROCESS_CD = "KT09"
+# 月次比較の標準稼働日。補正値 = 実値 × (標準稼働日 / 当月稼働日)
+STANDARD_WORKDAYS = 22
 
 
 def _exclude_hand_input_clause():
@@ -94,6 +101,111 @@ def _change_rate(current: float, previous: float) -> Optional[float]:
     if previous == 0:
         return None if current == 0 else 1.0
     return round((current - previous) / previous, 6)
+
+
+def _weekday_count(year: int, month: int) -> int:
+    last = monthrange(year, month)[1]
+    return sum(1 for d in range(1, last + 1) if date(year, month, d).weekday() < 5)
+
+
+def _workday_factor(working_days: int, standard: int = STANDARD_WORKDAYS) -> float:
+    if working_days is None or working_days <= 0:
+        return 1.0
+    return standard / float(working_days)
+
+
+def _adj_count(value: float, factor: float) -> float:
+    return round(float(value or 0) * factor, 1)
+
+
+def _adj_qty(value: float, factor: float) -> float:
+    return round(float(value or 0) * factor, 2)
+
+
+def _with_bucket_adj(bucket: dict, factor: float) -> dict:
+    count = int(bucket.get("count") or 0)
+    qty = float(bucket.get("quantity") or 0)
+    return {
+        "count": count,
+        "quantity": qty,
+        "countAdj": _adj_count(count, factor),
+        "quantityAdj": _adj_qty(qty, factor),
+    }
+
+
+def _with_workday_adj(summary: dict, working_days: int) -> dict:
+    """実数を保持したまま、標準稼働日(22日)換算の補正件数・数量を付与。"""
+    factor = _workday_factor(working_days)
+    out = dict(summary)
+    out["workingDays"] = int(working_days or 0)
+    out["standardWorkdays"] = STANDARD_WORKDAYS
+    out["workdayFactor"] = round(factor, 6)
+    for key in ("prodDataMgmt", "auto", "total"):
+        out[key] = _with_bucket_adj(summary.get(key) or {}, factor)
+    return out
+
+
+def _adj_process_rows(rows: list, working_days: int) -> list:
+    factor = _workday_factor(working_days)
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["workingDays"] = int(working_days or 0)
+        item["workdayFactor"] = round(factor, 6)
+        for key in ("prodDataMgmt", "auto", "total"):
+            item[key] = _with_bucket_adj(row.get(key) or {}, factor)
+        out.append(item)
+    return out
+
+
+async def _load_working_days_map(db: AsyncSession, months: list[str]) -> dict[str, int]:
+    """年月 → 稼働日。budget_working_days 優先、未設定は会社カレンダー、最後に平日数。"""
+    unique: list[str] = []
+    seen: set[str] = set()
+    for ym in months:
+        if ym and ym not in seen:
+            unique.append(ym)
+            seen.add(ym)
+    if not unique:
+        return {}
+
+    pairs = [_parse_month(ym) for ym in unique]
+    years = {y for y, _ in pairs}
+    wd_map: dict[str, int] = {}
+    q = select(BudgetWorkingDays).where(BudgetWorkingDays.year.in_(years))
+    rows = (await db.execute(q)).scalars().all()
+    budget = {(int(r.year), int(r.month)): int(r.working_days or 0) for r in rows}
+    for ym, (y, m) in zip(unique, pairs):
+        days = budget.get((y, m), 0)
+        if days > 0:
+            wd_map[ym] = days
+
+    missing = [ym for ym in unique if ym not in wd_map]
+    if missing:
+        starts: list[date] = []
+        ends: list[date] = []
+        parsed: dict[str, tuple[int, int, int]] = {}
+        for ym in missing:
+            y, m = _parse_month(ym)
+            last = monthrange(y, m)[1]
+            parsed[ym] = (y, m, last)
+            starts.append(date(y, m, 1))
+            ends.append(date(y, m, last))
+        try:
+            scheduled, off = await load_company_calendar_sets(db, min(starts), max(ends))
+            for ym, (y, m, last) in parsed.items():
+                wd_map[ym] = count_scheduled_workdays(
+                    date(y, m, 1),
+                    date(y, m, last),
+                    company_scheduled=scheduled,
+                    company_off=off,
+                    extra_workdays=set(),
+                    extra_holidays=set(),
+                )
+        except Exception:
+            for ym, (y, m, _last) in parsed.items():
+                wd_map[ym] = _weekday_count(y, m)
+    return wd_map
 
 
 def _summary_row_to_dict(row: Any) -> dict:
@@ -555,6 +667,7 @@ async def fetch_manual_entry_statistics(
     実績修正統計データ取得（操作種別=実績、手入力除外）。
     実績修正 vs 実績集計（MES・ファイル同期等）を月次比較。
     検査工程(KT09)は製品名に SD を含む行を除外。
+    件数・数量は標準稼働日22日換算の補正値を併記（比率は実数のまま）。
     """
     now = datetime.now()
     target_month = (month or "").strip() or now.strftime("%Y-%m")
@@ -564,6 +677,8 @@ async def fetch_manual_entry_statistics(
     trend_months = max(1, min(int(trend_months or 6), 24))
 
     proc = (process_cd or "").strip() or None
+    trend_list = _month_list_end_month(target_month, trend_months)
+    wd_map = await _load_working_days_map(db, [target_month, cmp_month, *trend_list])
 
     async def _fetch_summary(ym: str) -> dict:
         start, end = _month_bounds(ym)
@@ -581,13 +696,19 @@ async def fetch_manual_entry_statistics(
             )
         return _summary_row_to_dict(row)
 
-    current_summary = await _fetch_summary(target_month)
-    compare_summary = await _fetch_summary(cmp_month)
+    current_summary = _with_workday_adj(
+        await _fetch_summary(target_month), wd_map.get(target_month, 0)
+    )
+    compare_summary = _with_workday_adj(
+        await _fetch_summary(cmp_month), wd_map.get(cmp_month, 0)
+    )
 
-    by_process = await _fetch_by_process(db, target_month, proc)
-    by_process_compare = await _fetch_by_process(db, cmp_month, proc)
-
-    trend_list = _month_list_end_month(target_month, trend_months)
+    by_process = _adj_process_rows(
+        await _fetch_by_process(db, target_month, proc), wd_map.get(target_month, 0)
+    )
+    by_process_compare = _adj_process_rows(
+        await _fetch_by_process(db, cmp_month, proc), wd_map.get(cmp_month, 0)
+    )
     trend_start, _ = _month_bounds(trend_list[0])
     _, trend_end = _month_bounds(target_month)
     period_expr = func.date_format(StockTransactionLog.transaction_time, "%Y-%m").label("period")
@@ -641,48 +762,58 @@ async def fetch_manual_entry_statistics(
     by_month_trend = []
     for ym in trend_list:
         r = trend_map.get(ym)
+        wd = int(wd_map.get(ym, 0) or 0)
+        factor = _workday_factor(wd)
         if r:
             prod_c = int(r.prod_count or 0)
+            auto_c = int(r.auto_count or 0)
             total_c = int(r.total_count or 0)
             prod_q = float(r.prod_qty or 0)
+            auto_q = float(r.auto_qty or 0)
             total_q = float(r.total_qty or 0)
-            by_month_trend.append(
-                {
-                    "month": ym,
-                    "prodDataMgmtCount": prod_c,
-                    "autoCount": int(r.auto_count or 0),
-                    "totalCount": total_c,
-                    "prodDataMgmtCountRatio": _ratio(prod_c, total_c),
-                    "prodDataMgmtQuantity": prod_q,
-                    "autoQuantity": float(r.auto_qty or 0),
-                    "totalQuantity": total_q,
-                    "prodDataMgmtQuantityRatio": _ratio(prod_q, total_q),
-                }
-            )
         else:
-            by_month_trend.append(
-                {
-                    "month": ym,
-                    "prodDataMgmtCount": 0,
-                    "autoCount": 0,
-                    "totalCount": 0,
-                    "prodDataMgmtCountRatio": 0.0,
-                    "prodDataMgmtQuantity": 0.0,
-                    "autoQuantity": 0.0,
-                    "totalQuantity": 0.0,
-                    "prodDataMgmtQuantityRatio": 0.0,
-                }
-            )
+            prod_c = auto_c = total_c = 0
+            prod_q = auto_q = total_q = 0.0
+        by_month_trend.append(
+            {
+                "month": ym,
+                "workingDays": wd,
+                "workdayFactor": round(factor, 6),
+                "prodDataMgmtCount": prod_c,
+                "autoCount": auto_c,
+                "totalCount": total_c,
+                "prodDataMgmtCountRatio": _ratio(prod_c, total_c),
+                "prodDataMgmtQuantity": prod_q,
+                "autoQuantity": auto_q,
+                "totalQuantity": total_q,
+                "prodDataMgmtQuantityRatio": _ratio(prod_q, total_q),
+                "prodDataMgmtCountAdj": _adj_count(prod_c, factor),
+                "autoCountAdj": _adj_count(auto_c, factor),
+                "totalCountAdj": _adj_count(total_c, factor),
+                "prodDataMgmtQuantityAdj": _adj_qty(prod_q, factor),
+                "autoQuantityAdj": _adj_qty(auto_q, factor),
+                "totalQuantityAdj": _adj_qty(total_q, factor),
+            }
+        )
 
     cur_p = current_summary["prodDataMgmt"]
     cmp_p = compare_summary["prodDataMgmt"]
     cur_a = current_summary["auto"]
     cmp_a = compare_summary["auto"]
+    cur_p_adj_c = float(cur_p.get("countAdj") or 0)
+    cmp_p_adj_c = float(cmp_p.get("countAdj") or 0)
+    cur_p_adj_q = float(cur_p.get("quantityAdj") or 0)
+    cmp_p_adj_q = float(cmp_p.get("quantityAdj") or 0)
+    cur_a_adj_c = float(cur_a.get("countAdj") or 0)
+    cmp_a_adj_c = float(cmp_a.get("countAdj") or 0)
+    cur_a_adj_q = float(cur_a.get("quantityAdj") or 0)
+    cmp_a_adj_q = float(cmp_a.get("quantityAdj") or 0)
 
     return {
         "month": target_month,
         "compareMonth": cmp_month,
         "trendMonths": trend_months,
+        "standardWorkdays": STANDARD_WORKDAYS,
         "transactionType": "実績",
         "processCd": proc,
         "current": current_summary,
@@ -692,6 +823,10 @@ async def fetch_manual_entry_statistics(
             "prodDataMgmtCountChangeRate": _change_rate(cur_p["count"], cmp_p["count"]),
             "prodDataMgmtQuantityChange": round(cur_p["quantity"] - cmp_p["quantity"], 4),
             "prodDataMgmtQuantityChangeRate": _change_rate(cur_p["quantity"], cmp_p["quantity"]),
+            "prodDataMgmtCountAdjChange": round(cur_p_adj_c - cmp_p_adj_c, 1),
+            "prodDataMgmtCountAdjChangeRate": _change_rate(cur_p_adj_c, cmp_p_adj_c),
+            "prodDataMgmtQuantityAdjChange": round(cur_p_adj_q - cmp_p_adj_q, 2),
+            "prodDataMgmtQuantityAdjChangeRate": _change_rate(cur_p_adj_q, cmp_p_adj_q),
             "prodDataMgmtCountRatioChange": round(
                 current_summary["prodDataMgmtCountRatio"] - compare_summary["prodDataMgmtCountRatio"],
                 6,
@@ -705,6 +840,10 @@ async def fetch_manual_entry_statistics(
             "autoCountChangeRate": _change_rate(cur_a["count"], cmp_a["count"]),
             "autoQuantityChange": round(cur_a["quantity"] - cmp_a["quantity"], 4),
             "autoQuantityChangeRate": _change_rate(cur_a["quantity"], cmp_a["quantity"]),
+            "autoCountAdjChange": round(cur_a_adj_c - cmp_a_adj_c, 1),
+            "autoCountAdjChangeRate": _change_rate(cur_a_adj_c, cmp_a_adj_c),
+            "autoQuantityAdjChange": round(cur_a_adj_q - cmp_a_adj_q, 2),
+            "autoQuantityAdjChangeRate": _change_rate(cur_a_adj_q, cmp_a_adj_q),
         },
         "byProcess": by_process,
         "byProcessCompare": by_process_compare,
@@ -725,6 +864,7 @@ async def get_manual_entry_statistics(
     実績修正統計（操作種別=実績、手入力除外）。
     実績修正 vs 実績集計（MES・ファイル同期等）を月次比較。
     検査工程(KT09)は製品名に SD を含む行を除外。
+    件数・数量は標準稼働日22日換算の補正値を併記（比率は実数のまま）。
     """
     return await fetch_manual_entry_statistics(
         db,
