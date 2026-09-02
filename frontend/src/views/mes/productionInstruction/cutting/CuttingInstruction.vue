@@ -559,9 +559,9 @@
       </div>
 
       <!-- 材料別使用数汇总行（切断指示-今日/翌日の下・独立日付筛选） -->
-      <div ref="usageSummarySectionRef" class="instruction-row instruction-two-cols instruction-cols-6-4 usage-summary-row">
-        <!-- 今日：材料別使用数汇总表（独立日付筛选） -->
-        <div class="instruction-col usage-summary-col">
+      <div ref="usageSummarySectionRef" class="instruction-row usage-summary-row">
+        <!-- 今日：材料別使用数汇总表（独立日付筛选・一行占满） -->
+        <div class="instruction-col usage-summary-col instruction-col-full">
           <div class="usage-summary-wrap">
             <div class="usage-summary-title-row usage-summary-title-row--with-date">
               <span class="usage-summary-title">使用材料数（材料別）- 今日</span>
@@ -593,13 +593,23 @@
                     <th>在庫区分</th>
                     <th>材料使用数</th>
                     <th>使用材料</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(row, idx) in usageSummaryCuttingList" :key="row.id ?? `usage-${idx}`">
+                  <tr
+                    v-for="(row, idx) in usageSummaryCuttingList"
+                    :key="row.id ?? `usage-${idx}`"
+                    :class="{ 'usage-row-duplicate': isUsageSummaryDuplicateRow(row) }"
+                  >
                     <td>{{ row.product_name ?? '-' }}</td>
                     <td>{{ row.material_name ?? '-' }}</td>
-                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td
+                      :class="{
+                        'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim(),
+                        'usage-mgmt-duplicate': isUsageSummaryDuplicateRow(row),
+                      }"
+                    >{{ row.management_code?.trim() || '-' }}</td>
                     <td class="usage-summary-stock-td">
                       <el-switch
                         :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
@@ -617,6 +627,11 @@
                       <span v-else :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
                         {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
                       </span>
+                    </td>
+                    <td class="usage-summary-actions-td">
+                      <el-button type="danger" link size="small" title="削除" @click.stop="deleteUsageSummaryRow(row)">
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
                     </td>
                   </tr>
                 </tbody>
@@ -628,67 +643,9 @@
               <span class="usage-summary-footer-item usage-summary-footer--reflected">反映済：{{ usageSummaryTodayCounts.reflected }}</span>
               <span class="usage-summary-footer-item usage-summary-footer--not-reflected">未反映：{{ usageSummaryTodayCounts.notReflected }}</span>
               <span class="usage-summary-footer-item">未反映使用数：{{ formatUsageQty(usageSummaryTodayReflectQty) }} 束</span>
-            </div>
-          </div>
-        </div>
-        <!-- 翌日：使用材料数（材料別）- 翌日（独立日付筛选） -->
-        <div class="instruction-col usage-summary-col">
-          <div class="usage-summary-wrap usage-summary-wrap--tomorrow">
-            <div class="usage-summary-title-row usage-summary-title-row--with-date">
-              <span class="usage-summary-title">使用材料数（材料別）- 翌日</span>
-              <div class="cutting-mgmt-date-wrap usage-summary-date-wrap">
-                <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftUsageSummaryDateTomorrow(-1)" />
-                <el-date-picker
-                  v-model="usageSummaryDateTomorrow"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  placeholder="生産日"
-                  size="small"
-                  class="cutting-mgmt-date-picker"
-                  @change="loadUsageSummaryCuttingListTomorrow"
-                />
-                <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftUsageSummaryDateTomorrow(1)" />
-              </div>
-            </div>
-            <div v-loading="usageSummaryCuttingLoadingTomorrow" class="usage-summary-table-wrap">
-              <table v-if="usageSummaryCuttingListTomorrow.length" class="usage-summary-table usage-summary-table--list">
-                <thead>
-                  <tr>
-                    <th>製品名</th>
-                    <th>原材料</th>
-                    <th>管理コード</th>
-                    <th>在庫区分</th>
-                    <th>材料使用数</th>
-                    <th>使用材料</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, idx) in usageSummaryCuttingListTomorrow" :key="'tm-' + (row.id ?? idx)">
-                    <td>{{ row.product_name ?? '-' }}</td>
-                    <td>{{ row.material_name ?? '-' }}</td>
-                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
-                    <td class="usage-summary-stock-td">
-                      <el-switch
-                        :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
-                        :active-value="1"
-                        :inactive-value="0"
-                        size="small"
-                        @change="onChangeUsageSummaryStock(row, $event)"
-                      />
-                    </td>
-                    <td class="usage-summary-usage-td" @dblclick.stop="onDblClickUsageSummaryUsageCount(row)">
-                      {{ formatUsageCountDisplay(row as { usage_count?: number | null }) }}
-                    </td>
-                    <td>
-                      <span v-if="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1" class="usage-sub-manual-tag">サブ・手動</span>
-                      <span v-else :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
-                        {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div v-else-if="!usageSummaryCuttingLoadingTomorrow" class="usage-summary-empty">該当日のデータがありません</div>
+              <span v-if="usageSummaryDuplicateCodes.size" class="usage-summary-footer-item usage-summary-footer--duplicate">
+                重複管理コード：{{ usageSummaryDuplicateCodes.size }}
+              </span>
             </div>
           </div>
         </div>
@@ -4475,47 +4432,21 @@ function shiftUsageSummaryDateToday(delta: number) {
 
 watch(usageSummaryDateToday, loadUsageSummaryCuttingList)
 
-// ─────────────────────────────────────────────
-// 使用材料数（材料別）- 翌日：独立した日付筛选
-// ─────────────────────────────────────────────
-const usageSummaryDateTomorrow = ref(getTomorrowString())
-const usageSummaryCuttingListTomorrow = ref<CuttingManagementRow[]>([])
-const usageSummaryCuttingLoadingTomorrow = ref(false)
-
-async function loadUsageSummaryCuttingListTomorrow() {
-  const dayStr = normalizeDateStr(usageSummaryDateTomorrow.value)
-  if (!dayStr) return
-  const reqId = usageSummaryTomorrowLoadGuard.start()
-  usageSummaryCuttingLoadingTomorrow.value = true
-  try {
-    await loadReflectedManagementCodes()
-    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    const [res, hiddenCodes] = await Promise.all([
-      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
-        '/api/plan/cutting-management/list',
-        { params: { production_day: dayStr, limit: 2000 } }
-      ),
-      fetchReflectedCodesExceptDate(dayStr),
-    ])
-    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
-    usageSummaryCuttingListTomorrow.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
-  } catch {
-    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    usageSummaryCuttingListTomorrow.value = []
-  } finally {
-    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
-    usageSummaryCuttingLoadingTomorrow.value = false
-    fetchUsageReflectedStatus()
+/** 使用材料数表内で同じ管理コードが複数行ある場合のハイライト用 */
+const usageSummaryDuplicateCodes = computed(() => {
+  const counts = new Map<string, number>()
+  for (const row of usageSummaryCuttingList.value) {
+    const code = row.management_code?.trim()
+    if (!code) continue
+    counts.set(code, (counts.get(code) ?? 0) + 1)
   }
-}
+  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([c]) => c))
+})
 
-function shiftUsageSummaryDateTomorrow(delta: number) {
-  usageSummaryDateTomorrow.value = shiftDate(usageSummaryDateTomorrow.value, delta)
-  loadUsageSummaryCuttingListTomorrow()
+function isUsageSummaryDuplicateRow(row: CuttingManagementRow): boolean {
+  const code = row.management_code?.trim()
+  return !!code && usageSummaryDuplicateCodes.value.has(code)
 }
-
-watch(usageSummaryDateTomorrow, loadUsageSummaryCuttingListTomorrow)
 
 /** 使用材料数（材料別）一覧の在庫区分スイッチ変更時：cutting_management.use_material_stock_sub を更新 */
 async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number | boolean | string) {
@@ -4525,11 +4456,43 @@ async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number 
   try {
     await request.patch(`/api/plan/cutting-management/${id}`, { use_material_stock_sub: newVal })
     ;(row as { use_material_stock_sub?: number }).use_material_stock_sub = newVal
-    // サマリの合計値・反映対象件数にも影響するため、最新状態を再取得
-    await Promise.all([loadUsageSummaryCuttingList(), loadUsageSummaryCuttingListTomorrow()])
+    await loadUsageSummaryCuttingList()
   } catch (e) {
     console.error('在庫区分の更新に失敗:', e)
     ElMessage.error('在庫区分の更新に失敗しました')
+  }
+}
+
+/** 使用材料数表の行削除（同一管理コードの重複行整理用） */
+async function deleteUsageSummaryRow(row: CuttingManagementRow) {
+  if (!guardMesOperation(canDelete)) return
+  const id = row.id
+  if (id == null) return
+  const code = row.management_code?.trim() || '-'
+  const isDup = isUsageSummaryDuplicateRow(row)
+  try {
+    await ElMessageBox.confirm(
+      isDup
+        ? `管理コード「${code}」が複数件あります。この行を削除しますか？紐づく面取指示・面取ロット一覧・カンバン発行も削除されます。`
+        : `この行を削除しますか？（管理コード: ${code}）紐づく面取指示・面取ロット一覧・カンバン発行も削除されます。`,
+      '削除の確認',
+      { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await request.delete(`/api/plan/cutting-management/${id}`)
+    ElMessage.success('削除しました')
+    await loadUsageSummaryCuttingList()
+    loadCuttingManagement()
+    loadChamferingManagement()
+    loadChamferingBatchList()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '削除に失敗しました'
+    ElMessage.error(String(msg))
   }
 }
 
@@ -4756,35 +4719,22 @@ async function loadSpecifiedDateUsage() {
 // 使用数反映：確認ダイアログ → コミット（表の日付で反映）
 // ─────────────────────────────────────────────
 const usageReflectionLoading = ref(false)
-/** 使用材料数（材料別）- 今日・翌日の反映済みバッジ用 */
+/** 使用材料数（材料別）- 今日の反映済みバッジ用 */
 const usageReflectedToday = ref<boolean | null>(null)
-const usageReflectedTomorrow = ref<boolean | null>(null)
 
-/** 使用材料数（材料別）- 今日・翌日の反映済みバッジ用（今日は usageSummaryDateToday、翌日は usageSummaryDateTomorrow） */
 async function fetchUsageReflectedStatus() {
   const todayStr = normalizeDateStr(usageSummaryDateToday.value)
-  const tomorrowStr = normalizeDateStr(usageSummaryDateTomorrow.value)
   if (!todayStr) {
     usageReflectedToday.value = null
-    usageReflectedTomorrow.value = null
     return
   }
   try {
-    const [todayRes, tomorrowRes] = await Promise.all([
-      request.get<{ success?: boolean; reflected?: boolean }>('/api/material/usage/reflected', {
-        params: { date: todayStr, source: 'cutting_management' },
-      }),
-      tomorrowStr
-        ? request.get<{ success?: boolean; reflected?: boolean }>('/api/material/usage/reflected', {
-            params: { date: tomorrowStr, source: 'cutting_management' },
-          })
-        : Promise.resolve({ reflected: false }),
-    ])
+    const todayRes = await request.get<{ success?: boolean; reflected?: boolean }>('/api/material/usage/reflected', {
+      params: { date: todayStr, source: 'cutting_management' },
+    })
     usageReflectedToday.value = (todayRes as any)?.reflected ?? false
-    usageReflectedTomorrow.value = tomorrowStr ? ((tomorrowRes as any)?.reflected ?? false) : null
   } catch {
     usageReflectedToday.value = null
-    usageReflectedTomorrow.value = null
   }
 }
 
@@ -6022,7 +5972,6 @@ const dragSourceRef = ref<'batchList' | 'cuttingManagement' | 'chamferingBatch' 
 const cuttingManagementLoadGuard = createRequestGuard()
 const chamferingManagementLoadGuard = createRequestGuard()
 const usageSummaryTodayLoadGuard = createRequestGuard()
-const usageSummaryTomorrowLoadGuard = createRequestGuard()
 const specifiedDateUsageLoadGuard = createRequestGuard()
 
 /** 画面下部セクション：ビューポート進入時に初回データ取得 */
@@ -6037,7 +5986,6 @@ function activateUsageSummarySection() {
   if (usageSummarySectionActivated) return
   usageSummarySectionActivated = true
   loadUsageSummaryCuttingList()
-  loadUsageSummaryCuttingListTomorrow()
 }
 
 function activateChamferingSection() {
@@ -7123,7 +7071,7 @@ async function onDblClickUsageSummaryUsageCount(row: CuttingManagementRow) {
     }
     await request.patch(`/api/plan/cutting-management/${id}`, { usage_count: num })
     ;(row as { usage_count?: number | null }).usage_count = num
-    await Promise.all([loadUsageSummaryCuttingList(), loadUsageSummaryCuttingListTomorrow()])
+    await loadUsageSummaryCuttingList()
   } catch {
     // キャンセル等は無視
   }
@@ -8490,6 +8438,7 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
     loadCuttingManagement()
     loadChamferingManagement()
     loadChamferingBatchList()
+    loadUsageSummaryCuttingList()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -15872,6 +15821,12 @@ onUnmounted(() => {
 }
 .usage-summary-row {
   margin-top: 0;
+  display: flex;
+  width: 100%;
+}
+.usage-summary-row .instruction-col.instruction-col-full {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 .usage-summary-col {
   padding: 0;
@@ -15916,9 +15871,21 @@ onUnmounted(() => {
 .usage-summary-table--list td:nth-child(5) { min-width: 80px; }
 .usage-summary-table--list th:nth-child(6),
 .usage-summary-table--list td:nth-child(6) { min-width: 100px; }
+.usage-summary-table--list th:nth-child(7),
+.usage-summary-table--list td:nth-child(7) { min-width: 48px; width: 56px; text-align: center; }
 .usage-summary-table--list td.usage-mgmt-empty {
   color: #999;
   font-style: italic;
+}
+.usage-summary-table--list tr.usage-row-duplicate td {
+  background: #fff7ed;
+}
+.usage-summary-table--list td.usage-mgmt-duplicate {
+  color: #c2410c;
+  font-weight: 600;
+}
+.usage-summary-actions-td .el-button {
+  padding: 0 4px;
 }
 .usage-summary-empty {
   padding: 8px 0;
@@ -15943,6 +15910,10 @@ onUnmounted(() => {
 }
 .usage-summary-footer--not-reflected {
   color: #b45309;
+}
+.usage-summary-footer--duplicate {
+  color: #c2410c;
+  font-weight: 600;
 }
 .usage-summary-title-actions {
   display: flex;
