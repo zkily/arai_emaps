@@ -593,23 +593,16 @@
                     <th>在庫区分</th>
                     <th>材料使用数</th>
                     <th>使用材料</th>
-                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
                     v-for="(row, idx) in usageSummaryCuttingList"
                     :key="row.id ?? `usage-${idx}`"
-                    :class="{ 'usage-row-duplicate': isUsageSummaryDuplicateRow(row) }"
                   >
                     <td>{{ row.product_name ?? '-' }}</td>
                     <td>{{ row.material_name ?? '-' }}</td>
-                    <td
-                      :class="{
-                        'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim(),
-                        'usage-mgmt-duplicate': isUsageSummaryDuplicateRow(row),
-                      }"
-                    >{{ row.management_code?.trim() || '-' }}</td>
+                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
                     <td class="usage-summary-stock-td">
                       <el-switch
                         :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
@@ -628,11 +621,6 @@
                         {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
                       </span>
                     </td>
-                    <td class="usage-summary-actions-td">
-                      <el-button type="danger" link size="small" title="削除" @click.stop="deleteUsageSummaryRow(row)">
-                        <el-icon><Delete /></el-icon>
-                      </el-button>
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -643,9 +631,6 @@
               <span class="usage-summary-footer-item usage-summary-footer--reflected">反映済：{{ usageSummaryTodayCounts.reflected }}</span>
               <span class="usage-summary-footer-item usage-summary-footer--not-reflected">未反映：{{ usageSummaryTodayCounts.notReflected }}</span>
               <span class="usage-summary-footer-item">未反映使用数：{{ formatUsageQty(usageSummaryTodayReflectQty) }} 束</span>
-              <span v-if="usageSummaryDuplicateCodes.size" class="usage-summary-footer-item usage-summary-footer--duplicate">
-                重複管理コード：{{ usageSummaryDuplicateCodes.size }}
-              </span>
             </div>
           </div>
         </div>
@@ -4357,6 +4342,47 @@ function filterOutCodesReflectedOnOtherDays(
   })
 }
 
+/** 同一管理コードは1行だけ残す（切断指示本体は消さない）。反映済・本在庫・小さい id を優先 */
+function pickPreferredUsageRow(a: CuttingManagementRow, b: CuttingManagementRow): CuttingManagementRow {
+  const aRef = isUsageRowReflected(a)
+  const bRef = isUsageRowReflected(b)
+  if (aRef !== bRef) return aRef ? a : b
+  const aSub = (a as { use_material_stock_sub?: number }).use_material_stock_sub === 1
+  const bSub = (b as { use_material_stock_sub?: number }).use_material_stock_sub === 1
+  if (aSub !== bSub) return aSub ? b : a
+  const aId = a.id ?? Number.MAX_SAFE_INTEGER
+  const bId = b.id ?? Number.MAX_SAFE_INTEGER
+  return aId <= bId ? a : b
+}
+
+function dedupeUsageRowsByManagementCode(rows: CuttingManagementRow[]): CuttingManagementRow[] {
+  const byCode = new Map<string, CuttingManagementRow>()
+  const order: string[] = []
+  const noCode: CuttingManagementRow[] = []
+  for (const row of rows) {
+    const code = row.management_code != null ? String(row.management_code).trim() : ''
+    if (!code) {
+      noCode.push(row)
+      continue
+    }
+    const existing = byCode.get(code)
+    if (!existing) {
+      byCode.set(code, row)
+      order.push(code)
+    } else {
+      byCode.set(code, pickPreferredUsageRow(existing, row))
+    }
+  }
+  return [...order.map((c) => byCode.get(c)!), ...noCode]
+}
+
+function prepareUsageSummaryRows(
+  rows: CuttingManagementRow[],
+  hiddenCodes: Set<string>,
+): CuttingManagementRow[] {
+  return dedupeUsageRowsByManagementCode(filterOutCodesReflectedOnOtherDays(rows, hiddenCodes))
+}
+
 async function fetchReflectedCodesExceptDate(dayStr: string): Promise<Set<string>> {
   try {
     const res = await request.get<{ success?: boolean; management_codes?: string[] }>(
@@ -4414,7 +4440,7 @@ async function loadUsageSummaryCuttingList() {
     ])
     if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
-    usageSummaryCuttingList.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
+    usageSummaryCuttingList.value = prepareUsageSummaryRows(raw, hiddenCodes)
   } catch {
     if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     usageSummaryCuttingList.value = []
@@ -4432,22 +4458,6 @@ function shiftUsageSummaryDateToday(delta: number) {
 
 watch(usageSummaryDateToday, loadUsageSummaryCuttingList)
 
-/** 使用材料数表内で同じ管理コードが複数行ある場合のハイライト用 */
-const usageSummaryDuplicateCodes = computed(() => {
-  const counts = new Map<string, number>()
-  for (const row of usageSummaryCuttingList.value) {
-    const code = row.management_code?.trim()
-    if (!code) continue
-    counts.set(code, (counts.get(code) ?? 0) + 1)
-  }
-  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([c]) => c))
-})
-
-function isUsageSummaryDuplicateRow(row: CuttingManagementRow): boolean {
-  const code = row.management_code?.trim()
-  return !!code && usageSummaryDuplicateCodes.value.has(code)
-}
-
 /** 使用材料数（材料別）一覧の在庫区分スイッチ変更時：cutting_management.use_material_stock_sub を更新 */
 async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number | boolean | string) {
   const id = (row as { id?: number }).id
@@ -4460,39 +4470,6 @@ async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number 
   } catch (e) {
     console.error('在庫区分の更新に失敗:', e)
     ElMessage.error('在庫区分の更新に失敗しました')
-  }
-}
-
-/** 使用材料数表の行削除（同一管理コードの重複行整理用） */
-async function deleteUsageSummaryRow(row: CuttingManagementRow) {
-  if (!guardMesOperation(canDelete)) return
-  const id = row.id
-  if (id == null) return
-  const code = row.management_code?.trim() || '-'
-  const isDup = isUsageSummaryDuplicateRow(row)
-  try {
-    await ElMessageBox.confirm(
-      isDup
-        ? `管理コード「${code}」が複数件あります。この行を削除しますか？紐づく面取指示・面取ロット一覧・カンバン発行も削除されます。`
-        : `この行を削除しますか？（管理コード: ${code}）紐づく面取指示・面取ロット一覧・カンバン発行も削除されます。`,
-      '削除の確認',
-      { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
-    )
-  } catch {
-    return
-  }
-  try {
-    await request.delete(`/api/plan/cutting-management/${id}`)
-    ElMessage.success('削除しました')
-    await loadUsageSummaryCuttingList()
-    loadCuttingManagement()
-    loadChamferingManagement()
-    loadChamferingBatchList()
-  } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
-      ?? (err as { message?: string })?.message
-      ?? '削除に失敗しました'
-    ElMessage.error(String(msg))
   }
 }
 
@@ -4704,7 +4681,7 @@ async function loadSpecifiedDateUsage() {
     ])
     if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     const raw = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
-    specifiedDateRows.value = filterOutCodesReflectedOnOtherDays(raw, hiddenCodes)
+    specifiedDateRows.value = prepareUsageSummaryRows(raw, hiddenCodes)
   } catch (e) {
     if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     specifiedDateRows.value = []
@@ -15871,21 +15848,9 @@ onUnmounted(() => {
 .usage-summary-table--list td:nth-child(5) { min-width: 80px; }
 .usage-summary-table--list th:nth-child(6),
 .usage-summary-table--list td:nth-child(6) { min-width: 100px; }
-.usage-summary-table--list th:nth-child(7),
-.usage-summary-table--list td:nth-child(7) { min-width: 48px; width: 56px; text-align: center; }
 .usage-summary-table--list td.usage-mgmt-empty {
   color: #999;
   font-style: italic;
-}
-.usage-summary-table--list tr.usage-row-duplicate td {
-  background: #fff7ed;
-}
-.usage-summary-table--list td.usage-mgmt-duplicate {
-  color: #c2410c;
-  font-weight: 600;
-}
-.usage-summary-actions-td .el-button {
-  padding: 0 4px;
 }
 .usage-summary-empty {
   padding: 8px 0;
@@ -15910,10 +15875,6 @@ onUnmounted(() => {
 }
 .usage-summary-footer--not-reflected {
   color: #b45309;
-}
-.usage-summary-footer--duplicate {
-  color: #c2410c;
-  font-weight: 600;
 }
 .usage-summary-title-actions {
   display: flex;

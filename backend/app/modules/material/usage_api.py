@@ -162,6 +162,49 @@ def _is_sub_stock(row: dict) -> bool:
         return str(v).strip().lower() in ("1", "true")
 
 
+def _is_row_usage_reflected(row: dict) -> bool:
+    return str(_row_val(row, "material_usage_reflected") or "").strip() == "反映済"
+
+
+def _prefer_usage_row(a: dict, b: dict) -> dict:
+    """同一管理コードが複数ある場合：反映済・本在庫・小さい id を残す。"""
+    a_ref = _is_row_usage_reflected(a)
+    b_ref = _is_row_usage_reflected(b)
+    if a_ref != b_ref:
+        return a if a_ref else b
+    a_sub = _is_sub_stock(a)
+    b_sub = _is_sub_stock(b)
+    if a_sub != b_sub:
+        return b if a_sub else a
+    a_id = _row_val(a, "id")
+    b_id = _row_val(b, "id")
+    try:
+        a_n = int(a_id) if a_id is not None else 2**31
+        b_n = int(b_id) if b_id is not None else 2**31
+    except (TypeError, ValueError):
+        return a
+    return a if a_n <= b_n else b
+
+
+def _dedupe_cutting_rows_by_management_code(rows: list) -> list:
+    """同一管理コードは1行だけ残す（使用数反映で二重計上しない）。"""
+    by_code: dict[str, dict] = {}
+    order: list[str] = []
+    no_code: list = []
+    for row in rows:
+        mgmt = str(_row_val(row, "management_code") or "").strip()
+        if not mgmt:
+            no_code.append(row)
+            continue
+        existing = by_code.get(mgmt)
+        if existing is None:
+            by_code[mgmt] = row
+            order.append(mgmt)
+        else:
+            by_code[mgmt] = _prefer_usage_row(existing, row)
+    return [by_code[c] for c in order] + no_code
+
+
 def _parse_usage_count(raw) -> Optional[float]:
     """行の usage_count。未設定は 1。0 以下は対象外のため None。"""
     if raw is None:
@@ -533,6 +576,7 @@ async def commit_material_usage(
     already_reflected_codes = await collect_reflected_management_codes(
         db, source, other_than_day=today_d
     )
+    rows = _dedupe_cutting_rows_by_management_code(rows)
     try:
         for row in rows:
             if _is_sub_stock(row):
@@ -543,6 +587,8 @@ async def commit_material_usage(
                 continue
             # 別日で既に反映済の同一管理コードは再書き込みしない（順延コピー行）
             if mgmt_code in already_reflected_codes:
+                continue
+            if _is_row_usage_reflected(row):
                 continue
 
             usage_count_val = _parse_usage_count(_row_val(row, "usage_count"))
