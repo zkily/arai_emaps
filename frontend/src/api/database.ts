@@ -389,6 +389,7 @@ export function generateProductionSummarys(params: GenerateProductionSummarysPar
 export interface UpdateFromOrderDailyParams {
   updateMode?: 'all' | 'changed' | 'recent'
   days?: number
+  monthsAfter?: number
   clearBeforeUpdate?: boolean
 }
 

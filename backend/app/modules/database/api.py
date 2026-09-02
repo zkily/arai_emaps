@@ -1907,6 +1907,7 @@ async def generate_production_summarys(
 class UpdateFromOrderDailyBody(BaseModel):
     updateMode: str = "changed"  # 'all' | 'changed' | 'recent'
     days: int = 30
+    monthsAfter: Optional[int] = None  # recent 時: 当日基準で N ヶ月後まで（指定時は days 日前〜当該日）
     clearBeforeUpdate: bool = False
 
 
@@ -2176,7 +2177,6 @@ async def update_production_summarys_from_order_daily(
     forecast_quantity / order_quantity を更新する。
     """
     from time import perf_counter
-    from datetime import datetime, timedelta as _timedelta
     from app.modules.erp.models import OrderDaily
 
     start_time = perf_counter()
@@ -2189,11 +2189,21 @@ async def update_production_summarys_from_order_daily(
     if days <= 0:
         days = 30
 
-    # 対象期間（recent モード用）
-    recent_start_date = None
+    months_after = body.monthsAfter
+    if months_after is not None and months_after <= 0:
+        months_after = None
+
+    # 対象期間（recent モード用。当日は JST）
+    period_start = None
+    period_end = None
     if mode == "recent":
-        today = datetime.utcnow().date()
-        recent_start_date = today - _timedelta(days=days - 1)
+        today = now_jst().date()
+        if months_after is not None:
+            # 当日の days 日前 〜 当日の months_after ヶ月後
+            period_start = today - timedelta(days=days)
+            period_end = _parse_end_date(today, months_after)
+        else:
+            period_start = today - timedelta(days=days - 1)
 
     # order_daily から集計（product_cd 末尾を '1' にそろえてから集計）
     od = OrderDaily
@@ -2208,16 +2218,29 @@ async def update_production_summarys_from_order_daily(
         )
         .where(od.product_cd.isnot(None), od.product_cd != "")
     )
-    if mode == "recent" and recent_start_date is not None:
-        agg_query = agg_query.where(od.date >= recent_start_date)
+    if period_start is not None:
+        agg_query = agg_query.where(od.date >= period_start)
+    if period_end is not None:
+        agg_query = agg_query.where(od.date <= period_end)
 
     agg_query = agg_query.group_by(normalized_product_cd, od.date)
 
     agg_result = await db.execute(agg_query)
     agg_rows = agg_result.all()
 
+    # 更新前クリア（対象期間内の forecast/order を 0 にする）
+    if body.clearBeforeUpdate:
+        clear_stmt = update(ProductionSummary).values(order_quantity=0, forecast_quantity=0)
+        if period_start is not None:
+            clear_stmt = clear_stmt.where(ProductionSummary.date >= period_start)
+        if period_end is not None:
+            clear_stmt = clear_stmt.where(ProductionSummary.date <= period_end)
+        await db.execute(clear_stmt)
+
     total = len(agg_rows)
     if total == 0:
+        if body.clearBeforeUpdate:
+            await db.commit()
         elapsed = perf_counter() - start_time
         return {
             "code": 200,
@@ -2230,13 +2253,6 @@ async def update_production_summarys_from_order_daily(
             },
             "message": "更新対象となる受注データがありませんでした。",
         }
-
-    # 更新前クリア
-    if body.clearBeforeUpdate:
-        clear_stmt = update(ProductionSummary).values(order_quantity=0, forecast_quantity=0)
-        if mode == "recent" and recent_start_date is not None:
-            clear_stmt = clear_stmt.where(ProductionSummary.date >= recent_start_date)
-        await db.execute(clear_stmt)
 
     # 既存の production_summarys を一括取得
     key_list = [(r.product_cd, r.date) for r in agg_rows]

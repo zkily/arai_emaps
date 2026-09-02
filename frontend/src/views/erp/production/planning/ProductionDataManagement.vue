@@ -3134,6 +3134,7 @@ const handleUpdateFromOrderDaily = async () => {
     const res = await updateProductionSummarysFromOrderDaily({
       updateMode: 'recent',
       days: 10,
+      monthsAfter: 3,
       clearBeforeUpdate: true,
     }) as { data?: { updated?: number; unchanged?: number; skipped?: number; total?: number }; message?: string }
     const info = (res?.data ?? res ?? {}) as { updated?: number; unchanged?: number; skipped?: number; total?: number }
