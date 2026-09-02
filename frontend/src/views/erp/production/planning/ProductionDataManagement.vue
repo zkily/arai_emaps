@@ -3126,17 +3126,20 @@ const handleGenerateData = () => {
   showGenerateConfirmDialog.value = true
 }
 
+/** 受注データ更新：当日(JST)の10日前〜3ヶ月後をクリアしてから書き戻す */
+const ORDER_DAILY_UPDATE_PARAMS = {
+  updateMode: 'recent' as const,
+  days: 10,
+  monthsAfter: 3,
+  clearBeforeUpdate: true,
+}
+
 const handleUpdateFromOrderDaily = async () => {
   if (!guardApsOperation(canEdit)) return
 
   try {
     updatingFromOrderDaily.value = true
-    const res = await updateProductionSummarysFromOrderDaily({
-      updateMode: 'recent',
-      days: 10,
-      monthsAfter: 3,
-      clearBeforeUpdate: true,
-    }) as { data?: { updated?: number; unchanged?: number; skipped?: number; total?: number }; message?: string }
+    const res = await updateProductionSummarysFromOrderDaily(ORDER_DAILY_UPDATE_PARAMS) as { data?: { updated?: number; unchanged?: number; skipped?: number; total?: number }; message?: string }
     const info = (res?.data ?? res ?? {}) as { updated?: number; unchanged?: number; skipped?: number; total?: number }
     const msg =
       res?.message ??
@@ -4063,7 +4066,7 @@ const confirmAllUpdate = async () => {
     '計画データ更新',
   ]
   const steps = [
-    () => updateProductionSummarysFromOrderDaily({ updateMode: 'all' }),
+    () => updateProductionSummarysFromOrderDaily(ORDER_DAILY_UPDATE_PARAMS),
     () => updateProductionSummarysActual(getFirstDayOfCurrentMonth()),
     () => updateProductionSummarysDefect(),
     () => updateProductionSummarysScrap(),
