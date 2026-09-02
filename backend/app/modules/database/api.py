@@ -2290,12 +2290,11 @@ async def update_production_summarys_from_order_daily(
     await db.commit()
 
     try:
-        from datetime import timedelta
         from app.modules.database.lot_forecast_attribution_service import recompute_attribution
 
         affected_cds = list({str(r.product_cd) for r in agg_rows if r.product_cd})
         if affected_cds:
-            today = datetime.utcnow().date()
+            today = now_jst().date()
             await recompute_attribution(
                 db,
                 today - timedelta(days=30),
