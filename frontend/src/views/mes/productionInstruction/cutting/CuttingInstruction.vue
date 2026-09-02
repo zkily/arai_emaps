@@ -4,7 +4,7 @@
       <div class="header-left">
         <div class="header-title">
           <!-- <span class="page-header-badge">生産指示</span> -->
-          <h1>切断・面取指示管理</h1>
+          <h1><span class="page-title-mark" aria-hidden="true"></span>切断・面取指示管理</h1>
           <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
       </div>
@@ -28,7 +28,7 @@
         <template #header>
           <div class="card-header">
             <div class="section-title">
-              <el-icon size="18"><Calendar /></el-icon>
+              <span class="sec-icon sec-icon--batch" aria-hidden="true"><el-icon><Calendar /></el-icon></span>
               <span class="section-title-label">生産ロット一覧</span>
               <el-button
                 type="default"
@@ -238,7 +238,7 @@
       <div class="plan-section-right right-panel">
         <!-- 上：製品情報（products 表・点击批次卡片时取得） -->
         <div class="right-panel-top">
-          <div class="right-panel-title">製品情報</div>
+          <div class="right-panel-title"><span class="sec-icon sec-icon--batch" aria-hidden="true"></span>製品情報</div>
           <div v-if="!selectedProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
           <div v-else v-loading="productDetailLoading" class="product-detail-body">
             <template v-if="productDetail">
@@ -260,7 +260,7 @@
         </div>
         <!-- 下：設備能率（設備名に「切断」を含む行のみ） -->
         <div class="right-panel-bottom">
-          <div class="right-panel-title">設備能率（切断）</div>
+          <div class="right-panel-title"><span class="sec-icon sec-icon--cutting" aria-hidden="true"></span>設備能率（切断）</div>
           <div v-if="!selectedProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
           <div v-else v-loading="equipmentEfficiencyLoading" class="equipment-efficiency-body">
             <el-table v-if="equipmentEfficiencyListFiltered.length" :data="equipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
@@ -282,7 +282,7 @@
         <div class="instruction-col cutting-management-section">
           <div class="cutting-mgmt-header">
             <div class="cutting-mgmt-header-left">
-              <span class="cutting-mgmt-title">切断指示-今日</span>
+              <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--cutting" aria-hidden="true"></span>切断指示-今日</span>
               <div class="cutting-mgmt-date-wrap">
                 <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftDateToday(-1)" />
                 <el-date-picker
@@ -446,7 +446,7 @@
         </div>
         <div class="instruction-col cutting-management-section cutting-management-section-right">
           <div class="cutting-mgmt-header">
-            <span class="cutting-mgmt-title">切断指示-翌日</span>
+            <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--cutting-tm" aria-hidden="true"></span>切断指示-翌日</span>
             <div class="cutting-mgmt-date-wrap">
               <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftDateTomorrow(-1)" />
               <el-date-picker
@@ -560,11 +560,15 @@
 
       <!-- 材料別使用数汇总行（切断指示-今日/翌日の下・独立日付筛选） -->
       <div ref="usageSummarySectionRef" class="instruction-row usage-summary-row">
-        <!-- 今日：材料別使用数汇总表（独立日付筛选・一行占满） -->
         <div class="instruction-col usage-summary-col instruction-col-full">
           <div class="usage-summary-wrap">
             <div class="usage-summary-title-row usage-summary-title-row--with-date">
-              <span class="usage-summary-title">使用材料数（材料別）- 今日</span>
+              <div class="usage-summary-title-block">
+                <span class="usage-summary-title-icon" aria-hidden="true">
+                  <el-icon><TrendCharts /></el-icon>
+                </span>
+                <span class="usage-summary-title">使用材料数（材料別）</span>
+              </div>
               <div class="cutting-mgmt-date-wrap usage-summary-date-wrap">
                 <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftUsageSummaryDateToday(-1)" />
                 <el-date-picker
@@ -579,8 +583,8 @@
                 <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftUsageSummaryDateToday(1)" />
               </div>
               <div class="usage-summary-title-actions">
-                <el-button type="warning" size="small" :loading="usageReflectionLoading" @click="confirmUsageReflection">使用数反映</el-button>
-                <el-button type="info" size="small" @click="openSpecifiedDateDialog">指定日材料数</el-button>
+                <el-button class="usage-btn usage-btn--reflect" type="warning" size="small" :loading="usageReflectionLoading" @click="confirmUsageReflection">使用数反映</el-button>
+                <el-button class="usage-btn usage-btn--specified" size="small" @click="openSpecifiedDateDialog">指定日材料数</el-button>
               </div>
             </div>
             <div v-loading="usageSummaryCuttingLoading" class="usage-summary-table-wrap">
@@ -599,10 +603,11 @@
                   <tr
                     v-for="(row, idx) in usageSummaryCuttingList"
                     :key="row.id ?? `usage-${idx}`"
+                    :class="{ 'usage-summary-tr-alt': idx % 2 === 1 }"
                   >
                     <td>{{ row.product_name ?? '-' }}</td>
                     <td>{{ row.material_name ?? '-' }}</td>
-                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td class="usage-summary-code-td" :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
                     <td class="usage-summary-stock-td">
                       <el-switch
                         :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
@@ -616,8 +621,12 @@
                       {{ formatUsageCountDisplay(row as { usage_count?: number | null }) }}
                     </td>
                     <td>
-                      <span v-if="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1" class="usage-sub-manual-tag">サブ・手動</span>
-                      <span v-else :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
+                      <span v-if="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1" class="usage-status-pill usage-status-pill--sub">サブ・手動</span>
+                      <span
+                        v-else
+                        class="usage-status-pill"
+                        :class="isUsageRowReflected(row) ? 'usage-status-pill--ok' : 'usage-status-pill--wait'"
+                      >
                         {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
                       </span>
                     </td>
@@ -627,10 +636,22 @@
               <div v-else-if="!usageSummaryCuttingLoading" class="usage-summary-empty">該当日のデータがありません</div>
             </div>
             <div v-if="usageSummaryCuttingList.length" class="usage-summary-footer">
-              <span class="usage-summary-footer-item">合计件数：{{ usageSummaryTodayCounts.total }}</span>
-              <span class="usage-summary-footer-item usage-summary-footer--reflected">反映済：{{ usageSummaryTodayCounts.reflected }}</span>
-              <span class="usage-summary-footer-item usage-summary-footer--not-reflected">未反映：{{ usageSummaryTodayCounts.notReflected }}</span>
-              <span class="usage-summary-footer-item">未反映使用数：{{ formatUsageQty(usageSummaryTodayReflectQty) }} 束</span>
+              <span class="usage-stat usage-stat--total">
+                <span class="usage-stat-label">合计件数</span>
+                <span class="usage-stat-value">{{ usageSummaryTodayCounts.total }}</span>
+              </span>
+              <span class="usage-stat usage-stat--reflected">
+                <span class="usage-stat-label">反映済</span>
+                <span class="usage-stat-value">{{ usageSummaryTodayCounts.reflected }}</span>
+              </span>
+              <span class="usage-stat usage-stat--pending">
+                <span class="usage-stat-label">未反映</span>
+                <span class="usage-stat-value">{{ usageSummaryTodayCounts.notReflected }}</span>
+              </span>
+              <span class="usage-stat usage-stat--qty">
+                <span class="usage-stat-label">未反映使用数</span>
+                <span class="usage-stat-value">{{ formatUsageQty(usageSummaryTodayReflectQty) }}<small>束</small></span>
+              </span>
             </div>
           </div>
         </div>
@@ -641,7 +662,7 @@
         <div class="plan-section plan-section-left">
           <div class="chamfering-batch-section-card">
             <div class="cutting-mgmt-header">
-              <span class="cutting-mgmt-title">面取ロット一覧</span>
+              <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--chamfer" aria-hidden="true"></span>面取ロット一覧</span>
               <div class="cutting-mgmt-header-right">
                 <el-button type="primary" size="small" @click="openChamferingPlanNewDialog">新規追加</el-button>
               </div>
@@ -737,7 +758,7 @@
         </div>
         <div class="plan-section-right right-panel chamfering-right-panel">
           <div class="right-panel-top">
-            <div class="right-panel-title">製品情報</div>
+            <div class="right-panel-title"><span class="sec-icon sec-icon--chamfer" aria-hidden="true"></span>製品情報</div>
             <div v-if="!selectedChamferingProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
             <div v-else v-loading="chamferingProductDetailLoading" class="product-detail-body">
               <template v-if="chamferingProductDetail">
@@ -758,7 +779,7 @@
             </div>
           </div>
           <div class="right-panel-bottom">
-            <div class="right-panel-title">設備能率（面取）</div>
+            <div class="right-panel-title"><span class="sec-icon sec-icon--chamfer" aria-hidden="true"></span>設備能率（面取）</div>
             <div v-if="!selectedChamferingProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
             <div v-else v-loading="chamferingEquipmentEfficiencyLoading" class="equipment-efficiency-body">
               <el-table v-if="chamferingEquipmentEfficiencyListFiltered.length" :data="chamferingEquipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
@@ -778,7 +799,7 @@
           <div class="cutting-mgmt-header chamfering-mgmt-header-two-rows">
             <div class="chamfering-mgmt-header-row1">
               <div class="cutting-mgmt-header-left">
-                <span class="cutting-mgmt-title">面取指示-今日</span>
+                <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--chamfer" aria-hidden="true"></span>面取指示-今日</span>
                 <div class="cutting-mgmt-date-wrap">
                   <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftChamferingDateToday(-1)" />
                   <el-date-picker
@@ -965,7 +986,7 @@
         </div>
         <div class="instruction-col chamfering-management-section cutting-management-section-right">
           <div class="cutting-mgmt-header">
-            <span class="cutting-mgmt-title">面取指示-翌日</span>
+            <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--chamfer-tm" aria-hidden="true"></span>面取指示-翌日</span>
             <div class="cutting-mgmt-date-wrap">
               <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftChamferingDateTomorrow(-1)" />
               <el-date-picker
@@ -1075,7 +1096,7 @@
       <div class="instruction-row instruction-two-cols">
         <div ref="kanbanSectionRef" class="instruction-col kanban-issuance-section instruction-col-full">
           <div class="cutting-mgmt-header kanban-issuance-header">
-            <span class="cutting-mgmt-title">カンバン発行</span>
+            <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--kanban" aria-hidden="true"></span>カンバン発行</span>
             <div class="kanban-toolbar">
               <div class="kanban-toolbar-filters">
                 <el-button
@@ -4737,7 +4758,7 @@ function normalizeDateStr(val: unknown): string {
 async function confirmUsageReflection() {
   const todayParam = normalizeDateStr(usageSummaryDateToday.value)
   if (!todayParam) {
-    ElMessage.warning('使用材料数（材料別）- 今日の日付を選択してください')
+    ElMessage.warning('使用材料数（材料別）の日付を選択してください')
     return
   }
   const notReflected = usageSummaryTodayCounts.value.notReflected
@@ -4748,7 +4769,7 @@ async function confirmUsageReflection() {
   const qtyText = formatUsageQty(usageSummaryTodayReflectQty.value)
   try {
     await ElMessageBox.confirm(
-      `使用材料数（材料別）- 表示中の ${todayParam} の未反映 ${notReflected} 件（使用数合計 ${qtyText} 束）を材料在庫に反映します。反映済の管理コードは反映しません。よろしいですか？`,
+      `使用材料数（材料別）の ${todayParam} の未反映 ${notReflected} 件（使用数合計 ${qtyText} 束）を材料在庫に反映します。反映済の管理コードは反映しません。よろしいですか？`,
       '使用数反映の確認',
       {
         confirmButtonText: '反映する',
@@ -10179,6 +10200,13 @@ onUnmounted(() => {
   --kanban-bg: rgba(217, 119, 6, 0.06);
   --batch-accent: #2563eb;
   --batch-bg: rgba(37, 99, 235, 0.06);
+  --usage-accent: #7c3aed;
+  --radius-card: 16px;
+  --radius-inner: 12px;
+  --shadow-batch: 0 10px 28px -12px rgba(37, 99, 235, 0.28), 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-cutting: 0 10px 28px -12px rgba(79, 70, 229, 0.28), 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-chamfer: 0 10px 28px -12px rgba(5, 150, 105, 0.26), 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-kanban: 0 10px 28px -12px rgba(217, 119, 6, 0.26), 0 4px 12px rgba(15, 23, 42, 0.05);
 }
 
 .cutting-instruction-container {
@@ -15498,72 +15526,188 @@ onUnmounted(() => {
 }
 
 /* ============================================================
-   ページ全体美化 – コンパクト・フォント・アニメーション
+   ページ全体美化 – 統一カード・色分け・立体感
    ============================================================ */
 
-/* ── コンテナ余白を縮小 ── */
+.page-title-mark {
+  display: inline-block;
+  width: 10px;
+  height: 22px;
+  margin-right: 10px;
+  border-radius: 4px;
+  vertical-align: -4px;
+  background: linear-gradient(180deg, #93c5fd 0%, #2563eb 48%, #4f46e5 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 10px rgba(37, 99, 235, 0.35);
+}
+
+.sec-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 3px 8px rgba(15, 23, 42, 0.14);
+}
+.sec-icon--batch { background: linear-gradient(160deg, #93c5fd, #2563eb 55%, #1d4ed8); }
+.sec-icon--cutting { background: linear-gradient(160deg, #a5b4fc, #4f46e5 55%, #3730a3); }
+.sec-icon--cutting-tm { background: linear-gradient(160deg, #7dd3fc, #0284c7 55%, #0369a1); }
+.sec-icon--chamfer { background: linear-gradient(160deg, #6ee7b7, #059669 55%, #047857); }
+.sec-icon--chamfer-tm { background: linear-gradient(160deg, #5eead4, #0d9488 55%, #0f766e); }
+.sec-icon--kanban { background: linear-gradient(160deg, #fcd34d, #d97706 55%, #b45309); }
+
+/* ── コンテナ ── */
 .cutting-instruction-container {
-  padding: 8px 12px !important;
+  padding: 10px 14px !important;
   font-feature-settings: 'tnum' on, 'lnum' on;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background:
+    radial-gradient(1200px 420px at 8% -8%, rgba(99, 102, 241, 0.14), transparent 55%),
+    radial-gradient(900px 380px at 96% 0%, rgba(16, 185, 129, 0.10), transparent 50%),
+    linear-gradient(160deg, #eef2ff 0%, #f8fafc 42%, #f1f5f9 100%) !important;
   min-height: 100vh;
 }
 
-/* ── ページヘッダー compact ── */
+/* ── ページヘッダー ── */
 .page-header {
-  margin-bottom: 8px !important;
-  padding: 10px 14px !important;
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e0e7ff;
-  box-shadow: 0 2px 8px rgba(37,99,235,0.08),inset 0 1px 2px rgba(255,255,255,0.5);
+  margin-bottom: 10px !important;
+  padding: 12px 16px !important;
+  border-radius: var(--radius-card) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 100%) !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    0 10px 28px -12px rgba(37, 99, 235, 0.28),
+    0 4px 10px rgba(15, 23, 42, 0.05) !important;
 }
-.header-title h1 { font-size: 16px !important; letter-spacing: -0.04em !important; font-weight: 800 !important; }
+.header-title h1 {
+  font-size: 18px !important;
+  letter-spacing: -0.04em !important;
+  font-weight: 800 !important;
+  color: #1e1b4b !important;
+  display: flex !important;
+  align-items: center !important;
+}
 .header-right .header-pill-btn.el-button {
-  height: 28px !important;
-  padding: 0 12px !important;
+  height: 30px !important;
+  padding: 0 13px !important;
   font-size: 11px !important;
 }
 .header-right .header-pill-btn--report.el-button {
   padding: 0 12px 0 10px !important;
 }
 .header-pill-btn__icon { font-size: 13px !important; margin-right: 4px !important; }
-.header-title .header-desc { font-size: 11px !important; margin: 3px 0 0 !important; color: #64748b !important; }
+.header-title .header-desc { font-size: 11px !important; margin: 4px 0 0 32px !important; color: #64748b !important; }
 .page-header-badge { font-size: 9px !important; padding: 2px 6px !important; margin-bottom: 4px !important; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff !important; border-radius: 6px !important; font-weight: 700 !important; }
 
 /* ── カード padding compact ── */
-.plan-section .section-card :deep(.el-card__header) { padding: 8px 12px !important; }
+.plan-section .section-card :deep(.el-card__header) { padding: 10px 14px !important; }
 .plan-section .section-card :deep(.el-card__body)   { padding: 8px 12px !important; }
 
-/* ── カード hover lift ── */
+/* ── 生産ロットカード ── */
 .plan-section .section-card {
+  border-radius: var(--radius-card) !important;
+  border: 1px solid #bfdbfe !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(239,246,255,0.35) 100%),
+    #fff !important;
+  box-shadow: var(--shadow-batch) !important;
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease !important;
-  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
 }
 .plan-section .section-card:hover {
-  box-shadow: 0 12px 24px -6px rgba(37,99,235,0.18), 0 4px 12px -2px rgba(37,99,235,0.12) !important;
   transform: translateY(-2px);
+  box-shadow: 0 16px 36px -14px rgba(37,99,235,0.34), 0 6px 14px rgba(15,23,42,0.06) !important;
 }
 
-/* ── instruction-col hover lift ── */
+/* ── 右側パネル ── */
+.plan-row > .plan-section-right.right-panel {
+  border-radius: var(--radius-card) !important;
+  border: 1px solid #c7d2fe !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(238,242,255,0.5) 100%) !important;
+  box-shadow: var(--shadow-cutting) !important;
+}
+.right-panel.chamfering-right-panel {
+  border-color: #a7f3d0 !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(236,253,245,0.55) 100%) !important;
+  box-shadow: var(--shadow-chamfer) !important;
+}
+.right-panel-top,
+.right-panel-bottom {
+  border-radius: 12px !important;
+  box-shadow: inset 0 1px 0 #fff, 0 4px 12px rgba(15,23,42,0.04);
+}
+
+/* ── instruction-col 立体カード（色を潰さない） ── */
 .instruction-row .instruction-col {
-  padding: 8px 10px !important;
-  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease, background 0.2s ease !important;
+  padding: 10px 12px !important;
+  border-radius: var(--radius-card) !important;
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease !important;
 }
 .instruction-row .instruction-col:hover {
-  box-shadow: 0 8px 20px -4px rgba(0,0,0,0.12) !important;
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.95) !important;
+  transform: translateY(-2px) !important;
+  background: inherit !important;
+}
+.instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1),
+.instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
+  background: transparent !important;
+}
+.instruction-row .instruction-col.cutting-management-section {
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
+  border: 1px solid #c7d2fe !important;
+  box-shadow: var(--shadow-cutting) !important;
+}
+.instruction-row .instruction-col.cutting-management-section:nth-child(2) {
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%) !important;
+  border-color: #bae6fd !important;
+  box-shadow: 0 10px 28px -12px rgba(2, 132, 199, 0.26), 0 4px 12px rgba(15, 23, 42, 0.05) !important;
+}
+.instruction-row .instruction-col.cutting-management-section:hover {
+  box-shadow: 0 16px 36px -14px rgba(79, 70, 229, 0.34), 0 6px 14px rgba(15,23,42,0.06) !important;
+}
+.instruction-row .instruction-col.chamfering-management-section {
+  background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%) !important;
+  border: 1px solid #a7f3d0 !important;
+  box-shadow: var(--shadow-chamfer) !important;
+}
+.instruction-row .instruction-col.chamfering-management-section:nth-child(2) {
+  background: linear-gradient(180deg, #ffffff 0%, #ccfbf1 100%) !important;
+  border-color: #99f6e4 !important;
+}
+.instruction-row .instruction-col.chamfering-management-section:hover {
+  box-shadow: 0 16px 36px -14px rgba(5, 150, 105, 0.32), 0 6px 14px rgba(15,23,42,0.06) !important;
+}
+.instruction-row .instruction-col.kanban-issuance-section {
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%) !important;
+  border: 1px solid #fde68a !important;
+  box-shadow: var(--shadow-kanban) !important;
+}
+.instruction-row .instruction-col.kanban-issuance-section:hover {
+  box-shadow: 0 16px 36px -14px rgba(217, 119, 6, 0.32), 0 6px 14px rgba(15,23,42,0.06) !important;
+}
+
+.chamfering-batch-section-card {
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-chamfer) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%) !important;
+}
+.chamfering-batch-section-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -14px rgba(5, 150, 105, 0.32), 0 6px 14px rgba(15,23,42,0.06) !important;
 }
 
 /* ── gap compact ── */
-.plan-row { gap: 8px !important; margin-bottom: 8px !important; }
-.instruction-section { gap: 8px !important; margin-bottom: 8px !important; }
-.instruction-row.instruction-two-cols { gap: 8px !important; }
-.cutting-mgmt-header { margin-bottom: 4px !important; gap: 4px !important; }
+.plan-row { gap: 10px !important; margin-bottom: 10px !important; }
+.instruction-section { gap: 10px !important; margin-bottom: 10px !important; }
+.instruction-row.instruction-two-cols { gap: 10px !important; }
+.cutting-mgmt-header { margin-bottom: 6px !important; gap: 6px !important; }
 .search-section { padding: 0 !important; }
 .search-section :deep(.el-form--inline .el-form-item) { margin-bottom: 4px !important; }
 
@@ -15572,22 +15716,113 @@ onUnmounted(() => {
   transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 .plan-batch-data-row:hover {
-  background: linear-gradient(90deg, #eff6ff 0%, #f3f4f6 100%) !important;
+  background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 100%) !important;
   box-shadow: inset 3px 0 0 #2563eb !important;
 }
 
-/* ── 切断指示行 hover ── */
+/* ── 切断/面取行 hover ── */
 .cutting-mgmt-data-row { transition: background-color 0.15s ease, box-shadow 0.12s ease !important; }
-.cutting-mgmt-data-row:hover { background: linear-gradient(90deg, #f8faff 0%, #f3f4f6 100%) !important; box-shadow: inset 2px 0 0 #3b82f6; }
+.cutting-management-section .cutting-mgmt-data-row:hover {
+  background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%) !important;
+  box-shadow: inset 3px 0 0 #4f46e5 !important;
+}
+.chamfering-management-section .cutting-mgmt-data-row:hover,
+.chamfering-batch-section-card .plan-batch-data-row:hover {
+  background: linear-gradient(90deg, #ecfdf5 0%, #f8fafc 100%) !important;
+  box-shadow: inset 3px 0 0 #059669 !important;
+}
 
-/* ── table header 強化 ── */
-.plan-batch-th, .cutting-mgmt-th {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf5 100%) !important;
-  color: #3730a3 !important;
+/* ── table header 色分け ── */
+.plan-batch-th {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e40af !important;
   font-size: 10px !important;
   font-weight: 700 !important;
   letter-spacing: 0.03em !important;
-  border-bottom: 2px solid #c7d2fe !important;
+  border-bottom: 2px solid #93c5fd !important;
+}
+.cutting-management-section .cutting-mgmt-th {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  color: #3730a3 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #a5b4fc !important;
+}
+.instruction-row .instruction-col.cutting-management-section:nth-child(2) .cutting-mgmt-th {
+  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%) !important;
+  color: #075985 !important;
+  border-bottom-color: #7dd3fc !important;
+}
+.chamfering-management-section .cutting-mgmt-th,
+.chamfering-batch-section-card .plan-batch-th {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #047857 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  border-bottom: 2px solid #6ee7b7 !important;
+}
+.instruction-row .instruction-col.chamfering-management-section:nth-child(2) .cutting-mgmt-th {
+  background: linear-gradient(180deg, #ccfbf1 0%, #99f6e4 100%) !important;
+  color: #0f766e !important;
+  border-bottom-color: #5eead4 !important;
+}
+
+/* ── 日付ピル ── */
+.cutting-mgmt-date-wrap:not(.usage-summary-date-wrap) {
+  padding: 3px 6px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 6px rgba(15,23,42,0.06) !important;
+  margin-right: 6px !important;
+}
+.cutting-management-section .cutting-mgmt-date-wrap {
+  border-color: #c7d2fe !important;
+  background: linear-gradient(180deg, #ffffff, #eef2ff) !important;
+}
+.chamfering-management-section .cutting-mgmt-date-wrap {
+  border-color: #a7f3d0 !important;
+  background: linear-gradient(180deg, #ffffff, #ecfdf5) !important;
+}
+
+/* ── 合計行チップ ── */
+.cutting-mgmt-tfoot {
+  background: transparent !important;
+  border-top: none !important;
+  padding: 8px 2px 2px !important;
+}
+.cutting-mgmt-tfoot-summary {
+  gap: 8px !important;
+}
+.cutting-mgmt-tfoot-summary .cutting-mgmt-tfoot-item {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 5px 10px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(15,23,42,0.05) !important;
+  color: #334155 !important;
+  font-weight: 700 !important;
+}
+.cutting-management-section .cutting-mgmt-tfoot-item {
+  border-color: #c7d2fe !important;
+  background: linear-gradient(180deg, #ffffff, #eef2ff) !important;
+  color: #3730a3 !important;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-item {
+  border-color: #a7f3d0 !important;
+  background: linear-gradient(180deg, #ffffff, #ecfdf5) !important;
+  color: #047857 !important;
+}
+
+/* ── 内テーブル凹み ── */
+.cutting-mgmt-table-wrap,
+.plan-batch-table-wrap {
+  border-radius: 12px !important;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.05), 0 8px 18px -14px rgba(15,23,42,0.2);
 }
 
 /* ── ボタン カラーコーディング & アニメーション ── */
@@ -15707,7 +15942,7 @@ onUnmounted(() => {
 
 /* ── card section-title（生産ロット一覧：タイトル + ツールバー） ── */
 .card-header .section-title {
-  font-size: 12px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   color: #1e1b4b !important;
   display: flex !important;
@@ -15719,39 +15954,50 @@ onUnmounted(() => {
   flex: 1 1 auto !important;
   min-width: 0 !important;
 }
-/* ── right-panel hover ── */
+.section-title-label {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #1e40af !important;
+}
 .right-panel { transition: box-shadow 0.22s ease !important; }
-.right-panel:hover { box-shadow: 0 6px 16px rgba(37,99,235,0.12) !important; }
+.right-panel:hover { box-shadow: 0 12px 24px -10px rgba(37,99,235,0.22) !important; }
+.chamfering-right-panel:hover { box-shadow: 0 12px 24px -10px rgba(5,150,105,0.22) !important; }
 
-/* ── 製品詳細リスト compact & hover ── */
 .product-detail-list-item {
   transition: background-color 0.12s ease !important;
   padding: 3px 6px !important;
   min-height: 22px !important;
 }
 .product-detail-list-item:hover { background: #f0f9ff !important; }
+.product-detail-list--chamfering .product-detail-list-item:hover { background: #ecfdf5 !important; }
 .product-detail-list-item .detail-label { font-size: 10px !important; font-weight: 700 !important; }
 .product-detail-list-item .detail-value { font-size: 10px !important; font-weight: 500 !important; }
 
-/* ── ページネーション compact ── */
 .pagination-wrap { padding: 4px 0 0 !important; }
 .pagination-wrap :deep(.el-pagination) { font-size: 10px !important; }
 
-/* ── セクションタイトルアンダーライン ── */
-.cutting-mgmt-title { position: relative; padding-bottom: 2px; display: flex; align-items: center; }
-.cutting-mgmt-title::after {
-  content: '';
-  display: block;
-  position: absolute;
-  bottom: -2px; left: 0;
-  width: 100%; height: 2px;
-  border-radius: 1px;
-  background: currentColor;
-  opacity: 0.18;
+.cutting-mgmt-title {
+  position: relative;
+  padding-bottom: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
 }
-
-/* ── right-panel-title compact ── */
-.right-panel-title { margin-bottom: 6px !important; padding-bottom: 4px !important; font-size: 11px !important; }
+.cutting-mgmt-title::after,
+.chamfering-management-section .cutting-mgmt-title::before {
+  display: none !important;
+}
+.right-panel-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 6px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
 
 /* ── el-table global polish ── */
 .cutting-instruction-container :deep(.el-table th.el-table__cell) {
@@ -15769,6 +16015,14 @@ onUnmounted(() => {
 .cutting-instruction-container :deep(.el-table .el-table__row:hover > td) {
   background: linear-gradient(90deg, #f0f9ff 0%, #f3f4f6 100%) !important;
   transition: background-color 0.15s ease !important;
+}
+.chamfering-right-panel :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #047857 !important;
+}
+.kanban-issuance-section :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
+  color: #b45309 !important;
 }
 
 /* ── input/select focus glow ── */
@@ -15805,81 +16059,325 @@ onUnmounted(() => {
   flex: 1 1 100%;
   min-width: 0;
 }
-.usage-summary-col {
-  padding: 0;
+.instruction-row .instruction-col.usage-summary-col {
+  position: relative;
+  padding: 0 !important;
+  overflow: hidden;
+  min-height: 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0) 42%),
+    linear-gradient(135deg, #faf7ff 0%, #ffffff 38%, #f5f3ff 100%) !important;
+  border: 1px solid #ddd6fe !important;
+  border-radius: 16px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 10px 28px -10px rgba(109, 40, 217, 0.28),
+    0 4px 12px rgba(15, 23, 42, 0.06) !important;
+  transform: none !important;
+}
+.instruction-row .instruction-col.usage-summary-col::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 48%, #4f46e5 100%);
+  box-shadow: 1px 0 8px rgba(124, 58, 237, 0.28);
+  z-index: 1;
+}
+.instruction-row .instruction-col.usage-summary-col:hover {
+  transform: translateY(-2px) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 42%),
+    linear-gradient(135deg, #faf7ff 0%, #ffffff 38%, #f5f3ff 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    0 16px 36px -12px rgba(109, 40, 217, 0.34),
+    0 6px 16px rgba(15, 23, 42, 0.08) !important;
+}
+.usage-summary-wrap {
+  padding: 12px 14px 12px 18px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  height: 400px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 .usage-summary-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   flex-shrink: 0;
 }
 .usage-summary-title-row--with-date {
   flex-wrap: wrap;
+  gap: 10px;
+}
+.usage-summary-title-block {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.usage-summary-title-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(160deg, #c4b5fd 0%, #7c3aed 55%, #5b21b6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 4px 10px rgba(124, 58, 237, 0.38);
+  font-size: 14px;
+}
+.usage-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #5b21b6;
+  margin-bottom: 0;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 .usage-summary-date-wrap {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
+  border: 1px solid #ddd6fe;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 2px 6px rgba(91, 33, 182, 0.08);
 }
-.usage-summary-date-wrap .el-date-editor { width: 120px; }
+.usage-summary-date-wrap .el-date-editor { width: 128px; }
+.usage-summary-date-wrap .el-button.is-circle {
+  border-color: #ddd6fe;
+  color: #6d28d9;
+  background: #fff;
+}
+.usage-summary-date-wrap .el-button.is-circle:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #a78bfa, #7c3aed);
+  border-color: #7c3aed;
+}
+.usage-summary-title-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.usage-btn.usage-btn--reflect {
+  font-weight: 700;
+  border: none;
+  color: #fff !important;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 42%, #ea580c 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 4px 10px rgba(234, 88, 12, 0.32);
+}
+.usage-btn.usage-btn--reflect:hover,
+.usage-btn.usage-btn--reflect:focus {
+  filter: brightness(1.05);
+  color: #fff !important;
+}
+.usage-btn.usage-btn--specified {
+  font-weight: 700;
+  color: #5b21b6 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #ede9fe 100%) !important;
+  border: 1px solid #c4b5fd !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 8px rgba(124, 58, 237, 0.16);
+}
+.usage-btn.usage-btn--specified:hover,
+.usage-btn.usage-btn--specified:focus {
+  color: #4c1d95 !important;
+  border-color: #8b5cf6 !important;
+}
 .usage-summary-table-wrap {
   min-height: 48px;
   overflow-x: auto;
   overflow-y: auto;
-  height: 340px;
-  flex-shrink: 0;
+  height: 292px;
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e9e4ff;
+  box-shadow:
+    inset 0 1px 2px rgba(91, 33, 182, 0.06),
+    0 8px 18px -12px rgba(91, 33, 182, 0.28);
 }
+.usage-summary-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.usage-summary-table th,
+.usage-summary-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #f1e9ff;
+  border-right: 1px solid #f6f2ff;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usage-summary-table th:last-child,
+.usage-summary-table td:last-child { border-right: none; }
 .usage-summary-table--list th,
 .usage-summary-table--list td {
   min-width: 70px;
 }
 .usage-summary-table--list th:first-child,
-.usage-summary-table--list td:first-child { min-width: 80px; }
+.usage-summary-table--list td:first-child { min-width: 88px; }
 .usage-summary-table--list th:nth-child(2),
 .usage-summary-table--list td:nth-child(2) { min-width: 100px; }
 .usage-summary-table--list th:nth-child(3),
-.usage-summary-table--list td:nth-child(3) { min-width: 100px; }
+.usage-summary-table--list td:nth-child(3) { min-width: 120px; }
 .usage-summary-table--list th:nth-child(4),
 .usage-summary-table--list td:nth-child(4) { min-width: 80px; }
 .usage-summary-table--list th:nth-child(5),
-.usage-summary-table--list td:nth-child(5) { min-width: 80px; }
+.usage-summary-table--list td:nth-child(5) { min-width: 88px; }
 .usage-summary-table--list th:nth-child(6),
-.usage-summary-table--list td:nth-child(6) { min-width: 100px; }
+.usage-summary-table--list td:nth-child(6) { min-width: 96px; }
+.usage-summary-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #5b21b6;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 0 #ddd6fe;
+}
+.usage-summary-table tbody tr {
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.usage-summary-table tbody tr.usage-summary-tr-alt td {
+  background: #faf8ff;
+}
+.usage-summary-table tbody tr:hover td {
+  background: #f3e8ff;
+}
+.usage-summary-code-td {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #4338ca;
+  font-weight: 600;
+}
 .usage-summary-table--list td.usage-mgmt-empty {
-  color: #999;
+  color: #94a3b8;
   font-style: italic;
+  font-weight: 400;
+}
+.usage-summary-usage-td {
+  font-weight: 700;
+  color: #c2410c;
+  text-align: right;
+  cursor: text;
+}
+.usage-summary-stock-td {
+  text-align: center;
 }
 .usage-summary-empty {
-  padding: 8px 0;
-  color: #888;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #7c6bb0;
+  font-size: 13px;
+}
+.usage-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.usage-status-pill--ok {
+  color: #166534;
+  background: linear-gradient(180deg, #dcfce7, #bbf7d0);
+  border: 1px solid #86efac;
+}
+.usage-status-pill--wait {
+  color: #9a3412;
+  background: linear-gradient(180deg, #ffedd5, #fed7aa);
+  border: 1px solid #fdba74;
+}
+.usage-status-pill--sub {
+  color: #475569;
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+  border: 1px solid #cbd5e1;
 }
 .usage-summary-footer {
   display: flex;
-  gap: 12px;
-  padding: 6px 0 4px;
-  font-size: 12px;
-  color: #555;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 2px 0;
+  margin-top: 8px;
   flex-shrink: 0;
-  border-top: 1px solid #eee;
-  margin-top: 4px;
+  border-top: none;
 }
-.usage-summary-footer-item {
+.usage-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 10px;
   white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 3px 8px rgba(15, 23, 42, 0.06);
 }
-.usage-summary-footer--reflected {
-  color: #15803d;
+.usage-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.82;
 }
-.usage-summary-footer--not-reflected {
-  color: #b45309;
+.usage-stat-value {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
-.usage-summary-title-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+.usage-stat-value small {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.usage-stat--total {
+  color: #334155;
+  background: linear-gradient(180deg, #ffffff, #f1f5f9);
+  border: 1px solid #e2e8f0;
+}
+.usage-stat--reflected {
+  color: #166534;
+  background: linear-gradient(180deg, #f0fdf4, #dcfce7);
+  border: 1px solid #bbf7d0;
+}
+.usage-stat--pending {
+  color: #9a3412;
+  background: linear-gradient(180deg, #fff7ed, #ffedd5);
+  border: 1px solid #fed7aa;
+}
+.usage-stat--qty {
+  color: #5b21b6;
+  background: linear-gradient(180deg, #faf5ff, #ede9fe);
+  border: 1px solid #ddd6fe;
 }
 .usage-reflected-badge {
   font-size: 11px;
@@ -15911,67 +16409,9 @@ onUnmounted(() => {
   font-size: 11px;
   font-style: italic;
 }
-.usage-summary-wrap--tomorrow .usage-reflected-badge.is-reflected {
-  color: #15803d;
-  background: #bbf7d0;
-}
-.usage-summary-wrap--tomorrow .usage-reflected-badge.is-not-reflected {
-  color: #9a3412;
-  background: #fed7aa;
-}
-.usage-summary-wrap {
-  padding: 8px 10px 10px;
-  border-top: 2px solid #e0e7ff;
-  background: #fafafa;
-  border-radius: 0 0 6px 6px;
-  height: 380px;
-  display: flex;
-  flex-direction: column;
-  min-height: 380px;
-}
-.usage-summary-wrap--tomorrow {
-  background: #f0fdf4;
-  border-top-color: #bbf7d0;
-}
-.usage-summary-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #6366f1;
-  margin-bottom: 0;
-}
-.usage-summary-wrap--tomorrow .usage-summary-title {
-  color: #16a34a;
-}
-.usage-summary-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-}
-.usage-summary-table th,
-.usage-summary-table td {
-  padding: 3px 8px;
-  border: 1px solid #e0e7ff;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .usage-count-col {
   width: 120px;
   text-align: right;
-}
-.usage-summary-wrap--tomorrow .usage-summary-table th,
-.usage-summary-wrap--tomorrow .usage-summary-table td {
-  border-color: #bbf7d0;
-}
-.usage-summary-table th {
-  background: #eef2ff;
-  color: #4338ca;
-  font-weight: 600;
-}
-.usage-summary-wrap--tomorrow .usage-summary-table th {
-  background: #dcfce7;
-  color: #15803d;
 }
 .usage-count-cell {
   text-align: right;
