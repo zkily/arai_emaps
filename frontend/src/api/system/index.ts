@@ -772,3 +772,53 @@ export function testIntegration(serviceType: string) {
     message: string
   }>
 }
+
+// ========== Device Owner QR（Android キオスク配布） ==========
+
+export interface DeviceOwnerStatus {
+  has_apk: boolean
+  filename: string | null
+  size_bytes: number | null
+  package_checksum: string | null
+  signature_checksum: string | null
+  public_base_url: string
+  uploaded_at: string | null
+  download_path: string
+  dpc_component: string
+}
+
+export interface DeviceOwnerProvisioningPayload {
+  has_apk: boolean
+  download_url: string | null
+  package_checksum: string | null
+  signature_checksum: string | null
+  dpc_component: string
+  qr_json: Record<string, unknown> | null
+  qr_text: string | null
+  warning: string | null
+}
+
+export function getDeviceOwnerStatus() {
+  return request.get(`${BASE}/device-owner/status`) as unknown as Promise<DeviceOwnerStatus>
+}
+
+export function updateDeviceOwnerSettings(data: {
+  public_base_url: string
+  signature_checksum?: string
+}) {
+  return request.put(`${BASE}/device-owner/settings`, data) as unknown as Promise<DeviceOwnerStatus>
+}
+
+export function uploadDeviceOwnerApk(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post(`${BASE}/device-owner/apk`, form, {
+    timeout: 180000,
+  }) as unknown as Promise<DeviceOwnerStatus>
+}
+
+export function getDeviceOwnerProvisioningPayload(publicBaseUrl?: string) {
+  return request.get(`${BASE}/device-owner/provisioning-payload`, {
+    params: publicBaseUrl ? { public_base_url: publicBaseUrl } : undefined,
+  }) as unknown as Promise<DeviceOwnerProvisioningPayload>
+}

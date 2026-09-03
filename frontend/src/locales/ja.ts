@@ -611,6 +611,7 @@ export default {
     SYSTEM_DATA: 'データ管理',
     SYSTEM_MENUS: 'メニュー管理',
     SYSTEM_FILE_WATCHER: 'ファイル監視設定',
+    SYSTEM_DEVICE_OWNER_QR: 'Device Owner QR',
     SYSTEM_DATABASE: 'データベース',
     SYSTEM_DB_ORDER_DAILY: 'order_daily',
     COLLAPSE: '折りたたむ',

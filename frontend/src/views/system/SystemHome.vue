@@ -105,6 +105,7 @@ import {
   DataBoard,
   UserFilled,
   Lock,
+  Iphone,
 } from '@element-plus/icons-vue'
 import * as systemApi from '@/api/system'
 import type { PaginatedUserResponse } from '@/api/system'
@@ -243,6 +244,14 @@ const settingModules: SystemModule[] = [
     color: '#ec4899',
     gradient: 'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',
     icon: markRaw(DataBoard),
+  },
+  {
+    path: '/system/device-owner-qr',
+    title: 'Device Owner QR',
+    description: 'Android キオスク開通 QR',
+    color: '#0ea5e9',
+    gradient: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+    icon: markRaw(Iphone),
   },
 ]
 

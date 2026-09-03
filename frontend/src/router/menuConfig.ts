@@ -267,6 +267,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_DATA', name: 'データ管理', icon: 'FolderOpened', path: '/system/data', parentCode: 'SYSTEM_SETTINGS', sortOrder: 5 },
   { code: 'SYSTEM_MENUS', name: 'メニュー管理', icon: 'Menu', path: '/system/menus', parentCode: 'SYSTEM_SETTINGS', sortOrder: 6 },
   { code: 'SYSTEM_FILE_WATCHER', name: 'ファイル監視設定', icon: 'View', path: '/system/file-watcher', parentCode: 'SYSTEM_SETTINGS', sortOrder: 7 },
+  { code: 'SYSTEM_DEVICE_OWNER_QR', name: 'Device Owner QR', icon: 'Iphone', path: '/system/device-owner-qr', parentCode: 'SYSTEM_SETTINGS', sortOrder: 8 },
   { code: 'SYSTEM_DATABASE', name: 'データベース', icon: 'Cpu', parentCode: 'SYSTEM', sortOrder: 3 },
   { code: 'SYSTEM_DB_ORDER_DAILY', name: 'order_daily', icon: 'Calendar', path: '/system/database/order/daily', parentCode: 'SYSTEM_DATABASE', sortOrder: 1 },
 

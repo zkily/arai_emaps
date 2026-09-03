@@ -10,6 +10,9 @@ certs/dev-lan.*
 # ローカル環境変数
 .env
 
+# Device Owner QR 配布用 APK（アップロード成果物）
+data/device_owner/
+
 # Python キャッシュ
 __pycache__/
 *.py[cod]
