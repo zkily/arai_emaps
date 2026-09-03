@@ -240,23 +240,50 @@
           <div class="scrap-block__head-main">
             <el-icon class="scrap-block__ico scrap-block__ico--teal"><Grid /></el-icon>
             <span class="scrap-block__title">製品別集計</span>
+            <span class="scrap-block__hint">チェックで下部の月次対比へ</span>
+            <span v-if="compareSelectedProductCds.length" class="scrap-select-count">
+              対比用 {{ compareSelectedProductCds.length }} 件選択中
+            </span>
           </div>
-          <el-button type="primary" plain size="small" :loading="printProductLoading" @click="printProductTable">
-            <el-icon class="scrap-print-btn-ico"><Printer /></el-icon>
-            印刷
-          </el-button>
+          <div class="scrap-block__head-actions">
+            <el-button
+              v-if="compareSelectedProductCds.length"
+              size="small"
+              plain
+              @click="clearCompareProductSelection"
+            >
+              選択解除
+            </el-button>
+            <el-button
+              v-if="compareSelectedProductCds.length"
+              type="primary"
+              plain
+              size="small"
+              @click="scrollToMonthCompare"
+            >
+              月次対比へ
+            </el-button>
+            <el-button type="primary" plain size="small" :loading="printProductLoading" @click="printProductTable">
+              <el-icon class="scrap-print-btn-ico"><Printer /></el-icon>
+              印刷
+            </el-button>
+          </div>
         </div>
         <div class="scrap-table-shell scrap-table-shell--wide scrap-table-shell--product">
           <el-table
+            ref="productTableRef"
             v-loading="loadingProductMatrix"
             :data="productRows"
+            row-key="product_cd"
             size="small"
             border
             stripe
             class="scrap-table scrap-table--product"
             :default-sort="{ prop: 'product_name', order: 'ascending' }"
             @sort-change="onProductSortChange"
+            @selection-change="onProductSelectionChange"
           >
+            <el-table-column type="selection" width="42" fixed />
             <el-table-column
               prop="product_cd"
               label="製品CD"
@@ -338,6 +365,12 @@
         />
       </section>
     </el-card>
+
+    <ScrapProductMonthCompare
+      ref="monthCompareRef"
+      v-model:selected-product-cds="compareSelectedProductCds"
+      :product-options="productOptions"
+    />
   </div>
 </template>
 
@@ -367,6 +400,7 @@ import {
 } from '@/api/database'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import ScrapProductMonthCompare from './components/ScrapProductMonthCompare.vue'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
 
@@ -397,12 +431,21 @@ const process = ref('')
 const filterProductCd = ref('')
 const productOptions = ref<Array<{ product_cd: string; product_name?: string | null }>>([])
 const productPage = ref(1)
-const productLimit = ref(50)
+const productLimit = ref(20)
 const productTotal = ref(0)
 /** 製品別表：サーバー側ソート（既定＝品名昇順） */
 const productSortProp = ref<string>('product_name')
 const productSortOrder = ref<'asc' | 'desc'>('asc')
 const printProductLoading = ref(false)
+/** 月次対比用：製品別集計チェックと双方向同期（跨ページ保持） */
+const compareSelectedProductCds = ref<string[]>([])
+const productTableRef = ref<{
+  clearSelection: () => void
+  toggleRowSelection: (row: { product_cd: string }, selected?: boolean) => void
+} | null>(null)
+const monthCompareRef = ref<{ $el?: HTMLElement } | null>(null)
+let syncingProductSelection = false
+const COMPARE_PRODUCT_MAX = 100
 
 const DEFAULT_MAIN_LINE: Array<{ key: string; label: string }> = [
   { key: 'cutting', label: '切断' },
@@ -1258,6 +1301,76 @@ async function onProductPageChange(p: number) {
   await loadProductMatrixWithSpinner()
 }
 
+function onProductSelectionChange(selection: ProductMatrixRow[]) {
+  if (syncingProductSelection) return
+  const pageCds = new Set(productRows.value.map((r) => r.product_cd))
+  const selectedOnPage = new Set(selection.map((r) => r.product_cd).filter(Boolean))
+  const kept = compareSelectedProductCds.value.filter((cd) => !pageCds.has(cd))
+  const next = [...kept]
+  for (const cd of selectedOnPage) {
+    if (!next.includes(cd)) next.push(cd)
+  }
+  if (next.length > COMPARE_PRODUCT_MAX) {
+    ElMessage.warning(`対比用製品は最大${COMPARE_PRODUCT_MAX}件までです`)
+    syncingProductSelection = true
+    compareSelectedProductCds.value = next.slice(0, COMPARE_PRODUCT_MAX)
+    void syncProductTableSelection().finally(() => {
+      syncingProductSelection = false
+    })
+    return
+  }
+  const prev = compareSelectedProductCds.value
+  if (prev.length === next.length && prev.every((cd, i) => cd === next[i])) return
+  syncingProductSelection = true
+  compareSelectedProductCds.value = next
+  nextTick(() => {
+    syncingProductSelection = false
+  })
+}
+
+async function syncProductTableSelection() {
+  const table = productTableRef.value
+  if (!table) return
+  syncingProductSelection = true
+  try {
+    await nextTick()
+    for (const row of productRows.value) {
+      const on = compareSelectedProductCds.value.includes(row.product_cd)
+      table.toggleRowSelection(row, on)
+    }
+  } finally {
+    await nextTick()
+    syncingProductSelection = false
+  }
+}
+
+function clearCompareProductSelection() {
+  compareSelectedProductCds.value = []
+  const table = productTableRef.value
+  if (table) {
+    syncingProductSelection = true
+    try {
+      table.clearSelection()
+    } finally {
+      syncingProductSelection = false
+    }
+  }
+}
+
+function scrollToMonthCompare() {
+  const el = (monthCompareRef.value as { $el?: HTMLElement } | null)?.$el
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+watch(productRows, () => {
+  void syncProductTableSelection()
+})
+
+watch(compareSelectedProductCds, () => {
+  if (syncingProductSelection) return
+  void syncProductTableSelection()
+})
+
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, '&amp;')
@@ -1696,6 +1809,26 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.scrap-block__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.scrap-block__hint {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.scrap-select-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0ea5e9;
+  white-space: nowrap;
 }
 
 .scrap-print-btn-ico {

@@ -154,6 +154,8 @@ export function getQualityRateByProduct(params: {
   page?: number
   limit?: number
   productCd?: string
+  /** 製品CD 複数（カンマ区切り、最大100件） */
+  productCds?: string
   keyword?: string
   /** 既定: product_name。all_processes_defect_scrap=全工程不良+廃棄合計。主ライン工程キーは当該工程比率でソート */
   sortBy?: string

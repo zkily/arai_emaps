@@ -1131,6 +1131,27 @@ def _product_matrix_order_clause(sort_by: str, sort_order: str) -> str:
     return _simple("`product_name`")
 
 
+_PRODUCT_CDS_FILTER_MAX = 100
+
+
+def _parse_product_cd_filters(product_cd: Optional[str], product_cds: Optional[str]) -> list[str]:
+    """productCd と productCds（カンマ区切り）を結合し、重複を除いた製品CDリストを返す。"""
+    seen: list[str] = []
+    for raw in (product_cd, product_cds):
+        if not raw or not str(raw).strip():
+            continue
+        for part in str(raw).split(","):
+            cd = part.strip()
+            if cd and cd not in seen:
+                seen.append(cd)
+    if len(seen) > _PRODUCT_CDS_FILTER_MAX:
+        raise HTTPException(
+            status_code=422,
+            detail=f"製品CDは最大{_PRODUCT_CDS_FILTER_MAX}件まで指定できます",
+        )
+    return seen
+
+
 def _product_row_to_main_line_processes(row: dict) -> list[dict]:
     """GROUP BY 行を製品単位の主ライン工程メトリクスに変換"""
     out: list[dict] = []
@@ -1173,6 +1194,7 @@ async def get_quality_rate_by_product(
     page: int = Query(1, ge=1),
     limit: int = Query(100, ge=1, le=500),
     productCd: Optional[str] = Query(None, description="製品CD 完全一致"),
+    productCds: Optional[str] = Query(None, description="製品CD 複数（カンマ区切り、最大100件）"),
     keyword: Optional[str] = Query(None, description="製品CD・製品名 の部分一致"),
     sortBy: str = Query(
         "product_name",
@@ -1210,9 +1232,12 @@ async def get_quality_rate_by_product(
         kw_clause = " AND (`product_name` LIKE :kw OR `product_cd` LIKE :kw)"
 
     pcd_clause = ""
-    if productCd and productCd.strip():
-        params["product_cd_eq"] = productCd.strip()
-        pcd_clause = " AND `product_cd` = :product_cd_eq"
+    cds = _parse_product_cd_filters(productCd, productCds)
+    if cds:
+        ph = ", ".join(f":pcd_{i}" for i in range(len(cds)))
+        pcd_clause = f" AND `product_cd` IN ({ph})"
+        for i, cd in enumerate(cds):
+            params[f"pcd_{i}"] = cd
 
     count_sql = (
         "SELECT COUNT(*) AS c FROM ("
