@@ -164,6 +164,12 @@ async def get_product_route_steps(
             "step_no": step_no,
             "process_cd": step_row.process_cd,
             "process_name": process_name or step_row.process_cd,
+            "yield_percent": (
+                float(step_row.yield_percent) if getattr(step_row, "yield_percent", None) is not None else 100.0
+            ),
+            "wait_sec_after": (
+                int(step_row.wait_sec_after) if getattr(step_row, "wait_sec_after", None) is not None else 0
+            ),
             "machines": machines_by_step.get((step_no,), []),
         })
     return result
@@ -186,6 +192,8 @@ class StepItem(BaseModel):
     step_no: int
     process_cd: str
     process_name: Optional[str] = None
+    yield_percent: Optional[float] = 100.0
+    wait_sec_after: Optional[int] = 0
     machines: Optional[List[MachineItem]] = None
 
 
@@ -219,6 +227,8 @@ async def save_product_route_steps_bulk(
             route_cd=item.route_cd,
             step_no=item.step_no,
             process_cd=item.process_cd,
+            yield_percent=item.yield_percent if item.yield_percent is not None else 100.0,
+            wait_sec_after=item.wait_sec_after if item.wait_sec_after is not None else 0,
         )
         db.add(step)
         await db.flush()

@@ -157,8 +157,8 @@
                 v-for="d in dateColumns"
                 :key="`${row.lineId}-${d}`"
                 class="cell"
-                :class="cellClasses(row.dailyHours[d], d)"
-                :title="`${formatDate(d)}: ${formatHours(row.dailyHours[d] || 0)}h`"
+                :class="cellClasses(row.dailyHours[d], d, row.dailyOccupancy[d])"
+                :title="occupancyCellTitle(d, row.dailyHours[d] || 0, row.dailyOccupancy[d])"
               >
                 <div class="cell-main">{{ formatHours(row.dailyHours[d] || 0) }}</div>
               </td>
@@ -179,10 +179,12 @@ import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
   fetchLineCapacities,
+  fetchLineCapacitySlots,
   fetchLines,
   fetchSchedulingGrid,
   type ProductionLine,
 } from '@/api/aps'
+import { dayOccupancyKindFromSlots, type DayOccupancyKind } from '@/utils/lineOccupancyDisplay'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
 import { guardApsOperation } from '@/utils/apsOperationGuard'
 
@@ -193,6 +195,7 @@ type MatrixRow = {
   lineLabel: string
   totalHours: number
   dailyHours: Record<string, number>
+  dailyOccupancy: Record<string, DayOccupancyKind>
 }
 
 /** プルダウン表示：工程名のみ（空のときは CD） */
@@ -300,7 +303,19 @@ async function applyNextMonthRange() {
 }
 
 /** 画面セル：印刷と同じ稼働時間帯の色分け */
-function cellClasses(rawHours: number | undefined, d: string) {
+function occupancyCellTitle(d: string, hours: number, occ: DayOccupancyKind): string {
+  const base = `${formatDate(d)}: ${formatHours(hours)}h`
+  if (occ === 'tech') return `${base}／技術使用あり`
+  if (occ === 'maintenance') return `${base}／保全あり`
+  if (occ === 'mixed') return `${base}／技術・保全あり`
+  return base
+}
+
+function cellClasses(
+  rawHours: number | undefined,
+  d: string,
+  occ: DayOccupancyKind = '',
+) {
   const h = Number(rawHours || 0)
   const weekend = isWeekend(d)
   const classes: Record<string, boolean> = {
@@ -310,6 +325,9 @@ function cellClasses(rawHours: number | undefined, d: string) {
   if (!h && !weekend) classes['is-weekday-empty'] = true
   if (h > 23) classes['is-high-hours'] = true
   else if (h >= 20 && h <= 22) classes['is-mid-hours'] = true
+  if (occ === 'tech') classes['is-tech-occ'] = true
+  else if (occ === 'maintenance') classes['is-maint-occ'] = true
+  else if (occ === 'mixed') classes['is-mixed-occ'] = true
   return classes
 }
 
@@ -353,18 +371,28 @@ async function loadMatrix() {
       ? lines.value.filter((ln) => selectedLineIds.value.includes(ln.id))
       : lines.value
     const results = await Promise.all(
-      targetLines.map(async (ln) => ({
-        line: ln,
-        days: await fetchLineCapacities(ln.id, startDate, endDate),
-      })),
+      targetLines.map(async (ln) => {
+        const [days, slotDays] = await Promise.all([
+          fetchLineCapacities(ln.id, startDate, endDate),
+          fetchLineCapacitySlots(ln.id, startDate, endDate).catch(() => []),
+        ])
+        return { line: ln, days, slotDays }
+      }),
     )
-    matrixRows.value = results.map(({ line, days }) => {
+    matrixRows.value = results.map(({ line, days, slotDays }) => {
       const dailyHours: Record<string, number> = {}
+      const dailyOccupancy: Record<string, DayOccupancyKind> = {}
       for (const d of dateColumns.value) {
         dailyHours[d] = 0
+        dailyOccupancy[d] = ''
       }
       for (const day of days) {
         dailyHours[day.work_date] = Number(day.available_hours || 0)
+      }
+      for (const day of slotDays || []) {
+        const wd = String(day.work_date || '').slice(0, 10)
+        if (!wd) continue
+        dailyOccupancy[wd] = dayOccupancyKindFromSlots(day.slots || [])
       }
       const totalHours = Object.values(dailyHours).reduce((acc, h) => acc + Number(h || 0), 0)
       return {
@@ -372,6 +400,7 @@ async function loadMatrix() {
         lineLabel: String(line.line_name || '').trim() || line.line_code,
         totalHours,
         dailyHours,
+        dailyOccupancy,
       }
     })
   } finally {
@@ -447,6 +476,10 @@ async function handlePrint() {
         } else if (rawHours >= 20 && rawHours <= 22) {
           classes.push('is-mid-hours')
         }
+        const occ = row.dailyOccupancy?.[d] || ''
+        if (occ === 'tech') classes.push('is-tech-occ')
+        else if (occ === 'maintenance') classes.push('is-maint-occ')
+        else if (occ === 'mixed') classes.push('is-mixed-occ')
         return `<td class="${classes.join(' ')}">${escHtml(formatHours(rawHours))}</td>`
       })
       .join('')
@@ -475,6 +508,9 @@ async function handlePrint() {
       td.is-weekday-empty { background-color: #e5e7eb; }
       td.is-mid-hours { background-color: #fff7d6; }
       td.is-high-hours { background-color: #f4c98a; }
+      td.is-tech-occ { box-shadow: inset 0 0 0 2px #f5a623aa; background: #fff4e5; }
+      td.is-maint-occ { box-shadow: inset 0 0 0 2px #64748baa; background: #eef2ff; }
+      td.is-mixed-occ { box-shadow: inset 0 0 0 2px #ea580caa; background: #ffedd5; }
       thead { display: table-header-group; }
       tr { page-break-inside: avoid; }
       .print-summary { margin-top: 10px; border-top: 1px solid #cbd5e1; padding-top: 8px; }
@@ -751,6 +787,19 @@ onMounted(async () => {
 .cell.is-high-hours {
   background: #f4c98a !important;
 }
+.cell.is-tech-occ {
+  box-shadow: inset 0 0 0 2px #f5a623aa;
+  background: linear-gradient(180deg, #fff4e5 0%, transparent 55%);
+}
+.cell.is-maint-occ {
+  box-shadow: inset 0 0 0 2px #64748baa;
+  background: linear-gradient(180deg, #eef2ff 0%, transparent 55%);
+}
+.cell.is-mixed-occ {
+  box-shadow: inset 0 0 0 2px #ea580caa;
+  background: linear-gradient(180deg, #ffedd5 0%, transparent 55%);
+}
+
 .cell-main {
   font-weight: 700;
   font-size: 11px;

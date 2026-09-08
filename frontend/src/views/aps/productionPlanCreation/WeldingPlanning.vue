@@ -528,11 +528,16 @@
                   v-for="d in ganttDates"
                   :key="'cap-' + d"
                   class="lcb-cell lcb-cell--editable"
-                  :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
-                  title="ダブルクリックでこの日の稼働時間を編集"
+                  :class="lineCapacityCellClass(d)"
+                  :title="lineCapacityCellTitle(d)"
                   @dblclick.stop="openLineCapacityDayEdit(d)"
                 >
                   {{ formatLineCapacityHours(lineCapacityHoursByDate[d]) }}
+                  <span
+                    v-if="lineCapacityOccupancyByDate[d]"
+                    class="lcb-occ"
+                    :class="'lcb-occ--' + lineCapacityOccupancyByDate[d]"
+                  >{{ lineCapacityOccupancyByDate[d] === 'tech' ? '技' : lineCapacityOccupancyByDate[d] === 'maintenance' ? '保' : '占' }}</span>
                 </td>
               </tr>
             </tbody>
@@ -1054,6 +1059,7 @@ import {
   fetchLineReplanAnchors,
   saveLineReplanAnchors,
   fetchLineCapacities,
+  fetchLineCapacitySlots,
   updateScheduleDailyPlannedQty,
   productionLineOptionLabel,
   type ProductionLine,
@@ -1065,6 +1071,7 @@ import {
   type EquipmentEfficiencyProduct,
   type ProgressLotItem,
 } from '@/api/aps'
+import { dayOccupancyKindFromSlots, type DayOccupancyKind } from '@/utils/lineOccupancyDisplay'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
@@ -1228,6 +1235,7 @@ const eeStatsDisplay = computed(() => {
 const ganttDates = ref<string[]>([])
 /** ガント日付キー → line_capacities.available_hours（未登録は undefined） */
 const lineCapacityHoursByDate = ref<Record<string, number>>({})
+const lineCapacityOccupancyByDate = ref<Record<string, DayOccupancyKind>>({})
 const loadingLineCapacityStrip = ref(false)
 /** 日別稼働：時間帯編集（設備稼働設定と同 UI） */
 const lineCapacityDaySlotsDialogVisible = ref(false)
@@ -1604,6 +1612,7 @@ async function onProcessChange() {
   schedulesFetched.value = false
   ganttDates.value = []
   lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
   ganttRows.value = []
   hourlyColumns.value = []
   hourlyRows.value = []
@@ -1802,6 +1811,7 @@ async function onLineChange() {
   schedulesFetched.value = false
   ganttDates.value = []
   lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
   ganttRows.value = []
   hourlyColumns.value = []
   hourlyRows.value = []
@@ -1834,6 +1844,7 @@ async function loadSchedules() {
     schedulesFetched.value = false
     ganttDates.value = []
     lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
     ganttRows.value = []
     hourlyColumns.value = []
     hourlyRows.value = []
@@ -2704,23 +2715,56 @@ function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number 
 
 async function loadLineCapacityStrip() {
   lineCapacityHoursByDate.value = {}
+  lineCapacityOccupancyByDate.value = {}
   if (!selectedLineId.value || ganttDates.value.length === 0) return
   const sd = ganttDates.value[0]!
   const ed = ganttDates.value[ganttDates.value.length - 1]!
   loadingLineCapacityStrip.value = true
   try {
-    const rows = await fetchLineCapacities(selectedLineId.value, sd, ed)
+    const [rows, slotDays] = await Promise.all([
+      fetchLineCapacities(selectedLineId.value, sd, ed),
+      fetchLineCapacitySlots(selectedLineId.value, sd, ed).catch(() => []),
+    ])
     const m: Record<string, number> = {}
     for (const r of rows) {
       const k = String(r.work_date ?? '').slice(0, 10)
       if (k) m[k] = Number(r.available_hours ?? 0)
     }
     lineCapacityHoursByDate.value = m
+    const occ: Record<string, DayOccupancyKind> = {}
+    for (const day of slotDays || []) {
+      const k = String(day.work_date ?? '').slice(0, 10)
+      if (!k) continue
+      occ[k] = dayOccupancyKindFromSlots(day.slots || [])
+    }
+    lineCapacityOccupancyByDate.value = occ
   } catch {
     lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
   } finally {
     loadingLineCapacityStrip.value = false
   }
+}
+
+function lineCapacityCellClass(d: string): Record<string, boolean> {
+  const occ = lineCapacityOccupancyByDate.value[d] || ''
+  return {
+    'is-weekend': isWeekend(d),
+    'is-today': isToday(d),
+    'is-tech-occ': occ === 'tech',
+    'is-maint-occ': occ === 'maintenance',
+    'is-mixed-occ': occ === 'mixed',
+  }
+}
+
+function lineCapacityCellTitle(d: string): string {
+  const h = formatLineCapacityHours(lineCapacityHoursByDate.value[d])
+  const occ = lineCapacityOccupancyByDate.value[d] || ''
+  const base = `ダブルクリックでこの日の稼働時間を編集${h ? `（${h}h）` : ''}`
+  if (occ === 'tech') return `${base}／技術使用あり`
+  if (occ === 'maintenance') return `${base}／保全あり`
+  if (occ === 'mixed') return `${base}／技術・保全あり`
+  return base
 }
 
 function formatLineCapacityHours(v: number | undefined): string {
@@ -2749,6 +2793,7 @@ async function loadGantt() {
   if (!selectedLineId.value) {
     ganttDates.value = []
     lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
     ganttRows.value = []
     return
   }
@@ -2773,6 +2818,7 @@ async function loadGantt() {
   } catch {
     ganttDates.value = []
     lineCapacityHoursByDate.value = {}
+    lineCapacityOccupancyByDate.value = {}
     ganttRows.value = []
     hourlyColumns.value = []
     hourlyRows.value = []
@@ -4806,6 +4852,33 @@ td.gantt-has-actual {
   color: var(--c-text-s, #64748b);
   font-weight: 500;
 }
+
+.lcb-cell.is-tech-occ {
+  background: linear-gradient(180deg, #fff4e5 0%, #fff 70%);
+  box-shadow: inset 0 0 0 1px #f5a62388;
+}
+.lcb-cell.is-maint-occ {
+  background: linear-gradient(180deg, #eef2ff 0%, #fff 70%);
+  box-shadow: inset 0 0 0 1px #64748b88;
+}
+.lcb-cell.is-mixed-occ {
+  background: linear-gradient(180deg, #ffedd5 0%, #fff 70%);
+  box-shadow: inset 0 0 0 1px #ea580c88;
+}
+.lcb-occ {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+.lcb-occ--tech { background: #fff4e5; color: #b45309; }
+.lcb-occ--maintenance { background: #eef2ff; color: #475569; }
+.lcb-occ--mixed { background: #ffedd5; color: #9a3412; }
+
 </style>
 
 <!-- MessageBox は body へ teleport されるため、ライン順再計算の確認ダイアログ用はグローバル -->

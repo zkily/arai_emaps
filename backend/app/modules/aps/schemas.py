@@ -2,7 +2,7 @@
 APS Pydantic スキーマ（リクエスト / レスポンス）
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import date, time, datetime
 
 
@@ -75,11 +75,56 @@ class LineCapacityOut(BaseModel):
 
 # ──────────────────── Line Capacity Time Slots ────────────────────
 
+SLOT_TYPE_WORK = "work"
+SLOT_TYPE_REST = "rest"
+SLOT_TYPE_TECH = "tech"
+SLOT_TYPE_MAINTENANCE = "maintenance"
+VALID_SLOT_TYPES = frozenset(
+    {SLOT_TYPE_WORK, SLOT_TYPE_REST, SLOT_TYPE_TECH, SLOT_TYPE_MAINTENANCE}
+)
+NON_PRODUCTIVE_SLOT_TYPES = frozenset(
+    {SLOT_TYPE_REST, SLOT_TYPE_TECH, SLOT_TYPE_MAINTENANCE}
+)
+
+
+def normalize_slot_type(slot_type: Optional[str] = None, is_rest: bool = False) -> str:
+    """用途を正規化。旧データで is_rest=1 かつ slot_type 未設定(work)の場合は rest。"""
+    st = (slot_type or "").strip().lower()
+    if st in NON_PRODUCTIVE_SLOT_TYPES:
+        return st
+    if is_rest:
+        return SLOT_TYPE_REST
+    if st == SLOT_TYPE_WORK:
+        return SLOT_TYPE_WORK
+    return SLOT_TYPE_WORK
+
+
+def slot_type_is_non_productive(slot_type: Optional[str] = None, is_rest: bool = False) -> bool:
+    return normalize_slot_type(slot_type, is_rest) in NON_PRODUCTIVE_SLOT_TYPES
+
+
 class TimeSlotItem(BaseModel):
     start_time: time
     end_time: time
     sort_order: int = 0
     is_rest: bool = False
+    slot_type: str = SLOT_TYPE_WORK
+    note: Optional[str] = None
+
+    def resolved_slot_type(self) -> str:
+        return normalize_slot_type(self.slot_type, self.is_rest)
+
+    def resolved_is_rest(self) -> bool:
+        """後方互換: 非稼働タイプは is_rest=True として保存する。"""
+        return slot_type_is_non_productive(self.slot_type, self.is_rest)
+
+    def model_post_init(self, __context: Any) -> None:
+        st = (self.slot_type or "").strip().lower()
+        if st and st not in VALID_SLOT_TYPES:
+            # 未知値は work に落とさず、is_rest を尊重して正規化
+            object.__setattr__(self, "slot_type", normalize_slot_type(None, self.is_rest))
+        else:
+            object.__setattr__(self, "slot_type", self.resolved_slot_type())
 
 
 class DaySlotsBody(BaseModel):
@@ -94,6 +139,8 @@ class TimeSlotOut(BaseModel):
     end_time: time
     sort_order: int
     is_rest: bool = False
+    slot_type: str = SLOT_TYPE_WORK
+    note: Optional[str] = None
 
     class Config:
         from_attributes = True

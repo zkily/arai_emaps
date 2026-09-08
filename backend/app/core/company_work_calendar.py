@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Iterable, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Iterable, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.master.models import CompanyWorkCalendar
+if TYPE_CHECKING:
+    from app.modules.master.models import CompanyWorkCalendar
 
 DAY_TYPE_LABELS = {
     "workday": "平日",
@@ -91,7 +92,59 @@ def count_scheduled_workdays(
     )
 
 
-def split_calendar_rows(rows: Iterable[CompanyWorkCalendar]) -> Tuple[Set[str], Set[str]]:
+def previous_scheduled_workday(
+    d: date,
+    *,
+    company_scheduled: Set[str],
+    company_off: Set[str],
+    extra_workdays: Optional[Set[str]] = None,
+    extra_holidays: Optional[Set[str]] = None,
+    max_lookback_days: int = 14,
+) -> Optional[date]:
+    """直前の通常稼働日（土日・会社休を跨ぐ。例: 月曜の前は金曜）。"""
+    ew = extra_workdays or set()
+    eh = extra_holidays or set()
+    cur = d - timedelta(days=1)
+    for _ in range(max(1, int(max_lookback_days))):
+        if is_scheduled_workday(
+            cur,
+            company_scheduled=company_scheduled,
+            company_off=company_off,
+            extra_workdays=ew,
+            extra_holidays=eh,
+        ):
+            return cur
+        cur -= timedelta(days=1)
+    return None
+
+
+def next_scheduled_workday(
+    d: date,
+    *,
+    company_scheduled: Set[str],
+    company_off: Set[str],
+    extra_workdays: Optional[Set[str]] = None,
+    extra_holidays: Optional[Set[str]] = None,
+    max_lookahead_days: int = 14,
+) -> Optional[date]:
+    """直後の通常稼働日（土日・会社休を跨ぐ。例: 金曜の次は月曜）。"""
+    ew = extra_workdays or set()
+    eh = extra_holidays or set()
+    cur = d + timedelta(days=1)
+    for _ in range(max(1, int(max_lookahead_days))):
+        if is_scheduled_workday(
+            cur,
+            company_scheduled=company_scheduled,
+            company_off=company_off,
+            extra_workdays=ew,
+            extra_holidays=eh,
+        ):
+            return cur
+        cur += timedelta(days=1)
+    return None
+
+
+def split_calendar_rows(rows: Iterable["CompanyWorkCalendar"]) -> Tuple[Set[str], Set[str]]:
     scheduled: Set[str] = set()
     off: Set[str] = set()
     for row in rows:
@@ -108,6 +161,8 @@ async def load_company_calendar_sets(
     start_d: date,
     end_d: date,
 ) -> Tuple[Set[str], Set[str]]:
+    from app.modules.master.models import CompanyWorkCalendar
+
     q = (
         select(CompanyWorkCalendar)
         .where(
@@ -120,7 +175,7 @@ async def load_company_calendar_sets(
     return split_calendar_rows(res.scalars().all())
 
 
-def calendar_row_to_dict(row: CompanyWorkCalendar) -> dict:
+def calendar_row_to_dict(row: "CompanyWorkCalendar") -> dict:
     return {
         "id": row.id,
         "calendar_date": row.calendar_date.isoformat() if row.calendar_date else None,

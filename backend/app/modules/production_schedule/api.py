@@ -9,6 +9,7 @@
 import json
 import logging
 import re
+from collections import defaultdict
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -2206,6 +2207,14 @@ async def get_mes_forming_plan_data_from_schedule(
         endDate,
         (machineName or "").strip() or None,
     )
+    await _apply_line_occupancy_to_forming_plan_records(
+        db,
+        records,
+        process_label,
+        startDate,
+        endDate,
+        machine_name=(machineName or "").strip() or None,
+    )
     return {
         "success": True,
         "data": {"records": records, "total": total},
@@ -2214,6 +2223,305 @@ async def get_mes_forming_plan_data_from_schedule(
 
 
 MES_PLAN_MACHINE_REMARKS_MAX_LEN = 500
+
+
+_OCCUPANCY_SLOT_LABELS = {
+    "tech": "技術使用",
+    "maintenance": "保全",
+}
+
+
+def _fmt_slot_wall_time(v: Any) -> str:
+    if v is None:
+        return ""
+    if hasattr(v, "strftime"):
+        return v.strftime("%H:%M")
+    s = str(v).strip()
+    if len(s) >= 5 and s[2] == ":":
+        return s[:5]
+    return s
+
+
+def _fmt_slot_short_hour(v: Any) -> str:
+    """08:00 → 8、08:30 → 8:30（先頭ゼロ・分00は省略）。"""
+    hm = _fmt_slot_wall_time(v)
+    if not hm or ":" not in hm:
+        return hm
+    try:
+        h_s, m_s = hm.split(":", 1)
+        h = int(h_s)
+        m = int(m_s[:2])
+    except (TypeError, ValueError):
+        return hm
+    if m == 0:
+        return str(h)
+    return f"{h}:{m:02d}"
+
+
+def _fmt_occupancy_short_date(d: Any) -> str:
+    """2026-09-09 → 9/9。"""
+    if d is None:
+        return ""
+    if hasattr(d, "month") and hasattr(d, "day"):
+        return f"{int(d.month)}/{int(d.day)}"
+    s = str(d).strip()[:10].replace("/", "-")
+    try:
+        parts = s.split("-")
+        if len(parts) >= 3:
+            return f"{int(parts[1])}/{int(parts[2])}"
+    except (TypeError, ValueError):
+        pass
+    return s
+
+
+def _fmt_occupancy_short_range(work_date: Any, start_time: Any, end_time: Any) -> str:
+    """9/9 8–17 形式。"""
+    date_s = _fmt_occupancy_short_date(work_date)
+    start_s = _fmt_slot_short_hour(start_time)
+    end_s = _fmt_slot_short_hour(end_time)
+    if date_s and start_s and end_s:
+        return f"{date_s} {start_s}–{end_s}"
+    if start_s and end_s:
+        return f"{start_s}–{end_s}"
+    return date_s
+
+
+async def _apply_line_occupancy_to_forming_plan_records(
+    db: AsyncSession,
+    records: list[dict],
+    process_label: str,
+    start_date: str,
+    end_date: str,
+    machine_name: Optional[str] = None,
+) -> None:
+    """設備×生産日の技術使用・保全帯を records に載せる（通常生産不可の表示用）。
+
+    - 当日分に加え、次稼働日の占用を前稼働日行へ載せる（現場への前日告知）
+    - 土日・会社休を跨ぐ（例: 月曜占用 → 金曜に予告表示）
+    - 計画行が無い日でも、占用専用の行を追加して見えるようにする
+    """
+    try:
+        sd = date.fromisoformat(start_date[:10])
+        ed = date.fromisoformat(end_date[:10])
+    except ValueError:
+        return
+
+    try:
+        from sqlalchemy import select
+
+        from app.core.company_work_calendar import (
+            load_company_calendar_sets,
+            next_scheduled_workday,
+            previous_scheduled_workday,
+        )
+        from app.modules.aps.models import LineCapacityTimeSlot
+        from app.modules.aps.schemas import normalize_slot_type
+        from app.modules.master.models import Machine
+
+        mq = select(Machine).where(Machine.machine_type == process_label)
+        if machine_name:
+            mq = mq.where(Machine.machine_name == machine_name)
+        machines = (await db.execute(mq)).scalars().all()
+        if not machines:
+            return
+        line_ids = [int(m.id) for m in machines]
+
+        # 会社カレンダー（土日・会社休を跨いだ前日告知用）
+        cal_start = sd - timedelta(days=14)
+        cal_end = ed + timedelta(days=14)
+        company_scheduled, company_off = await load_company_calendar_sets(db, cal_start, cal_end)
+        empty_extra: set[str] = set()
+
+        def _prev_work(d: date):
+            return previous_scheduled_workday(
+                d,
+                company_scheduled=company_scheduled,
+                company_off=company_off,
+                extra_workdays=empty_extra,
+                extra_holidays=empty_extra,
+            )
+
+        def _next_work(d: date):
+            return next_scheduled_workday(
+                d,
+                company_scheduled=company_scheduled,
+                company_off=company_off,
+                extra_workdays=empty_extra,
+                extra_holidays=empty_extra,
+            )
+
+        # 照会末日の「次稼働日」まで取得（金曜表示で月曜占用を拾う）
+        slots_end = ed + timedelta(days=1)
+        nw_ed = _next_work(ed)
+        if nw_ed and nw_ed > slots_end:
+            slots_end = nw_ed
+
+        slots = (
+            (
+                await db.execute(
+                    select(LineCapacityTimeSlot)
+                    .where(
+                        LineCapacityTimeSlot.line_id.in_(line_ids),
+                        LineCapacityTimeSlot.work_date >= sd,
+                        LineCapacityTimeSlot.work_date <= slots_end,
+                    )
+                    .order_by(
+                        LineCapacityTimeSlot.work_date,
+                        LineCapacityTimeSlot.sort_order,
+                        LineCapacityTimeSlot.start_time,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    except Exception as e:
+        logger.warning("line occupancy 読取失敗: %s", e)
+        return
+
+    by_key: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    machine_by_cd = {m.machine_cd: m for m in machines}
+    cd_by_id = {int(m.id): m.machine_cd for m in machines}
+    for s in slots:
+        st = normalize_slot_type(
+            getattr(s, "slot_type", None),
+            bool(getattr(s, "is_rest", False)),
+        )
+        if st not in ("tech", "maintenance"):
+            continue
+        mcd = cd_by_id.get(int(s.line_id))
+        if not mcd:
+            continue
+        dkey = (
+            s.work_date.isoformat()
+            if hasattr(s.work_date, "isoformat")
+            else str(s.work_date)[:10]
+        )
+        label = _OCCUPANCY_SLOT_LABELS.get(st, st)
+        start_s = _fmt_slot_wall_time(s.start_time)
+        end_s = _fmt_slot_wall_time(s.end_time)
+        short_range = _fmt_occupancy_short_range(s.work_date, s.start_time, s.end_time)
+        note = (getattr(s, "note", None) or "").strip()
+        display = f"{label} {short_range}".strip()
+        text_parts = [f"【{label}】{short_range}"]
+        if note:
+            text_parts.append(note)
+        by_key[(mcd, dkey)].append(
+            {
+                "slot_type": st,
+                "label": label,
+                "work_date": dkey,
+                "start_time": start_s,
+                "end_time": end_s,
+                "short_range": short_range,
+                "display": display,
+                "note": note or None,
+                "summary": " ".join(text_parts),
+            }
+        )
+
+    if not by_key:
+        for rec in records:
+            rec.setdefault("occupancy_slots", [])
+            rec.setdefault("occupancy_summary", "")
+        return
+
+    def _with_flags(items: list[dict], *, is_advance: bool) -> list[dict]:
+        out: list[dict] = []
+        for item in items:
+            row = dict(item)
+            row["is_advance_notice"] = is_advance
+            out.append(row)
+        return out
+
+    def _occ_for_plan_date(mcd: str, plan_d: str) -> list[dict]:
+        """当日占用 + 次稼働日の占用（予告。金曜→月曜など週末跨ぎ対応）。"""
+        same_day = _with_flags(by_key.get((mcd, plan_d), []), is_advance=False)
+        advance: list[dict] = []
+        try:
+            pd = date.fromisoformat(plan_d)
+        except ValueError:
+            return same_day
+        nw = _next_work(pd)
+        if nw:
+            advance = _with_flags(by_key.get((mcd, nw.isoformat()), []), is_advance=True)
+        return same_day + advance
+
+    for rec in records:
+        mcd = str(rec.get("machine_cd") or "").strip()
+        dkey = _mes_plan_date_key(rec.get("plan_date"))
+        occ = _occ_for_plan_date(mcd, dkey) if mcd and dkey else []
+        rec["occupancy_slots"] = occ
+        rec["occupancy_summary"] = " / ".join(o["summary"] for o in occ) if occ else ""
+
+    # 計画行が無い日でも占用（当日・前稼働日告知）を見えるように合成行を追加
+    covered: set[tuple[str, str]] = set()
+    for rec in records:
+        mcd = str(rec.get("machine_cd") or "").strip()
+        dkey = _mes_plan_date_key(rec.get("plan_date"))
+        if mcd and dkey:
+            covered.add((mcd, dkey))
+
+    need_display_dates: set[tuple[str, str]] = set()
+    for (mcd, work_d), items in by_key.items():
+        if not items:
+            continue
+        try:
+            wd = date.fromisoformat(work_d)
+        except ValueError:
+            continue
+        # 当日表示（照会期間内）
+        if sd <= wd <= ed:
+            need_display_dates.add((mcd, work_d))
+        # 前稼働日告知（照会期間内。月曜占用 → 金曜など）
+        prev_wd = _prev_work(wd)
+        if prev_wd is not None and sd <= prev_wd <= ed:
+            need_display_dates.add((mcd, prev_wd.isoformat()))
+
+    synthetic: list[dict] = []
+    for mcd, plan_d in sorted(need_display_dates):
+        if (mcd, plan_d) in covered:
+            continue
+        occ = _occ_for_plan_date(mcd, plan_d)
+        if not occ:
+            continue
+        m = machine_by_cd.get(mcd)
+        if m is None:
+            continue
+        primary = occ[0]
+        label = str(primary.get("label") or "占用")
+        synthetic.append(
+            {
+                "id": f"occupancy-{mcd}-{plan_d}",
+                "schedule_id": None,
+                "file_name": "OCCUPANCY",
+                "plan_date": plan_d,
+                "quantity": 0,
+                "planned_quantity": 0,
+                "planned_output_qty": 0,
+                "machine_name": m.machine_name,
+                "machine_cd": mcd,
+                "process_name": process_label,
+                "operator": None,
+                "production_order": None,
+                "product_name": f"【{label}】",
+                "product_cd": None,
+                "efficiency_rate": None,
+                "setup_time": None,
+                "actual_production": 0,
+                "actual_qty": 0,
+                "defect_qty": 0,
+                "upstream_defect_qty_total": 0,
+                "remarks": "",
+                "occupancy_only": True,
+                "occupancy_slots": occ,
+                "occupancy_summary": " / ".join(o["summary"] for o in occ),
+            }
+        )
+        covered.add((mcd, plan_d))
+
+    if synthetic:
+        records.extend(synthetic)
 
 
 def _mes_plan_date_key(v: Any) -> str:

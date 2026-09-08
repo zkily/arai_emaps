@@ -243,6 +243,7 @@
           <el-table-column prop="remarks" label="備考" width="200" align="left">
             <template #default="{ row }">
               <el-input
+                v-if="!row.occupancy_only"
                 v-model="row.remarks"
                 size="small"
                 placeholder="備考を入力"
@@ -251,6 +252,28 @@
                 @keyup.enter="saveRemarks(row)"
                 clearable
               />
+              <span v-else style="color: #9ca3af">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="占用" width="168" align="left">
+            <template #default="{ row }">
+              <div v-if="shouldShowOccupancy(row) && row.occupancy_slots?.length" class="occupancy-tags">
+                <el-tag
+                  v-for="(occ, oi) in row.occupancy_slots"
+                  :key="oi"
+                  size="small"
+                  :type="occ.slot_type === 'tech' ? 'warning' : 'info'"
+                  :effect="occ.is_advance_notice ? 'plain' : 'light'"
+                  class="occupancy-tag"
+                  :class="{ 'occupancy-tag--advance': occ.is_advance_notice }"
+                  :title="occ.summary || formatOccupancyDisplay(occ, row.plan_date)"
+                >
+                  <span v-if="occ.is_advance_notice" class="occupancy-advance-mark">予告</span>
+                  {{ formatOccupancyDisplay(occ, row.plan_date) }}
+                </el-tag>
+              </div>
+              <span v-else-if="shouldShowOccupancy(row)" style="color: #9ca3af">-</span>
+              <span v-else style="color: #cbd5e1">·</span>
             </template>
           </el-table-column>
         </el-table>
@@ -490,6 +513,10 @@ import { fetchPlanBaselineComparison, type PlanBaselineComparisonResult } from '
 import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import {
+  formatOccupancyDisplay,
+  shouldShowOccupancyRow,
+} from '@/utils/lineOccupancyDisplay'
 
 const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
@@ -609,6 +636,11 @@ const pagination = reactive({
 // 計画テーブルデータ
 const planData = ref<any[]>([])
 const planLoading = ref(false)
+
+function shouldShowOccupancy(row: any): boolean {
+  return shouldShowOccupancyRow(planData.value || [], row)
+}
+
 
 const planQtyChartDateRange = ref<string[]>([])
 const planQtyChartLoading = ref(false)
@@ -820,17 +852,16 @@ const loadPlanData = async () => {
 
     if (result.success && result.data) {
       const records = result.data.records ?? []
-      const filteredData = records.filter((item: any) => {
-        // 製品名が空の場合は除外
-        if (!item.product_name || item.product_name.trim() === '') {
-          return false
-        }
-        // 計画生産数が0以下の場合は除外
+            const filteredData = records.filter((item: any) => {
+        const hasOccupancy =
+          (Array.isArray(item?.occupancy_slots) && item.occupancy_slots.length > 0) ||
+          Boolean(item?.occupancy_only)
         const quantity = parseFloat(item.quantity) || 0
-        if (quantity <= 0) {
-          return false
-        }
-        return true
+        const hasPlan =
+          item.product_name &&
+          String(item.product_name).trim() !== '' &&
+          quantity > 0
+        return hasPlan || hasOccupancy
       })
       console.log('フィルタリング前のデータ数:', records.length)
       console.log('フィルタリング後のデータ数:', filteredData.length)
@@ -2233,7 +2264,36 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
           padding: 20px;
         }
 
-      </style>
+      
+.occupancy-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.occupancy-tag {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  line-height: 1.3;
+  padding: 2px 6px;
+}
+.occupancy-tag--advance {
+  border-style: dashed !important;
+  opacity: 0.95;
+}
+.occupancy-advance-mark {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.4;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+</style>
     </head>
     <body>
       <div class="print-container">

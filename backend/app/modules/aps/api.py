@@ -1012,16 +1012,25 @@ async def get_line_capacity_slots(
             total = productive_hours_from_slot_rows(orm_list)
         else:
             total = float(cap_map.get(d, 0))
-        slot_list = [
-            TimeSlotOut(
-                id=s.id,
-                start_time=s.start_time,
-                end_time=s.end_time,
-                sort_order=s.sort_order,
-                is_rest=bool(getattr(s, "is_rest", False)),
+        from app.modules.aps.schemas import normalize_slot_type, slot_type_is_non_productive
+
+        slot_list = []
+        for s in orm_list:
+            st = normalize_slot_type(
+                getattr(s, "slot_type", None),
+                bool(getattr(s, "is_rest", False)),
             )
-            for s in orm_list
-        ]
+            slot_list.append(
+                TimeSlotOut(
+                    id=s.id,
+                    start_time=s.start_time,
+                    end_time=s.end_time,
+                    sort_order=s.sort_order,
+                    is_rest=slot_type_is_non_productive(st, bool(getattr(s, "is_rest", False))),
+                    slot_type=st,
+                    note=getattr(s, "note", None),
+                )
+            )
         result.append(DaySlotsOut(work_date=d, available_hours=total, slots=slot_list))
         d += timedelta(days=1)
 
@@ -1053,14 +1062,22 @@ async def batch_upsert_line_capacity_slots(
         )
 
         for idx, slot in enumerate(day_body.slots):
-            db.add(LineCapacityTimeSlot(
-                line_id=body.line_id,
-                work_date=day_body.work_date,
-                start_time=slot.start_time,
-                end_time=slot.end_time,
-                sort_order=slot.sort_order if slot.sort_order else idx,
-                is_rest=bool(slot.is_rest),
-            ))
+            st = slot.resolved_slot_type()
+            note = (slot.note or "").strip() or None
+            if note and len(note) > 255:
+                raise HTTPException(400, f"{day_body.work_date}: note は 255 文字以内です")
+            db.add(
+                LineCapacityTimeSlot(
+                    line_id=body.line_id,
+                    work_date=day_body.work_date,
+                    start_time=slot.start_time,
+                    end_time=slot.end_time,
+                    sort_order=slot.sort_order if slot.sort_order else idx,
+                    is_rest=slot.resolved_is_rest(),
+                    slot_type=st,
+                    note=note,
+                )
+            )
         total_hours = productive_hours_from_slot_rows(day_body.slots)
 
         existing_cap = await db.execute(

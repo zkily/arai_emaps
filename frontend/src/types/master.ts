@@ -199,6 +199,7 @@ export interface MachineItem {
   calendar_id?: number
   efficiency?: number
   available_qty?: number
+  use_in_cpsat?: boolean
   note?: string
   created_at?: string
   updated_at?: string
@@ -228,6 +229,7 @@ export interface RouteStepItem {
   process_name?: string
   yield_percent?: number
   cycle_sec?: number
+  wait_sec_after?: number
   remarks?: string
   created_at?: string
   updated_at?: string

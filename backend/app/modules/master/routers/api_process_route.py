@@ -38,6 +38,7 @@ def _step_to_dict(row: ProcessRouteStep, process_name: Optional[str] = None) -> 
         "process_cd": row.process_cd,
         "yield_percent": float(row.yield_percent) if row.yield_percent is not None else 100.0,
         "cycle_sec": float(row.cycle_sec) if row.cycle_sec is not None else 0.0,
+        "wait_sec_after": int(row.wait_sec_after) if getattr(row, "wait_sec_after", None) is not None else 0,
         "remarks": row.remarks,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -239,6 +240,7 @@ async def create_route_step(
         process_cd=str(body.get("process_cd", "")),
         yield_percent=float(body["yield_percent"]) if body.get("yield_percent") is not None else 100.0,
         cycle_sec=float(body["cycle_sec"]) if body.get("cycle_sec") is not None else 0.0,
+        wait_sec_after=int(body["wait_sec_after"]) if body.get("wait_sec_after") is not None else 0,
         remarks=body.get("remarks"),
     )
     db.add(step)
@@ -268,6 +270,8 @@ async def update_route_step(
         row.yield_percent = float(body["yield_percent"]) if body["yield_percent"] is not None else 100.0
     if "cycle_sec" in body:
         row.cycle_sec = float(body["cycle_sec"]) if body["cycle_sec"] is not None else 0.0
+    if "wait_sec_after" in body:
+        row.wait_sec_after = int(body["wait_sec_after"]) if body["wait_sec_after"] is not None else 0
     if "remarks" in body:
         row.remarks = body["remarks"]
     await db.commit()

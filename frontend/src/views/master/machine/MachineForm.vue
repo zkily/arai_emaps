@@ -96,6 +96,9 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-form-item label="CP-SAT排程に参加">
+            <el-switch v-model="form.use_in_cpsat" />
+          </el-form-item>
         </div>
 
         <div class="form-section">
@@ -180,6 +183,7 @@ const form = reactive({
   calendar_id: undefined as number | undefined,
   efficiency: 100,
   available_qty: 0,
+  use_in_cpsat: true,
   note: '',
 })
 
@@ -212,6 +216,7 @@ function resetForm() {
     calendar_id: undefined,
     efficiency: 100,
     available_qty: 0,
+    use_in_cpsat: true,
     note: '',
   })
 }
@@ -231,6 +236,7 @@ watch(() => props.visible, (val) => {
         calendar_id: props.data.calendar_id,
         efficiency: props.data.efficiency ?? 100,
         available_qty: props.data.available_qty ?? 0,
+        use_in_cpsat: props.data.use_in_cpsat !== false,
         note: props.data.note ?? '',
       })
     } else {
@@ -255,6 +261,7 @@ async function submitForm() {
       calendar_id: form.calendar_id,
       efficiency: form.efficiency,
       available_qty: form.available_qty,
+      use_in_cpsat: form.use_in_cpsat,
       note: form.note || undefined,
     }
     if (form.id != null) {

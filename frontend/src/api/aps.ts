@@ -129,11 +129,16 @@ export interface ScheduleOut {
 
 // ──────────── Time Slots ────────────
 
+/** work=稼働 / rest=休憩 / tech=技術使用 / maintenance=保全 */
+export type LineCapacitySlotType = 'work' | 'rest' | 'tech' | 'maintenance'
+
 export interface TimeSlotItem {
   start_time: string
   end_time: string
   sort_order?: number
   is_rest?: boolean
+  slot_type?: LineCapacitySlotType | string
+  note?: string | null
 }
 
 export interface DaySlotsBody {
@@ -148,6 +153,8 @@ export interface TimeSlotOut {
   end_time: string
   sort_order: number
   is_rest?: boolean
+  slot_type?: LineCapacitySlotType | string
+  note?: string | null
 }
 
 export interface DaySlotsOut {

@@ -544,10 +544,6 @@ async def _issue_login_response(
         try:
             from app.modules.websocket.api import notify_user_logged_in_elsewhere
             await notify_user_logged_in_elsewhere(user.username, access_token)
-            logger.info(
-                "[AUTH] 强制登出通知(其他设备): {}",
-                _user_display(user),
-            )
         except Exception as e:
             logger.error("[WebSocket] Failed to notify other devices: {}", e)
 

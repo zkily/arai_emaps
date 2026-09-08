@@ -361,6 +361,11 @@ async def fetch_time_slots(
     start_date: date,
     end_date: date,
 ) -> dict[tuple[int, date], list[tuple[time, time]]]:
+    """稼働時間帯を返す。休憩・技術使用・保全は APS と同じく稼働区間から差し引く。"""
+    from types import SimpleNamespace
+
+    from app.modules.aps.engine import productive_minute_intervals_from_slots
+
     ids = [int(x) for x in set(machine_ids)]
     if not ids:
         return {}
@@ -370,25 +375,68 @@ async def fetch_time_slots(
         "start_date": start_date,
         "end_date": end_date,
     }
+    # slot_type 未移行環境でも動くよう is_rest のみ必須
     sql = text(
         f"""
-        SELECT line_id, work_date, start_time, end_time, sort_order
+        SELECT line_id, work_date, start_time, end_time, sort_order,
+               COALESCE(is_rest, 0) AS is_rest
         FROM line_capacity_time_slots
         WHERE line_id IN ({placeholders})
           AND work_date BETWEEN :start_date AND :end_date
-          AND COALESCE(is_rest, 0) = 0
         ORDER BY line_id, work_date, sort_order, start_time
         """
     )
-    res = await db.execute(sql, params)
-    out: dict[tuple[int, date], list[tuple[time, time]]] = defaultdict(list)
-    for row in res.mappings().all():
-        out[(as_int(row["line_id"]), row["work_date"])].append(
-            (
-                as_time(row["start_time"], time(0, 0, 0)),
-                as_time(row["end_time"], time(23, 59, 59)),
+    try:
+        sql_with_type = text(
+            f"""
+            SELECT line_id, work_date, start_time, end_time, sort_order,
+                   COALESCE(is_rest, 0) AS is_rest,
+                   slot_type
+            FROM line_capacity_time_slots
+            WHERE line_id IN ({placeholders})
+              AND work_date BETWEEN :start_date AND :end_date
+            ORDER BY line_id, work_date, sort_order, start_time
+            """
+        )
+        res = await db.execute(sql_with_type, params)
+        rows = list(res.mappings().all())
+    except Exception:
+        res = await db.execute(sql, params)
+        rows = list(res.mappings().all())
+
+    grouped: dict[tuple[int, date], list[Any]] = defaultdict(list)
+    for row in rows:
+        lid = as_int(row["line_id"])
+        wd = row["work_date"]
+        if isinstance(wd, datetime):
+            wd = wd.date()
+        grouped[(lid, wd)].append(
+            SimpleNamespace(
+                start_time=as_time(row["start_time"], time(0, 0, 0)),
+                end_time=as_time(row["end_time"], time(23, 59, 59)),
+                sort_order=as_int(row.get("sort_order") or 0),
+                is_rest=bool(row.get("is_rest")),
+                slot_type=(str(row["slot_type"]).strip() if row.get("slot_type") is not None else None),
             )
         )
+
+    out: dict[tuple[int, date], list[tuple[time, time]]] = {}
+    for key, day_slots in grouped.items():
+        segs = productive_minute_intervals_from_slots(day_slots)
+        intervals: list[tuple[time, time]] = []
+        for sm, em in segs:
+            if em <= sm:
+                continue
+            sh, smn = divmod(int(sm), 60)
+            eh, emn = divmod(int(em), 60)
+            # 1440 = 翌日 00:00 → 切断側は end<=start で跨日処理するため 00:00 にする
+            if eh >= 24:
+                end_t = time(0, 0, 0)
+            else:
+                end_t = time(eh, emn, 0)
+            intervals.append((time(sh % 24, smn, 0), end_t))
+        if intervals:
+            out[key] = intervals
     return out
 
 

@@ -44,6 +44,7 @@ from app.modules import (
     fin,
     ai,
     reports,
+    cpsat,
 )
 
 
@@ -392,6 +393,7 @@ app.include_router(machine_work_time_config.router, prefix="/api/machine-work-ti
 app.include_router(production_schedule.router, prefix="/api", tags=["生産状況・スケジュール"])
 app.include_router(plan_baseline.router, prefix="/api/plan-baseline", tags=["生産計画ベースライン"])
 app.include_router(inventory_projection.router, prefix="/api/inventory-projection", tags=["月末在庫予測"])
+app.include_router(cpsat.router, prefix="/api/cpsat", tags=["CP-SAT自動排程"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI助手"])
 app.include_router(reports.router, prefix="/api/reports", tags=["レポート配信"])
 app.include_router(fin.router, prefix="/api/fin", tags=["FIN 経理・原価・人事"])

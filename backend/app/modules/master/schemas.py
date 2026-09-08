@@ -226,6 +226,7 @@ class ProcessRouteStepBase(BaseModel):
     process_cd: str
     yield_percent: Optional[float] = 100.0
     cycle_sec: Optional[float] = 0.0
+    wait_sec_after: Optional[int] = 0
     remarks: Optional[str] = None
 
 
@@ -363,6 +364,7 @@ class MachineBase(BaseModel):
     calendar_id: Optional[int] = None
     efficiency: float = 100.0
     available_qty: int = 0
+    use_in_cpsat: bool = True
     note: Optional[str] = None
 
 
@@ -380,6 +382,7 @@ class MachineUpdate(BaseModel):
     calendar_id: Optional[int] = None
     efficiency: Optional[float] = None
     available_qty: Optional[int] = None
+    use_in_cpsat: Optional[bool] = None
     note: Optional[str] = None
 
 

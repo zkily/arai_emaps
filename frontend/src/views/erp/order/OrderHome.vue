@@ -198,7 +198,7 @@
               <el-icon class="analytics-card-head-icon"><Calendar /></el-icon>
               <div class="analytics-card-head-text">
                 <span class="analytics-card-title">日別集計（当月）</span>
-                <span class="analytics-card-sub">ダッシュボードと同じ棒グラフ（JST）。高さ＝確定本数。色は過去／当日／当月内の未来を区別</span>
+                <span class="analytics-card-sub">製品CD末尾を1にそろえ、製品×日の日合計を足した確定本数（JST）</span>
               </div>
             </div>
             <div class="chart-legend-hint chart-legend-hint--daily">
@@ -225,7 +225,7 @@
               <el-icon class="analytics-card-head-icon"><Histogram /></el-icon>
               <div class="analytics-card-head-text">
                 <span class="analytics-card-title">製品別ランキング（当月・確定本数）</span>
-                <span class="analytics-card-sub">日別受注データを集計。上位{{ PRODUCT_RANK_LIMIT }}品目（同率は件数多い順）</span>
+                <span class="analytics-card-sub">製品CD末尾を1にそろえ、日合計してから集計。上位{{ PRODUCT_RANK_LIMIT }}品目（同率は日数多い順）</span>
               </div>
             </div>
             <div class="chart-legend-hint chart-legend-hint--rank">
@@ -465,21 +465,42 @@ function disposeProductRankChart() {
   productRankEcharts = null
 }
 
-/** 日別受注一覧から当月の製品別確定本数ランキングを算出 */
+/** 日別受注一覧から当月の製品別確定本数ランキングを算出。
+ * 製品CD末尾を 1 にそろえたあと、(製品, 日) の日合計を作り、それを月次合計する。
+ */
+function normalizeProductCd(cd: string): string {
+  const s = cd.trim()
+  if (!s) return s
+  return `${s.slice(0, -1)}1`
+}
+
 function aggregateProductRank(list: OrderDailyItem[]): ProductRankRow[] {
-  const map = new Map<string, { name: string; units: number; lines: number }>()
+  const daily = new Map<string, { cd: string; name: string; units: number }>()
   for (const row of list) {
-    const cd = String(row.product_cd ?? '').trim()
-    if (!cd) continue
+    const raw = String(row.product_cd ?? '').trim()
+    if (!raw) continue
+    const cd = normalizeProductCd(raw)
     const displayName = (row.product_name || row.product_alias || cd).trim()
     if (displayName.includes('加工')) continue
-    if (!map.has(cd)) {
-      map.set(cd, { name: displayName || cd, units: 0, lines: 0 })
+    const day = String(row.date ?? '').slice(0, 10)
+    const key = `${cd}|${day}`
+    if (!daily.has(key)) {
+      daily.set(key, { cd, name: displayName || cd, units: 0 })
     }
-    const a = map.get(cd)!
-    a.units += Number(row.confirmed_units) || 0
+    const d = daily.get(key)!
+    d.units += Number(row.confirmed_units) || 0
+    if (raw.endsWith('1') && displayName.length >= d.name.length) d.name = displayName
+    else if (displayName.length > d.name.length) d.name = displayName
+  }
+  const map = new Map<string, { name: string; units: number; lines: number }>()
+  for (const v of daily.values()) {
+    if (!map.has(v.cd)) {
+      map.set(v.cd, { name: v.name, units: 0, lines: 0 })
+    }
+    const a = map.get(v.cd)!
+    a.units += v.units
     a.lines += 1
-    if (displayName.length > a.name.length) a.name = displayName
+    if (v.name.length > a.name.length) a.name = v.name
   }
   return [...map.entries()]
     .map(([product_cd, v]) => ({
@@ -984,20 +1005,30 @@ async function loadDailyChartData() {
     const end = `${y}-${pad(m)}-${pad(lastDay)}`
     const list = await fetchOrderDailyList({ start_date: start, end_date: end })
     productRankRows.value = aggregateProductRank(list)
-    const map = new Map<string, { count: number; units: number; weekday: string }>()
+    const dailyByProduct = new Map<string, number>()
     for (const row of list) {
-      const key = row.date
-      if (!map.has(key)) {
-        let wd = row.weekday || ''
-        if (!wd && key) {
-          const dt = new Date(`${key}T12:00:00`)
-          if (!isNaN(dt.getTime())) wd = WD_JA[dt.getDay()]
-        }
-        map.set(key, { count: 0, units: 0, weekday: wd })
+      const raw = String(row.product_cd ?? '').trim()
+      if (!raw) continue
+      const displayName = (row.product_name || row.product_alias || raw).trim()
+      if (displayName.includes('加工')) continue
+      const cd = normalizeProductCd(raw)
+      const day = String(row.date ?? '').slice(0, 10)
+      if (!day) continue
+      const key = `${cd}|${day}`
+      dailyByProduct.set(key, (dailyByProduct.get(key) || 0) + (Number(row.confirmed_units) || 0))
+    }
+    const map = new Map<string, { count: number; units: number; weekday: string }>()
+    for (const [key, units] of dailyByProduct) {
+      const day = key.slice(key.lastIndexOf('|') + 1)
+      if (!map.has(day)) {
+        let wd = ''
+        const dt = new Date(`${day}T12:00:00`)
+        if (!isNaN(dt.getTime())) wd = WD_JA[dt.getDay()]
+        map.set(day, { count: 0, units: 0, weekday: wd })
       }
-      const a = map.get(key)!
+      const a = map.get(day)!
       a.count += 1
-      a.units += Number(row.confirmed_units) || 0
+      a.units += units
     }
     dailyRows.value = buildFullMonthDailyRows(y, m, map)
     await nextTick()

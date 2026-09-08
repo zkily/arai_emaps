@@ -109,7 +109,6 @@ async def notify_user_logged_in_elsewhere(username: str, new_token: str):
         for websocket in list(active_connections[username]):
             try:
                 await websocket.send_json(message)
-                logger.info(f"[WebSocket] Sent force_logout message to {username}")
             except Exception as e:
                 logger.error(f"[WebSocket] Error sending message to {username}: {e}")
                 disconnected.append(websocket)

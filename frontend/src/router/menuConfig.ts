@@ -145,6 +145,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_CAPACITY_MATRIX', name: '設備稼働時間表', icon: 'Grid', path: '/aps/capacity-matrix', parentCode: 'APS_EQUIPMENT_UTILIZATION_MANAGEMENT', sortOrder: 2 },
   { code: 'APS_DAILY_REPORT', name: '日別設備計画表', icon: 'Calendar', path: '/aps/daily-report', parentCode: 'APS_EQUIPMENT_UTILIZATION_MANAGEMENT', sortOrder: 3 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', icon: 'Timer', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 4 },
+  { code: 'APS_CPSAT', name: 'CP-SAT最適化', icon: 'MagicStick', path: '/aps/cpsat', parentCode: 'APS', sortOrder: 5 },
   // 非表示（Sidebar から除外）：ロット一覧は成型計画「生産進捗」で代替。ルート /aps/batch-plans は残す。
   // { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
   { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
@@ -232,6 +233,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_PRODUCT_LABEL_CONFIG', name: '成型用ラベル設定', icon: 'PriceTag', path: '/master/product-label-config', parentCode: 'MASTER_LABEL', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_USE_LABEL_CONFIG', name: '製品用ラベル設定', icon: 'Tickets', path: '/master/product-use-label-config', parentCode: 'MASTER_LABEL', sortOrder: 2 },
   { code: 'MASTER_LABEL_QTY_MGMT', name: 'ラベル枚数管理', icon: 'DataAnalysis', path: '/master/label-quantity', parentCode: 'MASTER_LABEL', sortOrder: 3 },
+  { code: 'MASTER_TEXT_LABEL_PRINT', name: 'テキストラベル印刷', icon: 'EditPen', path: '/master/text-label-print', parentCode: 'MASTER_LABEL', sortOrder: 4 },
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', icon: 'Share', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', icon: 'Cpu', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
   { code: 'MASTER_EQUIPMENT_EFFICIENCY', name: '設備能率管理', icon: 'Odometer', path: '/master/bom/equipment-efficiency', parentCode: 'MASTER_BOM', sortOrder: 3 },

@@ -150,6 +150,13 @@
             {{ row.available_qty != null ? row.available_qty : '—' }}
           </template>
         </el-table-column>
+        <el-table-column label="CP-SAT" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.use_in_cpsat === false ? 'info' : 'success'" size="small" effect="plain">
+              {{ row.use_in_cpsat === false ? '除外' : '参加' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="note"
           :label="t('master.machine.note')"

@@ -34,6 +34,9 @@
         <el-table-column label="サイクル(s)" prop="cycle_sec" width="100" align="right">
           <template #default="{ row }"><span class="number-cell">{{ row.cycle_sec }}</span></template>
         </el-table-column>
+        <el-table-column label="後工程待ち(秒)" prop="wait_sec_after" width="120" align="right">
+          <template #default="{ row }"><span class="number-cell">{{ row.wait_sec_after ?? 0 }}</span></template>
+        </el-table-column>
         <el-table-column label="備考" prop="remarks" min-width="120" show-overflow-tooltip />
         <el-table-column v-if="canEdit || canDelete" label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">

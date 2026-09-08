@@ -80,6 +80,35 @@
                 </div>
               </template>
 
+              <div class="step-params">
+                <div class="form-cell">
+                  <label class="form-label">歩留(%)</label>
+                  <el-input-number
+                    v-model="step.yield_percent"
+                    :min="0"
+                    :max="100"
+                    :precision="2"
+                    :step="0.1"
+                    size="small"
+                    style="width: 100%"
+                    controls-position="right"
+                    :disabled="loading || !canEdit"
+                  />
+                </div>
+                <div class="form-cell">
+                  <label class="form-label">後工程待ち(秒)</label>
+                  <el-input-number
+                    v-model="step.wait_sec_after"
+                    :min="0"
+                    :step="1"
+                    size="small"
+                    style="width: 100%"
+                    controls-position="right"
+                    :disabled="loading || !canEdit"
+                  />
+                </div>
+              </div>
+
               <div class="machines-block">
                 <div class="machines-block__head">
                   <div class="machines-block__title">
@@ -238,6 +267,7 @@ import ProcessSelectDialog from './ProcessSelectDialog.vue'
 import draggable from 'vuedraggable'
 import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
 import { guardMasterOperation } from '@/utils/masterOperationGuard'
+import { getProcessDetails } from '@/api/options'
 
 const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
@@ -259,6 +289,8 @@ interface ProductRouteStep {
   step_no: number
   process_cd: string
   process_name: string
+  yield_percent?: number
+  wait_sec_after?: number
   machines?: MachineInfo[]
 }
 
@@ -337,6 +369,8 @@ const loadData = async () => {
     if (productSteps && Array.isArray(productSteps) && productSteps.length > 0) {
       steps.value = productSteps.map((step: ProductRouteStep) => ({
         ...step,
+        yield_percent: step.yield_percent != null ? Number(step.yield_percent) : 100,
+        wait_sec_after: step.wait_sec_after != null ? Number(step.wait_sec_after) : 0,
         machines: (step.machines || []).map((m: MachineInfo) => ({
           id: m.id,
           machine_cd: m.machine_cd || '',
@@ -387,12 +421,23 @@ const addProcess = async (process: { process_cd: string; process_name: string })
     }
   }
   const maxStepNo = steps.value.length > 0 ? Math.max(...steps.value.map((s) => s.step_no)) : 0
+  let yieldPercent = 100
+  try {
+    const details = await getProcessDetails(process.process_cd)
+    if (details.success && details.data?.default_yield != null) {
+      yieldPercent = Number(details.data.default_yield) * 100
+    }
+  } catch {
+    /* 工程マスタ未取得時は 100% */
+  }
   steps.value.push({
     product_cd: props.productCd,
     route_cd: routeCd,
     step_no: maxStepNo + 1,
     process_cd: process.process_cd,
     process_name: process.process_name,
+    yield_percent: yieldPercent,
+    wait_sec_after: 0,
     machines: [],
   })
 }
@@ -662,6 +707,17 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 
 .process-card :deep(.el-card__body) {
   padding: 8px !important;
+}
+
+.step-params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
 .process-head {

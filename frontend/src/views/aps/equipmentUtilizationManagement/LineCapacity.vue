@@ -15,7 +15,7 @@
               </span>
             </h3>
             <p class="card-head__desc card-head__desc--embed">
-              表示中ライン・ガント期間の時間帯を編集します（保存で反映）。
+              表示中ライン・ガント期間の時間帯を編集します（保存で反映）。技術使用・保全は通常生産不可として指示画面にも表示されます。
             </p>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
@@ -41,7 +41,7 @@
               </span>
             </h3>
             <p class="card-head__desc">
-              日別の稼働時間帯を設定します。「休憩」にした行は稼働合計・排産から除外（稼働帯との重複分のみ差引）。
+              日別の稼働時間帯を設定します。「休憩・技術使用・保全」は稼働合計・排産から除外（稼働帯との重複分のみ差引）。技術使用・保全は成型指示にも表示されます。
             </p>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
@@ -247,6 +247,14 @@
                 <el-icon class="day-card__tag-icon"><Timer /></el-icon>
                 {{ calcProductiveHours(day).toFixed(1) }}h
               </span>
+              <span
+                v-if="dayOccupancyBadge(day)"
+                class="day-card__occ"
+                :class="`day-card__occ--${dayOccupancyBadge(day)}`"
+                :title="dayOccupancyTitle(day)"
+              >
+                {{ dayOccupancyBadge(day) === 'tech' ? '技術' : dayOccupancyBadge(day) === 'maintenance' ? '保全' : '占用' }}
+              </span>
             </div>
             <div class="day-card__actions">
               <el-button
@@ -280,7 +288,7 @@
               v-for="(slot, idx) in day.editSlots"
               :key="idx"
               class="slot-row"
-              :class="{ 'slot-row--rest': slot.is_rest }"
+              :class="slotRowClass(slot)"
             >
               <div class="slot-row__times">
                 <el-time-picker
@@ -304,11 +312,38 @@
                 />
               </div>
               <div class="slot-row__side">
-                <el-checkbox v-model="slot.is_rest" size="small" class="slot-row__chk">休憩</el-checkbox>
+                <el-select
+                  v-model="slot.slot_type"
+                  size="small"
+                  class="slot-row__type"
+                  @change="onSlotTypeChange(slot)"
+                >
+                  <el-option
+                    v-for="opt in SLOT_TYPE_OPTIONS"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+                <el-input
+                  v-if="slot.slot_type === 'tech' || slot.slot_type === 'maintenance'"
+                  v-model="slot.note"
+                  size="small"
+                  maxlength="255"
+                  clearable
+                  placeholder="用途メモ"
+                  class="slot-row__note"
+                />
                 <el-button type="danger" size="small" link class="slot-row__del" @click="removeSlot(day, idx)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
+            </div>
+            <div class="slots-list__add">
+              <el-button size="small" plain type="primary" @click="addSlot(day, 'work')">稼働帯を追加</el-button>
+              <el-button size="small" plain @click="addSlot(day, 'rest')">休憩を追加</el-button>
+              <el-button size="small" plain type="warning" @click="addSlot(day, 'tech')">技術使用を追加</el-button>
+              <el-button size="small" plain type="info" @click="addSlot(day, 'maintenance')">保全を追加</el-button>
             </div>
           </div>
         </div>
@@ -341,6 +376,7 @@ import {
   batchUpsertLineCapacitySlots,
   type ProductionLine,
   type DaySlotsOut,
+  type LineCapacitySlotType,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
@@ -349,10 +385,30 @@ import { guardApsOperation } from '@/utils/apsOperationGuard'
 
 const { canEdit } = useApsOperationPermission()
 
+const SLOT_TYPE_OPTIONS: { value: LineCapacitySlotType; label: string }[] = [
+  { value: 'work', label: '稼働' },
+  { value: 'rest', label: '休憩' },
+  { value: 'tech', label: '技術使用' },
+  { value: 'maintenance', label: '保全' },
+]
+
+function normalizeSlotType(raw?: string | null, isRest?: boolean): LineCapacitySlotType {
+  const st = (raw || '').trim().toLowerCase()
+  if (st === 'rest' || st === 'tech' || st === 'maintenance') return st
+  if (isRest) return 'rest'
+  return 'work'
+}
+
+function isNonProductiveSlotType(slotType: LineCapacitySlotType): boolean {
+  return slotType === 'rest' || slotType === 'tech' || slotType === 'maintenance'
+}
+
 interface EditSlot {
   start_time: string
   end_time: string
   is_rest?: boolean
+  slot_type: LineCapacitySlotType
+  note?: string
 }
 
 interface DayEdit extends DaySlotsOut {
@@ -586,11 +642,16 @@ async function loadData() {
     daySlots.value = data.map(d => ({
       ...d,
       editSlots: d.slots.length > 0
-        ? d.slots.map(s => ({
-          start_time: s.start_time,
-          end_time: s.end_time,
-          is_rest: Boolean(s.is_rest),
-        }))
+        ? d.slots.map(s => {
+          const slot_type = normalizeSlotType(s.slot_type, Boolean(s.is_rest))
+          return {
+            start_time: s.start_time,
+            end_time: s.end_time,
+            is_rest: isNonProductiveSlotType(slot_type),
+            slot_type,
+            note: (s.note || '').toString(),
+          }
+        })
         : [],
     }))
     slotsCollapsedByDate.value = Object.fromEntries(daySlots.value.map(d => [d.work_date, true]))
@@ -660,84 +721,84 @@ onMounted(async () => {
 })
 
 const STANDARD_SHIFT_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false },
-  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false },
-  { start_time: '01:00:00', end_time: '06:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '01:00:00', end_time: '06:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 20H：昼直＋残業2h＋夜跨ぎ＋早番 */
 const SHIFT_20H_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false },
-  { start_time: '17:00:00', end_time: '19:00:00', is_rest: false },
-  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false },
-  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '17:00:00', end_time: '19:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 22H プリセット（昼帯 13:00–翌00:00、早番 01:00–08:00） */
 const SHIFT_22H_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '00:00:00', is_rest: false },
-  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 24H（カレンダー日あたり）：08:00〜翌08:00 を API 都合で夜跨ぎ2行に分割（全日稼働） */
 const SHIFT_24H_DAY_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '00:00:00', is_rest: false },
-  { start_time: '00:00:00', end_time: '08:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '00:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 4H：午前帯のみ＋10分休憩 */
 const SHIFT_4H_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
 /** 8H：昼間2直＋各直10分休憩 */
 const SHIFT_8H_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false },
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
-  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
 /** 溶接 8H の休憩（9H/10H/12H は 17:00 休憩を追加） */
 const WELDING_DAY_BREAK_SLOTS: EditSlot[] = [
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
-  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
 /** 溶接 9H/10H/12H の休憩（8H + 17:00） */
 const WELDING_EXTENDED_BREAK_SLOTS: EditSlot[] = [
   ...WELDING_DAY_BREAK_SLOTS,
-  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true },
+  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
 /** 溶接 9H：午後1時間延長 */
 const SHIFT_9H_WELDING_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '18:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '18:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 溶接 10H */
 const SHIFT_10H_WELDING_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '19:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '19:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 溶接 12H */
 const SHIFT_12H_WELDING_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
-  { start_time: '13:00:00', end_time: '21:00:00', is_rest: false },
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '13:00:00', end_time: '21:00:00', is_rest: false, slot_type: 'work' },
 ]
 
 /** 毎日固定の短い休憩（16H・20H・22H・24H のプリセットで使用） */
 const FIXED_DAILY_BREAK_SLOTS: EditSlot[] = [
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
-  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
-  { start_time: '01:00:00', end_time: '01:10:00', is_rest: true },
-  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '01:00:00', end_time: '01:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
 function applyStandardShift(day: DayEdit) {
@@ -820,6 +881,61 @@ function applyShiftPreset(day: DayEdit, key: ShiftPresetKey) {
 
 function removeSlot(day: DayEdit, idx: number) {
   day.editSlots.splice(idx, 1)
+}
+
+function addSlot(day: DayEdit, slotType: LineCapacitySlotType = 'work') {
+  day.editSlots.push({
+    start_time: '08:00:00',
+    end_time: '09:00:00',
+    slot_type: slotType,
+    is_rest: isNonProductiveSlotType(slotType),
+    note: '',
+  })
+  showSlotsEditor(day)
+}
+
+function onSlotTypeChange(slot: EditSlot) {
+  slot.slot_type = normalizeSlotType(slot.slot_type, Boolean(slot.is_rest))
+  slot.is_rest = isNonProductiveSlotType(slot.slot_type)
+  if (slot.slot_type === 'work' || slot.slot_type === 'rest') {
+    slot.note = ''
+  }
+}
+
+function slotRowClass(slot: EditSlot): Record<string, boolean> {
+  const st = normalizeSlotType(slot.slot_type, Boolean(slot.is_rest))
+  return {
+    'slot-row--rest': st === 'rest',
+    'slot-row--tech': st === 'tech',
+    'slot-row--maintenance': st === 'maintenance',
+  }
+}
+
+function dayOccupancyBadge(day: DayEdit): 'tech' | 'maintenance' | 'mixed' | '' {
+  let hasTech = false
+  let hasMaint = false
+  for (const slot of day.editSlots || []) {
+    const st = normalizeSlotType(slot.slot_type, Boolean(slot.is_rest))
+    if (st === 'tech') hasTech = true
+    if (st === 'maintenance') hasMaint = true
+  }
+  if (hasTech && hasMaint) return 'mixed'
+  if (hasTech) return 'tech'
+  if (hasMaint) return 'maintenance'
+  return ''
+}
+
+function dayOccupancyTitle(day: DayEdit): string {
+  const parts: string[] = []
+  for (const slot of day.editSlots || []) {
+    const st = normalizeSlotType(slot.slot_type, Boolean(slot.is_rest))
+    if (st !== 'tech' && st !== 'maintenance') continue
+    const label = st === 'tech' ? '技術使用' : '保全'
+    const note = (slot.note || '').trim()
+    const range = `${(slot.start_time || '').slice(0, 5)}–${(slot.end_time || '').slice(0, 5)}`
+    parts.push(note ? `${label} ${range} ${note}` : `${label} ${range}`)
+  }
+  return parts.join(' / ')
 }
 
 function clearAllSlots(day: DayEdit) {
@@ -910,14 +1026,15 @@ function subtractRestFromWork(
   return mergeMinuteIntervals(out)
 }
 
-/** 非休憩帯を結合し、休憩帯を差し引いた実稼働時間（h）— バックエンド engine と同趣旨 */
+/** 非稼働（休憩・技術使用・保全）帯を差し引いた実稼働時間（h）— バックエンド engine と同趣旨 */
 function calcProductiveHours(day: DayEdit): number {
   const workRaw: [number, number][] = []
   const restRaw: [number, number][] = []
   for (const slot of day.editSlots) {
     if (!slot.start_time || !slot.end_time) continue
     const parts = expandSlotToMinuteParts(slot.start_time, slot.end_time)
-    if (slot.is_rest) restRaw.push(...parts)
+    const st = normalizeSlotType(slot.slot_type, Boolean(slot.is_rest))
+    if (isNonProductiveSlotType(st)) restRaw.push(...parts)
     else workRaw.push(...parts)
   }
   const workM = mergeMinuteIntervals(workRaw)
@@ -936,12 +1053,17 @@ async function saveAll() {
       work_date: d.work_date,
       slots: d.editSlots
         .filter(s => s.start_time && s.end_time)
-        .map((s, idx) => ({
-          start_time: s.start_time,
-          end_time: s.end_time,
-          sort_order: idx,
-          is_rest: Boolean(s.is_rest),
-        })),
+        .map((s, idx) => {
+          const slot_type = normalizeSlotType(s.slot_type, Boolean(s.is_rest))
+          return {
+            start_time: s.start_time,
+            end_time: s.end_time,
+            sort_order: idx,
+            is_rest: isNonProductiveSlotType(slot_type),
+            slot_type,
+            note: (s.note || '').trim() || null,
+          }
+        }),
     }))
     await batchUpsertLineCapacitySlots({ line_id: selectedLineId.value, days })
     ElMessage.success('保存しました')
@@ -1509,7 +1631,7 @@ function isWeekend(d: string): boolean {
 
 .slot-row {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
   padding: 2px 3px;
@@ -1522,6 +1644,66 @@ function isWeekend(d: string): boolean {
 .slot-row--rest {
   background: linear-gradient(90deg, var(--el-color-warning-light-9) 0%, var(--el-fill-color-light) 100%);
   border: 1px dashed var(--el-border-color-lighter);
+}
+
+.slot-row--tech {
+  background: linear-gradient(90deg, #fff4e5 0%, var(--el-fill-color-light) 100%);
+  border: 1px solid #f5a62355;
+}
+
+.slot-row--maintenance {
+  background: linear-gradient(90deg, var(--el-color-info-light-9) 0%, var(--el-fill-color-light) 100%);
+  border: 1px dashed var(--el-color-info-light-5);
+}
+
+.slots-list__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 0 0;
+}
+
+.slot-row__type {
+  width: 96px;
+  flex-shrink: 0;
+}
+
+.slot-row__note {
+  width: 100%;
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+}
+
+.day-card__occ {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.day-card__occ--tech {
+  background: #fff4e5;
+  color: #b45309;
+  border: 1px solid #f5a62355;
+}
+
+.day-card__occ--maintenance {
+  background: var(--el-color-info-light-9);
+  color: var(--el-color-info);
+  border: 1px dashed var(--el-color-info-light-5);
+}
+
+.day-card__occ--mixed {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
 }
 
 /* 開始 〜 終了（不换行；flex:1 仅吃剩余空间，避免把侧栏挤出卡片） */

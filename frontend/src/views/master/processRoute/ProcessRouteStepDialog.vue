@@ -32,10 +32,20 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="標準サイクル(秒)" prop="cycle_sec">
-          <el-input-number v-model="form.cycle_sec" :min="0" :precision="2" controls-position="right" class="full-width" />
-          <div class="field-hint">💡 工程選択時に自動設定</div>
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="標準サイクル(秒)" prop="cycle_sec">
+              <el-input-number v-model="form.cycle_sec" :min="0" :precision="2" controls-position="right" class="full-width" />
+              <div class="field-hint">💡 工程選択時に自動設定</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="後工程待ち(秒)" prop="wait_sec_after">
+              <el-input-number v-model="form.wait_sec_after" :min="0" :step="1" controls-position="right" class="full-width" />
+              <div class="field-hint">冷却・搬送など T_wait</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="備考">
           <el-input v-model="form.remarks" type="textarea" :rows="2" placeholder="補足情報など" resize="none" />
@@ -66,7 +76,7 @@ const visible = ref(props.visible)
 watch(() => props.visible, (val) => { visible.value = val; if (val) initialize() })
 
 const formRef = ref()
-const form = reactive({ id: undefined as number | undefined, route_cd: '', step_no: 1, process_cd: '', yield_percent: 100, cycle_sec: 0, remarks: '' })
+const form = reactive({ id: undefined as number | undefined, route_cd: '', step_no: 1, process_cd: '', yield_percent: 100, cycle_sec: 0, wait_sec_after: 0, remarks: '' })
 const processOptions = ref<OptionItem[]>([])
 const saving = ref(false)
 
@@ -85,7 +95,7 @@ watch(() => form.process_cd, async (newCd, oldCd) => {
 const initialize = async () => {
   processOptions.value = await getProcessOptions()
   if (props.mode === 'edit' && props.initialData) Object.assign(form, props.initialData)
-  else Object.assign(form, { id: undefined, route_cd: props.routeCd, step_no: 1, process_cd: '', yield_percent: 100, cycle_sec: 0, remarks: '' })
+  else Object.assign(form, { id: undefined, route_cd: props.routeCd, step_no: 1, process_cd: '', yield_percent: 100, cycle_sec: 0, wait_sec_after: 0, remarks: '' })
 }
 
 const rules = { step_no: [{ required: true, message: '順番は必須', trigger: 'blur' }], process_cd: [{ required: true, message: '工程を選択', trigger: 'change' }] }
@@ -95,8 +105,8 @@ const handleSubmit = () => {
     if (!valid) return
     saving.value = true
     try {
-      if (props.mode === 'add') await createRouteStep(props.routeCd, { route_cd: props.routeCd, step_no: form.step_no, process_cd: form.process_cd, yield_percent: form.yield_percent, cycle_sec: form.cycle_sec, remarks: form.remarks || undefined })
-      else { if (form.id == null) return; await updateRouteStep(form.id, { step_no: form.step_no, process_cd: form.process_cd, yield_percent: form.yield_percent, cycle_sec: form.cycle_sec, remarks: form.remarks || undefined }) }
+      if (props.mode === 'add') await createRouteStep(props.routeCd, { route_cd: props.routeCd, step_no: form.step_no, process_cd: form.process_cd, yield_percent: form.yield_percent, cycle_sec: form.cycle_sec, wait_sec_after: form.wait_sec_after, remarks: form.remarks || undefined })
+      else { if (form.id == null) return; await updateRouteStep(form.id, { step_no: form.step_no, process_cd: form.process_cd, yield_percent: form.yield_percent, cycle_sec: form.cycle_sec, wait_sec_after: form.wait_sec_after, remarks: form.remarks || undefined }) }
       ElMessage.success('保存成功'); emit('update:visible', false); emit('saved')
     } catch (e: unknown) { ElMessage.error((e && typeof e === 'object' && 'message' in e) ? String((e as { message: string }).message) : '保存失敗') }
     finally { saving.value = false }

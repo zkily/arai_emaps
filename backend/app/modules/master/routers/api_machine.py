@@ -62,6 +62,7 @@ def _machine_to_dict(row: Machine) -> dict:
         "calendar_id": row.calendar_id,
         "efficiency": eff,
         "available_qty": int(getattr(row, "available_qty", 0) or 0),
+        "use_in_cpsat": bool(getattr(row, "use_in_cpsat", True)),
         "note": row.note,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -157,6 +158,7 @@ async def create_machine(
         calendar_id=body.calendar_id,
         efficiency=body.efficiency,
         available_qty=body.available_qty,
+        use_in_cpsat=body.use_in_cpsat,
         note=body.note,
     )
     db.add(row)
@@ -196,6 +198,8 @@ async def update_machine(
         row.efficiency = body.efficiency
     if body.available_qty is not None:
         row.available_qty = body.available_qty
+    if body.use_in_cpsat is not None:
+        row.use_in_cpsat = body.use_in_cpsat
     if body.note is not None:
         row.note = body.note
     await db.commit()

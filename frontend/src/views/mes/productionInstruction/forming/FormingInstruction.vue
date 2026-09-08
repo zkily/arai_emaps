@@ -199,14 +199,7 @@
             :sort-orders="['ascending', 'descending']"
           />
           <el-table-column prop="process_name" label="工程名" width="80" align="center" />
-          <el-table-column
-            prop="machine_name"
-            label="設備名"
-            align="center"
-            width="120"
-            sortable
-            :sort-orders="['ascending', 'descending']"
-          />
+          <el-table-column prop="machine_name" label="設備名" align="center" width="120" sortable :sort-orders="['ascending', 'descending']" />
           <el-table-column prop="product_cd" label="製品CD" align="center" width="100" />
           <el-table-column prop="product_name" label="製品名" width="140" />
           <el-table-column
@@ -265,6 +258,7 @@
           <el-table-column prop="remarks" label="備考" width="200" align="left">
             <template #default="{ row }">
               <el-input
+                v-if="!row.occupancy_only"
                 v-model="row.remarks"
                 size="small"
                 :placeholder="
@@ -275,6 +269,28 @@
                 @blur="saveRemarks(row)"
                 @keyup.enter="saveRemarks(row)"
               />
+              <span v-else style="color: #9ca3af">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="占用" width="168" align="left">
+            <template #default="{ row }">
+              <div v-if="shouldShowOccupancy(row) && row.occupancy_slots?.length" class="occupancy-tags">
+                <el-tag
+                  v-for="(occ, oi) in row.occupancy_slots"
+                  :key="oi"
+                  size="small"
+                  :type="occ.slot_type === 'tech' ? 'warning' : 'info'"
+                  :effect="occ.is_advance_notice ? 'plain' : 'light'"
+                  class="occupancy-tag"
+                  :class="{ 'occupancy-tag--advance': occ.is_advance_notice }"
+                  :title="occ.summary || formatOccupancyDisplay(occ, row.plan_date)"
+                >
+                  <span v-if="occ.is_advance_notice" class="occupancy-advance-mark">予告</span>
+                  {{ formatOccupancyDisplay(occ, row.plan_date) }}
+                </el-tag>
+              </div>
+              <span v-else-if="shouldShowOccupancy(row)" style="color: #9ca3af">-</span>
+              <span v-else style="color: #cbd5e1">·</span>
             </template>
           </el-table-column>
         </el-table>
@@ -787,6 +803,10 @@ import {
 } from '@/api/aps'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import {
+  formatOccupancyDisplay,
+  shouldShowOccupancyRow,
+} from '@/utils/lineOccupancyDisplay'
 
 const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
@@ -841,6 +861,11 @@ interface PlanRecord {
   operator?: number | string
   remarks?: string
   [key: string]: any
+}
+
+/** 同一 生産日×設備 の先頭行だけ占用を表示（重複を避ける） */
+function shouldShowOccupancy(row: PlanRecord): boolean {
+  return shouldShowOccupancyRow(allFilteredPlanData.value || [], row)
 }
 
 // 計画検索フォーム
@@ -1159,9 +1184,20 @@ const loadPlanData = async () => {
 
     if (result.success) {
       const records = Array.isArray(result?.data?.records) ? result.data.records : []
-      // 过滤掉製品名为空值的数据，以及計画生産数小于等于0的数据
+      // 通常計画（品名あり・数量>0）または占用専用行を残す
       const filteredData = records
-        .filter((item: any) => item.product_name && item.product_name.trim() !== '' && item.quantity > 0)
+        .filter((item: any) => {
+          const hasOccupancy =
+            (Array.isArray(item?.occupancy_slots) && item.occupancy_slots.length > 0) ||
+            Boolean(item?.occupancy_only)
+          const qty = Number(item?.quantity)
+          const hasPlan =
+            item?.product_name &&
+            String(item.product_name).trim() !== '' &&
+            Number.isFinite(qty) &&
+            qty > 0
+          return hasPlan || hasOccupancy
+        })
         .sort(sortByPlanDateAndOperatorAsc)
 
       // 存储所有过滤后的数据
@@ -5386,19 +5422,30 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
   // 手入力備考（設備名×生産日）があれば既存備考を上書き。段替アルゴリズム自体は変更しない
   const remarksByMachine = new Map<string, string>()
+  const occupancyByMachine = new Map<string, string>()
   for (const item of planData || []) {
     const itemDate = JapanDateUtils.normalizeDate(item?.plan_date || '').replace(/\//g, '-')
     if (itemDate !== filterDateForTotal) continue
     const machine = String(item?.machine_name || '').trim()
     const remarks = String(item?.remarks || '').trim()
+    const occupancy = String(item?.occupancy_summary || '').trim()
     if (machine && remarks && !remarksByMachine.has(machine)) {
       remarksByMachine.set(machine, remarks)
     }
+    if (machine && occupancy && !occupancyByMachine.has(machine)) {
+      occupancyByMachine.set(machine, occupancy)
+    }
   }
   for (const row of tableRows) {
-    const saved = remarksByMachine.get(String(row?.line || '').trim())
-    if (saved) {
-      row.remarks = saved
+    const machine = String(row?.line || '').trim()
+    const saved = remarksByMachine.get(machine)
+    const occupancy = occupancyByMachine.get(machine)
+    const parts: string[] = []
+    if (occupancy) parts.push(occupancy)
+    if (saved) parts.push(saved)
+    else if (row.remarks) parts.push(String(row.remarks))
+    if (parts.length) {
+      row.remarks = parts.join(' ／ ')
     }
   }
 
@@ -6905,6 +6952,37 @@ onUnmounted(() => {
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: slideInUp 0.8s ease-out;
+}
+
+.occupancy-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.occupancy-tag {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  line-height: 1.3;
+  padding: 2px 6px;
+}
+
+.occupancy-tag--advance {
+  border-style: dashed !important;
+  opacity: 0.95;
+}
+
+.occupancy-advance-mark {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.4;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
 }
 
 .section-card:hover {

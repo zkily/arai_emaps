@@ -351,15 +351,25 @@ def _subtract_rest_from_work_minutes(
     return _merge_minute_intervals(out)
 
 
+def _slot_is_non_productive(s: Any) -> bool:
+    """rest / tech / maintenance、または旧 is_rest は非稼働として扱う。"""
+    from app.modules.aps.schemas import slot_type_is_non_productive
+
+    return slot_type_is_non_productive(
+        getattr(s, "slot_type", None),
+        bool(getattr(s, "is_rest", False)),
+    )
+
+
 def productive_minute_intervals_from_slots(
     day_slots: Sequence[Any],
 ) -> List[tuple[int, int]]:
-    """is_rest の行は休憩として、稼働区間（非休憩）の合算から差し引く。"""
+    """非稼働（休憩・技術使用・保全）の行は稼働区間の合算から差し引く。"""
     work_raw: List[tuple[int, int]] = []
     rest_raw: List[tuple[int, int]] = []
-    for s in sorted(day_slots, key=lambda x: (x.sort_order, x.start_time)):
+    for s in sorted(day_slots, key=lambda x: (getattr(x, "sort_order", 0), x.start_time)):
         parts = _expand_one_slot_to_minute_parts(s.start_time, s.end_time)
-        if bool(getattr(s, "is_rest", False)):
+        if _slot_is_non_productive(s):
             rest_raw.extend(parts)
         else:
             work_raw.extend(parts)
