@@ -179,7 +179,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { PieChart, DataAnalysis, Histogram, Grid, Refresh, Download } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { inventoryValueApi } from '@/api/inventoryValue'
 
 // 类型定义

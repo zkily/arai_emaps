@@ -506,7 +506,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
 import { Box, Lock, Warning, Printer, Operation, Loading, TrendCharts, EditPen, Plus } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import {
   getProductionSummarysList,
   getProductionSummarysProducts,

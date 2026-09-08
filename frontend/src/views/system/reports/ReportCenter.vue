@@ -393,8 +393,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Download, Plus, Promotion, Refresh, View } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
-import type { ECharts } from 'echarts'
+import echarts from '@/utils/echarts'
+import type { ECharts } from '@/utils/echarts'
 import {
   createReportSchedule,
   deleteReportSchedule,

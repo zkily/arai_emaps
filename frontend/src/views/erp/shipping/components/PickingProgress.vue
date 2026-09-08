@@ -394,7 +394,7 @@ import {
   TrendCharts,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
 import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'

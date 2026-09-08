@@ -168,7 +168,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh, RefreshLeft, TrendCharts, Histogram, PieChart, List } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import dayjs from 'dayjs'
 
 import {

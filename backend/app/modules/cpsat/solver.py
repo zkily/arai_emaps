@@ -18,15 +18,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from ortools.sat.python import cp_model
-
-STATUS_MAP = {
-    cp_model.OPTIMAL: "optimal",
-    cp_model.FEASIBLE: "feasible",
-    cp_model.INFEASIBLE: "infeasible",
-    cp_model.MODEL_INVALID: "error",
-    cp_model.UNKNOWN: "error",
-}
+# ortools は solve_model() 内で遅延 import（アプリ起動時に載せない）
 
 
 def sec_to_unit(sec: int | float | None, unit: int) -> int:
@@ -109,6 +101,16 @@ class SolveOutput:
 
 
 def solve_model(inp: SolveInput) -> SolveOutput:
+    from ortools.sat.python import cp_model
+
+    status_map = {
+        cp_model.OPTIMAL: "optimal",
+        cp_model.FEASIBLE: "feasible",
+        cp_model.INFEASIBLE: "infeasible",
+        cp_model.MODEL_INVALID: "error",
+        cp_model.UNKNOWN: "error",
+    }
+
     unit = max(int(inp.time_unit_sec or 60), 1)
     jobs: list[SolveJob] = []
     skipped: list[int] = []
@@ -222,7 +224,7 @@ def solve_model(inp: SolveInput) -> SolveOutput:
     solver.parameters.num_search_workers = 8
     status_code = solver.Solve(model)
     solver_name = solver.StatusName(status_code)
-    status = STATUS_MAP.get(status_code, "error")
+    status = status_map.get(status_code, "error")
     wall = float(solver.WallTime())
 
     if status_code not in (cp_model.OPTIMAL, cp_model.FEASIBLE):

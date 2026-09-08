@@ -302,7 +302,7 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import dayjs from 'dayjs'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

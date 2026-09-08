@@ -22,7 +22,6 @@ from app.modules.cpsat.schemas import (
     RunOut,
     SolveRunIn,
 )
-from app.modules.cpsat.solve_service import solve_run
 
 router = APIRouter()
 
@@ -153,6 +152,8 @@ async def solve_existing_run(
     current_user: User = Depends(require_aps_operation("create")),
 ):
     """展開済みスナップショットを CP-SAT で求解し、S/E/X を書き戻す。"""
+    from app.modules.cpsat.solve_service import solve_run
+
     try:
         run, _out = await solve_run(
             db,

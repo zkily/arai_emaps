@@ -637,7 +637,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { ElMessage } from 'element-plus'
 import {
   DataAnalysis,

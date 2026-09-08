@@ -138,7 +138,7 @@ import { ref, computed, markRaw, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import dayjs from 'dayjs'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import {
   getSalesStats,
   getDailyConfirmedSeries,

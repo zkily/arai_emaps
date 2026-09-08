@@ -176,7 +176,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, Download } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import request from '@/utils/request'
 import { getProductList } from '@/api/master/productMaster'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'

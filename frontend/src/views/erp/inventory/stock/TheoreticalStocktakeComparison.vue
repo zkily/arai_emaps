@@ -456,7 +456,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { ElMessage } from 'element-plus'

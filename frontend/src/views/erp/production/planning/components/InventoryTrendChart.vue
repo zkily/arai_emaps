@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import type { FormingDailyPlanSummaryData } from '@/api/formingDailyPlan'
 import { FORMING_PLAN_PROCESS_OPTIONS, processColor, processLabel } from './formingDailyPlanConstants'
 

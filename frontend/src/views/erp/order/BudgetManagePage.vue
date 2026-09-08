@@ -590,7 +590,7 @@
 </template>
 
 <script setup lang="ts">
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import dayjs from 'dayjs'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'

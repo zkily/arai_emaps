@@ -721,8 +721,8 @@ import {
   Top,
   Bottom,
 } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
-import type { EChartsOption } from 'echarts'
+import echarts from '@/utils/echarts'
+import type { EChartsOption } from '@/utils/echarts'
 import {
   getProcessMachinePlan,
   getProcessMachinePlanProducts,

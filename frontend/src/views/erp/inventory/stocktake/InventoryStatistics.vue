@@ -289,7 +289,7 @@
 import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 
 import { getInventoryLogsAll } from '@/api/inventory'
 

@@ -2136,7 +2136,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import {
   deleteMeeting,
   downloadMeetingPptx,

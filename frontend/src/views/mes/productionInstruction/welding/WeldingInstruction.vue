@@ -493,7 +493,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'WeldingInstruction' })
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   Search,

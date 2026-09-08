@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="iqa ipa">
     <div class="ipa__bg" aria-hidden="true">
       <div class="ipa__orb ipa__orb--1" />
@@ -412,8 +412,8 @@
 
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
-import type { ECharts } from 'echarts'
+import echarts from '@/utils/echarts'
+import type { ECharts } from '@/utils/echarts'
 import {
   Calendar,
   CircleCheck,

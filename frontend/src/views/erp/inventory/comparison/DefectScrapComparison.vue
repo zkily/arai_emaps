@@ -422,8 +422,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
-import type { ECharts, EChartsOption } from 'echarts'
+import echarts from '@/utils/echarts'
+import type { ECharts, EChartsOption } from '@/utils/echarts'
 import {
   Calendar,
   DocumentChecked,

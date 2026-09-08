@@ -1,4 +1,4 @@
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 
 export const CHART_INIT_OPTS = {
   devicePixelRatio: Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 2, 2),

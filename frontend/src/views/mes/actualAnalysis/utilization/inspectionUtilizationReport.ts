@@ -1,5 +1,5 @@
-import * as echarts from 'echarts'
-import type { EChartsOption } from 'echarts'
+import echarts from '@/utils/echarts'
+import type { EChartsOption } from '@/utils/echarts'
 import type {
   InspectionUtilizationDailyInspectorRow,
   InspectionUtilizationDailyRow,

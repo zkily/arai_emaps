@@ -848,7 +848,7 @@ import { fetchScheduledWorkdaysForMonth } from '@/api/master/companyWorkCalendar
 import type { ProcessItem } from '@/types/master'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
 import { guardApsOperation } from '@/utils/apsOperationGuard'
 

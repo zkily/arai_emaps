@@ -776,7 +776,7 @@ function formingDevLog(...args: unknown[]) {
   if (import.meta.env.DEV) console.info('[FormingInstruction]', ...args)
 }
 import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 /** ERP/MES いずれの画面でも MES 由来 API を利用し、挙動を統一する */
 const planDataApiPath = computed(() => '/api/mes/forming-plan-data')
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'

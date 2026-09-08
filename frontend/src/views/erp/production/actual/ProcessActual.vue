@@ -312,7 +312,7 @@ import {
   Calendar,
   Top,
 } from '@element-plus/icons-vue'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { getStockActualLogs, type StockActualLogRecord } from '@/api/productionActualStockLogs'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'

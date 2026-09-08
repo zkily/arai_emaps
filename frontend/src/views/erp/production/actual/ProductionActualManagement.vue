@@ -417,7 +417,7 @@ import {
   type StockActualStats,
   type StockActualTypeSummary,
 } from '@/api/productionActualStockLogs'
-import * as echarts from 'echarts'
+import echarts from '@/utils/echarts'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
