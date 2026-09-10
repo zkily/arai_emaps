@@ -12,8 +12,8 @@ export interface InventoryStagnationHeaderOverview {
   topProcesses: Array<{ column: string; label: string; count: number }>
 }
 
-export const INVENTORY_STAGNATION_DEFAULT_MIN_QTY = 50
-export const INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS = 7
+export const INVENTORY_STAGNATION_DEFAULT_MIN_QTY = 450
+export const INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS = 14
 
 function todayJstIsoDate() {
   const now = new Date()

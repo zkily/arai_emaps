@@ -7,6 +7,7 @@ from app.modules.database.inventory_kpi_api import router as inventory_kpi_route
 from app.modules.database.forming_daily_plan_api import router as forming_daily_plan_router
 from app.modules.database.process_machine_plan_api import router as process_machine_plan_router
 from app.modules.database.lot_forecast_attribution_api import router as lot_forecast_attribution_router
+from app.modules.database.product_process_gantt_api import router as product_process_gantt_router
 from app.modules.database.defect_scrap_comparison_api import router as defect_scrap_comparison_router
 
 router = APIRouter()
@@ -16,5 +17,6 @@ router.include_router(inventory_kpi_router, prefix="/inventory-kpi")
 router.include_router(forming_daily_plan_router, prefix="/forming-daily-plan")
 router.include_router(process_machine_plan_router)
 router.include_router(lot_forecast_attribution_router)
+router.include_router(product_process_gantt_router)
 
 __all__ = ["router"]

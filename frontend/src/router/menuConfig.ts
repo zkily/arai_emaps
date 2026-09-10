@@ -91,7 +91,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_PLANNING', name: '生産計画', icon: 'Calendar', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION', sortOrder: 5 },
   { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', icon: 'DataBoard', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', icon: 'Histogram', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },
-  { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', icon: 'Calendar', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
+  { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '製品工程ガント', icon: 'Calendar', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_PROCESS_MACHINE_PLAN', name: '工程别设备别计划', icon: 'Grid', path: '/erp/production/process-machine-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.6 },
   { code: 'ERP_PRODUCTION_FORMING_DAILY_PLAN', name: '成型計画試算', icon: 'TrendCharts', path: '/erp/production/forming-daily-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.5 },
   { code: 'ERP_PRODUCTION_INVENTORY_PROJECTION', name: '月末在庫予測', icon: 'DataLine', path: '/erp/production/inventory-projection', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.55 },

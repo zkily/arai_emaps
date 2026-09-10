@@ -8,126 +8,240 @@
           </span>
           <div class="tlp-title-block">
             <h1 class="tlp-title">テキストラベル印刷</h1>
-            <p class="tlp-subtitle">社内表示用ラベルを A5 横で印刷します</p>
+            <p class="tlp-subtitle">{{ activeSubtitle }}</p>
           </div>
         </div>
         <div class="tlp-badges">
           <span class="tlp-badge">A5 横</span>
-          <span class="tlp-badge tlp-badge--muted">{{ FONT_SIZE.notice }} / {{ FONT_SIZE.destination }} / {{ FONT_SIZE.message }} px</span>
+          <span class="tlp-badge tlp-badge--muted">{{ activeFontBadge }}</span>
         </div>
       </div>
     </header>
 
-    <div class="tlp-body">
-      <section class="tlp-panel tlp-panel--form">
-        <div class="tlp-panel-head">
-          <span class="tlp-panel-title">入力</span>
-          <span class="tlp-panel-hint">3行構成・改行なし</span>
+    <el-tabs v-model="activeTab" class="tlp-tabs">
+      <!-- 出荷表示（既存） -->
+      <el-tab-pane label="出荷表示" name="shipping">
+        <div class="tlp-body">
+          <section class="tlp-panel tlp-panel--form">
+            <div class="tlp-panel-head">
+              <span class="tlp-panel-title">入力</span>
+              <span class="tlp-panel-hint">3行構成・改行なし</span>
+            </div>
+
+            <div class="tlp-fields">
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">1</span>
+                    注意文言
+                  </label>
+                  <span class="tlp-px">{{ FONT_SIZE.notice }}px</span>
+                </div>
+                <el-input
+                  v-model="notice"
+                  placeholder="例：社内表示用　出荷の際は外してください"
+                  maxlength="60"
+                  clearable
+                  show-word-limit
+                />
+              </div>
+
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">2</span>
+                    納入先
+                  </label>
+                  <span class="tlp-px">{{ FONT_SIZE.destination }}px</span>
+                </div>
+                <el-select
+                  v-model="destinationCd"
+                  filterable
+                  clearable
+                  placeholder="納入先を選択"
+                  class="tlp-select"
+                  :loading="loadingDestinations"
+                  popper-class="destination-select-popper"
+                >
+                  <el-option
+                    v-for="d in destinationOptions"
+                    :key="d.cd"
+                    :label="`${d.cd} | ${d.name}`"
+                    :value="d.cd"
+                  />
+                </el-select>
+              </div>
+
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">3</span>
+                    印刷テキスト
+                  </label>
+                  <span class="tlp-px">{{ FONT_SIZE.message }}px</span>
+                </div>
+                <el-input
+                  v-model="message"
+                  placeholder="例：出荷OK"
+                  maxlength="40"
+                  clearable
+                  show-word-limit
+                  @keyup.enter="handlePrintShipping"
+                />
+              </div>
+            </div>
+
+            <div class="tlp-actions">
+              <el-button
+                class="tlp-btn tlp-btn--print"
+                :icon="Printer"
+                :loading="printing"
+                @click="handlePrintShipping"
+              >
+                印刷
+              </el-button>
+              <el-button class="tlp-btn tlp-btn--ghost" @click="resetShippingForm">クリア</el-button>
+            </div>
+          </section>
+
+          <section class="tlp-panel tlp-panel--preview">
+            <div class="tlp-panel-head">
+              <span class="tlp-panel-title">プレビュー</span>
+              <span class="tlp-panel-hint">実寸比 A5 横</span>
+            </div>
+
+            <div class="tlp-preview-stage">
+              <div class="a5-preview" aria-hidden="true">
+                <div class="a5-row a5-row--notice">
+                  <span class="a5-text" :class="{ 'is-placeholder': !notice.trim() }">
+                    {{ notice.trim() || '注意文言' }}
+                  </span>
+                </div>
+                <div class="a5-row a5-row--dest">
+                  <span class="a5-text" :class="{ 'is-placeholder': !selectedDestinationName }">
+                    {{ selectedDestinationName || '納入先' }}
+                  </span>
+                </div>
+                <div class="a5-row a5-row--msg">
+                  <span class="a5-text" :class="{ 'is-placeholder': !message.trim() }">
+                    {{ message.trim() || '印刷テキスト' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
+      </el-tab-pane>
 
-        <div class="tlp-fields">
-          <div class="tlp-field">
-            <div class="tlp-field-label-row">
-              <label class="tlp-field-label">
-                <span class="tlp-step">1</span>
-                注意文言
-              </label>
-              <span class="tlp-px">{{ FONT_SIZE.notice }}px</span>
+      <!-- 社内メッキ向け（新規） -->
+      <el-tab-pane label="社内メッキ向け" name="plating">
+        <div class="tlp-body">
+          <section class="tlp-panel tlp-panel--form">
+            <div class="tlp-panel-head">
+              <span class="tlp-panel-title">入力</span>
+              <span class="tlp-panel-hint">枚数分「N 枚目」を印刷</span>
             </div>
-            <el-input
-              v-model="notice"
-              placeholder="例：社内表示用　出荷の際は外してください"
-              maxlength="60"
-              clearable
-              show-word-limit
-            />
-          </div>
 
-          <div class="tlp-field">
-            <div class="tlp-field-label-row">
-              <label class="tlp-field-label">
-                <span class="tlp-step">2</span>
-                納入先
-              </label>
-              <span class="tlp-px">{{ FONT_SIZE.destination }}px</span>
-            </div>
-            <el-select
-              v-model="destinationCd"
-              filterable
-              clearable
-              placeholder="納入先を選択"
-              class="tlp-select"
-              :loading="loadingDestinations"
-              popper-class="destination-select-popper"
-            >
-              <el-option
-                v-for="d in destinationOptions"
-                :key="d.cd"
-                :label="`${d.cd} | ${d.name}`"
-                :value="d.cd"
-              />
-            </el-select>
-          </div>
+            <div class="tlp-fields">
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">1</span>
+                    見出し
+                  </label>
+                  <span class="tlp-px">{{ PLATING_FONT_SIZE.title }}px</span>
+                </div>
+                <el-input
+                  v-model="platingTitle"
+                  placeholder="例：社内メッキ向け"
+                  maxlength="40"
+                  clearable
+                  show-word-limit
+                />
+              </div>
 
-          <div class="tlp-field">
-            <div class="tlp-field-label-row">
-              <label class="tlp-field-label">
-                <span class="tlp-step">3</span>
-                印刷テキスト
-              </label>
-              <span class="tlp-px">{{ FONT_SIZE.message }}px</span>
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">2</span>
+                    品番・テキスト
+                  </label>
+                  <span class="tlp-px">{{ PLATING_FONT_SIZE.product }}px</span>
+                </div>
+                <el-input
+                  v-model="platingProduct"
+                  placeholder="例：164B FR"
+                  maxlength="40"
+                  clearable
+                  show-word-limit
+                  @keyup.enter="handlePrintPlating"
+                />
+              </div>
+
+              <div class="tlp-field">
+                <div class="tlp-field-label-row">
+                  <label class="tlp-field-label">
+                    <span class="tlp-step">3</span>
+                    印刷枚数
+                  </label>
+                  <span class="tlp-px">{{ PLATING_FONT_SIZE.sheetNo }}px</span>
+                </div>
+                <div class="tlp-copies-row">
+                  <el-input-number
+                    v-model="platingCopies"
+                    :min="1"
+                    :max="99"
+                    :step="1"
+                    controls-position="right"
+                    class="tlp-copies"
+                  />
+                  <span class="tlp-copies-hint">
+                    → {{ formatSheetLabel(1) }}〜{{ formatSheetLabel(safePlatingCopies) }}
+                  </span>
+                </div>
+              </div>
             </div>
-            <el-input
-              v-model="message"
-              placeholder="例：出荷OK"
-              maxlength="40"
-              clearable
-              show-word-limit
-              @keyup.enter="handlePrint"
-            />
-          </div>
+
+            <div class="tlp-actions">
+              <el-button
+                class="tlp-btn tlp-btn--print"
+                :icon="Printer"
+                :loading="printing"
+                @click="handlePrintPlating"
+              >
+                印刷
+              </el-button>
+              <el-button class="tlp-btn tlp-btn--ghost" @click="resetPlatingForm">クリア</el-button>
+            </div>
+          </section>
+
+          <section class="tlp-panel tlp-panel--preview">
+            <div class="tlp-panel-head">
+              <span class="tlp-panel-title">プレビュー</span>
+              <span class="tlp-panel-hint">1枚目のイメージ</span>
+            </div>
+
+            <div class="tlp-preview-stage">
+              <div class="a5-preview a5-preview--plating" aria-hidden="true">
+                <div class="a5-row a5-row--plating-title">
+                  <span class="a5-text" :class="{ 'is-placeholder': !platingTitle.trim() }">
+                    {{ platingTitle.trim() || '見出し' }}
+                  </span>
+                </div>
+                <div class="a5-row a5-row--plating-product">
+                  <span class="a5-text" :class="{ 'is-placeholder': !platingProduct.trim() }">
+                    {{ platingProduct.trim() || '品番・テキスト' }}
+                  </span>
+                </div>
+                <div class="a5-row a5-row--plating-sheet">
+                  <span class="a5-text">{{ formatSheetLabel(1) }}</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-
-        <div class="tlp-actions">
-          <el-button
-            class="tlp-btn tlp-btn--print"
-            :icon="Printer"
-            :loading="printing"
-            @click="handlePrint"
-          >
-            印刷
-          </el-button>
-          <el-button class="tlp-btn tlp-btn--ghost" @click="resetForm">クリア</el-button>
-        </div>
-      </section>
-
-      <section class="tlp-panel tlp-panel--preview">
-        <div class="tlp-panel-head">
-          <span class="tlp-panel-title">プレビュー</span>
-          <span class="tlp-panel-hint">実寸比 A5 横</span>
-        </div>
-
-        <div class="tlp-preview-stage">
-          <div class="a5-preview" aria-hidden="true">
-            <div class="a5-row a5-row--notice">
-              <span class="a5-text" :class="{ 'is-placeholder': !notice.trim() }">
-                {{ notice.trim() || '注意文言' }}
-              </span>
-            </div>
-            <div class="a5-row a5-row--dest">
-              <span class="a5-text" :class="{ 'is-placeholder': !selectedDestinationName }">
-                {{ selectedDestinationName || '納入先' }}
-              </span>
-            </div>
-            <div class="a5-row a5-row--msg">
-              <span class="a5-text" :class="{ 'is-placeholder': !message.trim() }">
-                {{ message.trim() || '印刷テキスト' }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -139,10 +253,20 @@ import { getDestinationOptions } from '@/api/master/destinationMaster'
 import {
   DEFAULT_MESSAGE,
   DEFAULT_NOTICE,
+  DEFAULT_PLATING_COPIES,
+  DEFAULT_PLATING_PRODUCT,
+  DEFAULT_PLATING_TITLE,
   FONT_SIZE,
+  PLATING_FONT_SIZE,
   PRINT_POPUP_BLOCKED_MSG,
+  formatSheetLabel,
+  printPlatingLabel,
   printTextLabel,
 } from './utils/textLabelPrint'
+
+type TabName = 'shipping' | 'plating'
+
+const activeTab = ref<TabName>('shipping')
 
 const notice = ref(DEFAULT_NOTICE)
 const destinationCd = ref('')
@@ -151,15 +275,40 @@ const destinationOptions = ref<{ cd: string; name: string }[]>([])
 const loadingDestinations = ref(false)
 const printing = ref(false)
 
+const platingTitle = ref(DEFAULT_PLATING_TITLE)
+const platingProduct = ref(DEFAULT_PLATING_PRODUCT)
+const platingCopies = ref(DEFAULT_PLATING_COPIES)
+
 const selectedDestinationName = computed(() => {
   const hit = destinationOptions.value.find((d) => d.cd === destinationCd.value)
   return hit?.name || ''
+})
+
+const safePlatingCopies = computed(() => {
+  const n = Math.floor(Number(platingCopies.value) || 1)
+  return Math.min(99, Math.max(1, n))
+})
+
+const activeSubtitle = computed(() =>
+  activeTab.value === 'plating'
+    ? '社内メッキ向けラベルを A5 横で印刷します'
+    : '社内表示用ラベルを A5 横で印刷します',
+)
+
+const activeFontBadge = computed(() => {
+  if (activeTab.value === 'plating') {
+    return `${PLATING_FONT_SIZE.title} / ${PLATING_FONT_SIZE.product} / ${PLATING_FONT_SIZE.sheetNo} px`
+  }
+  return `${FONT_SIZE.notice} / ${FONT_SIZE.destination} / ${FONT_SIZE.message} px`
 })
 
 /** プレビューは縮小表示（実寸比） */
 const previewNoticePx = `${Math.round(FONT_SIZE.notice * 0.42)}px`
 const previewDestPx = `${Math.round(FONT_SIZE.destination * 0.42)}px`
 const previewMessagePx = `${Math.round(FONT_SIZE.message * 0.42)}px`
+const previewPlatingTitlePx = `${Math.round(PLATING_FONT_SIZE.title * 0.42)}px`
+const previewPlatingProductPx = `${Math.round(PLATING_FONT_SIZE.product * 0.42)}px`
+const previewPlatingSheetPx = `${Math.round(PLATING_FONT_SIZE.sheetNo * 0.42)}px`
 
 async function loadDestinations() {
   loadingDestinations.value = true
@@ -172,13 +321,19 @@ async function loadDestinations() {
   }
 }
 
-function resetForm() {
+function resetShippingForm() {
   notice.value = DEFAULT_NOTICE
   destinationCd.value = ''
   message.value = DEFAULT_MESSAGE
 }
 
-async function handlePrint() {
+function resetPlatingForm() {
+  platingTitle.value = DEFAULT_PLATING_TITLE
+  platingProduct.value = DEFAULT_PLATING_PRODUCT
+  platingCopies.value = DEFAULT_PLATING_COPIES
+}
+
+async function handlePrintShipping() {
   const noticeText = notice.value.trim()
   if (!noticeText) {
     ElMessage.warning('注意文言を入力してください')
@@ -199,6 +354,35 @@ async function handlePrint() {
       notice: noticeText,
       destinationName: selectedDestinationName.value,
       message: text,
+    })
+    if (!win) {
+      ElMessage.error(PRINT_POPUP_BLOCKED_MSG)
+    }
+  } finally {
+    printing.value = false
+  }
+}
+
+async function handlePrintPlating() {
+  const title = platingTitle.value.trim()
+  if (!title) {
+    ElMessage.warning('見出しを入力してください')
+    return
+  }
+  const product = platingProduct.value.trim()
+  if (!product) {
+    ElMessage.warning('品番・テキストを入力してください')
+    return
+  }
+  const copies = safePlatingCopies.value
+  platingCopies.value = copies
+
+  printing.value = true
+  try {
+    const win = printPlatingLabel({
+      title,
+      productText: product,
+      copies,
     })
     if (!win) {
       ElMessage.error(PRINT_POPUP_BLOCKED_MSG)
@@ -309,6 +493,39 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
+.tlp-tabs {
+  --el-tabs-header-height: 40px;
+}
+
+.tlp-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.tlp-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: var(--tlp-line);
+}
+
+.tlp-tabs :deep(.el-tabs__item) {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--tlp-muted);
+}
+
+.tlp-tabs :deep(.el-tabs__item.is-active) {
+  color: #0f766e;
+}
+
+.tlp-tabs :deep(.el-tabs__active-bar) {
+  background-color: var(--tlp-teal);
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+}
+
+.tlp-tabs :deep(.el-tabs__content) {
+  overflow: visible;
+}
+
 .tlp-body {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.05fr);
@@ -393,6 +610,24 @@ onMounted(() => {
   width: 100%;
 }
 
+.tlp-copies-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tlp-copies {
+  width: 140px;
+}
+
+.tlp-copies-hint {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+  font-variant-numeric: tabular-nums;
+}
+
 .tlp-actions {
   display: flex;
   align-items: center;
@@ -448,6 +683,12 @@ onMounted(() => {
     0 10px 28px rgba(15, 23, 42, 0.12);
 }
 
+.a5-preview--plating {
+  justify-content: center;
+  gap: 18px;
+  padding: 12px 8px;
+}
+
 .a5-row {
   display: flex;
   align-items: center;
@@ -479,6 +720,21 @@ onMounted(() => {
 .a5-row--msg {
   flex: 1 1 auto;
   font-size: v-bind(previewMessagePx);
+}
+
+.a5-row--plating-title {
+  flex: 0 0 auto;
+  font-size: v-bind(previewPlatingTitlePx);
+}
+
+.a5-row--plating-product {
+  flex: 0 0 auto;
+  font-size: v-bind(previewPlatingProductPx);
+}
+
+.a5-row--plating-sheet {
+  flex: 0 0 auto;
+  font-size: v-bind(previewPlatingSheetPx);
 }
 
 .a5-text {

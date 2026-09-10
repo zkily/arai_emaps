@@ -516,6 +516,11 @@ import { guardApsOperation } from '@/utils/apsOperationGuard'
 
 import InventoryStagnationNotifyDialog from './InventoryStagnationNotifyDialog.vue'
 
+import {
+  INVENTORY_STAGNATION_DEFAULT_MIN_QTY,
+  INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS,
+} from '@/utils/inventoryStagnationOverview'
+
 import { inventoryChipClass, inventoryColumnLabel } from './inventoryStagnationConstants'
 
 
@@ -576,9 +581,9 @@ const todayJst = () => {
 
 const asOfDate = ref<string>(todayJst())
 
-const minQuantity = ref<number>(50)
+const minQuantity = ref<number>(INVENTORY_STAGNATION_DEFAULT_MIN_QTY)
 
-const stableDays = ref<number>(7)
+const stableDays = ref<number>(INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS)
 
 
 
@@ -836,9 +841,9 @@ async function fetchList() {
 
       as_of: asOfDate.value || undefined,
 
-      min_quantity: minQuantity.value ?? 50,
+      min_quantity: minQuantity.value ?? INVENTORY_STAGNATION_DEFAULT_MIN_QTY,
 
-      stable_calendar_days: stableDays.value ?? 7,
+      stable_calendar_days: stableDays.value ?? INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS,
 
     })
 
