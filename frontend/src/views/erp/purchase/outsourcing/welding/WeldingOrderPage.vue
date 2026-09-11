@@ -1,19 +1,78 @@
 <template>
-  <div class="outsourcing-order-page">
+  <div class="outsourcing-order-page welding-order-page">
     <!-- 页面头部 -->
-    <div class="page-header glass-header">
+    <div class="page-header welding-header glass-header">
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
             <div class="title-icon">
               <el-icon><Operation /></el-icon>
             </div>
-            <span class="title-text">外注溶接注文</span>
-            <div class="title-badge">
-              <span class="badge-text">{{ orderList.length }}</span>
+            <div class="title-copy">
+              <span class="title-text">外注溶接注文</span>
+              <p class="subtitle">外注溶接加工の注文作成・管理を行います</p>
             </div>
           </h2>
-          <p class="subtitle">外注溶接加工の注文作成・管理を行います</p>
+        </div>
+        <div class="header-stats">
+          <div class="stat-chip stat-chip--count">
+            <span class="stat-chip__value">{{ orderList.length }}</span>
+            <span class="stat-chip__label">件数</span>
+          </div>
+          <div class="stat-chip stat-chip--qty">
+            <span class="stat-chip__value">{{ formatNumber(totalQuantity) }}</span>
+            <span class="stat-chip__label">数量</span>
+          </div>
+          <div class="stat-chip stat-chip--amount">
+            <span class="stat-chip__value">{{ formatCurrency(totalAmount) }}</span>
+            <span class="stat-chip__label">金額</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 状態KPI -->
+    <div class="kpi-row">
+      <div class="kpi-card kpi-card--pending">
+        <div class="kpi-card__icon"><el-icon><Document /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ statusCounts.pending }}</span>
+          <span class="kpi-card__label">未発注</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--ordered">
+        <div class="kpi-card__icon"><el-icon><Upload /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ statusCounts.ordered }}</span>
+          <span class="kpi-card__label">発注済</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--partial">
+        <div class="kpi-card__icon"><el-icon><Loading /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ statusCounts.partial }}</span>
+          <span class="kpi-card__label">一部受入</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--done">
+        <div class="kpi-card__icon"><el-icon><CircleCheck /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ statusCounts.completed }}</span>
+          <span class="kpi-card__label">受入完</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--qty">
+        <div class="kpi-card__icon"><el-icon><Box /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ formatNumber(totalQuantity) }}<span class="kpi-card__unit">本</span></span>
+          <span class="kpi-card__label">合計数量</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--amount">
+        <div class="kpi-card__icon"><el-icon><Money /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ formatCurrency(totalAmount) }}</span>
+          <span class="kpi-card__label">合計金額</span>
         </div>
       </div>
     </div>
@@ -22,8 +81,8 @@
     <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">期間</span>
+        <div class="filter-group filter-group--date">
+          <span class="filter-label"><el-icon><Calendar /></el-icon>期間</span>
           <div class="date-filter-container">
             <el-date-picker
               v-model="filters.dateRange"
@@ -58,8 +117,8 @@
         </div>
 
         <!-- 外注先フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">外注先</span>
+        <div class="filter-group filter-group--supplier">
+          <span class="filter-label"><el-icon><User /></el-icon>外注先</span>
           <el-select
             v-model="filters.supplier"
             placeholder="全て"
@@ -78,8 +137,8 @@
         </div>
 
         <!-- 製品フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">製品</span>
+        <div class="filter-group filter-group--product">
+          <span class="filter-label"><el-icon><Box /></el-icon>製品</span>
           <el-select
             v-model="filters.productName"
             placeholder="全て"
@@ -93,8 +152,8 @@
         </div>
 
         <!-- 状態フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">状態</span>
+        <div class="filter-group filter-group--status">
+          <span class="filter-label"><el-icon><CircleCheck /></el-icon>状態</span>
           <el-select
             v-model="filters.status"
             placeholder="全て"
@@ -115,20 +174,19 @@
     <!-- 操作按钮栏 -->
     <div class="action-bar glass-card">
       <div class="left-actions">
-        <el-button type="primary" @click="openCreateDialog">
+        <el-button type="primary" class="action-btn action-btn--create" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>新規注文
         </el-button>
-        <el-button type="success" @click="openBatchCreateDialog">
+        <el-button type="success" class="action-btn action-btn--batch" @click="openBatchCreateDialog">
           <el-icon><Plus /></el-icon>新規一括注文
         </el-button>
-        <el-button type="primary" @click="handlePrintOrder" class="print-btn">
+        <el-button type="primary" class="action-btn action-btn--print print-btn" @click="handlePrintOrder">
           <el-icon><Printer /></el-icon>注文書発行
         </el-button>
       </div>
       <div class="right-actions">
-        <el-tag type="info" size="large">
-          合計: {{ formatNumber(totalQuantity) }} 本 / {{ formatCurrency(totalAmount) }}円
-        </el-tag>
+        <span class="summary-pill summary-pill--qty">{{ formatNumber(totalQuantity) }} 本</span>
+        <span class="summary-pill summary-pill--amount">{{ formatCurrency(totalAmount) }}</span>
       </div>
     </div>
 
@@ -143,19 +201,20 @@
         highlight-current-row
         class="data-table"
         size="small"
-        :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: '600' }"
+        :row-class-name="getTableRowClass"
+        :header-cell-style="{ background: '#eef2ff', color: '#4338ca', fontWeight: '600' }"
       >
-        <el-table-column prop="orderNo" label="注文番号" width="140" align="center" fixed="left">
+        <el-table-column prop="orderNo" label="注文番号" width="148" align="center" fixed="left">
           <template #default="{ row }">
-            <el-link type="primary" @click="viewDetail(row)">{{ row.orderNo || '-' }}</el-link>
+            <el-link type="primary" class="order-no-link" @click="viewDetail(row)">{{ row.orderNo || '-' }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="orderDate" label="納入日" width="90" align="center">
+        <el-table-column prop="orderDate" label="納入日" width="96" align="center">
           <template #default="{ row }">
             {{ row.orderDate || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="supplier" label="外注先" width="140" align="center">
+        <el-table-column prop="supplier" label="外注先" width="160" align="center">
           <template #default="{ row }">
             <el-tag
               :type="getSupplierTagType(row.supplierCd || row.supplier) || undefined"
@@ -167,7 +226,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="productName" label="製品名" min-width="120" show-overflow-tooltip>
+        <el-table-column prop="productName" label="製品名" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.productName || '-' }}
           </template>
@@ -194,37 +253,37 @@
             {{ row.category || '-' }}
           </template>
         </el-table-column> -->
-        <el-table-column prop="quantity" label="数量" width="70" align="right">
+        <el-table-column prop="quantity" label="数量" width="78" align="right">
           <template #default="{ row }">
-            {{ formatNumber(row.quantity) }}
+            <span class="qty-cell">{{ formatNumber(row.quantity) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="unitPrice" label="単価" width="70" align="right">
+        <el-table-column prop="unitPrice" label="単価" width="78" align="right">
           <template #default="{ row }"> {{ formatCurrency(row.unitPrice) }} </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金額" width="90" align="center">
+        <el-table-column prop="amount" label="金額" width="100" align="center">
           <template #default="{ row }">
             <span class="amount-cell">{{ formatCurrency(row.amount) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="deliveryDate" label="納期" width="90" align="center">
+        <el-table-column prop="deliveryDate" label="納期" width="96" align="center">
           <template #default="{ row }">
             {{ row.deliveryDate || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="receivedQty" label="入庫数" width="70" align="right">
+        <el-table-column prop="receivedQty" label="入庫数" width="78" align="right">
           <template #default="{ row }">
-            {{ formatNumber(row.receivedQty) }}
+            <span class="recv-cell">{{ formatNumber(row.receivedQty) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状態" width="100" align="center">
+        <el-table-column prop="status" label="状態" width="108" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row)" size="small">
+            <el-tag :type="getStatusType(row)" size="small" round class="status-tag">
               {{ getStatusLabel(row) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="進捗" width="100" align="center">
+        <el-table-column label="進捗" width="108" align="center">
           <template #default="{ row }">
             <el-progress
               :percentage="
@@ -251,30 +310,36 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="900px"
+      width="1020px"
       destroy-on-close
-      class="order-dialog batch-dialog"
+      class="order-dialog create-dialog"
       :close-on-click-modal="false"
-      center
     >
       <template #header>
-        <div class="dialog-header compact-header">
-          <el-icon class="dialog-icon">
-            <Upload />
-          </el-icon>
-          <span class="dialog-title">{{ dialogTitle }}</span>
+        <div class="create-dialog__header">
+          <span class="create-dialog__header-icon">
+            <el-icon><Plus /></el-icon>
+          </span>
+          <div class="create-dialog__header-text">
+            <span class="create-dialog__title">{{ dialogTitle }}</span>
+            <span class="create-dialog__subtitle">外注先を選び、製品を読み込んで数量を入力します</span>
+          </div>
         </div>
       </template>
-      <div class="batch-form-container">
-        <div class="batch-form compact-form">
-          <el-form :model="formData" label-width="70px" class="compact-form-inner">
-            <div class="form-row-inline">
-              <el-form-item label="外注先" class="inline-form-item flex-item">
+      <div class="create-dialog__body">
+        <section class="create-dialog__section create-dialog__section--filter">
+          <div class="create-dialog__section-title">
+            <el-icon class="create-dialog__section-icon"><Setting /></el-icon>
+            <span>注文条件</span>
+          </div>
+          <el-form :model="formData" class="create-dialog__form" label-position="top">
+            <div class="create-dialog__form-row">
+              <el-form-item label="外注先" class="create-dialog__field create-dialog__field--supplier">
                 <el-select
                   v-model="formData.supplierCd"
                   filterable
                   placeholder="外注先を選択"
-                  class="supplier-select"
+                  class="create-dialog__select"
                   clearable
                 >
                   <el-option
@@ -285,83 +350,83 @@
                   />
                 </el-select>
               </el-form-item>
-
-              <el-form-item class="inline-form-item button-item">
-                <el-button
-                  type="primary"
-                  class="load-btn"
-                  @click="fetchProducts"
-                  :loading="productLoading"
-                >
-                  <el-icon>
-                    <Download />
-                  </el-icon>
-                  読込
-                </el-button>
-              </el-form-item>
-            </div>
-            <div class="form-row-inline date-row">
-              <el-form-item label="注文日" class="inline-form-item">
+              <el-form-item label="注文日" class="create-dialog__field create-dialog__field--date">
                 <el-date-picker
                   v-model="formData.orderDate"
                   type="date"
                   value-format="YYYY-MM-DD"
-                  placeholder="注文日を選択"
-                  class="date-select"
+                  placeholder="注文日"
+                  class="create-dialog__date"
                   @change="calculateDeliveryDate"
                 />
               </el-form-item>
-
-              <el-form-item label="納期" class="inline-form-item delivery-date-item">
-                <div class="delivery-date-wrapper">
-                  <el-date-picker
-                    v-model="formData.deliveryDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    placeholder="納期を選択"
-                    class="date-select"
-                  />
-                  <div v-if="productList.length > 0" class="delivery-date-hint-text">
-                    納期が正しいかご確認ください
-                  </div>
+              <el-form-item label="納期" class="create-dialog__field create-dialog__field--date">
+                <el-date-picker
+                  v-model="formData.deliveryDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="納期"
+                  class="create-dialog__date create-dialog__date--delivery"
+                />
+                <div v-if="productList.length > 0" class="create-dialog__hint">
+                  納期が正しいかご確認ください
                 </div>
+              </el-form-item>
+              <el-form-item class="create-dialog__field create-dialog__field--action" label="　">
+                <el-button
+                  type="primary"
+                  class="create-dialog__load-btn"
+                  @click="fetchProducts"
+                  :loading="productLoading"
+                >
+                  <el-icon v-if="!productLoading"><Download /></el-icon>
+                  {{ productLoading ? '読込中...' : '読込' }}
+                </el-button>
               </el-form-item>
             </div>
           </el-form>
+        </section>
 
-          <div class="table-container">
+        <section class="create-dialog__section create-dialog__section--table">
+          <div class="create-dialog__table-header">
+            <span class="create-dialog__table-title">製品一覧</span>
+            <el-tag v-if="productList.length > 0" type="info" size="small" round>
+              {{ productList.length }} 件
+            </el-tag>
+            <el-tag v-if="filledProductCount > 0" type="success" size="small" round>
+              入力済 {{ filledProductCount }}
+            </el-tag>
+            <el-tag v-if="createDialogTotalQty > 0" type="warning" size="small" round>
+              数量 {{ formatNumber(createDialogTotalQty) }}
+            </el-tag>
+          </div>
+          <div class="create-dialog__table-wrap">
             <el-table
               v-if="productList.length > 0"
               :data="productList"
-              class="batch-product-table"
+              class="create-dialog__table"
               :loading="productLoading"
               border
               stripe
               highlight-current-row
-              max-height="380"
-              :row-style="{ height: '34px' }"
+              max-height="420"
+              :row-style="{ height: '38px' }"
               size="small"
             >
               <el-table-column
                 prop="productCd"
                 label="製品CD"
-                width="80"
+                width="92"
                 align="center"
                 fixed="left"
               />
               <el-table-column
                 prop="productName"
                 label="製品名"
-                min-width="120"
+                min-width="160"
                 show-overflow-tooltip
               />
-              <!-- <el-table-column
-                prop="specification"
-                label="規格"
-                width="120"
-                show-overflow-tooltip
-              /> -->
-              <el-table-column prop="unitPrice" label="単価" width="80" align="center">
+              <el-table-column prop="unitPrice" label="単価" width="88" align="right">
                 <template #default="{ row }">
                   {{ formatCurrency(row.unitPrice) }}
                 </template>
@@ -369,32 +434,31 @@
               <el-table-column
                 prop="deliveryLocation"
                 label="納入場所"
-                width="140"
+                width="132"
                 align="center"
                 show-overflow-tooltip
               />
-              <el-table-column prop="category" label="区分" width="130" align="center" />
+              <el-table-column prop="category" label="区分" width="110" align="center" show-overflow-tooltip />
               <el-table-column
                 prop="content"
                 label="内容"
-                min-width="100"
+                min-width="110"
                 align="center"
                 show-overflow-tooltip
               />
-              <el-table-column label="数量" width="120" align="center" fixed="right">
+              <el-table-column label="数量" width="118" align="center" fixed="right">
                 <template #default="{ row, $index }">
                   <el-input
                     v-model="productList[$index].quantity"
                     type="text"
-                    class="quantity-input"
-                    :class="
-                      (() => {
-                        const qty = productList[$index].quantity
-                        const numQty = typeof qty === 'number' ? qty : Number(qty || 0)
-                        return numQty > 0 ? 'normal-cell' : 'warning-cell'
-                      })()
-                    "
-                    placeholder="数量"
+                    class="create-dialog__qty-input"
+                    :class="{
+                      'create-dialog__qty-input--filled':
+                        (typeof productList[$index].quantity === 'number'
+                          ? productList[$index].quantity
+                          : Number(productList[$index].quantity) || 0) > 0,
+                    }"
+                    placeholder="0"
                     :id="`quantity-input-${$index}`"
                     @keydown.enter.prevent="handleQuantityEnter($index)"
                     @input="handleQuantityChange(row, $index)"
@@ -402,39 +466,35 @@
                 </template>
               </el-table-column>
             </el-table>
-            <div v-else-if="productLoading" class="loading-placeholder compact-placeholder">
-              <el-icon class="is-loading">
-                <Loading />
-              </el-icon>
-              <p>データ読込中...</p>
+            <div v-else-if="productLoading" class="create-dialog__empty create-dialog__empty--loading">
+              <el-icon class="is-loading create-dialog__empty-icon"><Loading /></el-icon>
+              <p class="create-dialog__empty-text">データを読込中です...</p>
             </div>
-            <div v-else-if="!formData.supplierCd" class="empty-placeholder compact-placeholder">
-              <p>外注先を選択し、製品一覧を読み込んでください</p>
+            <div v-else-if="!formData.supplierCd" class="create-dialog__empty">
+              <el-icon class="create-dialog__empty-icon"><Document /></el-icon>
+              <p class="create-dialog__empty-text">外注先を選択し、「読込」をクリックしてください</p>
             </div>
-            <div v-else class="empty-placeholder compact-placeholder">
-              <p>製品データがありません</p>
+            <div v-else class="create-dialog__empty">
+              <el-icon class="create-dialog__empty-icon"><FolderOpened /></el-icon>
+              <p class="create-dialog__empty-text">製品データがありません</p>
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
       <template #footer>
-        <div class="dialog-footer-compact">
-          <el-button @click="dialogVisible = false" class="cancel-btn">
-            <el-icon>
-              <Close />
-            </el-icon>
+        <div class="create-dialog__footer">
+          <el-button @click="dialogVisible = false" class="create-dialog__btn create-dialog__btn--cancel">
+            <el-icon><Close /></el-icon>
             キャンセル
           </el-button>
           <el-button
             type="primary"
             @click="submitForm"
             :loading="submitLoading"
-            class="register-btn"
+            class="create-dialog__btn create-dialog__btn--submit"
           >
-            <el-icon v-if="!submitLoading">
-              <Check />
-            </el-icon>
+            <el-icon v-if="!submitLoading"><Check /></el-icon>
             登録する
           </el-button>
         </div>
@@ -445,36 +505,36 @@
     <el-dialog
       v-model="batchDialogVisible"
       title="新規一括注文"
-      width="1020px"
+      width="1060px"
       destroy-on-close
-      class="order-dialog batch-dialog batch-dialog--styled"
+      class="order-dialog create-dialog"
       :close-on-click-modal="false"
     >
       <template #header>
-        <div class="batch-dialog__header">
-          <span class="batch-dialog__header-icon">
+        <div class="create-dialog__header">
+          <span class="create-dialog__header-icon">
             <el-icon><Upload /></el-icon>
           </span>
-          <div class="batch-dialog__header-text">
-            <span class="batch-dialog__title">新規一括注文</span>
-            <span class="batch-dialog__subtitle">外注先・製品・期間を指定して一括で注文データを生成</span>
+          <div class="create-dialog__header-text">
+            <span class="create-dialog__title">新規一括注文</span>
+            <span class="create-dialog__subtitle">外注先・製品・期間を指定して一括で注文データを生成</span>
           </div>
         </div>
       </template>
-      <div class="batch-dialog__body">
-        <section class="batch-dialog__section batch-dialog__section--filter">
-          <div class="batch-dialog__section-title">
-            <el-icon class="batch-dialog__section-icon"><Setting /></el-icon>
+      <div class="create-dialog__body">
+        <section class="create-dialog__section create-dialog__section--filter">
+          <div class="create-dialog__section-title">
+            <el-icon class="create-dialog__section-icon"><Setting /></el-icon>
             <span>検索条件</span>
           </div>
-          <el-form :model="batchFormData" label-width="70px" class="batch-dialog__form" label-position="left">
-            <div class="batch-dialog__form-row">
-              <el-form-item label="外注先" class="batch-dialog__form-item">
+          <el-form :model="batchFormData" class="create-dialog__form" label-position="top">
+            <div class="create-dialog__form-row">
+              <el-form-item label="外注先" class="create-dialog__field create-dialog__field--supplier">
                 <el-select
                   v-model="batchFormData.supplierCd"
                   filterable
                   placeholder="外注先を選択"
-                  class="batch-dialog__select"
+                  class="create-dialog__select"
                   clearable
                 >
                   <el-option
@@ -485,12 +545,12 @@
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="製品" class="batch-dialog__form-item">
+              <el-form-item label="製品" class="create-dialog__field create-dialog__field--product">
                 <el-select
                   v-model="batchFormData.productCd"
                   filterable
                   placeholder="製品を選択"
-                  class="batch-dialog__select"
+                  class="create-dialog__select"
                   clearable
                   :disabled="!batchFormData.supplierCd"
                 >
@@ -502,8 +562,8 @@
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="期間" class="batch-dialog__form-item batch-dialog__form-item--date">
-                <div class="batch-dialog__date-row">
+              <el-form-item label="期間" class="create-dialog__field create-dialog__field--period">
+                <div class="create-dialog__date-row">
                   <el-date-picker
                     v-model="batchFormData.dateRange"
                     type="daterange"
@@ -511,19 +571,19 @@
                     start-placeholder="開始日"
                     end-placeholder="終了日"
                     value-format="YYYY-MM-DD"
-                    class="batch-dialog__date-picker"
+                    class="create-dialog__date create-dialog__range"
                   />
-                  <div class="batch-dialog__date-shortcuts">
+                  <div class="create-dialog__date-shortcuts">
                     <el-button size="small" @click="setBatchDateRangePrevMonth">前月</el-button>
                     <el-button size="small" type="primary" @click="setBatchDateRangeThisMonth">今月</el-button>
                     <el-button size="small" @click="setBatchDateRangeNextMonth">翌月</el-button>
                   </div>
                 </div>
               </el-form-item>
-              <el-form-item label=" " class="batch-dialog__form-item batch-dialog__form-item--action">
+              <el-form-item class="create-dialog__field create-dialog__field--action" label="　">
                 <el-button
                   type="primary"
-                  class="batch-dialog__load-btn"
+                  class="create-dialog__load-btn"
                   @click="fetchBatchProducts"
                   :loading="batchProductLoading"
                 >
@@ -535,22 +595,30 @@
           </el-form>
         </section>
 
-        <section class="batch-dialog__section batch-dialog__section--table">
-          <div v-if="batchOrderList.length > 0" class="batch-dialog__table-header">
-            <span class="batch-dialog__table-title">注文一覧</span>
-            <el-tag type="info" size="small" round>{{ batchOrderList.length }} 件</el-tag>
+        <section class="create-dialog__section create-dialog__section--table">
+          <div class="create-dialog__table-header">
+            <span class="create-dialog__table-title">注文一覧</span>
+            <el-tag v-if="batchOrderList.length > 0" type="info" size="small" round>
+              {{ batchOrderList.length }} 件
+            </el-tag>
+            <el-tag v-if="filledBatchCount > 0" type="success" size="small" round>
+              入力済 {{ filledBatchCount }}
+            </el-tag>
+            <el-tag v-if="batchDialogTotalQty > 0" type="warning" size="small" round>
+              数量 {{ formatNumber(batchDialogTotalQty) }}
+            </el-tag>
           </div>
-          <div class="batch-dialog__table-wrap">
+          <div class="create-dialog__table-wrap">
             <el-table
               v-if="batchOrderList.length > 0"
               :data="batchOrderList"
-              class="batch-dialog__table"
+              class="create-dialog__table"
               :loading="batchProductLoading"
               border
               stripe
               highlight-current-row
-              max-height="360"
-              :row-style="{ height: '36px' }"
+              max-height="420"
+              :row-style="{ height: '38px' }"
               size="small"
             >
               <el-table-column
@@ -564,34 +632,34 @@
               <el-table-column
                 prop="productName"
                 label="製品名"
-                min-width="120"
+                min-width="140"
                 show-overflow-tooltip
               />
-              <el-table-column prop="unitPrice" label="単価" width="88" align="center" >
+              <el-table-column prop="unitPrice" label="単価" width="88" align="right">
                 <template #default="{ row }">
                   {{ formatCurrency(row.unitPrice) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="content" label="内容" min-width="100" show-overflow-tooltip align="center" />
+              <el-table-column prop="content" label="内容" min-width="110" show-overflow-tooltip align="center" />
               <el-table-column prop="deliveryDate" label="納期" width="140" align="center">
                 <template #default="{ $index }">
                   <el-input
                     v-model="batchOrderList[$index].deliveryDate"
                     type="text"
                     size="small"
-                    class="batch-dialog__delivery-input"
+                    class="create-dialog__date create-dialog__date--delivery"
                     placeholder="納期"
                   />
                 </template>
               </el-table-column>
-              <el-table-column label="数量" width="128" align="center" fixed="right">
+              <el-table-column label="数量" width="118" align="center" fixed="right">
                 <template #default="{ row, $index }">
                   <el-input
                     v-model="batchOrderList[$index].quantity"
                     type="text"
-                    class="batch-dialog__qty-input"
+                    class="create-dialog__qty-input"
                     :class="{
-                      'batch-dialog__qty-input--filled':
+                      'create-dialog__qty-input--filled':
                         (typeof batchOrderList[$index].quantity === 'number'
                           ? batchOrderList[$index].quantity
                           : Number(batchOrderList[$index].quantity) || 0) > 0,
@@ -604,9 +672,9 @@
                 </template>
               </el-table-column>
             </el-table>
-            <div v-else-if="batchProductLoading" class="batch-dialog__empty batch-dialog__empty--loading">
-              <el-icon class="is-loading batch-dialog__empty-icon"><Loading /></el-icon>
-              <p class="batch-dialog__empty-text">データを読込中です...</p>
+            <div v-else-if="batchProductLoading" class="create-dialog__empty create-dialog__empty--loading">
+              <el-icon class="is-loading create-dialog__empty-icon"><Loading /></el-icon>
+              <p class="create-dialog__empty-text">データを読込中です...</p>
             </div>
             <div
               v-else-if="
@@ -615,22 +683,22 @@
                 !batchFormData.dateRange ||
                 batchFormData.dateRange.length !== 2
               "
-              class="batch-dialog__empty"
+              class="create-dialog__empty"
             >
-              <el-icon class="batch-dialog__empty-icon"><Document /></el-icon>
-              <p class="batch-dialog__empty-text">外注先・製品・期間を選択し、「読込」をクリックしてください</p>
+              <el-icon class="create-dialog__empty-icon"><Document /></el-icon>
+              <p class="create-dialog__empty-text">外注先・製品・期間を選択し、「読込」をクリックしてください</p>
             </div>
-            <div v-else class="batch-dialog__empty">
-              <el-icon class="batch-dialog__empty-icon"><FolderOpened /></el-icon>
-              <p class="batch-dialog__empty-text">該当するデータがありません</p>
+            <div v-else class="create-dialog__empty">
+              <el-icon class="create-dialog__empty-icon"><FolderOpened /></el-icon>
+              <p class="create-dialog__empty-text">該当するデータがありません</p>
             </div>
           </div>
         </section>
       </div>
 
       <template #footer>
-        <div class="batch-dialog__footer">
-          <el-button @click="batchDialogVisible = false" class="batch-dialog__btn batch-dialog__btn--cancel">
+        <div class="create-dialog__footer">
+          <el-button @click="batchDialogVisible = false" class="create-dialog__btn create-dialog__btn--cancel">
             <el-icon><Close /></el-icon>
             キャンセル
           </el-button>
@@ -638,7 +706,7 @@
             type="primary"
             @click="submitBatchForm"
             :loading="submitLoading"
-            class="batch-dialog__btn batch-dialog__btn--submit"
+            class="create-dialog__btn create-dialog__btn--submit"
           >
             <el-icon v-if="!submitLoading"><Check /></el-icon>
             登録する
@@ -1072,6 +1140,11 @@ import {
   Setting,
   Document,
   FolderOpened,
+  Operation,
+  Calendar,
+  User,
+  CircleCheck,
+  Money,
 } from '@element-plus/icons-vue'
 import {
   getWeldingOrders,
@@ -1428,6 +1501,32 @@ const loadProductNames = async () => {
 const totalQuantity = computed(() => orderList.value.reduce((sum, item) => sum + item.quantity, 0))
 const totalAmount = computed(() => orderList.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogTitle = computed(() => (isEdit.value ? '注文編集' : '新規注文'))
+const filledProductCount = computed(
+  () =>
+    productList.value.filter((p) => {
+      const n = typeof p.quantity === 'number' ? p.quantity : Number(p.quantity || 0)
+      return n > 0
+    }).length,
+)
+const createDialogTotalQty = computed(() =>
+  productList.value.reduce((sum, p) => {
+    const n = typeof p.quantity === 'number' ? p.quantity : Number(p.quantity || 0)
+    return sum + (Number.isFinite(n) ? n : 0)
+  }, 0),
+)
+const filledBatchCount = computed(
+  () =>
+    batchOrderList.value.filter((p) => {
+      const n = typeof p.quantity === 'number' ? p.quantity : Number(p.quantity || 0)
+      return n > 0
+    }).length,
+)
+const batchDialogTotalQty = computed(() =>
+  batchOrderList.value.reduce((sum, p) => {
+    const n = typeof p.quantity === 'number' ? p.quantity : Number(p.quantity || 0)
+    return sum + (Number.isFinite(n) ? n : 0)
+  }, 0),
+)
 
 // 根据订单状态计算显示状态（优先使用后端 status，新規登録为 pending → 未発注）
 const calculateStatus = (row: OrderItem): string => {
@@ -1475,6 +1574,27 @@ const getStatusType = (row: OrderItem): 'success' | 'info' | 'warning' | 'primar
 
 const getStatusLabel = (row: OrderItem) => {
   return calculateStatus(row)
+}
+
+const statusCounts = computed(() => {
+  const counts = { pending: 0, ordered: 0, partial: 0, completed: 0 }
+  for (const item of orderList.value) {
+    const status = calculateStatus(item)
+    if (status === '未発注') counts.pending += 1
+    else if (status === '発注済') counts.ordered += 1
+    else if (status === '一部受入') counts.partial += 1
+    else if (status === '受入完') counts.completed += 1
+  }
+  return counts
+})
+
+const getTableRowClass = ({ row }: { row: OrderItem }) => {
+  const status = calculateStatus(row)
+  if (status === '受入完') return 'row-status-done'
+  if (status === '一部受入') return 'row-status-partial'
+  if (status === '発注済') return 'row-status-ordered'
+  if (status === '未発注') return 'row-status-pending'
+  return ''
 }
 
 // 根据外注先代码生成标签类型（用于颜色区分）
@@ -3072,12 +3192,12 @@ onMounted(async () => {
 }
 
 .page-header {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.88) 0%, rgba(118, 75, 162, 0.88) 100%);
-  border-radius: 14px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
+  border-radius: 16px;
   padding: 16px 22px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   color: white;
-  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  box-shadow: 0 10px 28px rgba(79, 70, 229, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
   animation: slideDown 0.45s ease-out;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
@@ -3087,20 +3207,170 @@ onMounted(async () => {
 }
 .page-header:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  box-shadow: 0 12px 32px rgba(124, 58, 237, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .title-section {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.title-text {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.03em;
+  font-weight: 700;
+}
+
+.title-badge {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 3px 10px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.92;
+  font-weight: 500;
+}
+
+.header-stats {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.stat-chip {
+  min-width: 86px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.stat-chip--count { background: rgba(255, 255, 255, 0.2); }
+.stat-chip--qty { background: rgba(99, 102, 241, 0.32); }
+.stat-chip--amount { background: rgba(245, 158, 11, 0.32); }
+
+.stat-chip__value {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.stat-chip__label {
+  display: block;
+  font-size: 11px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+
+.kpi-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.kpi-card__body { min-width: 0; }
+
+.kpi-card__value {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #0f172a;
+}
+
+.kpi-card__unit {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.kpi-card__label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.kpi-card--pending .kpi-card__icon { background: #f1f5f9; color: #64748b; }
+.kpi-card--ordered .kpi-card__icon { background: #fef3c7; color: #d97706; }
+.kpi-card--partial .kpi-card__icon { background: #dbeafe; color: #2563eb; }
+.kpi-card--done .kpi-card__icon { background: #d1fae5; color: #059669; }
+.kpi-card--qty .kpi-card__icon { background: #e0e7ff; color: #4f46e5; }
+.kpi-card--amount .kpi-card__icon { background: #ffedd5; color: #ea580c; }
+.kpi-card--pending { border-top: 3px solid #94a3b8; }
+.kpi-card--ordered { border-top: 3px solid #f59e0b; }
+.kpi-card--partial { border-top: 3px solid #3b82f6; }
+.kpi-card--done { border-top: 3px solid #10b981; }
+.kpi-card--qty { border-top: 3px solid #6366f1; }
+.kpi-card--amount { border-top: 3px solid #f59e0b; }
 
 .title {
   display: flex;
@@ -3184,17 +3454,29 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #e2e8f0;
 }
+
+.filter-group--date { border-left: 3px solid #6366f1; }
+.filter-group--supplier { border-left: 3px solid #7c3aed; }
+.filter-group--product { border-left: 3px solid #2563eb; }
+.filter-group--status { border-left: 3px solid #f59e0b; }
 
 .filter-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #606266;
+  font-weight: 700;
+  color: #4338ca;
   white-space: nowrap;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-label .el-icon {
+  font-size: 13px;
 }
 
 .date-filter-container {
@@ -3330,6 +3612,28 @@ onMounted(async () => {
 .right-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.summary-pill--qty {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.summary-pill--amount {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fdba74;
 }
 
 .right-actions .el-tag {
@@ -3350,15 +3654,17 @@ onMounted(async () => {
 }
 
 /* 按钮颜色区分 */
-.left-actions .el-button--primary:first-child {
-  background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+.left-actions .el-button--primary:first-child,
+.action-btn--create {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border: none;
-  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
 }
 
-.left-actions .el-button--primary:first-child:hover {
-  background: linear-gradient(135deg, #337ecc 0%, #2b6cb0 100%);
-  box-shadow: 0 4px 10px rgba(64, 158, 255, 0.4);
+.left-actions .el-button--primary:first-child:hover,
+.action-btn--create:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4);
   transform: translateY(-1px);
 }
 
@@ -3479,9 +3785,41 @@ onMounted(async () => {
 }
 
 .amount-cell {
-  font-weight: 600;
+  font-weight: 700;
   color: #c2410c;
   letter-spacing: 0.02em;
+}
+
+.qty-cell {
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.recv-cell {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.order-no-link {
+  font-weight: 700;
+}
+
+.status-tag {
+  min-width: 68px;
+  justify-content: center;
+}
+
+.data-table :deep(.row-status-pending td) {
+  background: rgba(241, 245, 249, 0.45);
+}
+.data-table :deep(.row-status-ordered td) {
+  background: rgba(254, 243, 199, 0.35);
+}
+.data-table :deep(.row-status-partial td) {
+  background: rgba(219, 234, 254, 0.4);
+}
+.data-table :deep(.row-status-done td) {
+  background: rgba(209, 250, 229, 0.4);
 }
 
 /* 外注先标签样式 */
@@ -3499,12 +3837,352 @@ onMounted(async () => {
 }
 
 .order-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   color: white;
   margin: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-bottom: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.create-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(79, 70, 229, 0.18);
+}
+
+.create-dialog :deep(.el-dialog__header) {
+  padding: 12px 18px;
+  text-align: left;
+}
+
+.create-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.create-dialog__header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 18px;
+}
+
+.create-dialog__header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.create-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.create-dialog__subtitle {
+  font-size: 11px;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+.create-dialog__body {
+  padding: 12px 16px 10px;
+  background: #eef2ff;
+}
+
+.create-dialog__section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.05);
+}
+
+.create-dialog__section:last-child {
+  margin-bottom: 0;
+}
+
+.create-dialog__section--filter {
+  border-top: 3px solid #7c3aed;
+}
+
+.create-dialog__section--table {
+  border-top: 3px solid #4f46e5;
+}
+
+.create-dialog__section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #c7d2fe;
+}
+
+.create-dialog__section-icon {
+  color: #4f46e5;
+  font-size: 14px;
+}
+
+.create-dialog__form {
+  margin: 0;
+}
+
+.create-dialog__form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.create-dialog__form :deep(.el-form-item__label) {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.create-dialog__form-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.create-dialog__field {
+  margin-right: 0;
+}
+
+.create-dialog__field--supplier {
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+
+.create-dialog__field--date {
+  width: 168px;
+  flex: 0 0 168px;
+}
+
+.create-dialog__field--product {
+  flex: 1 1 240px;
+  max-width: 300px;
+}
+
+.create-dialog__field--period {
+  flex: 1 1 340px;
+  min-width: 280px;
+}
+
+.create-dialog__date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.create-dialog__date-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.create-dialog__range {
+  width: 240px;
+}
+
+.create-dialog__field--action {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.create-dialog__field--action :deep(.el-form-item__label) {
+  visibility: hidden;
+}
+
+.create-dialog__select,
+.create-dialog__date {
+  width: 100%;
+}
+
+.create-dialog__select :deep(.el-input__wrapper),
+.create-dialog__date :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  min-height: 32px;
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+}
+
+.create-dialog__field--supplier :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+
+.create-dialog__field--product :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #a5b4fc inset;
+}
+
+.create-dialog__field--period :deep(.el-input__wrapper),
+.create-dialog__field--date :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #93c5fd inset;
+}
+
+.create-dialog__date--delivery :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #fcd34d inset;
+}
+
+.create-dialog__select :deep(.el-input__wrapper:hover),
+.create-dialog__date :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #6366f1 inset;
+}
+
+.create-dialog__select :deep(.el-input.is-focus .el-input__wrapper),
+.create-dialog__date :deep(.el-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.28);
+}
+
+.create-dialog__hint {
+  color: #dc2626;
+  font-size: 10px;
+  line-height: 1.3;
+  margin-top: 4px;
+}
+
+.create-dialog__load-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  border: none;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
+}
+
+.create-dialog__load-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.create-dialog__table-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.create-dialog__table-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.create-dialog__table-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  min-height: 120px;
+}
+
+.create-dialog__table {
+  font-size: 12px;
+}
+
+.create-dialog__table :deep(th.el-table__cell) {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.create-dialog__qty-input :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  min-height: 28px;
+  background: #fef2f2;
+  box-shadow: 0 0 0 1px #fca5a5 inset;
+}
+
+.create-dialog__qty-input :deep(.el-input__inner) {
+  text-align: center;
+  font-weight: 700;
+}
+
+.create-dialog__qty-input--filled :deep(.el-input__wrapper) {
+  background: #ecfdf5;
+  box-shadow: 0 0 0 1px #34d399 inset;
+}
+
+.create-dialog__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 20px;
+  color: #64748b;
+  text-align: center;
+}
+
+.create-dialog__empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  color: #94a3b8;
+}
+
+.create-dialog__empty--loading .create-dialog__empty-icon {
+  color: #4f46e5;
+}
+
+.create-dialog__empty-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.create-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border-top: 1px solid #e0e7ff;
+}
+
+.create-dialog__btn {
+  min-width: 96px;
+  height: 32px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.create-dialog__btn--cancel {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+}
+
+.create-dialog__btn--submit {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  border: none;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.28);
+}
+
+.create-dialog__btn--submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.create-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  background: #eef2ff;
+}
+
+.create-dialog :deep(.el-dialog__footer) {
+  padding: 0;
 }
 
 .order-dialog :deep(.el-dialog__title) {
@@ -5011,5 +5689,52 @@ onMounted(async () => {
 
 .edit-dialog-compact :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
   color: rgba(255, 255, 255, 0.8);
+}
+
+.create-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  background: #eef2ff;
+}
+
+.create-dialog :deep(.el-dialog__footer) {
+  padding: 0;
+}
+
+@media (max-width: 1200px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .create-dialog__field--supplier {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .create-dialog__field--date {
+    width: 148px;
+    flex: 1 1 148px;
+  }
+
+  .create-dialog__field--action {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .header-stats {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 </style>

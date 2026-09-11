@@ -494,6 +494,19 @@ const searchForm = reactive({
   transaction_type: '実績',
 })
 
+/** 倉庫(KT13)のログは入庫/出庫等のため「実績」では絞らない */
+const isWarehouseProcess = (processCd: string) => {
+  if (!processCd || processCd === 'ALL') return false
+  if (processCd === 'KT13') return true
+  const p = processList.value.find((x) => x.process_cd === processCd)
+  return String(p?.process_name || '') === '倉庫'
+}
+
+const resolveTransactionTypeParam = () => {
+  if (isWarehouseProcess(searchForm.process_cd)) return undefined
+  return searchForm.transaction_type || undefined
+}
+
 let autoSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 const dateShortcuts = [
@@ -734,7 +747,7 @@ const loadChartData = async () => {
       page: 1,
       limit: 500, // チャート用（API 上限 500 で確実に通す。バックエンドを le=10000 にした場合は 5000 等に変更可）
       process_cd: searchForm.process_cd || undefined,
-      transaction_type: searchForm.transaction_type || undefined,
+      transaction_type: resolveTransactionTypeParam(),
       target_name: searchForm.target_name || undefined,
       machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
@@ -1579,7 +1592,7 @@ const loadData = async () => {
       page: pagination.page,
       limit: pagination.limit,
       process_cd: searchForm.process_cd || undefined,
-      transaction_type: searchForm.transaction_type || undefined,
+      transaction_type: resolveTransactionTypeParam(),
       target_name: searchForm.target_name || undefined,
       machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
@@ -1975,7 +1988,7 @@ const handlePrintTable = async () => {
       page: 1,
       limit: 10000, // 大きな値を設定して全データを取得
       process_cd: searchForm.process_cd || undefined,
-      transaction_type: searchForm.transaction_type || undefined,
+      transaction_type: resolveTransactionTypeParam(),
       target_name: searchForm.target_name || undefined,
       machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
@@ -2223,7 +2236,7 @@ const handlePrintMatrixTable = async () => {
       page: 1,
       limit: 10000,
       process_cd: searchForm.process_cd || undefined,
-      transaction_type: searchForm.transaction_type || undefined,
+      transaction_type: resolveTransactionTypeParam(),
       target_name: searchForm.target_name || undefined,
       machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,

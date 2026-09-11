@@ -1,5 +1,5 @@
 <template>
-  <div class="outsourcing-receiving-page">
+  <div class="outsourcing-receiving-page plating-receiving-page">
     <!-- 页面头部 -->
     <div class="page-header plating-header glass-header">
       <div class="header-content">
@@ -8,22 +8,70 @@
             <div class="title-icon">
               <el-icon><Download /></el-icon>
             </div>
-            <span class="title-text">外注メッキ受入</span>
-            <div class="title-badge">
-              <span class="badge-text">{{ receivingList.length }}</span>
+            <div class="title-copy">
+              <span class="title-text">外注メッキ受入</span>
+              <p class="subtitle">外注メッキ品の受入検収処理を行います</p>
             </div>
           </h2>
-          <p class="subtitle">外注メッキ品の受入検収処理を行います</p>
         </div>
         <div class="header-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ pendingCount }}</span>
-            <span class="stat-label">未検収</span>
+          <div class="stat-chip stat-chip--count">
+            <span class="stat-chip__value">{{ receivingList.length }}</span>
+            <span class="stat-chip__label">件数</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ todayCount }}</span>
-            <span class="stat-label">本日入庫</span>
+          <div class="stat-chip stat-chip--pending">
+            <span class="stat-chip__value">{{ pendingCount }}</span>
+            <span class="stat-chip__label">未検収</span>
           </div>
+          <div class="stat-chip stat-chip--qty">
+            <span class="stat-chip__value">{{ todayQuantity.toLocaleString() }}</span>
+            <span class="stat-chip__label">本日入庫</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi-card kpi-card--pending">
+        <div class="kpi-card__icon"><el-icon><Warning /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ pendingCount }}</span>
+          <span class="kpi-card__label">未検収</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--partial">
+        <div class="kpi-card__icon"><el-icon><Loading /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ partialCount }}</span>
+          <span class="kpi-card__label">一部検収</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--done">
+        <div class="kpi-card__icon"><el-icon><CircleCheck /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ completedCount }}</span>
+          <span class="kpi-card__label">検収済</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--today">
+        <div class="kpi-card__icon"><el-icon><Calendar /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ todayCount }}</span>
+          <span class="kpi-card__label">本日件数</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--qty">
+        <div class="kpi-card__icon"><el-icon><Box /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ todayQuantity.toLocaleString() }}<span class="kpi-card__unit">個</span></span>
+          <span class="kpi-card__label">本日入庫数</span>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card--amount">
+        <div class="kpi-card__icon"><el-icon><Download /></el-icon></div>
+        <div class="kpi-card__body">
+          <span class="kpi-card__value">{{ receivingList.length }}</span>
+          <span class="kpi-card__label">表示件数</span>
         </div>
       </div>
     </div>
@@ -32,8 +80,8 @@
     <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">期間</span>
+        <div class="filter-group filter-group--date">
+          <span class="filter-label"><el-icon><Calendar /></el-icon>期間</span>
           <div class="date-filter-container">
             <el-date-picker
               v-model="filters.dateRange"
@@ -68,8 +116,8 @@
         </div>
 
         <!-- 外注先フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">外注先</span>
+        <div class="filter-group filter-group--supplier">
+          <span class="filter-label"><el-icon><User /></el-icon>外注先</span>
           <el-select
             v-model="filters.supplier"
             placeholder="全て"
@@ -88,8 +136,8 @@
         </div>
 
         <!-- 製品フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">製品</span>
+        <div class="filter-group filter-group--product">
+          <span class="filter-label"><el-icon><Box /></el-icon>製品</span>
           <el-select
             v-model="filters.productName"
             placeholder="全て"
@@ -103,8 +151,8 @@
         </div>
 
         <!-- キーワードフィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">キーワード</span>
+        <div class="filter-group filter-group--keyword">
+          <span class="filter-label"><el-icon><Search /></el-icon>キーワード</span>
           <el-input
             v-model="filters.keyword"
             placeholder="製品名で検索..."
@@ -119,8 +167,8 @@
         </div>
 
         <!-- 検収状態フィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">状態</span>
+        <div class="filter-group filter-group--status">
+          <span class="filter-label"><el-icon><CircleCheck /></el-icon>状態</span>
           <el-select
             v-model="filters.status"
             placeholder="全て"
@@ -147,18 +195,16 @@
     <!-- 操作按钮栏 -->
     <div class="action-bar glass-card">
       <div class="left-actions">
-        <el-button type="primary" @click="openReceivingDialog">
+        <el-button type="primary" class="action-btn action-btn--create" @click="openReceivingDialog">
           <el-icon><Plus /></el-icon>受入登録
         </el-button>
-        <el-button type="warning" @click="handlePrint">
+        <el-button type="warning" class="action-btn action-btn--print" @click="handlePrint">
           <el-icon><Printer /></el-icon>印刷
         </el-button>
       </div>
       <div class="right-actions">
-        <el-tag type="success" size="large" class="total-tag">
-          <el-icon><Box /></el-icon>
-          本日入庫: {{ todayQuantity.toLocaleString() }} 個
-        </el-tag>
+        <span class="summary-pill summary-pill--pending">未検収 {{ pendingCount }}</span>
+        <span class="summary-pill summary-pill--qty">本日 {{ todayQuantity.toLocaleString() }} 個</span>
       </div>
     </div>
 
@@ -173,55 +219,54 @@
         highlight-current-row
         class="data-table"
         size="small"
-        :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: '600' }"
+        :header-cell-style="{ background: '#ecfeff', color: '#0f766e', fontWeight: '600' }"
         :row-class-name="tableRowClassName"
       >
-        <el-table-column prop="receivingNo" label="受入番号" width="130" fixed="left">
+        <el-table-column prop="receivingNo" label="受入番号" width="140" fixed="left">
           <template #default="{ row }">
-            <el-link type="primary" @click="viewDetail(row)">{{ row.receivingNo }}</el-link>
+            <el-link type="primary" class="order-no-link" @click="viewDetail(row)">{{ row.receivingNo }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="receivingDate" label="受入予定日" width="100" />
-        <el-table-column prop="orderNo" label="注文番号" width="140">
+        <el-table-column prop="receivingDate" label="受入予定日" width="108" />
+        <el-table-column prop="orderNo" label="注文番号" width="148">
           <template #default="{ row }">
             <el-link type="info" @click="viewOrder(row)">{{ row.orderNo }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="supplier" label="外注先" width="140">
+        <el-table-column prop="supplier" label="外注先" width="150">
           <template #default="{ row }">
             <span :class="getSupplierColorClass(row.supplier)" class="supplier-text">
               {{ row.supplier }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="productCode" label="製品CD" width="90" />
-        <el-table-column prop="productName" label="製品名" min-width="130" show-overflow-tooltip />
-        <!-- <el-table-column prop="platingType" label="メッキ種類" width="100" /> -->
-        <el-table-column prop="orderQty" label="注文数" width="80" align="right">
+        <el-table-column prop="productCode" label="製品CD" width="96" />
+        <el-table-column prop="productName" label="製品名" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="orderQty" label="注文数" width="86" align="right">
           <template #default="{ row }">
-            {{ row.orderQty.toLocaleString() }}
+            <span class="qty-cell">{{ row.orderQty.toLocaleString() }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="receivingQty" label="受入数" width="80" align="right">
+        <el-table-column prop="receivingQty" label="受入数" width="86" align="right">
           <template #default="{ row }">
             <span class="receiving-qty">{{ row.receivingQty.toLocaleString() }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="goodQty" label="良品数" width="80" align="right">
+        <el-table-column prop="goodQty" label="良品数" width="86" align="right">
           <template #default="{ row }">
             <span class="good-qty">{{ row.goodQty.toLocaleString() }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="defectQty" label="不良数" width="80" align="right">
+        <el-table-column prop="defectQty" label="不良数" width="86" align="right">
           <template #default="{ row }">
             <span :class="{ 'defect-qty': row.defectQty > 0 }">{{
               row.defectQty.toLocaleString()
             }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="検収状態" width="100" align="center">
+        <el-table-column prop="status" label="検収状態" width="108" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row)" size="small" effect="plain">
+            <el-tag :type="getStatusType(row)" size="small" round class="status-tag">
               {{ getStatusLabel(row) }}
             </el-tag>
           </template>
@@ -250,22 +295,34 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="836px"
+      width="980px"
       destroy-on-close
-      class="receiving-dialog"
+      class="receiving-dialog create-dialog"
       :close-on-click-modal="false"
     >
+      <template #header>
+        <div class="create-dialog__header">
+          <span class="create-dialog__header-icon">
+            <el-icon><Plus /></el-icon>
+          </span>
+          <div class="create-dialog__header-text">
+            <span class="create-dialog__title">{{ dialogTitle }}</span>
+            <span class="create-dialog__subtitle">注文を選び、受入数量と検収結果を登録します</span>
+          </div>
+        </div>
+      </template>
+      <div class="create-dialog__body">
       <el-form
         ref="formRef"
         :model="formData"
         :rules="formRules"
-        label-width="85px"
+        label-width="82px"
         class="compact-form receiving-form"
       >
         <!-- 基本信息区域 -->
         <div class="form-section form-section-primary">
           <div class="section-header">
-            <span class="section-icon">📋</span>
+            <el-icon class="section-icon"><Document /></el-icon>
             <span class="section-title">基本情報</span>
           </div>
           <el-row :gutter="10">
@@ -328,7 +385,7 @@
         <!-- 数量信息区域 -->
         <div class="form-section form-section-warning">
           <div class="section-header">
-            <span class="section-icon">📊</span>
+            <el-icon class="section-icon"><Box /></el-icon>
             <span class="section-title">数量情報</span>
           </div>
           <el-row :gutter="10">
@@ -362,7 +419,7 @@
         <!-- 検収情報区域 -->
         <div class="form-section form-section-success">
           <div class="section-header">
-            <span class="section-icon">✅</span>
+            <el-icon class="section-icon"><CircleCheck /></el-icon>
             <span class="section-title">検収情報</span>
           </div>
           <el-row :gutter="10">
@@ -449,10 +506,15 @@
           </el-form-item>
         </div>
       </el-form>
+      </div>
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false" size="default">キャンセル</el-button>
-          <el-button type="primary" @click="submitForm" :loading="submitLoading" size="default">
+        <div class="create-dialog__footer">
+          <el-button @click="dialogVisible = false" class="create-dialog__btn create-dialog__btn--cancel">
+            <el-icon><Close /></el-icon>
+            キャンセル
+          </el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitLoading" class="create-dialog__btn create-dialog__btn--submit">
+            <el-icon v-if="!submitLoading"><Check /></el-icon>
             {{ isEdit ? '更新' : '登録' }}
           </el-button>
         </div>
@@ -552,6 +614,12 @@ import {
   EditPen,
   Check,
   Close,
+  Calendar,
+  User,
+  CircleCheck,
+  Warning,
+  Loading,
+  Document,
 } from '@element-plus/icons-vue'
 import {
   getPlatingReceivings,
@@ -887,6 +955,12 @@ const loadPendingOrders = async () => {
 const pendingCount = computed(
   () => receivingList.value.filter((i) => calculateStatus(i) === '未検収').length,
 )
+const partialCount = computed(
+  () => receivingList.value.filter((i) => calculateStatus(i) === '一部検収').length,
+)
+const completedCount = computed(
+  () => receivingList.value.filter((i) => calculateStatus(i) === '検収済').length,
+)
 const todayCount = computed(() => {
   const today = formatDate(getJapanDate())
   return receivingList.value.filter((i) => i.receivingDate === today).length
@@ -1010,8 +1084,10 @@ const getSupplierColorClass = (supplier: string | undefined): string => {
 
 const tableRowClassName = ({ row }: { row: ReceivingItem }) => {
   const status = calculateStatus(row)
-  if (status === '未検収') return 'pending-row'
-  if (row.defectQty > 0) return 'defect-row'
+  if (row.defectQty > 0) return 'row-status-defect'
+  if (status === '未検収') return 'row-status-pending'
+  if (status === '一部検収') return 'row-status-partial'
+  if (status === '検収済') return 'row-status-done'
   return ''
 }
 
@@ -1598,17 +1674,18 @@ onMounted(async () => {
 
 <style scoped>
 .outsourcing-receiving-page {
-  padding: 10px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  padding: 12px;
+  background: linear-gradient(135deg, #ecfeff 0%, #f0fdfa 48%, #f8fafc 100%);
   min-height: 100vh;
 }
 
 .page-header {
-  border-radius: 8px;
-  padding: 14px 18px;
-  margin-bottom: 10px;
+  border-radius: 16px;
+  padding: 16px 22px;
+  margin-bottom: 12px;
   color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 28px rgba(13, 148, 136, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 .page-header.glass-header {
   backdrop-filter: blur(12px);
@@ -1616,46 +1693,52 @@ onMounted(async () => {
 }
 .page-header:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  box-shadow: 0 12px 32px rgba(14, 165, 233, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
 }
 
 .plating-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 3px 15px rgba(102, 126, 234, 0.35);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 58%, #14b8a6 100%);
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .title-section {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin: 0;
   font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
 }
 
+.title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .title-icon {
-  width: 38px;
-  height: 38px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  backdrop-filter: blur(10px);
+  font-size: 22px;
 }
 
 .title-badge {
@@ -1664,55 +1747,119 @@ onMounted(async () => {
   border-radius: 16px;
   font-size: 13px;
   font-weight: 600;
-  backdrop-filter: blur(10px);
 }
 
 .subtitle {
   margin: 0;
   font-size: 12px;
-  opacity: 0.95;
-  line-height: 1.3;
+  opacity: 0.92;
 }
 
 .header-stats {
   display: flex;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.stat-item {
+.stat-chip {
+  min-width: 86px;
+  padding: 7px 12px;
+  border-radius: 12px;
   text-align: center;
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  min-width: 65px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
 }
 
-.stat-item:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
-}
+.stat-chip--count { background: rgba(255, 255, 255, 0.2); }
+.stat-chip--pending { background: rgba(245, 158, 11, 0.32); }
+.stat-chip--qty { background: rgba(14, 165, 233, 0.32); }
 
-.stat-value {
+.stat-chip__value {
   display: block;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
-.stat-label {
-  font-size: 10px;
-  opacity: 0.95;
+.stat-chip__label {
+  display: block;
+  font-size: 11px;
+  opacity: 0.9;
   margin-top: 2px;
 }
 
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+
+.kpi-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.kpi-card__body { min-width: 0; }
+
+.kpi-card__value {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: #0f172a;
+}
+
+.kpi-card__unit {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.kpi-card__label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.kpi-card--pending .kpi-card__icon { background: #fef3c7; color: #d97706; }
+.kpi-card--partial .kpi-card__icon { background: #dbeafe; color: #2563eb; }
+.kpi-card--done .kpi-card__icon { background: #d1fae5; color: #059669; }
+.kpi-card--today .kpi-card__icon { background: #cffafe; color: #0891b2; }
+.kpi-card--qty .kpi-card__icon { background: #e0f2fe; color: #0284c7; }
+.kpi-card--amount .kpi-card__icon { background: #ecfeff; color: #0d9488; }
+.kpi-card--pending { border-top: 3px solid #f59e0b; }
+.kpi-card--partial { border-top: 3px solid #3b82f6; }
+.kpi-card--done { border-top: 3px solid #10b981; }
+.kpi-card--today { border-top: 3px solid #06b6d4; }
+.kpi-card--qty { border-top: 3px solid #0ea5e9; }
+.kpi-card--amount { border-top: 3px solid #14b8a6; }
+
 .filter-card {
   margin-bottom: 10px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.12);
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.12);
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
 }
 
 .filter-card :deep(.el-card__body) {
@@ -1742,17 +1889,30 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #e2e8f0;
 }
+
+.filter-group--date { border-left: 3px solid #0ea5e9; }
+.filter-group--supplier { border-left: 3px solid #0d9488; }
+.filter-group--product { border-left: 3px solid #6366f1; }
+.filter-group--keyword { border-left: 3px solid #64748b; }
+.filter-group--status { border-left: 3px solid #f59e0b; }
 
 .filter-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #606266;
+  font-weight: 700;
+  color: #0f766e;
   white-space: nowrap;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-label .el-icon {
+  font-size: 13px;
 }
 
 .date-filter-container {
@@ -1802,7 +1962,7 @@ onMounted(async () => {
 }
 
 .today-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -1904,14 +2064,52 @@ onMounted(async () => {
   margin-bottom: 10px;
   padding: 10px 14px;
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.08);
 }
 
 .left-actions {
   display: flex;
   gap: 8px;
+}
+
+.right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.summary-pill--pending {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.summary-pill--qty {
+  background: #ecfeff;
+  color: #0e7490;
+  border: 1px solid #a5f3fc;
+}
+
+.action-btn--create {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%);
+  border: none;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.3);
+}
+
+.action-btn--print {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  color: #fff;
 }
 
 .left-actions :deep(.el-button) {
@@ -2001,6 +2199,19 @@ onMounted(async () => {
   font-weight: 500;
 }
 
+.data-table :deep(.row-status-pending) {
+  background-color: #fef9e7;
+}
+.data-table :deep(.row-status-partial td) {
+  background: rgba(219, 234, 254, 0.4);
+}
+.data-table :deep(.row-status-done td) {
+  background: rgba(209, 250, 229, 0.4);
+}
+.data-table :deep(.row-status-defect td) {
+  background: rgba(254, 226, 226, 0.5);
+}
+
 .data-table :deep(.pending-row) {
   background-color: #fef9e7;
 }
@@ -2017,9 +2228,23 @@ onMounted(async () => {
   background-color: #fce2e0;
 }
 
+.order-no-link {
+  font-weight: 700;
+}
+
+.status-tag {
+  min-width: 68px;
+  justify-content: center;
+}
+
+.qty-cell {
+  font-weight: 700;
+  color: #0e7490;
+}
+
 .receiving-qty {
-  font-weight: 600;
-  color: #667eea;
+  font-weight: 700;
+  color: #0284c7;
   font-size: 12px;
 }
 
@@ -2110,12 +2335,85 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff8c42 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%);
   color: white;
   margin: 0;
+  padding: 12px 18px;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.2);
+}
+
+.create-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.create-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.create-dialog__header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 18px;
+}
+
+.create-dialog__header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.create-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.create-dialog__subtitle {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.create-dialog__body {
+  padding: 12px 16px 10px;
+  background: #f0fdfa;
+}
+
+.create-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
   padding: 10px 16px;
-  border-radius: 8px 8px 0 0;
-  box-shadow: 0 2px 6px rgba(255, 107, 107, 0.2);
+  background: #fff;
+  border-top: 1px solid #ccfbf1;
+}
+
+.create-dialog__btn {
+  min-width: 96px;
+  height: 32px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.create-dialog__btn--submit {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%);
+  border: none;
+}
+
+.create-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  background: #f0fdfa;
+}
+
+.create-dialog :deep(.el-dialog__footer) {
+  padding: 0;
 }
 
 .receiving-dialog :deep(.el-dialog__title) {
@@ -2134,8 +2432,8 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-dialog__body) {
-  padding: 12px 16px;
-  background: #f5f7fa;
+  padding: 0;
+  background: #f0fdfa;
 }
 
 .receiving-form {
@@ -2189,7 +2487,8 @@ onMounted(async () => {
 }
 
 .section-icon {
-  font-size: 13px;
+  font-size: 14px;
+  color: #0d9488;
 }
 
 .section-title {
@@ -2367,10 +2666,9 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-dialog__footer) {
-  padding: 10px 16px;
-  border-top: 1px solid #ebeef5;
+  padding: 0;
+  border-top: none;
   background: #fff;
-  border-radius: 0 0 8px 8px;
 }
 
 .receiving-dialog :deep(.el-button) {
@@ -2383,20 +2681,20 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-button--primary) {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0d9488 100%);
   border: none;
-  box-shadow: 0 2px 4px rgba(255, 107, 107, 0.25);
+  box-shadow: 0 2px 4px rgba(13, 148, 136, 0.25);
 }
 
 .receiving-dialog :deep(.el-button--primary:hover) {
-  background: linear-gradient(135deg, #ff5252 0%, #e63946 100%);
-  box-shadow: 0 3px 8px rgba(255, 107, 107, 0.35);
+  background: linear-gradient(135deg, #0284c7 0%, #0f766e 100%);
+  box-shadow: 0 3px 8px rgba(13, 148, 136, 0.35);
   transform: translateY(-1px);
 }
 
 .receiving-dialog :deep(.el-button--default:hover) {
-  border-color: #ff6b6b;
-  color: #ff6b6b;
+  border-color: #0d9488;
+  color: #0f766e;
 }
 
 .dialog-footer {
@@ -2498,6 +2796,18 @@ onMounted(async () => {
   .left-actions {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+@media (max-width: 1200px) {
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

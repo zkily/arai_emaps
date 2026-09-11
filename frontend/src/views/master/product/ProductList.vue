@@ -603,7 +603,8 @@
       <div class="product-type-selector">
         <div class="selector-label">印刷する製品種別を選択してください：</div>
         <el-checkbox-group v-model="selectedProductTypes" class="product-type-checkbox-group">
-          <el-checkbox label="量産品" />
+          <el-checkbox label="量産品（倉庫用）" />
+          <el-checkbox label="量産品（事務所用）" />
           <el-checkbox label="試作品" />
           <el-checkbox label="補給品" />
           <el-checkbox label="その他" />
@@ -1046,6 +1047,25 @@ const confirmProductTypeSelection = async () => {
   await doGenerateAndPrintQRCodes()
 }
 
+/** QR印刷用の製品種別マッチ（量産品は倉庫用／事務所用に再分類） */
+const matchesQrPrintProductType = (product: Product, selectedTypes: string[]): boolean => {
+  const type = product.product_type || ''
+  const name = product.product_name || ''
+  const excludeForOffice = name.includes('加工') || name.includes('アーチ')
+
+  return selectedTypes.some((selected) => {
+    if (selected === '量産品（倉庫用）') {
+      // 現行の量産品と同じ（全量産品）
+      return type === '量産品'
+    }
+    if (selected === '量産品（事務所用）') {
+      // 量産品から製品名に「加工」「アーチ」を含むものを除外
+      return type === '量産品' && !excludeForOffice
+    }
+    return type === selected
+  })
+}
+
 // 实际生成并打印所有製品CD的二维码
 const doGenerateAndPrintQRCodes = async () => {
   // 获取所有产品的製品CD（优先使用 allProducts，如果没有则使用 productList）
@@ -1054,7 +1074,7 @@ const doGenerateAndPrintQRCodes = async () => {
   // 根据选择的製品種別过滤
   if (selectedProductTypes.value.length > 0) {
     productsToUse = productsToUse.filter((product) =>
-      selectedProductTypes.value.includes(product.product_type || ''),
+      matchesQrPrintProductType(product, selectedProductTypes.value),
     )
   }
 
