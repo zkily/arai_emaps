@@ -1,20 +1,19 @@
 <template>
   <div class="production-data-management">
-    <div class="page-header-shell">
-      <div class="page-header-row">
-      <div class="title-group">
-        <div class="page-title-mark" aria-hidden="true">
-          <el-icon :size="22"><DataBoard /></el-icon>
+    <div class="page-header production-header glass-header">
+      <div class="header-content">
+        <div class="title-section">
+          <h2 class="title">
+            <div class="title-icon">
+              <el-icon><DataBoard /></el-icon>
+            </div>
+            <div class="title-copy">
+              <span class="title-text">生産データ管理</span>
+              <p class="subtitle">受注・実績・在庫を一元管理</p>
+            </div>
+          </h2>
         </div>
-        <div class="title-text-block">
-          <h1 class="page-title">生産データ管理</h1>
-          <p class="page-subtitle">受注・実績・在庫を一元管理</p>
-        </div>
-        <el-tag type="info" size="small" class="record-count">
-          {{ total.toLocaleString() }} 件
-        </el-tag>
-      </div>
-      <div class="header-actions">
+        <div class="header-actions">
         <!-- PC: ドロップダウン / スマホ・タブレット: ボタンで Drawer を開く -->
         <template v-if="!isSmallScreen">
           <el-dropdown
@@ -395,7 +394,7 @@
         >
           <span>列設定</span>
         </el-button>
-      </div>
+        </div>
       </div>
     </div>
 
@@ -406,8 +405,8 @@
     <el-card class="table-card" shadow="hover">
       <template #header>
         <div class="filter-section">
-          <div class="filter-item date-filter-item">
-            <label class="filter-label">期間</label>
+          <div class="filter-item date-filter-item filter-group--date">
+            <label class="filter-label"><el-icon><Calendar /></el-icon>期間</label>
             <el-date-picker
               v-model="dateRange"
               type="daterange"
@@ -430,8 +429,8 @@
               <el-button size="small" plain @click="shiftDateRange(1)">翌日</el-button>
             </div>
           </div>
-          <div class="filter-item">
-            <label class="filter-label">製品</label>
+          <div class="filter-item filter-group--product">
+            <label class="filter-label"><el-icon><Goods /></el-icon>製品</label>
             <el-select
               v-model="filterProductCd"
               placeholder="製品名を選択"
@@ -450,8 +449,8 @@
               />
             </el-select>
           </div>
-          <div class="filter-item keyword-filter-item">
-            <label class="filter-label">検索</label>
+          <div class="filter-item keyword-filter-item filter-group--keyword">
+            <label class="filter-label"><el-icon><Search /></el-icon>検索</label>
             <el-input
               v-model="filterKeyword"
               placeholder="製品名キーワード"
@@ -475,7 +474,10 @@
       <el-tabs v-model="activeTableTab" type="card" class="summary-table-tabs" :stretch="true">
               <el-tab-pane v-for="tab in tableTabs" :key="tab.key" :name="tab.key">
                 <template #label>
-                  <span class="tab-text">{{ tab.label }}</span>
+                  <span class="tab-label" :class="'tab-label--' + tab.key">
+                    <span class="tab-dot" />
+                    <span class="tab-text">{{ tab.label }}</span>
+                  </span>
                 </template>
         </el-tab-pane>
       </el-tabs>
@@ -3045,12 +3047,12 @@ const getWeekdayType = (dayOfWeek: string) => {
   return 'info'
 }
 const headerCellStyle = {
-  background: '#f8fafc',
-  color: '#475569',
-  fontWeight: 600,
+  background: '#ecfdf5',
+  color: '#047857',
+  fontWeight: 700,
   fontSize: '0.65rem',
   padding: '4px 8px',
-  borderBottom: '1px solid #e5e7eb',
+  borderBottom: '1px solid #a7f3d0',
 }
 const cellStyleHandler = ({ row, column }: { row: Record<string, any>; column: { property?: string } }) => {
   const prop = column?.property
@@ -7529,89 +7531,86 @@ onUnmounted(() => {
 .production-data-management {
   padding: 0.65rem 0.75rem 1rem;
   min-height: 100%;
-  background:
-    radial-gradient(1200px 480px at 10% -8%, rgba(99, 102, 241, 0.09), transparent 55%),
-    radial-gradient(900px 400px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 50%),
-    linear-gradient(165deg, #f1f5f9 0%, #e8eef5 45%, #f8fafc 100%);
+  background: linear-gradient(160deg, #ecfdf5 0%, #f0fdf4 42%, #f8fafc 100%);
 }
-.page-header-shell {
-  margin-bottom: 0.65rem;
-  padding: 0.65rem 0.85rem;
+
+.page-header {
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  box-shadow:
-    0 4px 24px -10px rgba(15, 23, 42, 0.14),
-    0 0 0 1px rgba(255, 255, 255, 0.65) inset;
+  padding: 16px 22px;
+  margin-bottom: 12px;
+  color: white;
+  box-shadow: 0 10px 28px rgba(5, 150, 105, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.page-header.glass-header {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-.page-header-row {
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+}
+.production-header {
+  background: linear-gradient(135deg, #059669 0%, #10b981 55%, #34d399 100%);
+}
+.header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 0.65rem;
 }
-.title-group {
+.title-section {
+  min-width: 0;
+  flex-shrink: 0;
+}
+.title {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
+  gap: 12px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
 }
-.page-title-mark {
-  flex-shrink: 0;
+.title-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.title-icon {
   width: 44px;
   height: 44px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  color: #fff;
-  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 48%, #4338ca 100%);
-  box-shadow: 0 8px 22px -10px rgba(79, 70, 229, 0.65);
+  font-size: 22px;
 }
-.title-text-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
+.title-text {
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-.page-title {
+.subtitle {
   margin: 0;
-  font-size: 1.28rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #0f172a;
-  line-height: 1.2;
+  font-size: 12px;
+  opacity: 0.92;
 }
-.page-subtitle {
-  margin: 0;
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #64748b;
-  letter-spacing: 0.04em;
-}
-.title-group :deep(.record-count.el-tag) {
-  font-size: 0.72rem;
-  height: 28px;
-  line-height: 26px;
-  padding: 0 10px;
-  border: none;
-  font-weight: 600;
-  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-  color: #4338ca;
-}
+
 .header-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.46rem;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
 }
 .header-actions :deep(.el-button) {
-  font-size: 0.75rem;
-  height: 32px;
-  padding: 0 13px;
+  font-size: 0.72rem;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 11px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -7741,12 +7740,12 @@ onUnmounted(() => {
 /* 内容区域：统一字体 0.75rem，组件高度 28px */
 .table-card {
   border-radius: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 1px solid rgba(16, 185, 129, 0.16);
   overflow: hidden;
   font-size: 0.75rem;
   background: rgba(255, 255, 255, 0.92);
   box-shadow:
-    0 12px 40px -18px rgba(15, 23, 42, 0.12),
+    0 12px 40px -18px rgba(5, 150, 105, 0.12),
     0 0 0 1px rgba(255, 255, 255, 0.8) inset;
 }
 .table-card :deep(.el-card__header) {
@@ -7781,11 +7780,20 @@ onUnmounted(() => {
   height: 30px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
+.filter-group--date { border-left: 3px solid #10b981; }
+.filter-group--product { border-left: 3px solid #0ea5e9; }
+.filter-group--keyword { border-left: 3px solid #64748b; }
 .filter-label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #64748b;
+  color: #047857;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.filter-label .el-icon {
+  font-size: 13px;
 }
 .date-filter-item {
   height: 30px;
@@ -7832,12 +7840,12 @@ onUnmounted(() => {
 }
 .date-quick-buttons :deep(.el-button--primary.is-plain) {
   color: #fff;
-  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
-  border-color: #0284c7;
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  border-color: #059669;
 }
 .date-quick-buttons :deep(.el-button--primary.is-plain:hover) {
-  background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 100%);
-  border-color: #0ea5e9;
+  background: linear-gradient(180deg, #6ee7b7 0%, #34d399 100%);
+  border-color: #10b981;
   color: #fff;
 }
 .filter-select {
@@ -7879,16 +7887,37 @@ onUnmounted(() => {
     color 0.15s ease;
 }
 .summary-table-tabs :deep(.el-tabs__item:hover) {
-  border-color: rgba(99, 102, 241, 0.35);
-  color: #4338ca;
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #047857;
 }
 .summary-table-tabs :deep(.el-tabs__item.is-active) {
-  border-color: rgba(99, 102, 241, 0.55);
-  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-  color: #4338ca;
+  border-color: rgba(16, 185, 129, 0.55);
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #047857;
   font-weight: 700;
-  box-shadow: 0 2px 8px -4px rgba(79, 70, 229, 0.45);
+  box-shadow: 0 2px 8px -4px rgba(5, 150, 105, 0.45);
 }
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.tab-label--custom .tab-dot { background: #8b5cf6; }
+.tab-label--actual .tab-dot { background: #10b981; }
+.tab-label--inventory .tab-dot { background: #f59e0b; }
+.tab-label--trend .tab-dot { background: #c026d3; }
+.tab-label--actual_plan_trend .tab-dot { background: #6366f1; }
+.tab-label--defect .tab-dot { background: #f59e0b; }
+.tab-label--scrap .tab-dot { background: #ef4444; }
+.tab-label--on_hold .tab-dot { background: #06b6d4; }
+.tab-label--plan .tab-dot { background: #14b8a6; }
+.tab-label--carry_over .tab-dot { background: #6366f1; }
 .tab-text {
   font-weight: inherit;
   font-size: 0.74rem;
@@ -7900,8 +7929,8 @@ onUnmounted(() => {
 }
 .modern-table :deep(.el-table) {
   --el-table-border-color: #e5e7eb;
-  --el-table-header-bg-color: #f1f5f9;
-  --el-table-row-hover-bg-color: #f1f5f9;
+  --el-table-header-bg-color: #ecfdf5;
+  --el-table-row-hover-bg-color: #f0fdf4;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -7920,12 +7949,12 @@ onUnmounted(() => {
 .modern-table :deep(.el-table__header .cell) {
   padding: 4px 8px;
   line-height: 1.3;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.75rem;
-  color: #475569;
+  color: #047857;
 }
 .modern-table :deep(.el-table__row:hover) {
-  background-color: #f1f5f9 !important;
+  background-color: #f0fdf4 !important;
 }
 .modern-table :deep(.el-table--border .el-table__cell) {
   border-color: #e5e7eb;
@@ -8659,11 +8688,11 @@ onUnmounted(() => {
   .production-data-management {
     padding: 0.4rem;
   }
-  .page-header-shell {
-    padding: 0.55rem 0.65rem;
+  .page-header {
+    padding: 12px 16px;
     border-radius: 14px;
   }
-  .page-header-row {
+  .header-content {
     gap: 0.4rem;
   }
   .header-actions {
@@ -8693,30 +8722,24 @@ onUnmounted(() => {
   .production-data-management {
     padding: 0.35rem;
   }
-  .page-subtitle {
+  .subtitle {
     display: none;
   }
-  .page-title {
+  .title {
     font-size: 1.12rem;
   }
-  .page-title-mark {
+  .title-icon {
     width: 38px;
     height: 38px;
     border-radius: 12px;
   }
-  .page-title-mark :deep(.el-icon) {
-    font-size: 18px;
+  .page-header {
+    padding: 10px 14px;
   }
-  .page-header-shell {
-    padding: 0.5rem 0.55rem;
-  }
-  .page-header-row {
+  .header-content {
     flex-direction: column;
     align-items: stretch;
     gap: 0.35rem;
-  }
-  .title-group {
-    justify-content: space-between;
   }
   .header-actions {
     flex-wrap: wrap;
@@ -8793,14 +8816,11 @@ onUnmounted(() => {
   .production-data-management {
     padding: 0.25rem;
   }
-  .page-title {
+  .title {
     font-size: 1rem;
   }
-  .title-group :deep(.record-count.el-tag) {
-    font-size: 0.7rem;
-    height: 24px;
-    line-height: 22px;
-    padding: 0 6px;
+  .header-actions {
+    justify-content: flex-start;
   }
   .header-actions :deep(.el-button) {
     height: 24px;
