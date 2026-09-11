@@ -140,7 +140,8 @@ def _row_to_item(r: dict) -> dict:
 
 def _shipping_item_to_picking_display_dict(r: dict) -> dict:
     """shipping_items 行をピッキング画面用（旧 picking_tasks 互換）に変換"""
-    matched = int(r.get("picking_log_matched") or 0)
+    live = r.get("picking_matched_live")
+    matched = int(live if live is not None else r.get("picking_log_matched") or 0)
     st = "completed" if matched else "pending"
     uqty = int(r.get("confirmed_units") or 0) or int(r.get("confirmed_boxes") or 0)
     snp = r.get("shipping_no_p") or ""
@@ -168,6 +169,7 @@ def _shipping_item_to_picking_display_dict(r: dict) -> dict:
         "complete_time": "",
         "created_at": str(r.get("created_at")) if r.get("created_at") else "",
         "updated_at": str(r.get("updated_at")) if r.get("updated_at") else "",
+        "picking_log_matched": matched,
     }
 
 

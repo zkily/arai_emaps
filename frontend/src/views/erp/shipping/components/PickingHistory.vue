@@ -573,7 +573,12 @@ import ChartWrapper from '@/components/ChartWrapper.vue'
 import { registerChartJS, type ChartData, type ChartOptions } from '@/utils/chartRegistration'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
-import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
+import {
+  isPickingItemCompleted,
+  pickingPalletKey,
+  shouldIncludeInPickingDisplay,
+  summarizePickingPalletStatus,
+} from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -602,6 +607,7 @@ interface PickingTask {
   complete_time?: string
   work_time?: number
   created_at?: string
+  picking_log_matched?: number
 }
 
 interface TrendDataPoint {
@@ -1182,18 +1188,18 @@ const dailyCompletionRateChartData = computed<ChartData<'line'>>(() => {
       const dayTasks = tasks.filter(
         (t) => getTaskDateKey(t) === date && destCds.has((t.destination_cd || '').trim()),
       )
-      const palletMap = new Map<string, string[]>()
+      const palletMap = new Map<string, PickingTask[]>()
       dayTasks.forEach((t) => {
-        const key = t.shipping_no_p || t.shipping_no || ''
+        const key = pickingPalletKey(t)
         if (!key) return
         if (!palletMap.has(key)) palletMap.set(key, [])
-        palletMap.get(key)!.push(t.status || 'pending')
+        palletMap.get(key)!.push(t)
       })
       let total = 0
       let completed = 0
-      palletMap.forEach((statuses) => {
+      palletMap.forEach((items) => {
         total++
-        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
+        if (summarizePickingPalletStatus(items) === 'completed') completed++
       })
       const rate = total > 0 ? Number(((completed / total) * 100).toFixed(1)) : 0
       rateByDateAndGroup[date][group.group_name] = rate
@@ -1271,25 +1277,22 @@ async function fetchHistoryStats() {
         // 製品名キーワード（加工・アーチ・料金）および量産品以外の製品タイプを除外
         const filteredTasks = allTasks.filter((task) => shouldIncludeInPickingDisplay(task))
 
-        // 按 shipping_no_p（パレット）分组，托盘状态与 PickingListGenerator 一致：
-        // 全部 completed → completed；任一 picking → picking；否则 pending
-        const palletGroups = new Map<string, { statuses: string[] }>()
+        // 按 shipping_no（パレット）分组。一部完了は未ピッキングにしない
+        const palletGroups = new Map<string, PickingTask[]>()
         for (const task of filteredTasks) {
-          const key = task.shipping_no_p || task.shipping_no || ''
+          const key = pickingPalletKey(task)
           if (!key) continue
-          if (!palletGroups.has(key)) palletGroups.set(key, { statuses: [] })
-          palletGroups.get(key)!.statuses.push(task.status || 'pending')
+          if (!palletGroups.has(key)) palletGroups.set(key, [])
+          palletGroups.get(key)!.push(task)
         }
         let totalTasks = 0
         let pendingTasksCount = 0
         let completedTasksCount = 0
-        palletGroups.forEach(({ statuses }) => {
-          const allCompleted = statuses.every((s) => s === 'completed' || s === 'picked')
-          const anyPicking = statuses.some((s) => s === 'picking')
+        palletGroups.forEach((items) => {
           totalTasks++
-          if (allCompleted) completedTasksCount++
-          else if (anyPicking) pendingTasksCount++
-          else pendingTasksCount++
+          const status = summarizePickingPalletStatus(items)
+          if (status === 'completed') completedTasksCount++
+          else if (status === 'pending') pendingTasksCount++
         })
 
         // 更新统计数据（按托盘数）
@@ -1300,16 +1303,11 @@ async function fetchHistoryStats() {
           totalTasks > 0 ? Number(((completedTasksCount / totalTasks) * 100).toFixed(1)) : 0
 
         // 任务列表仍按行展示：未ピッキング = pending + picking 行，完了 = completed 行
-        pendingTasks.value = filteredTasks.filter(
-          (task) =>
-            task.status === 'pending' || task.status === 'picking' || task.status === 'assigned',
-        )
-        completedTasks.value = filteredTasks.filter(
-          (task) => task.status === 'completed' || task.status === 'picked',
-        )
+        pendingTasks.value = filteredTasks.filter((task) => !isPickingItemCompleted(task))
+        completedTasks.value = filteredTasks.filter((task) => isPickingItemCompleted(task))
 
         console.log('📊 更新後の統計データ:', historyStats)
-        console.log('📊 按パレット(shipping_no_p)统计（与ピッキングリスト一致）:', {
+        console.log('📊 按パレット(shipping_no)统计（与ピッキングリスト一致）:', {
           totalTasks,
           completedTasksCount,
           pendingTasksCount,
@@ -1348,7 +1346,7 @@ function generateTrendDataFromTasks(tasks: PickingTask[]): TrendDataPoint[] {
   // 製品名キーワード（加工・アーチ・料金）および量産品以外の製品タイプを除外
   const filteredTasks = tasks.filter((task) => shouldIncludeInPickingDisplay(task))
 
-  // 按日期/月分组，再按 shipping_no_p 判定托盘状态（与 PickingListGenerator 一致）
+  // 按日期/月分组，再按 shipping_no 判定托盘状态（与 PickingListGenerator 一致）
   const getDateKey = (task: PickingTask) =>
     task.shipping_date
       ? task.shipping_date.split('T')[0]
@@ -1358,41 +1356,41 @@ function generateTrendDataFromTasks(tasks: PickingTask[]): TrendDataPoint[] {
 
   if (trendGranularity.value === 'daily') {
     // 按日期 → shipping_no_p 分组，每个托盘状态：全部 completed → completed，否则任一 picking → picking，否则 pending
-    const dailyPallets: Record<string, Map<string, string[]>> = {}
+    const dailyPallets: Record<string, Map<string, typeof filteredTasks>> = {}
     filteredTasks.forEach((task) => {
       const date = getDateKey(task)
       if (!dailyPallets[date]) dailyPallets[date] = new Map()
-      const key = task.shipping_no_p || task.shipping_no || ''
+      const key = pickingPalletKey(task)
       if (!key) return
       if (!dailyPallets[date].has(key)) dailyPallets[date].set(key, [])
-      dailyPallets[date].get(key)!.push(task.status || 'pending')
+      dailyPallets[date].get(key)!.push(task)
     })
     Object.entries(dailyPallets).forEach(([date, palletMap]) => {
       let total = 0
       let completed = 0
-      palletMap.forEach((statuses) => {
+      palletMap.forEach((items) => {
         total++
-        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
+        if (summarizePickingPalletStatus(items) === 'completed') completed++
       })
       data.push({ date, total, completed })
     })
   } else {
-    const monthlyPallets: Record<string, Map<string, string[]>> = {}
+    const monthlyPallets: Record<string, Map<string, typeof filteredTasks>> = {}
     filteredTasks.forEach((task) => {
       const date = getDateKey(task)
       const month = date.substring(0, 7)
       if (!monthlyPallets[month]) monthlyPallets[month] = new Map()
-      const key = task.shipping_no_p || task.shipping_no || ''
+      const key = pickingPalletKey(task)
       if (!key) return
       if (!monthlyPallets[month].has(key)) monthlyPallets[month].set(key, [])
-      monthlyPallets[month].get(key)!.push(task.status || 'pending')
+      monthlyPallets[month].get(key)!.push(task)
     })
     Object.entries(monthlyPallets).forEach(([month, palletMap]) => {
       let total = 0
       let completed = 0
-      palletMap.forEach((statuses) => {
+      palletMap.forEach((items) => {
         total++
-        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
+        if (summarizePickingPalletStatus(items) === 'completed') completed++
       })
       data.push({ date: month, total, completed })
     })

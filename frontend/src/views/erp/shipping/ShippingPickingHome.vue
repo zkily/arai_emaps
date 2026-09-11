@@ -374,12 +374,11 @@ const fetchProgressData = async () => {
       ) {
         todayOverview.value = overview as TodayOverview
       } else {
-        // 使用默认示例数据
         todayOverview.value = {
-          total_today: 45,
-          pending_today: 12,
-          completed_today: 33,
-          today_completion_rate: 73,
+          total_today: 0,
+          pending_today: 0,
+          completed_today: 0,
+          today_completion_rate: 0,
         }
       }
 

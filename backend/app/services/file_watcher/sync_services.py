@@ -11,6 +11,7 @@ import mysql.connector
 from mysql.connector import pooling
 
 from app.core.config import settings
+from app.services.picking_match import shipping_log_exists_sql
 from app.services.file_watcher.utils import read_csv_content, normalize_date_str, normalize_time_str
 
 logger = logging.getLogger(__name__)
@@ -1197,7 +1198,10 @@ class PickingLogService:
             conn.close()
 
     def _refresh_shipping_items_picking_log_matched_for_batch(self, cursor, source_records):
-        """PickingLog 取込後、当該 picking_no（= shipping_no_p）の shipping_items.picking_log_matched を shipping_log と突合せて更新。"""
+        """PickingLog 取込後、当該 picking_no に対応する shipping_items.picking_log_matched を更新。
+
+        picking_no は通常 shipping_no_p。パレット番号（shipping_no）のみのログは品番でも突合する。
+        """
         if not source_records:
             return
         pns: list[str] = []
@@ -1208,21 +1212,17 @@ class PickingLogService:
         if not pns:
             return
         placeholders = ",".join(["%s"] * len(pns))
+        exists_sql = shipping_log_exists_sql("s", "l")
         sql = f"""
             UPDATE shipping_items s
-            SET s.picking_log_matched = CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM shipping_log l
-                    WHERE l.picking_no = s.shipping_no_p
-                      AND l.picking_no IS NOT NULL AND l.picking_no != ''
-                    LIMIT 1
-                ) THEN 1 ELSE 0 END
+            SET s.picking_log_matched = CASE WHEN {exists_sql} THEN 1 ELSE 0 END
             WHERE s.shipping_no_p IN ({placeholders})
+               OR s.shipping_no IN ({placeholders})
         """
         try:
-            cursor.execute(sql, tuple(pns))
+            cursor.execute(sql, tuple(pns) + tuple(pns))
         except Exception as e:
-            logger.debug("picking_log_matched 一括更新スキップ（列未作成等）: %s", e)
+            logger.warning("picking_log_matched 一括更新失敗: %s", e)
 
 
 def execute_full_picking_log_matched_refresh_sync() -> int:
@@ -1235,21 +1235,22 @@ def execute_full_picking_log_matched_refresh_sync() -> int:
     cursor = conn.cursor()
     affected = 0
     try:
+        cursor.execute("DROP TEMPORARY TABLE IF EXISTS tmp_shipping_matched_picking_nos")
         cursor.execute(
             """
-            CREATE TEMPORARY TABLE IF NOT EXISTS tmp_shipping_matched_picking_nos (
-                picking_no VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-                PRIMARY KEY (picking_no)
+            CREATE TEMPORARY TABLE tmp_shipping_matched_picking_nos (
+                picking_no VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+                product_code VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+                PRIMARY KEY (picking_no, product_code)
             )
             """
         )
-        cursor.execute("TRUNCATE TABLE tmp_shipping_matched_picking_nos")
         cursor.execute(
             """
-            INSERT IGNORE INTO tmp_shipping_matched_picking_nos (picking_no)
-            SELECT DISTINCT picking_no
+            INSERT IGNORE INTO tmp_shipping_matched_picking_nos (picking_no, product_code)
+            SELECT DISTINCT TRIM(picking_no), IFNULL(TRIM(product_code), '')
             FROM shipping_log
-            WHERE picking_no IS NOT NULL AND picking_no != ''
+            WHERE picking_no IS NOT NULL AND TRIM(picking_no) != ''
             """
         )
         conn.commit()
@@ -1268,9 +1269,17 @@ def execute_full_picking_log_matched_refresh_sync() -> int:
             cursor.execute(
                 """
                 UPDATE shipping_items si
-                LEFT JOIN tmp_shipping_matched_picking_nos m
-                  ON m.picking_no = si.shipping_no_p
-                SET si.picking_log_matched = IF(m.picking_no IS NULL, 0, 1)
+                SET si.picking_log_matched = CASE WHEN EXISTS (
+                    SELECT 1 FROM tmp_shipping_matched_picking_nos m
+                    WHERE m.picking_no = CONVERT(TRIM(si.shipping_no_p) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                       OR (
+                         m.picking_no = CONVERT(TRIM(si.shipping_no) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                         AND (
+                           m.product_code = ''
+                           OR m.product_code = CONVERT(TRIM(si.product_cd) USING utf8mb4) COLLATE utf8mb4_unicode_ci
+                         )
+                       )
+                ) THEN 1 ELSE 0 END
                 WHERE si.id BETWEEN %s AND %s
                   AND si.shipping_no_p IS NOT NULL
                   AND si.shipping_no_p != ''
@@ -1305,7 +1314,7 @@ def run_picking_sync_and_refresh_matched(filepath: str, filename: str) -> None:
     """
     PickingLog.csv / Partslog.csv 変更時：CSV を shipping_log に取り込む。
 
-    picking_log_matched は sync 内で当該 picking_no（= shipping_no_p）分だけ更新する。
+    picking_log_matched は sync 内で当該 picking_no（shipping_no_p または shipping_no）分だけ更新する。
     全件 UPDATE は shipping_items を長時間ロックし印刷記録保存と競合するため行わない。
     全件整合が必要な場合は POST /items/refresh-picking-log-matched を使う。
     """

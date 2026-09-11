@@ -454,6 +454,15 @@ interface ShiftPresetButton {
   title: string
 }
 
+/** 22H：成型・溶接（溶接SP 含む）共通（昼帯 13:00–翌00:00、早番 01:00–08:00） */
+const SHIFT_PRESET_22H_BUTTON: ShiftPresetButton = {
+  key: '22h',
+  label: '22H',
+  btnType: '',
+  btnClass: 'lcap-preset--22h',
+  title: '稼働 08:00–12:00 / 13:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+}
+
 const FORMING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
   {
     key: '4h',
@@ -479,13 +488,7 @@ const FORMING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     btnType: 'warning',
     title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
   },
-  {
-    key: '22h',
-    label: '22H',
-    btnType: '',
-    btnClass: 'lcap-preset--22h',
-    title: '稼働 08:00–12:00 / 13:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
-  },
+  SHIFT_PRESET_22H_BUTTON,
   {
     key: '24h',
     label: '24H',
@@ -532,6 +535,7 @@ const WELDING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     btnType: 'warning',
     title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
   },
+  SHIFT_PRESET_22H_BUTTON,
 ]
 
 const processOptions = ref<ProcessItem[]>([])
@@ -552,6 +556,7 @@ const shiftPresetButtons = computed(() =>
 
 const lines = ref<ProductionLine[]>([])
 const selectedLineId = ref<number | null>(null)
+
 const dateRange = ref<[string, string] | null>(null)
 const loading = ref(false)
 const saving = ref(false)

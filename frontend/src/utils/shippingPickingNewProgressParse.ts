@@ -37,6 +37,36 @@ export function shouldIncludeInPickingDisplay(item: {
   return isPickingMassProductionType(item.product_type ?? item.productType)
 }
 
+/** 品番行のピッキング完了判定（フラグまたは status） */
+export function isPickingItemCompleted(item: {
+  status?: unknown
+  picking_log_matched?: unknown
+}): boolean {
+  const st = String(item.status || '')
+  return st === 'completed' || st === 'picked' || Number(item.picking_log_matched || 0) === 1
+}
+
+/** パレット番号。shipping_no_p は品番付きのピッキング単位なので使わない */
+export function pickingPalletKey(item: { shipping_no?: unknown; shipping_no_p?: unknown }): string {
+  const no = String(item.shipping_no || '').trim()
+  return no || String(item.shipping_no_p || '').trim()
+}
+
+export type PickingPalletStatus = 'completed' | 'picking' | 'pending'
+
+/** 同一パレット内の品番行からパレット状態を算出。一部完了は作業中（未ピッキングにしない） */
+export function summarizePickingPalletStatus(
+  items: Array<{ status?: unknown; picking_log_matched?: unknown }>,
+): PickingPalletStatus {
+  if (!items.length) return 'pending'
+  const completedCount = items.filter((item) => isPickingItemCompleted(item)).length
+  if (completedCount === items.length) return 'completed'
+  if (completedCount > 0 || items.some((item) => String(item.status || '') === 'picking')) {
+    return 'picking'
+  }
+  return 'pending'
+}
+
 /** request インターセプタ後の生レスポンスを data オブジェクトに正規化 */
 export function normalizePickingProgressResponse(response: unknown): NormalizedPickingProgressResult {
   if (Array.isArray(response)) {
@@ -99,32 +129,36 @@ export function filterProductDataForPickingProgress(data: unknown): Record<strin
       })
 
       if (todayItems.length > 0) {
-        const pendingStatuses = ['pending', '進行中', 'in_progress']
-        const completedStatuses = ['completed', '完了', 'finished']
-
-        const totalToday = todayItems.length
-        const pendingToday = todayItems.filter((item: Record<string, unknown>) =>
-          pendingStatuses.includes(String(item.status)),
-        ).length
-        const completedToday = todayItems.filter((item: Record<string, unknown>) =>
-          completedStatuses.includes(String(item.status)),
-        ).length
+        const pallets = new Map<string, Record<string, unknown>[]>()
+        todayItems.forEach((item: Record<string, unknown>) => {
+          const key = pickingPalletKey(item)
+          if (!key) return
+          const list = pallets.get(key)
+          if (list) list.push(item)
+          else pallets.set(key, [item])
+        })
+        let completedToday = 0
+        let unfinishedToday = 0
+        pallets.forEach((items) => {
+          if (summarizePickingPalletStatus(items) === 'completed') completedToday++
+          else unfinishedToday++
+        })
+        const totalToday = pallets.size
         const completionRate = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0
 
         filtered.todayOverview = {
           total_today: totalToday,
-          pending_today: pendingToday,
+          pending_today: unfinishedToday,
           completed_today: completedToday,
           today_completion_rate: completionRate,
         }
         filtered.palletList = todayItems
       } else {
-        const overview = (filtered.todayOverview || {}) as Record<string, number>
         filtered.todayOverview = {
-          total_today: overview.total_today || 0,
-          pending_today: overview.pending_today || 0,
-          completed_today: overview.completed_today || 0,
-          today_completion_rate: overview.today_completion_rate || 0,
+          total_today: 0,
+          pending_today: 0,
+          completed_today: 0,
+          today_completion_rate: 0,
         }
       }
     }

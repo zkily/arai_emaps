@@ -25,6 +25,17 @@
             </div>
           </div>
         </div>
+        <div class="stat-card picking-card">
+          <div class="stat-card-inner">
+            <div class="stat-icon-wrap">
+              <el-icon class="stat-icon"><Loading /></el-icon>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value">{{ totalStats.picking.toLocaleString() }}</span>
+              <span class="stat-label">作業中</span>
+            </div>
+          </div>
+        </div>
         <div class="stat-card completed-card">
           <div class="stat-card-inner">
             <div class="stat-icon-wrap">
@@ -91,6 +102,7 @@
               style="width: 150px"
             >
               <el-option label="未ピッキング" value="未ピッキング" />
+              <el-option label="作業中" value="作業中" />
               <el-option label="ピッキング済" value="ピッキング済" />
             </el-select>
           </el-form-item>
@@ -199,6 +211,13 @@
                         (item.confirmed_units || item.confirmed_boxes || 0).toLocaleString()
                       }}箱</span
                     >
+                    <el-tag
+                      :type="getStatusType(itemIsPickingCompleted(item) ? 'completed' : item.status)"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ getStatusText(itemIsPickingCompleted(item) ? 'completed' : item.status) }}
+                    </el-tag>
                   </div>
                 </div>
               </template>
@@ -258,7 +277,13 @@ import request from '@/utils/request'
 import { getProductList } from '@/api/master/productMaster'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
-import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
+import { getJSTToday } from '@/utils/dateFormat'
+import {
+  isPickingItemCompleted,
+  pickingPalletKey,
+  shouldIncludeInPickingDisplay,
+  summarizePickingPalletStatus,
+} from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -296,6 +321,7 @@ interface ShippingItem {
   picker_id: string
   picker_name?: string
   picker_full_name?: string
+  picking_log_matched?: number
 }
 
 interface PalletGroup {
@@ -325,14 +351,6 @@ const filters = ref({
 
 const productOptions = ref<Array<{ product_cd: string; product_name: string }>>([])
 
-// 获取日本标准时间(JST)的今天日期
-const getJSTToday = () => {
-  const now = new Date()
-  const jstOffset = 9 * 60 // JST是UTC+9
-  const jstTime = new Date(now.getTime() + jstOffset * 60 * 1000)
-  return jstTime.toISOString().slice(0, 10)
-}
-
 const today = getJSTToday()
 const dateRange = ref<[string, string]>([today, today])
 
@@ -341,19 +359,29 @@ let debounceTimer: NodeJS.Timeout | null = null
 
 const palletGroups = ref<PalletGroup[]>([])
 
-// 筛选后的托盘组（状態は API で指定済み。クライアント側の追加フィルタなし）
-const filteredPalletGroups = computed(() => palletGroups.value)
+// 状態はパレット単位で算出するため、API 側の行フィルタは使わずクライアントで絞る
+const filteredPalletGroups = computed(() => {
+  const list = palletGroups.value
+  const raw = filters.value.status
+  if (!raw) return list
+  const statusMap: Record<string, string> = {
+    '未ピッキング': 'pending',
+    '作業中': 'picking',
+    'ピッキング済': 'completed',
+  }
+  const want = statusMap[raw] || raw
+  return list.filter((p) => p.status === want)
+})
 
-// 统计数据：按パレット（shipping_no_p）件数。未ピッキング = pending + picking（作業中も含む）
+// 统计数据：按パレット（shipping_no）件数。未ピッキング = pending のみ（一部完了は作業中）
 const totalStats = computed(() => {
   const groups = filteredPalletGroups.value
   const total = groups.length
   const completed = groups.filter((p) => p.status === 'completed').length
-  const pending = groups.filter(
-    (p) => p.status === 'pending' || p.status === 'picking',
-  ).length
+  const pending = groups.filter((p) => p.status === 'pending').length
+  const picking = groups.filter((p) => p.status === 'picking').length
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
-  return { total, completed, pending, completionRate }
+  return { total, completed, pending, picking, completionRate }
 })
 
 const PAGE_SIZE = 25
@@ -371,14 +399,10 @@ const API_PAGE_SIZE = 500
 async function fetchShippingData() {
   loading.value.fetch = true
   try {
-    const statusMap: Record<string, string> = { '未ピッキング': 'pending', 'ピッキング済': 'completed' }
     const baseParams: Record<string, string | number> = {
       start_date: dateRange.value[0],
       end_date: dateRange.value[1],
       page_size: API_PAGE_SIZE,
-    }
-    if (filters.value.status) {
-      baseParams.status = statusMap[filters.value.status] || filters.value.status
     }
 
     const allItems: ShippingItem[] = []
@@ -455,10 +479,9 @@ async function fetchShippingData() {
       return // Exit function early if no items
     }
 
-    // 按 shipping_no_p（パレット番号）分组，无则退化为 shipping_no，统计按パレット件数
-    const palletKey = (item: ShippingItem) => (item.shipping_no_p && item.shipping_no_p.trim()) ? item.shipping_no_p.trim() : (item.shipping_no || '').trim()
+    // 按 shipping_no（パレット番号）分组。shipping_no_p は品番付きのピッキング単位
     const grouped = filteredItems.reduce((acc: Record<string, PalletGroup>, item: ShippingItem) => {
-      const key = palletKey(item)
+      const key = pickingPalletKey(item)
       if (!key) return acc
       if (!acc[key]) {
         acc[key] = {
@@ -481,27 +504,9 @@ async function fetchShippingData() {
       return acc
     }, {})
 
-    // 计算每个托盘的整体状态
+    // 一部でも履历があれば未ピッキングにせず作業中にする
     for (const pallet of Object.values(grouped) as PalletGroup[]) {
-      const statuses = pallet.items.map((item) => item.status)
-      console.log(`托盘 ${pallet.shipping_no} 项目状态:`, statuses)
-
-      // 如果所有项目都是completed，则托盘状态为completed
-      if (statuses.every((status) => status === 'completed')) {
-        pallet.status = 'completed'
-      }
-      // 如果有任何项目是picking，则托盘状态为picking
-      else if (statuses.some((status) => status === 'picking')) {
-        pallet.status = 'picking'
-      }
-      // 否则默认为pending
-      else {
-        pallet.status = 'pending'
-      }
-
-      console.log(
-        `托盘 ${pallet.shipping_no} 最终状态: ${pallet.status}, 累计: units=${pallet.totalUnits}, boxes=${pallet.totalBoxes}`,
-      )
+      pallet.status = summarizePickingPalletStatus(pallet.items)
     }
 
     palletGroups.value = Object.values(grouped)
@@ -707,7 +712,7 @@ function generatePrintHTML(pallets: PalletGroup[], filterInfo: string[], current
         product_cd: item.product_cd || '-',
         product_name: item.product_name || '-',
         boxes: Number(item.confirmed_boxes) || 0,
-        status: getStatusText(item.status),
+        status: getStatusText(itemIsPickingCompleted(item) ? 'completed' : item.status),
         destination_name: item.destination_name || item.destination_cd || '-',
       })
     }
@@ -842,19 +847,21 @@ function escapeHtml(s: string): string {
 }
 
 // 快捷日期设置函数
+function addCalendarDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, (d || 1) + days))
+  return dt.toISOString().slice(0, 10)
+}
+
 function setDateRange(dayOffset: number) {
   if (dayOffset === 0) {
-    // 今日按钮：设置为今天
-    const today = new Date()
-    const dateStr = today.toISOString().slice(0, 10)
+    const dateStr = getJSTToday()
     dateRange.value = [dateStr, dateStr]
-  } else {
-    // 前日/翌日按钮：基于当前选择的日期进行增减
-    const currentDate = dateRange.value[0] ? new Date(dateRange.value[0]) : new Date()
-    currentDate.setDate(currentDate.getDate() + dayOffset)
-    const dateStr = currentDate.toISOString().slice(0, 10)
-    dateRange.value = [dateStr, dateStr]
+    return
   }
+  const base = dateRange.value[0] || getJSTToday()
+  const dateStr = addCalendarDays(base, dayOffset)
+  dateRange.value = [dateStr, dateStr]
 }
 
 function formatDate(dateStr: string) {
@@ -864,9 +871,14 @@ function formatDate(dateStr: string) {
   return date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
 }
 
+function itemIsPickingCompleted(item: ShippingItem) {
+  return isPickingItemCompleted(item)
+}
+
 function getStatusText(status: string) {
   switch (status) {
     case 'completed':
+    case 'picked':
       return 'ピッキング済'
     case 'picking':
       return '作業中'
@@ -880,6 +892,7 @@ function getStatusText(status: string) {
 function getStatusType(status: string) {
   switch (status) {
     case 'completed':
+    case 'picked':
       return 'success'
     case 'picking':
       return 'primary'
@@ -900,9 +913,9 @@ function debouncedFetchData() {
   }, 500) // 500ms 防抖延迟
 }
 
-// 出荷日・状態変更時に自動で再取得
+// 出荷日変更時に自動で再取得（状態はクライアント側でパレット単位に絞る）
 watch(
-  [dateRange, () => filters.value.status],
+  dateRange,
   () => {
     debouncedFetchData()
   },
@@ -1153,6 +1166,7 @@ onMounted(() => {
 .product-item {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 4px 0;
   border-bottom: 1px solid #f0f0f0;
@@ -1487,7 +1501,7 @@ onMounted(() => {
 
 .statistics-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 10px;
 }
 
@@ -1574,6 +1588,15 @@ onMounted(() => {
 .pending-card .stat-icon-wrap {
   background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
   box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
+}
+
+.picking-card {
+  --stat-accent: #6366f1;
+  border-left: 3px solid #6366f1;
+}
+.picking-card .stat-icon-wrap {
+  background: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
 }
 
 .completed-card {

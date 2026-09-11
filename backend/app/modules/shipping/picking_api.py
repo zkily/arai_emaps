@@ -264,7 +264,7 @@ async def get_performance_by_destination(
 ) -> dict:
     """担当者＝納入先グループ（destination_groups の1行＝1つの group_name）。
     各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で shipping_items を集計。
-    件数は出荷単位 COUNT(DISTINCT shipping_no_p)、完了は picking_log_matched = 1。
+    件数は出荷単位 COUNT(DISTINCT shipping_no)、完了は同一パレットの全品が picking_log_matched = 1。
     品名 加工・アーチ・料金 除外。製品タイプは量産品のみ（空は量産品扱い）。
     """
     params: dict = {}
@@ -322,16 +322,24 @@ async def get_performance_by_destination(
             continue
         q = text(f"""
             SELECT
-                si.destination_cd,
-                si.destination_name,
-                COUNT(DISTINCT si.shipping_no_p) AS total_tasks,
-                COUNT(DISTINCT CASE WHEN ({completed_condition}) THEN si.shipping_no_p END) AS completed_tasks
-            FROM shipping_items si
-            WHERE {date_condition}
-              AND si.status != 'キャンセル'
-            {product_exclude}
-            AND si.destination_cd IN :dest_cds
-            GROUP BY si.destination_cd, si.destination_name
+                destination_cd,
+                destination_name,
+                COUNT(*) AS total_tasks,
+                SUM(CASE WHEN unmatched_cnt = 0 THEN 1 ELSE 0 END) AS completed_tasks
+            FROM (
+                SELECT
+                    si.shipping_no,
+                    si.destination_cd,
+                    si.destination_name,
+                    SUM(CASE WHEN NOT ({completed_condition}) THEN 1 ELSE 0 END) AS unmatched_cnt
+                FROM shipping_items si
+                WHERE {date_condition}
+                  AND si.status != 'キャンセル'
+                {product_exclude}
+                AND si.destination_cd IN :dest_cds
+                GROUP BY si.shipping_no, si.destination_cd, si.destination_name
+            ) pallet_agg
+            GROUP BY destination_cd, destination_name
             ORDER BY total_tasks DESC
         """).bindparams(bindparam("dest_cds", expanding=True))
         exec_params = {**params, "dest_cds": dest_cds}

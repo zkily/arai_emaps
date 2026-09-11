@@ -331,15 +331,15 @@
             <el-table-column prop="status" label="状態" min-width="140">
               <template #default="{ row }">
                 <el-tag
-                  :type="getStatusTagType(row.status)"
+                  :type="getStatusTagType(itemDisplayStatus(row))"
                   size="default"
-                  :effect="row.status === 'completed' ? 'dark' : 'light'"
+                  :effect="itemDisplayStatus(row) === 'completed' ? 'dark' : 'light'"
                   class="status-tag"
                 >
                   <el-icon class="status-icon">
-                    <component :is="getStatusIcon(row.status)" />
+                    <component :is="getStatusIcon(itemDisplayStatus(row))" />
                   </el-icon>
-                  {{ getStatusText(row.status) }}
+                  {{ getStatusText(itemDisplayStatus(row)) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -397,7 +397,7 @@ import request from '@/utils/request'
 import echarts from '@/utils/echarts'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'
-import { shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
+import { isPickingItemCompleted, shouldIncludeInPickingDisplay } from '@/utils/shippingPickingNewProgressParse'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
 
@@ -416,6 +416,7 @@ interface NewProgressResponse {
 
 interface PalletItem {
   shipping_no_p: string
+  shipping_no?: string
   shipping_date: string
   product_name: string
   product_type?: string
@@ -425,6 +426,7 @@ interface PalletItem {
   picker_id: string
   picker_name: string
   picker_full_name?: string
+  picking_log_matched?: number
 }
 
 interface ProgressStat {
@@ -489,10 +491,8 @@ let mutationObserver: MutationObserver | null = null
 const detailOverviewStats = computed(() => {
   const list = filteredDetailPalletList.value
   const total = list.length
-  const completed = list.filter((i) => i.status === 'completed').length
-  const pending = list.filter(
-    (i) => i.status === 'pending' || i.status === 'picking',
-  ).length
+  const completed = list.filter((i) => isPickingItemCompleted(i)).length
+  const pending = list.filter((i) => !isPickingItemCompleted(i)).length
   const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
   return { total, completed, pending, completionRate }
 })
@@ -504,7 +504,7 @@ const todayCompletionRate = computed(() => {
 
 const filteredPalletList = computed(() => {
   if (!statusFilter.value) return palletList.value
-  return palletList.value.filter((item) => item.status === statusFilter.value)
+  return palletList.value.filter((item) => itemDisplayStatus(item) === statusFilter.value)
 })
 
 // 製品名に「加工」「アーチ」「料金」を含む行、および量産品以外を除外する
@@ -530,7 +530,7 @@ const filteredDetailPalletList = computed(() => {
   // 按状态过滤（使用原有的statusFilter或新的detailFilters.status）
   const filterStatus = detailFilters.value.status || statusFilter.value
   if (filterStatus) {
-    filtered = filtered.filter((item) => item.status === filterStatus)
+    filtered = filtered.filter((item) => itemDisplayStatus(item) === filterStatus)
   }
 
   return filtered
@@ -1129,7 +1129,11 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string }) => {
 
 // 样式辅助函数
 const getRowClass = ({ row }: { row: PalletItem }) => {
-  return `status-${row.status}`
+  return `status-${itemDisplayStatus(row)}`
+}
+
+function itemDisplayStatus(item: PalletItem): string {
+  return isPickingItemCompleted(item) ? 'completed' : item.status || 'pending'
 }
 
 const getStatusTagType = (
@@ -1296,7 +1300,7 @@ const printDetailData = () => {
               <td>${item.product_name}</td>
               <td>${item.confirmed_boxes ?? '-'}</td>
               <td>${item.destination_name}</td>
-              <td class="status-${item.status}">${getStatusText(item.status)}</td>
+              <td class="status-${itemDisplayStatus(item)}">${getStatusText(itemDisplayStatus(item))}</td>
               <td>${item.picker_full_name || item.picker_name || '<span class="no-picker">未割当</span>'}</td>
             </tr>
           `,
