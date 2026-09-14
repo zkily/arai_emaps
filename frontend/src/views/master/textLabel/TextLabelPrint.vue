@@ -7,7 +7,7 @@
             <el-icon :size="20"><EditPen /></el-icon>
           </span>
           <div class="tlp-title-block">
-            <h1 class="tlp-title">テキストラベル印刷</h1>
+            <h1 class="tlp-title">各種表示印刷</h1>
             <p class="tlp-subtitle">{{ activeSubtitle }}</p>
           </div>
         </div>
@@ -134,7 +134,7 @@
       </el-tab-pane>
 
       <!-- 社内メッキ向け（新規） -->
-      <el-tab-pane label="社内メッキ向け" name="plating">
+      <el-tab-pane label="社内メッキ向け(新聞紙なし)" name="plating">
         <div class="tlp-body">
           <section class="tlp-panel tlp-panel--form">
             <div class="tlp-panel-head">
@@ -153,7 +153,7 @@
                 </div>
                 <el-input
                   v-model="platingTitle"
-                  placeholder="例：社内メッキ向け"
+                  placeholder="例：社内メッキ向け(新聞紙なし)"
                   maxlength="40"
                   clearable
                   show-word-limit
@@ -196,7 +196,9 @@
                     class="tlp-copies"
                   />
                   <span class="tlp-copies-hint">
-                    → {{ formatSheetLabel(1) }}〜{{ formatSheetLabel(safePlatingCopies) }}
+                    → {{ formatSheetLabel(1, safePlatingCopies) }}〜{{
+                      formatSheetLabel(safePlatingCopies, safePlatingCopies)
+                    }}
                   </span>
                 </div>
               </div>
@@ -223,6 +225,7 @@
 
             <div class="tlp-preview-stage">
               <div class="a5-preview a5-preview--plating" aria-hidden="true">
+                <div class="a5-corner-note">{{ PLATING_TITLE_NOTE }}</div>
                 <div class="a5-row a5-row--plating-title">
                   <span class="a5-text" :class="{ 'is-placeholder': !platingTitle.trim() }">
                     {{ platingTitle.trim() || '見出し' }}
@@ -234,7 +237,7 @@
                   </span>
                 </div>
                 <div class="a5-row a5-row--plating-sheet">
-                  <span class="a5-text">{{ formatSheetLabel(1) }}</span>
+                  <span class="a5-text">{{ formatSheetLabel(1, safePlatingCopies) }}</span>
                 </div>
               </div>
             </div>
@@ -258,6 +261,7 @@ import {
   DEFAULT_PLATING_TITLE,
   FONT_SIZE,
   PLATING_FONT_SIZE,
+  PLATING_TITLE_NOTE,
   PRINT_POPUP_BLOCKED_MSG,
   formatSheetLabel,
   printPlatingLabel,
@@ -291,7 +295,7 @@ const safePlatingCopies = computed(() => {
 
 const activeSubtitle = computed(() =>
   activeTab.value === 'plating'
-    ? '社内メッキ向けラベルを A5 横で印刷します'
+    ? '社内メッキ向け(新聞紙なし)ラベルを A5 横で印刷します'
     : '社内表示用ラベルを A5 横で印刷します',
 )
 
@@ -309,6 +313,7 @@ const previewMessagePx = `${Math.round(FONT_SIZE.message * 0.42)}px`
 const previewPlatingTitlePx = `${Math.round(PLATING_FONT_SIZE.title * 0.42)}px`
 const previewPlatingProductPx = `${Math.round(PLATING_FONT_SIZE.product * 0.42)}px`
 const previewPlatingSheetPx = `${Math.round(PLATING_FONT_SIZE.sheetNo * 0.42)}px`
+const previewPlatingTitleNotePx = `${Math.max(9, Math.round(PLATING_FONT_SIZE.titleNote * 0.85))}px`
 
 async function loadDestinations() {
   loadingDestinations.value = true
@@ -684,9 +689,23 @@ onMounted(() => {
 }
 
 .a5-preview--plating {
+  position: relative;
   justify-content: center;
   gap: 18px;
   padding: 12px 8px;
+}
+
+.a5-corner-note {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  z-index: 1;
+  color: #dc2626;
+  font-size: v-bind(previewPlatingTitleNotePx);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
 .a5-row {

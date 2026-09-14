@@ -295,7 +295,7 @@
                   size="small"
                   class="control-btn-small"
                 >
-                  クリア
+                  アーカイブ
                 </el-button>
               </div>
             </div>
@@ -875,22 +875,22 @@ function handleCurrentChange(page: number) {
 async function cleanupLogs() {
   try {
     await ElMessageBox.confirm(
-      '古いログデータを削除しますか？この操作は元に戻すことができません。',
-      '確認',
+      '30日以前の shipping_log を shipping_log_archive へ退避します。直近データとピッキング完了フラグは保持されます。',
+      'アーカイブ確認',
       {
-        confirmButtonText: '削除実行',
+        confirmButtonText: 'アーカイブ実行',
         cancelButtonText: 'キャンセル',
         type: 'warning',
       },
     )
 
     const result = (await cleanupShippingLogs()) as ApiResponseBody
-    ElMessage.success(result.message || 'ログデータを正常にクリアしました')
+    ElMessage.success(result.message || '古いログをアーカイブしました')
     await loadLogs()
     await loadStats()
   } catch (error: unknown) {
     if (error !== 'cancel') {
-      const errorMessage = getErrorMessage(error, 'ログデータのクリアに失敗しました')
+      const errorMessage = getErrorMessage(error, 'ログのアーカイブに失敗しました')
       ElMessage.error(errorMessage)
     }
   }
@@ -1062,6 +1062,7 @@ async function showSyncDebugInfo() {
     const data = (response.data ?? response) as Record<string, { count?: number; latest?: unknown[]; error?: string }>
 
     const shippingLogCount = data.shipping_log?.count ?? 0
+    const shippingLogArchiveCount = data.shipping_log_archive?.count ?? 0
     const shippingItemsCount = data.shipping_items?.count ?? 0
     const pickingListCount = data.picking_list?.count ?? 0
 
@@ -1071,6 +1072,7 @@ async function showSyncDebugInfo() {
         <h4>データ同期デバッグ情報</h4>
         <p><strong>shipping_items レコード数:</strong> ${shippingItemsCount}</p>
         <p><strong>shipping_log レコード数:</strong> ${shippingLogCount}</p>
+        <p><strong>shipping_log_archive レコード数:</strong> ${shippingLogArchiveCount}</p>
         <p><strong>picking_list レコード数:</strong> ${pickingListCount}</p>
         <br>
         <p style="font-size: 12px; color: #666;">

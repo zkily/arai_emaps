@@ -311,7 +311,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/product-label-config', name: 'ProductLabelConfigManagement', component: () => import('@/views/master/productLabel/ProductLabelConfigManagement.vue'), meta: { title: '成型用ラベル設定', requiresAuth: true } },
       { path: 'master/product-use-label-config', name: 'ProductUseLabelConfigManagement', component: () => import('@/views/master/productUseLabel/ProductUseLabelConfigManagement.vue'), meta: { title: '製品用ラベル設定', requiresAuth: true } },
       { path: 'master/label-quantity', name: 'LabelQuantityManagement', component: () => import('@/views/master/labelQuantity/LabelQuantityManagement.vue'), meta: { title: 'ラベル枚数管理', requiresAuth: true } },
-      { path: 'master/text-label-print', name: 'TextLabelPrint', component: () => import('@/views/master/textLabel/TextLabelPrint.vue'), meta: { title: 'テキストラベル印刷', requiresAuth: true } },
+      { path: 'master/text-label-print', name: 'TextLabelPrint', component: () => import('@/views/master/textLabel/TextLabelPrint.vue'), meta: { title: '各種表示印刷', requiresAuth: true } },
       { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },
       { path: 'master/bom/roller-bom', name: 'RollerBomManagement', component: () => import('@/views/master/bom/RollerBomManagement.vue'), meta: { title: 'ローラーBOM管理', requiresAuth: true } },
       { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '製品BOM表管理', requiresAuth: true } },
@@ -334,6 +334,17 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/data', name: 'DataManagement', component: () => import('@/views/system/settings/DataManagement.vue'), meta: { title: 'データ管理', requiresAuth: true } },
       { path: 'system/menus', name: 'MenuManagement', component: () => import('@/views/system/settings/MenuManagement.vue'), meta: { title: 'メニュー管理', requiresAuth: true } },
       { path: 'system/file-watcher', name: 'FileWatcherSetting', component: () => import('@/views/system/settings/FileWatcherSetting.vue'), meta: { title: 'ファイル監視設定', requiresAuth: true } },
+      {
+        path: 'system/database-files',
+        name: 'DatabaseFileManagement',
+        component: () => import('@/views/system/settings/DatabaseFileManagement.vue'),
+        meta: { title: 'データベースファイル管理', requiresAuth: true },
+      },
+      // 旧パス互換
+      {
+        path: 'system/file-watcher-manager',
+        redirect: '/system/database-files',
+      },
       { path: 'system/device-owner-qr', name: 'DeviceOwnerQr', component: () => import('@/views/system/settings/DeviceOwnerQr.vue'), meta: { title: 'Device Owner QR', requiresAuth: true } },
       { path: 'system/database/order/daily', name: 'SystemDbOrderDaily', component: () => import('@/views/system/database/order/OrderDailyBrowse.vue'), meta: { title: 'order_daily（DB）', requiresAuth: true } },
 

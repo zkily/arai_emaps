@@ -60,7 +60,7 @@ export function getShippingLogs(params?: { page?: number; pageSize?: number; sea
 }
 
 export function cleanupShippingLogs() {
-  return request.post('/api/shipping/picking/cleanup-logs')
+  return request.post('/api/shipping/picking/cleanup-logs', {}, { timeout: 300000 })
 }
 
 export function getDuplicateStats(): Promise<DuplicateStats> {

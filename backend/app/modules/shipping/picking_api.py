@@ -7,22 +7,113 @@
 import asyncio
 import json
 import logging
+import threading
+import uuid
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, bindparam
-from typing import Optional, List, Any
-from datetime import date, timedelta
+from typing import Optional, List, Any, Dict
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.shipping.shipping_items_api import _shipping_item_to_picking_display_dict
-from app.services.file_watcher.sync_services import execute_full_picking_log_matched_refresh_sync
+from app.services.file_watcher.sync_services import (
+    SHIPPING_LOG_RETENTION_DAYS,
+    archive_old_shipping_logs_sync,
+    execute_full_picking_log_matched_refresh_sync,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ARCHIVE_TASKS: Dict[str, Dict[str, Any]] = {}
+_ARCHIVE_TASKS_LOCK = threading.Lock()
+
+
+def _utc_now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _create_archive_task() -> str:
+    task_id = uuid.uuid4().hex
+    with _ARCHIVE_TASKS_LOCK:
+        _ARCHIVE_TASKS[task_id] = {
+            "task_id": task_id,
+            "status": "queued",
+            "progress_percent": 0,
+            "message": "queued",
+            "archived": 0,
+            "total_candidates": 0,
+            "retention_days": SHIPPING_LOG_RETENTION_DAYS,
+            "created_at": _utc_now_iso(),
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+        }
+    return task_id
+
+
+def _update_archive_task(task_id: str, **patch: Any) -> None:
+    with _ARCHIVE_TASKS_LOCK:
+        task = _ARCHIVE_TASKS.get(task_id)
+        if not task:
+            return
+        task.update(patch)
+
+
+def _get_archive_task(task_id: str) -> Optional[Dict[str, Any]]:
+    with _ARCHIVE_TASKS_LOCK:
+        task = _ARCHIVE_TASKS.get(task_id)
+        return dict(task) if task else None
+
+
+def _run_archive_task(task_id: str) -> None:
+    _update_archive_task(
+        task_id,
+        status="running",
+        progress_percent=1,
+        message="アーカイブ開始",
+        started_at=_utc_now_iso(),
+    )
+
+    def _progress(percent: int, message: str, archived: int, total: int) -> None:
+        _update_archive_task(
+            task_id,
+            progress_percent=max(0, min(99, int(percent))),
+            message=message,
+            archived=int(archived or 0),
+            total_candidates=int(total or 0),
+        )
+
+    try:
+        result = archive_old_shipping_logs_sync(progress_cb=_progress)
+        archived = int(result.get("archived") or 0)
+        days = int(result.get("retention_days") or SHIPPING_LOG_RETENTION_DAYS)
+        total = int(result.get("total_candidates") or 0)
+        _update_archive_task(
+            task_id,
+            status="completed",
+            progress_percent=100,
+            message=f"{archived} 件の古いログを shipping_log_archive へ退避しました（保持 {days} 日）",
+            archived=archived,
+            total_candidates=total,
+            retention_days=days,
+            finished_at=_utc_now_iso(),
+        )
+    except Exception as e:
+        logger.error("shipping_log アーカイブタスク失敗: %s", e, exc_info=True)
+        _update_archive_task(
+            task_id,
+            status="failed",
+            progress_percent=100,
+            message="failed",
+            error=str(e),
+            finished_at=_utc_now_iso(),
+        )
 
 
 
@@ -421,22 +512,60 @@ async def get_shipping_logs(
 
 
 # ================================================================
-# 8. POST /cleanup-logs  ─ 古いログを削除
+# 8. POST /cleanup-logs  ─ 古いログをアーカイブ（同期）
 # ================================================================
 @router.post("/cleanup-logs")
 async def cleanup_shipping_logs(
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
-    """30日以前の shipping_log を削除し、shipping_items.picking_log_matched を再計算"""
-    result = await db.execute(text(
-        "DELETE FROM shipping_log WHERE date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
-    ))
-    deleted = result.rowcount
-    # 削除を先に確定し、突合せは分割コミットで更新（長時間の全表ロックを避ける）
-    await db.commit()
-    await asyncio.to_thread(execute_full_picking_log_matched_refresh_sync)
-    return {"success": True, "message": f"{deleted} 件の古いログを削除しました", "deleted": deleted}
+    """保持期間以前の shipping_log を shipping_log_archive へ退避する。
+
+    picking_log_matched は再計算しない（過去の完了フラグを保持する）。
+    進捗表示が必要な場合は POST /cleanup-logs/async を使う。
+    """
+    try:
+        result = await asyncio.to_thread(archive_old_shipping_logs_sync)
+    except Exception as e:
+        logger.error("shipping_log アーカイブ失敗: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    archived = int(result.get("archived") or 0)
+    days = int(result.get("retention_days") or SHIPPING_LOG_RETENTION_DAYS)
+    return {
+        "success": True,
+        "message": f"{archived} 件の古いログを shipping_log_archive へ退避しました（保持 {days} 日）",
+        "archived": archived,
+        "deleted": archived,
+        "retention_days": days,
+        "total_candidates": int(result.get("total_candidates") or 0),
+    }
+
+
+@router.post("/cleanup-logs/async")
+async def start_cleanup_shipping_logs_task(
+    current_user: User = Depends(require_sales_operation("edit")),
+) -> dict:
+    """shipping_log アーカイブを非同期起動し task_id を返す。"""
+    task_id = _create_archive_task()
+    asyncio.create_task(asyncio.to_thread(_run_archive_task, task_id))
+    return {
+        "success": True,
+        "data": {
+            "task_id": task_id,
+            "status": "queued",
+            "progress_percent": 0,
+        },
+    }
+
+
+@router.get("/cleanup-logs/tasks/{task_id}")
+async def get_cleanup_shipping_logs_task(
+    task_id: str,
+    current_user: User = Depends(require_sales_operation("edit")),
+) -> dict:
+    task = _get_archive_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="タスクが見つかりません")
+    return {"success": True, "data": task}
 
 
 # ================================================================
@@ -559,7 +688,7 @@ async def get_sync_debug_info(
 ) -> dict:
     """デバッグ用に各テーブルの件数と最新レコードを返す"""
     info: dict = {}
-    for table in ["shipping_items", "shipping_log", "picking_list"]:
+    for table in ["shipping_items", "shipping_log", "shipping_log_archive", "picking_list"]:
         try:
             r = await db.execute(text(f"SELECT COUNT(*) AS cnt FROM {table}"))
             cnt = int(r.scalar() or 0)

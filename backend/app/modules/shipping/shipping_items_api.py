@@ -2,7 +2,7 @@
 出荷明細 API (shipping_items テーブル)
 - GET /items: 一覧取得（shipping_date / end_date / destination_cd / status 等でフィルタ）
 - GET /items/for-picking-display: ピッキング画面用（shipping_items のみ、ページング）
-- POST /items/refresh-picking-log-matched: FILE_WATCH_BASE_PATH の PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、picking_log_matched を全件再計算
+- POST /items/refresh-picking-log-matched: FILE_WATCH_BASE_PATH の PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、直近保持期間の picking_log_matched を再計算
 - POST /items/bulk: 一括登録（パレット割当て案 → shipping_items）
 - POST /items/{shipping_no}/issue: 出荷番号を発行（該当 shipping_no の status を「発行済」に更新）
 - POST /items/{id}/cancel: shipping_no_p で order_daily を整理後、shipping_items を物理削除
@@ -317,7 +317,7 @@ async def list_shipping_items_for_picking_display(
 async def refresh_picking_log_matched(
     current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
-    """監視フォルダのピッキングログ CSV を shipping_log に強制取込後、picking_log_matched を全件再計算する。"""
+    """監視フォルダのピッキングログ CSV を shipping_log に強制取込後、直近保持期間の picking_log_matched を再計算する。"""
     csv_path, csv_name = _resolve_picking_csv_for_shipping_log()
     base = _file_watch_csv_base()
     if not csv_path:

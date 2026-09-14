@@ -15,9 +15,11 @@ export { PRINT_POPUP_BLOCKED_MSG }
 export const DEFAULT_NOTICE = '社内表示用　出荷の際は外してください'
 export const DEFAULT_MESSAGE = '出荷OK'
 
-export const DEFAULT_PLATING_TITLE = '社内メッキ向け'
+export const DEFAULT_PLATING_TITLE = '社内メッキ向け(新聞紙なし)'
 export const DEFAULT_PLATING_PRODUCT = '164B FR'
 export const DEFAULT_PLATING_COPIES = 1
+/** 1行目（見出し）右側の固定注意事項（赤文字） */
+export const PLATING_TITLE_NOTE = '注意：164B(567D) FR --(白ラベル使用）'
 
 /** 各行の固定フォントサイズ（px）— 出荷表示 */
 export const FONT_SIZE = {
@@ -31,6 +33,7 @@ export const PLATING_FONT_SIZE = {
   title: 48,
   product: 72,
   sheetNo: 48,
+  titleNote: 16,
 } as const
 
 export interface TextLabelPrintData {
@@ -116,8 +119,22 @@ const PRINT_STYLES = `
 const PLATING_PRINT_STYLES = `
   ${SHARED_PAGE_STYLES}
   .sheet {
+    position: relative;
     justify-content: center;
     gap: 10mm;
+  }
+  .sheet-corner-note {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    z-index: 1;
+    color: #dc2626;
+    font-size: ${PLATING_FONT_SIZE.titleNote}px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    line-height: 1.2;
+    padding: 1mm 2mm;
   }
   .row {
     flex: 0 0 auto;
@@ -161,8 +178,13 @@ export function printTextLabel(data: TextLabelPrintData): Window | null {
   return openPrintWindow(html, { autoPrint: true, autoClose: true, delayMs: 350 })
 }
 
-export function formatSheetLabel(index: number): string {
-  return `${index} 枚目`
+export function formatSheetLabel(index: number, total?: number): string {
+  const n = Math.max(1, Math.floor(Number(index) || 1))
+  if (total != null && Number(total) > 0) {
+    const t = Math.max(1, Math.floor(Number(total) || 1))
+    return `${n} 枚目 / ${t} 枚目`
+  }
+  return `${n} 枚目`
 }
 
 export function buildPlatingLabelPrintHtml(data: PlatingLabelPrintData): string {
@@ -171,9 +193,10 @@ export function buildPlatingLabelPrintHtml(data: PlatingLabelPrintData): string 
   const copies = Math.max(1, Math.floor(Number(data.copies) || 1))
 
   const sheets = Array.from({ length: copies }, (_, i) => {
-    const sheetNo = formatSheetLabel(i + 1)
+    const sheetNo = formatSheetLabel(i + 1, copies)
     return `
     <section class="sheet">
+      <div class="sheet-corner-note">${escapeHtml(PLATING_TITLE_NOTE)}</div>
       <div class="row row-title">
         <span class="row-text">${escapeHtml(title)}</span>
       </div>

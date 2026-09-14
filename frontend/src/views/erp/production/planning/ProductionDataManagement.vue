@@ -3128,11 +3128,11 @@ const handleGenerateData = () => {
   showGenerateConfirmDialog.value = true
 }
 
-/** 受注データ更新：当日(JST)の10日前〜3ヶ月後をクリアしてから書き戻す */
+/** 受注データ更新：当日(JST)の10日前〜4ヶ月後をクリアしてから書き戻す */
 const ORDER_DAILY_UPDATE_PARAMS = {
   updateMode: 'recent' as const,
   days: 10,
-  monthsAfter: 3,
+  monthsAfter: 4,
   clearBeforeUpdate: true,
 }
 

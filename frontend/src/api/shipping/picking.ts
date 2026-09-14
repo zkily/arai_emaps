@@ -7,7 +7,7 @@ export function getPickingNewProgress() {
   return request.get('/api/shipping/picking/new-progress')
 }
 
-/** 監視フォルダの PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、picking_log_matched を全件再計算 */
+/** 監視フォルダの PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、直近保持期間の picking_log_matched を再計算 */
 export function refreshPickingLogMatchedFromLog() {
   return request.post('/api/shipping/items/refresh-picking-log-matched', {}, { timeout: PICKING_SYNC_TIMEOUT_MS })
 }
