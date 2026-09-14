@@ -612,7 +612,7 @@ export default {
     SYSTEM_DATA: '数据管理',
     SYSTEM_MENUS: '菜单管理',
     SYSTEM_FILE_WATCHER: '文件监视设置',
-    SYSTEM_FILE_WATCHER_MANAGER: '数据库文件管理',
+    SYSTEM_FILE_WATCHER_MANAGER: '归档管理',
     SYSTEM_DEVICE_OWNER_QR: 'Device Owner QR',
     SYSTEM_DATABASE: '数据库',
     SYSTEM_DB_ORDER_DAILY: 'order_daily',

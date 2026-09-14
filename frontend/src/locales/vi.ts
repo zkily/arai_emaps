@@ -504,7 +504,7 @@ export default {
     SYSTEM_DATA: 'Quản lý dữ liệu',
     SYSTEM_MENUS: 'Quản lý menu',
     SYSTEM_FILE_WATCHER: 'Cài đặt giám sát tệp',
-    SYSTEM_FILE_WATCHER_MANAGER: 'Quản lý file CSDL',
+    SYSTEM_FILE_WATCHER_MANAGER: 'Quản lý lưu trữ',
     SYSTEM_DEVICE_OWNER_QR: 'Device Owner QR',
     SYSTEM_DATABASE: 'Cơ sở dữ liệu',
     SYSTEM_DB_ORDER_DAILY: 'order_daily',

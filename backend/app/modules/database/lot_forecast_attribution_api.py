@@ -1,11 +1,13 @@
 """管理コード → 日内示帰属 API。"""
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,6 +15,11 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_mes_operation
 from app.modules.auth.models import User
 from app.modules.database.forming_daily_plan_service import parse_iso_date
+from app.modules.database.lot_forecast_attribution_archive import (
+    create_archive_task,
+    get_archive_task,
+    run_archive_task,
+)
 from app.modules.database.lot_forecast_attribution_service import (
     delete_process_status_override,
     enrich_rows_with_predicted_production_completion,
@@ -238,6 +245,116 @@ async def batch_lookup_lot_forecast_attribution(
         await enrich_rows_with_process_status(db, rows)
         await enrich_rows_with_predicted_production_completion(db, rows)
     return {"code": 200, "data": rows, "total": len(rows)}
+
+
+@router.get("/archive-overview")
+async def lot_forecast_archive_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """ホット（is_current=1）/ 退避対象（is_current=0）/ archive 表の件数。"""
+    current_cnt = 0
+    stale_cnt = 0
+    archive_cnt = 0
+    try:
+        r = await db.execute(
+            text(
+                """
+                SELECT
+                  SUM(CASE WHEN is_current = 1 THEN 1 ELSE 0 END) AS current_cnt,
+                  SUM(CASE WHEN is_current = 0 THEN 1 ELSE 0 END) AS stale_cnt
+                FROM lot_forecast_attribution
+                """
+            )
+        )
+        row = r.mappings().first()
+        if row:
+            current_cnt = int(row["current_cnt"] or 0)
+            stale_cnt = int(row["stale_cnt"] or 0)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"件数の取得に失敗しました: {e}") from e
+
+    try:
+        r2 = await db.execute(text("SELECT COUNT(*) AS cnt FROM lot_forecast_attribution_archive"))
+        archive_cnt = int(r2.scalar() or 0)
+    except Exception:
+        archive_cnt = 0
+
+    return {
+        "code": 200,
+        "data": {
+            "current": current_cnt,
+            "stale": stale_cnt,
+            "archive": archive_cnt,
+            "hot": current_cnt + stale_cnt,
+        },
+    }
+
+
+@router.get("/archive-preview")
+async def lot_forecast_archive_preview(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """ホットテーブルの現行行（is_current=1）をプレビューする。"""
+    where = ["is_current = 1"]
+    filter_params: dict[str, Any] = {}
+    q = (search or "").strip()
+    if q:
+        where.append(
+            "(management_code LIKE :q OR product_cd LIKE :q OR canonical_product_cd LIKE :q)"
+        )
+        filter_params["q"] = f"%{q}%"
+    where_sql = " AND ".join(where)
+
+    count_r = await db.execute(
+        text(f"SELECT COUNT(*) FROM lot_forecast_attribution WHERE {where_sql}"),
+        filter_params,
+    )
+    total = int(count_r.scalar() or 0)
+    data_r = await db.execute(
+        text(
+            f"""
+            SELECT id, management_code, product_cd, canonical_product_cd, destination_cd,
+                   process_key, source_date, forecast_attribution_date, attributed_qty,
+                   method, attribution_mode, computed_at
+            FROM lot_forecast_attribution
+            WHERE {where_sql}
+            ORDER BY id DESC
+            LIMIT :limit OFFSET :offset
+            """
+        ),
+        {**filter_params, "limit": pageSize, "offset": (page - 1) * pageSize},
+    )
+    items = [dict(row) for row in data_r.mappings().all()]
+    return {"code": 200, "data": {"items": items, "total": total, "page": page, "pageSize": pageSize}}
+
+
+@router.post("/archive/async")
+async def start_lot_forecast_archive_task(
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """is_current=0 の行を archive 表へ非同期退避する。"""
+    task_id = create_archive_task()
+    asyncio.create_task(asyncio.to_thread(run_archive_task, task_id))
+    return {
+        "code": 200,
+        "data": {"task_id": task_id, "status": "queued", "progress_percent": 0},
+    }
+
+
+@router.get("/archive/tasks/{task_id}")
+async def get_lot_forecast_archive_task(
+    task_id: str,
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    task = get_archive_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="タスクが見つかりません")
+    return {"code": 200, "data": task}
 
 
 @router.post("/batch-summary")

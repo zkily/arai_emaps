@@ -614,7 +614,7 @@ export default {
     SYSTEM_DATA: 'Data Management',
     SYSTEM_MENUS: 'Menu Management',
     SYSTEM_FILE_WATCHER: 'File Watcher Settings',
-    SYSTEM_FILE_WATCHER_MANAGER: 'Database File Management',
+    SYSTEM_FILE_WATCHER_MANAGER: 'Archive Management',
     SYSTEM_DEVICE_OWNER_QR: 'Device Owner QR',
     SYSTEM_DATABASE: 'Database',
     SYSTEM_DB_ORDER_DAILY: 'order_daily',

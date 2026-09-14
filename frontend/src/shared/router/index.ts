@@ -338,7 +338,7 @@ const routes: RouteRecordRaw[] = [
         path: 'system/database-files',
         name: 'DatabaseFileManagement',
         component: () => import('@/views/system/settings/DatabaseFileManagement.vue'),
-        meta: { title: 'データベースファイル管理', requiresAuth: true },
+        meta: { title: 'アーカイブ管理', requiresAuth: true },
       },
       // 旧パス互換
       {

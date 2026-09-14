@@ -156,3 +156,68 @@ export function clearProcessStatusOverride(management_code: string) {
     params: { management_code },
   })
 }
+
+export interface LotForecastArchiveOverview {
+  current: number
+  stale: number
+  archive: number
+  hot: number
+}
+
+export interface LotForecastArchivePreviewRow {
+  id: number
+  management_code?: string | null
+  product_cd?: string | null
+  canonical_product_cd?: string | null
+  destination_cd?: string | null
+  process_key?: string | null
+  source_date?: string | null
+  forecast_attribution_date?: string | null
+  attributed_qty?: number | null
+  method?: string | null
+  attribution_mode?: string | null
+  computed_at?: string | null
+}
+
+export interface LotForecastArchiveTask {
+  task_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | string
+  progress_percent: number
+  message?: string
+  archived?: number
+  total_candidates?: number
+  error?: string | null
+}
+
+export function getLotForecastArchiveOverview() {
+  return request.get(`${BASE}/archive-overview`) as unknown as Promise<{
+    code?: number
+    data?: LotForecastArchiveOverview
+  }>
+}
+
+export function getLotForecastArchivePreview(params?: {
+  page?: number
+  pageSize?: number
+  search?: string
+}) {
+  return request.get(`${BASE}/archive-preview`, { params }) as unknown as Promise<{
+    code?: number
+    data?: { items?: LotForecastArchivePreviewRow[]; total?: number }
+  }>
+}
+
+export function startLotForecastArchive() {
+  return request.post(`${BASE}/archive/async`) as unknown as Promise<{
+    code?: number
+    data?: { task_id?: string }
+    task_id?: string
+  }>
+}
+
+export function getLotForecastArchiveTask(taskId: string) {
+  return request.get(`${BASE}/archive/tasks/${encodeURIComponent(taskId)}`) as unknown as Promise<{
+    code?: number
+    data?: LotForecastArchiveTask
+  }>
+}

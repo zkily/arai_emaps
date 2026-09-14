@@ -271,7 +271,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_FILE_WATCHER', name: 'ファイル監視設定', icon: 'View', path: '/system/file-watcher', parentCode: 'SYSTEM_SETTINGS', sortOrder: 7 },
   {
     code: 'SYSTEM_FILE_WATCHER_MANAGER',
-    name: 'データベースファイル管理',
+    name: 'アーカイブ管理',
     icon: 'FolderOpened',
     path: '/system/database-files',
     parentCode: 'SYSTEM_SETTINGS',
