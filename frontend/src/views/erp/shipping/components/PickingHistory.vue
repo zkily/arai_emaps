@@ -449,7 +449,7 @@
       </div>
     </el-card>
 
-    <!-- 担当者每天完成率折线图 -->
+    <!-- 担当者每天完成率看板（数字・色分け・アニメーション） -->
     <el-card class="daily-rate-chart-card" shadow="never">
       <template #header>
         <div class="card-header">
@@ -457,20 +457,69 @@
             <el-icon class="header-icon"><TrendCharts /></el-icon>
             <span class="header-title">担当者別日次完了率</span>
           </div>
+          <div class="daily-rate-legend">
+            <span class="legend-item full">完了 100%</span>
+            <span class="legend-item near">80–99%</span>
+            <span class="legend-item mid">50–79%</span>
+            <span class="legend-item low">1–49%</span>
+            <span class="legend-item zero">0%</span>
+            <span class="legend-item empty">なし</span>
+          </div>
         </div>
       </template>
-      <div class="chart-container">
-        <ChartWrapper
-          v-if="!loading.trend"
-          :data="dailyCompletionRateChartData as any"
-          :options="dailyCompletionRateChartOptions as any"
-          height="320px"
-          @error="handleChartError"
-          @retry="retryChart"
+      <div class="daily-rate-board" v-loading="loading.dailyRate">
+        <el-empty
+          v-if="!loading.dailyRate && (!dailyCompletionBoard.rows.length || !dailyCompletionBoard.dates.length)"
+          description="担当者の日次データがありません"
         />
-        <div v-else class="chart-loading-placeholder">
-          <el-icon class="loading-icon"><Loading /></el-icon>
-          <span>データ読み込み中...</span>
+        <div v-else class="daily-rate-scroll">
+          <div class="daily-rate-grid" :style="dailyRateGridStyle">
+            <div class="daily-rate-head">
+              <div class="daily-rate-name-col">担当者</div>
+              <div class="daily-rate-avg-col">平均</div>
+              <div
+                v-for="date in dailyCompletionBoard.dates"
+                :key="`h-${date}`"
+                class="daily-rate-day-col"
+              >
+                {{ formatDayLabel(date) }}
+              </div>
+            </div>
+            <div
+              v-for="(row, rowIndex) in dailyCompletionBoard.rows"
+              :key="row.name"
+              class="daily-rate-row"
+              :style="{ '--row-accent': row.color, '--row-delay': `${rowIndex * 70}ms` }"
+            >
+              <div class="daily-rate-name-col">
+                <span class="name-dot" />
+                <span class="name-text" :title="row.name">{{ row.name }}</span>
+              </div>
+              <div class="daily-rate-avg-col">
+                <span class="avg-badge" :class="rateLevelClass(row.average)">
+                  {{ row.average }}%
+                </span>
+              </div>
+              <div
+                v-for="(cell, cellIndex) in row.cells"
+                :key="`${row.name}-${cell.date}`"
+                class="daily-rate-day-col"
+              >
+                <div
+                  class="rate-pill"
+                  :class="rateLevelClass(cell.rate, cell.total)"
+                  :title="`${cell.date} 完了 ${cell.completed}/${cell.total} 件`"
+                  :style="{
+                    '--fill': `${cell.rate}%`,
+                    '--cell-delay': `${rowIndex * 40 + cellIndex * 28}ms`,
+                  }"
+                >
+                  <span class="rate-pill-fill" />
+                  <span class="rate-pill-num">{{ cell.total ? `${cell.rate}%` : '—' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </el-card>
@@ -515,15 +564,13 @@
       >
         <el-table-column prop="shipping_date" label="出荷日" width="96" sortable />
         <el-table-column prop="shipping_no_p" label="出荷番号" width="132" show-overflow-tooltip />
-        <el-table-column prop="destination_cd" label="納入先CD" width="96" show-overflow-tooltip />
         <el-table-column
           prop="destination_name"
           label="納入先名"
-          min-width="120"
+          min-width="140"
           show-overflow-tooltip
         />
-        <el-table-column prop="product_cd" label="製品CD" width="108" show-overflow-tooltip />
-        <el-table-column prop="product_name" label="製品名" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="product_name" label="製品名" min-width="180" show-overflow-tooltip />
         <el-table-column prop="confirmed_boxes" label="箱数" width="64" align="right" />
         <el-table-column prop="status" label="状態" width="80" align="center">
           <template #default="{ row }">
@@ -630,6 +677,7 @@ const loading = ref({
   completedTasks: false,
   trend: false,
   performerAnalysis: false,
+  dailyRate: false,
 })
 
 // 图表错误处理
@@ -688,6 +736,17 @@ const completedTasks = ref<PickingTask[]>([])
 const trendGranularity = ref<'daily' | 'monthly'>('daily')
 const trendData = ref<TrendDataPoint[]>([])
 const rawTrendTasks = ref<PickingTask[]>([])
+const dailyRateTasks = ref<PickingTask[]>([])
+const DAILY_RATE_COLORS = [
+  '#4f46e5',
+  '#0ea5e9',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#8b5cf6',
+  '#14b8a6',
+  '#f97316',
+]
 
 // 担当者分析関連
 interface GroupOption {
@@ -1171,7 +1230,7 @@ const trendChartOptions = computed<ChartOptions<'bar' | 'line'>>(() => ({
   },
 }))
 
-// 担当者別日次完了率（折线图）：按日期 + 各グループ的納入先在 rawTrendTasks 上汇总
+// 担当者別日次完了率（件数ベースの色分けボード）
 function getTaskDateKey(task: PickingTask): string {
   return task.shipping_date
     ? task.shipping_date.split('T')[0]
@@ -1187,84 +1246,76 @@ function getGroupDestinationCds(group: GroupOption): string[] {
     .filter(Boolean)
 }
 
-const dailyCompletionRateChartData = computed<ChartData<'line'>>(() => {
-  const tasks = rawTrendTasks.value
-  const groups = groupOptions.value || []
-  if (tasks.length === 0 || groups.length === 0) {
-    return { labels: [], datasets: [] }
+function formatDayLabel(ymd: string): string {
+  const parts = ymd.split('-')
+  if (parts.length < 3) return ymd
+  return `${Number(parts[1])}/${Number(parts[2])}`
+}
+
+function rateLevelClass(rate: number, total = 1): string {
+  if (!total) return 'empty'
+  if (rate >= 100) return 'full'
+  if (rate >= 80) return 'near'
+  if (rate >= 50) return 'mid'
+  if (rate > 0) return 'low'
+  return 'zero'
+}
+
+const dailyCompletionBoard = computed(() => {
+  const tasks = dailyRateTasks.value
+  const selected = selectedGroups.value
+  const groups = (groupOptions.value || []).filter((group) => {
+    if (!group.group_name) return false
+    if (selected.includes('all') || selected.length === 0) return true
+    return selected.includes(group.group_name)
+  })
+  if (groups.length === 0) {
+    return { dates: [] as string[], rows: [] as Array<{
+      name: string
+      color: string
+      average: number
+      cells: Array<{ date: string; rate: number; total: number; completed: number }>
+    }> }
   }
+
   const dateSet = new Set<string>()
   tasks.forEach((t) => dateSet.add(getTaskDateKey(t)))
   const sortedDates = Array.from(dateSet).sort()
-  const rateByDateAndGroup: Record<string, Record<string, number>> = {}
-  sortedDates.forEach((d) => {
-    rateByDateAndGroup[d] = {}
-  })
-  groups.forEach((group) => {
+  const rows = groups.map((group, index) => {
     const destCds = new Set(getGroupDestinationCds(group))
-    if (destCds.size === 0) return
-    sortedDates.forEach((date) => {
-      const dayTasks = tasks.filter(
-        (t) => getTaskDateKey(t) === date && destCds.has((t.destination_cd || '').trim()),
-      )
-      const palletMap = new Map<string, PickingTask[]>()
-      dayTasks.forEach((t) => {
-        const key = pickingPalletKey(t)
-        if (!key) return
-        if (!palletMap.has(key)) palletMap.set(key, [])
-        palletMap.get(key)!.push(t)
-      })
-      let total = 0
-      let completed = 0
-      palletMap.forEach((items) => {
-        total++
-        if (summarizePickingPalletStatus(items) === 'completed') completed++
-      })
+    const cells = sortedDates.map((date) => {
+      const dayTasks = destCds.size
+        ? tasks.filter(
+            (t) => getTaskDateKey(t) === date && destCds.has((t.destination_cd || '').trim()),
+          )
+        : []
+      const total = dayTasks.length
+      const completed = dayTasks.filter((t) => isPickingItemCompleted(t)).length
       const rate = total > 0 ? Number(((completed / total) * 100).toFixed(1)) : 0
-      rateByDateAndGroup[date][group.group_name] = rate
+      return { date, rate, total, completed }
     })
+    const counted = cells.filter((c) => c.total > 0)
+    const average =
+      counted.length > 0
+        ? Number((counted.reduce((sum, c) => sum + c.rate, 0) / counted.length).toFixed(1))
+        : 0
+    return {
+      name: group.group_name,
+      color: DAILY_RATE_COLORS[index % DAILY_RATE_COLORS.length],
+      average,
+      cells,
+    }
   })
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6']
-  const datasets = groups.map((g, i) => ({
-    type: 'line' as const,
-    label: g.group_name,
-    data: sortedDates.map((d) => rateByDateAndGroup[d]?.[g.group_name] ?? null),
-    borderColor: colors[i % colors.length],
-    backgroundColor: colors[i % colors.length],
-    tension: 0.3,
-    fill: false,
-    pointRadius: 4,
-    spanGaps: true,
-  }))
-  return { labels: sortedDates, datasets }
+  return { dates: sortedDates, rows }
 })
 
-const dailyCompletionRateChartOptions = computed<ChartOptions<'line'>>(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  scales: {
-    x: { grid: { display: false } },
-    y: {
-      type: 'linear',
-      min: 0,
-      max: 110,
-      title: { display: true, text: '完了率 (%)' },
-      grid: { color: '#f1f5f9' },
-    },
-  },
-  plugins: {
-    legend: { display: true, position: 'top' },
-    tooltip: {
-      callbacks: {
-        label: (ctx: any) => {
-          const v = ctx.parsed?.y
-          return v != null ? `${ctx.dataset.label}: ${v}%` : ''
-        },
-      },
-    },
-  },
-}))
+const dailyRateGridStyle = computed(() => {
+  const n = dailyCompletionBoard.value.dates.length
+  return {
+    gridTemplateColumns:
+      n > 0 ? `132px 72px repeat(${n}, minmax(58px, 1fr))` : '132px 72px',
+  }
+})
 
 // Methods
 async function fetchHistoryStats() {
@@ -1704,6 +1755,7 @@ async function fetchGroupOptions() {
 
 async function fetchPerformerAnalysisData() {
   loading.value.performerAnalysis = true
+  void fetchDailyRateTasks()
   try {
     const groupNames = selectedGroups.value.includes('all') ? [] : selectedGroups.value
     const dateRange =
@@ -1745,6 +1797,37 @@ async function fetchPerformerAnalysisData() {
     performerAnalysisData.value = []
   } finally {
     loading.value.performerAnalysis = false
+  }
+}
+
+async function fetchDailyRateTasks() {
+  loading.value.dailyRate = true
+  try {
+    const range =
+      performerDateRange.value && performerDateRange.value.length === 2
+        ? performerDateRange.value
+        : getCurrentMonthRange()
+    const response = await getPickingHistoryData({
+      start_date: range[0],
+      end_date: range[1],
+    })
+    const data = response?.data ?? response
+    const allTasks = Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.tasks)
+        ? data.tasks
+        : Array.isArray(data)
+          ? data
+          : []
+    dailyRateTasks.value = (allTasks as PickingTask[]).filter((task) =>
+      shouldIncludeInPickingDisplay(task),
+    )
+  } catch (error: any) {
+    if (!error?.isTokenError) {
+      dailyRateTasks.value = []
+    }
+  } finally {
+    loading.value.dailyRate = false
   }
 }
 
@@ -3372,7 +3455,7 @@ if (app) {
   }
 }
 
-/* 担当者別日次完了率折线图卡片 */
+/* 担当者別日次完了率看板 */
 .daily-rate-chart-card {
   margin-bottom: 24px;
   border-radius: 20px;
@@ -3382,8 +3465,252 @@ if (app) {
   backdrop-filter: blur(10px);
 }
 
-.daily-rate-chart-card .chart-container {
-  min-height: 320px;
+.daily-rate-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.legend-item {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.legend-item.full {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.legend-item.near {
+  color: #a16207;
+  background: #fef9c3;
+}
+
+.legend-item.mid {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.legend-item.low {
+  color: #c2410c;
+  background: #ffedd5;
+}
+
+.legend-item.zero {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.legend-item.empty {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.daily-rate-board {
+  min-height: 120px;
+}
+
+.daily-rate-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.daily-rate-grid {
+  display: grid;
+  min-width: 100%;
+  row-gap: 8px;
+  column-gap: 6px;
+}
+
+.daily-rate-head,
+.daily-rate-row {
+  display: contents;
+}
+
+.daily-rate-head .daily-rate-name-col,
+.daily-rate-head .daily-rate-avg-col,
+.daily-rate-head .daily-rate-day-col {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 4px 2px;
+}
+
+.daily-rate-name-col,
+.daily-rate-avg-col {
+  position: sticky;
+  z-index: 2;
+  background: #fff;
+}
+
+.daily-rate-name-col {
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.daily-rate-avg-col {
+  left: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.daily-rate-head .daily-rate-name-col,
+.daily-rate-head .daily-rate-avg-col {
+  background: #f8fafc;
+  z-index: 3;
+}
+
+.daily-rate-row .daily-rate-name-col,
+.daily-rate-row .daily-rate-avg-col,
+.daily-rate-row .daily-rate-day-col {
+  animation: dailyRateRowIn 0.45s ease both;
+  animation-delay: var(--row-delay, 0ms);
+}
+
+.name-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--row-accent, #4f46e5);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--row-accent, #4f46e5) 18%, transparent);
+  flex-shrink: 0;
+}
+
+.name-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avg-badge,
+.rate-pill {
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.avg-badge {
+  min-width: 58px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rate-pill {
+  position: relative;
+  height: 42px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.rate-pill-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--fill, 0%);
+  animation: dailyRateFill 0.7s ease both;
+  animation-delay: var(--cell-delay, 0ms);
+}
+
+.rate-pill-num {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 42px;
+}
+
+.rate-pill.full,
+.avg-badge.full {
+  color: #166534;
+  background: #ecfdf3;
+  border-color: #86efac;
+}
+.rate-pill.full .rate-pill-fill {
+  background: linear-gradient(180deg, #4ade80, #16a34a);
+}
+
+.rate-pill.near,
+.avg-badge.near {
+  color: #a16207;
+  background: #fefce8;
+  border-color: #fde047;
+}
+.rate-pill.near .rate-pill-fill {
+  background: linear-gradient(180deg, #facc15, #ca8a04);
+}
+
+.rate-pill.mid,
+.avg-badge.mid {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+.rate-pill.mid .rate-pill-fill {
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
+}
+
+.rate-pill.low,
+.avg-badge.low {
+  color: #c2410c;
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.rate-pill.low .rate-pill-fill {
+  background: linear-gradient(180deg, #fb923c, #ea580c);
+}
+
+.rate-pill.zero,
+.avg-badge.zero {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.rate-pill.zero .rate-pill-fill {
+  background: #fecaca;
+}
+
+.rate-pill.empty,
+.avg-badge.empty {
+  color: #94a3b8;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+.rate-pill.empty .rate-pill-fill {
+  background: transparent;
+}
+
+@keyframes dailyRateRowIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dailyRateFill {
+  from {
+    height: 0;
+  }
 }
 
 /* Modern Tables Grid (保留样式供其他用途) */
@@ -4018,8 +4345,8 @@ if (app) {
   border-radius: 12px;
 }
 
-.daily-rate-chart-card .chart-container {
-  min-height: 260px;
+.daily-rate-board {
+  min-height: 120px;
 }
 
 .pagination-container {
