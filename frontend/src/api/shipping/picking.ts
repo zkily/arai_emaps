@@ -36,3 +36,14 @@ export function getPerformanceByDestination(params: {
 }) {
   return request.get('/api/shipping/picking/performance-by-destination', { params })
 }
+
+/** 担当者別納入先分析の件数明細一覧 */
+export function getPerformanceByDestinationDetails(params: {
+  start_date: string
+  end_date: string
+  group_name?: string
+  destination_cd?: string
+  page_key?: string
+}) {
+  return request.get('/api/shipping/picking/performance-by-destination/details', { params })
+}

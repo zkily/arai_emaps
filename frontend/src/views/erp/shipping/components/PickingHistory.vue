@@ -361,6 +361,8 @@
               <div
                 class="performer-list-header"
                 @click="togglePerformerExpansion(performer.performer_id)"
+                @dblclick.stop="openPerformerDetailDialog(performer)"
+                title="ダブルクリックで明細一覧を表示"
               >
                 <div class="performer-avatar">
                   <el-icon><User /></el-icon>
@@ -375,7 +377,7 @@
                     <span class="stat-value">{{ performer.destination_count }}</span>
                   </div>
                   <div class="stat-item">
-                    <span class="stat-label">総ピッキング</span>
+                    <span class="stat-label">総件数</span>
                     <span class="stat-value">{{ getTotalTasks(performer) }}</span>
                   </div>
                   <div class="stat-item">
@@ -398,20 +400,7 @@
               >
                 <div class="destinations-header">
                   <span class="destinations-title">担当者別納入先一覧</span>
-                  <div class="destinations-filter">
-                    <!-- <el-select
-                      v-model="destinationStatusFilter[performer.performer_id]"
-                      placeholder="状態で絞り込み"
-                      size="small"
-                      style="width: 140px"
-                      @change="filterDestinationsByStatus(performer.performer_id)"
-                      popper-class="custom-destination-status-popper"
-                    >
-                      <el-option label="全て" value="" />
-                      <el-option label="完了" value="completed" />
-                      <el-option label="待機" value="pending" />
-                    </el-select> -->
-                  </div>
+                  <span class="destinations-hint">ダブルクリックで明細表示</span>
                 </div>
 
                 <div class="destinations-list" v-auto-height>
@@ -420,6 +409,8 @@
                     :key="destination.destination_cd"
                     class="destination-list-item"
                     v-auto-height
+                    title="ダブルクリックで明細一覧を表示"
+                    @dblclick.stop="openDestinationDetailDialog(performer, destination)"
                   >
                     <div class="destination-header">
                       <div class="destination-name">{{ destination.destination_name }}</div>
@@ -427,11 +418,11 @@
                     </div>
                     <div class="destination-stats">
                       <div class="stat-row">
-                        <span class="label">総タスク数</span>
+                        <span class="label">総件数</span>
                         <span class="value">{{ destination.total_tasks }}</span>
                       </div>
                       <div class="stat-row">
-                        <span class="label">完了数</span>
+                        <span class="label">完了件数</span>
                         <span class="value">{{ destination.completed_tasks }}</span>
                       </div>
                       <div class="stat-row">
@@ -484,56 +475,57 @@
       </div>
     </el-card>
 
-    <!-- Task Detail Dialog -->
-    <!-- <el-dialog
-      v-model="taskDetailVisible"
-      title="タスク詳細"
-      width="600px"
-      class="task-detail-dialog"
+    <!-- 担当者別納入先 件数明細ダイアログ -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      :title="detailDialogTitle"
+      width="90%"
+      top="5vh"
+      destroy-on-close
+      :close-on-click-modal="false"
+      class="performer-detail-dialog"
     >
-      <el-descriptions v-if="selectedTask" :column="2" border>
-        <el-descriptions-item label="ピッキングID">
-          <span class="detail-value">{{ selectedTask.picking_id }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="ピッキングNo">
-          <span class="detail-value">{{ selectedTask.shipping_no }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="製品CD">
-          <span class="detail-value">{{ selectedTask.product_cd }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="製品名">
-          <span class="detail-value">{{ selectedTask.product_name }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="確定箱数">
-          <span class="detail-value">{{ selectedTask.confirmed_boxes }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="ピッキング数量">
-          <span class="detail-value">{{ selectedTask.picked_quantity || 0 }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="保管場所">
-          <span class="detail-value">{{ selectedTask.location_cd }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="担当者">
-          <span class="detail-value">{{ selectedTask.picker_name || selectedTask.picker_id }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="状態">
-          <el-tag :type="getStatusTagType(selectedTask.status)">
-            {{ getStatusText(selectedTask.status) }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="作業時間" v-if="selectedTask.work_time">
-          <span class="detail-value">{{ selectedTask.work_time }}分</span>
-        </el-descriptions-item>
-      </el-descriptions>
+      <div class="detail-dialog-summary">
+        <el-tag type="info" effect="plain">総件数 {{ detailDialogStats.total }}</el-tag>
+        <el-tag type="success" effect="plain">完了 {{ detailDialogStats.completed }}</el-tag>
+        <el-tag type="warning" effect="plain">
+          未完了 {{ Math.max(detailDialogStats.total - detailDialogStats.completed, 0) }}
+        </el-tag>
+        <span v-if="detailDialogPeriod" class="detail-dialog-period">{{ detailDialogPeriod }}</span>
+      </div>
+      <el-table
+        v-loading="detailDialogLoading"
+        :data="detailDialogItems"
+        size="small"
+        border
+        stripe
+        height="60vh"
+        empty-text="明細データがありません"
+      >
+        <el-table-column prop="shipping_date" label="出荷日" width="110" sortable />
+        <el-table-column prop="shipping_no_p" label="出荷番号" width="150" show-overflow-tooltip />
+        <el-table-column prop="destination_cd" label="納入先CD" width="110" show-overflow-tooltip />
+        <el-table-column
+          prop="destination_name"
+          label="納入先名"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column prop="product_cd" label="製品CD" width="120" show-overflow-tooltip />
+        <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="confirmed_boxes" label="箱数" width="80" align="right" />
+        <el-table-column prop="status" label="状態" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getStatusTagType(row.status)" size="small">
+              {{ getStatusText(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="taskDetailVisible = false" class="close-dialog-btn">
-            <el-icon><Close /></el-icon>
-            閉じる
-          </el-button>
-        </div>
+        <el-button @click="detailDialogVisible = false">閉じる</el-button>
       </template>
-    </el-dialog> -->
+    </el-dialog>
 
     <!-- 納入先グループ管理ダイアログ -->
     <DestinationGroupManager
@@ -566,7 +558,7 @@ import {
   ArrowRight,
   Loading,
 } from '@element-plus/icons-vue'
-import { getPickingHistoryData, getPerformanceByDestination } from '@/api/shipping/picking'
+import { getPickingHistoryData, getPerformanceByDestination, getPerformanceByDestinationDetails } from '@/api/shipping/picking'
 import request from '@/utils/request'
 import DestinationGroupManager from './DestinationGroupManager.vue'
 import ChartWrapper from '@/components/ChartWrapper.vue'
@@ -743,6 +735,14 @@ const performerDateRange = ref<[string, string]>(getCurrentMonthRange())
 // 納入先グループ管理関連
 const showGroupManager = ref(false)
 
+// 件数明細ダイアログ
+const detailDialogVisible = ref(false)
+const detailDialogLoading = ref(false)
+const detailDialogTitle = ref('明細一覧')
+const detailDialogPeriod = ref('')
+const detailDialogStats = reactive({ total: 0, completed: 0 })
+const detailDialogItems = ref<PickingTask[]>([])
+
 // 担当者チャート表示関連（将来のテンプレート用に保留）
 const _performerViewMode = ref<'chart' | 'list'>('chart')
 
@@ -765,13 +765,13 @@ const _performerBarChartData = computed<ChartData<'bar' | 'line'>>(() => {
   // 納入先件数
   const destinationCounts = performers.map((p) => p.destination_count || 0)
 
-  // 総ピッキング件数：グループ名里含有的納入先在picking_tasks表里shipping_no_p字段的件数
+  // 総件数：グループ所属納入先の shipping_items 行数
   const _totalTasks = performers.map((p) => p.total_tasks || 0)
 
-  // ピッキング済件数：グループ名里含有的納入先在picking_tasks表里status字段为completed的件数
+  // 完了件数：picking_log_matched = 1 の行数
   const _completedTasks = performers.map((p) => p.completed_tasks || 0)
 
-  // 完了率：ピッキング済件数/総ピッキング件数
+  // 完了率：完了件数 / 総件数
   const completionRates = performers.map((p) => p.completion_rate || 0)
 
   return {
@@ -786,7 +786,7 @@ const _performerBarChartData = computed<ChartData<'bar' | 'line'>>(() => {
         yAxisID: 'y',
       },
       {
-        label: '総ピッキング件数',
+        label: '総件数',
         data: _totalTasks,
         backgroundColor: 'rgba(59, 130, 246, 0.8)',
         borderColor: 'rgba(59, 130, 246, 1)',
@@ -794,7 +794,7 @@ const _performerBarChartData = computed<ChartData<'bar' | 'line'>>(() => {
         yAxisID: 'y',
       },
       {
-        label: 'ピッキング済件数',
+        label: '完了件数',
         data: _completedTasks,
         backgroundColor: 'rgba(34, 197, 94, 0.8)',
         borderColor: 'rgba(34, 197, 94, 1)',
@@ -1847,6 +1847,69 @@ function getFilteredDestinations(performer: PerformerAnalysisData): DestinationD
   return performer.destinations.filter((dest) => getDestinationStatus(dest) === filter)
 }
 
+function getPerformerDetailDateRange(): [string, string] {
+  if (performerDateRange.value && performerDateRange.value.length === 2) {
+    return performerDateRange.value
+  }
+  return getCurrentMonthRange()
+}
+
+async function fetchPerformanceDetailItems(options: {
+  groupName: string
+  destinationCd?: string
+  title: string
+}) {
+  const [startDate, endDate] = getPerformerDetailDateRange()
+  detailDialogTitle.value = options.title
+  detailDialogPeriod.value = `${startDate} 〜 ${endDate}`
+  detailDialogVisible.value = true
+  detailDialogLoading.value = true
+  detailDialogItems.value = []
+  detailDialogStats.total = 0
+  detailDialogStats.completed = 0
+
+  try {
+    const response = await getPerformanceByDestinationDetails({
+      start_date: startDate,
+      end_date: endDate,
+      page_key: 'picking_history',
+      group_name: options.groupName,
+      ...(options.destinationCd ? { destination_cd: options.destinationCd } : {}),
+    })
+    const payload = (response as any)?.data ?? response
+    const data = payload?.data ?? payload
+    const items = Array.isArray(data?.items) ? data.items : []
+    detailDialogItems.value = items
+    detailDialogStats.total = Number(data?.total ?? items.length) || 0
+    detailDialogStats.completed =
+      Number(data?.completed ?? items.filter((it: PickingTask) => isPickingItemCompleted(it)).length) ||
+      0
+  } catch (error: any) {
+    if (!error?.isTokenError) {
+      ElMessage.error('明細一覧の取得に失敗しました')
+    }
+    detailDialogVisible.value = false
+  } finally {
+    detailDialogLoading.value = false
+  }
+}
+
+function openPerformerDetailDialog(performer: PerformerAnalysisData) {
+  fetchPerformanceDetailItems({
+    groupName: performer.performer_name || performer.performer_id,
+    title: `担当者明細：${performer.performer_name || performer.performer_id}`,
+  })
+}
+
+function openDestinationDetailDialog(performer: PerformerAnalysisData, destination: DestinationData) {
+  const destLabel = destination.destination_name || destination.destination_cd
+  fetchPerformanceDetailItems({
+    groupName: performer.performer_name || performer.performer_id,
+    destinationCd: destination.destination_cd,
+    title: `納入先明細：${destLabel}（${performer.performer_name || performer.performer_id}）`,
+  })
+}
+
 // 納入先状態：后端未返 status 时按 completion_rate 推导
 function getDestinationStatus(dest: DestinationData): string {
   if (dest.status) return dest.status
@@ -1893,15 +1956,15 @@ function handleGroupsUpdated() {
   fetchPerformerAnalysisData()
 }
 
-// 计算グループ的総ピッキング数
+// 计算グループ的総件数（shipping_items 行数）
 function getTotalTasks(performer: PerformerAnalysisData): number {
-  // 直接使用后端返回的total_tasks字段，这是基于グループ所属的所有納入先+日期计算的结果
+  // 后端 total_tasks：グループ所属納入先＋日期の shipping_items 件数
   return performer.total_tasks || 0
 }
 
-// 计算グループ的ピッキング済数（テンプレートで未使用のため _ 接頭辞）
+// 计算グループ的完了件数（テンプレートで未使用のため _ 接頭辞）
 function _getCompletedTasks(performer: PerformerAnalysisData): number {
-  // 直接使用后端返回的completed_tasks字段，这是基于グループ所属的所有納入先+日期计算的结果
+  // 后端 completed_tasks：picking_log_matched = 1 の件数
   return performer.completed_tasks || 0
 }
 
@@ -2508,6 +2571,7 @@ if (app) {
     0 2px 8px rgba(0, 0, 0, 0.06),
     0 1px 0 rgba(255, 255, 255, 0.4) inset;
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .destination-list-item:hover {
@@ -2517,6 +2581,30 @@ if (app) {
     0 1px 0 rgba(255, 255, 255, 0.5) inset;
   border-color: rgba(99, 102, 241, 0.2);
   background: rgba(255, 255, 255, 0.9);
+}
+
+.destinations-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.detail-dialog-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.detail-dialog-period {
+  margin-left: auto;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.performer-detail-dialog :deep(.el-dialog__body) {
+  padding-top: 8px;
 }
 
 .destination-header {

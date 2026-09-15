@@ -1,9 +1,10 @@
 """
 出荷パレット数管理 API
 - GET /pallet-count: グループ別カード用・日付×納入先の二次元集計（同一 shipping_no = 1 パレット）
+  表示優先: 自動集計（出荷実績）> 手動修正 > 空
 - PUT /pallet-count/advance-tohoku: オワリ便「先出(東北)」保存
 - PUT /pallet-count/bin2: オワリ便「2便」保存
-- PUT /pallet-count/cell-override: セル手動修正（ダブルクリック編集）
+- PUT /pallet-count/cell-override: セル手動修正（ダブルクリック編集・実績無し時の補完用）
 - POST /pallet-count/send-mail: グループ表をメール送信
 """
 from __future__ import annotations
@@ -226,18 +227,30 @@ def _apply_cell_overrides(
     dest_cds: List[str],
     dates: List[str],
     overrides: Dict[Tuple[str, str], int],
+    auto_source: Optional[Dict[Tuple[str, str], int]] = None,
 ) -> Dict[str, Dict[str, int]]:
-    """手動修正を最終表示値として適用。戻り値: date -> {dest_cd: qty}"""
+    """表示優先: 自動集計（出荷実績）> 手動修正 > 空。
+
+    出荷実績があるセルは手動修正を適用しない。
+    戻り値: 実際に表示へ反映した手動値 date -> {dest_cd: qty}
+    """
     applied: Dict[str, Dict[str, int]] = {}
     dest_set = set(dest_cds)
     date_set = set(dates)
     for (ds, cd), qty in overrides.items():
         if ds not in date_set or cd not in dest_set:
             continue
+        if auto_source is not None:
+            has_auto = int(auto_source.get((ds, cd), 0) or 0) > 0
+        else:
+            has_auto = int((matrix.get(ds) or {}).get(cd, 0) or 0) > 0
+        if has_auto:
+            continue
         if ds not in matrix:
             matrix[ds] = {c: 0 for c in dest_cds}
-        matrix[ds][cd] = max(0, int(qty))
-        applied.setdefault(ds, {})[cd] = max(0, int(qty))
+        ov = max(0, int(qty))
+        matrix[ds][cd] = ov
+        applied.setdefault(ds, {})[cd] = ov
     return applied
 
 
@@ -850,6 +863,7 @@ async def get_pallet_count_matrix(
             dest_cds=dest_cds,
             dates=dates,
             overrides=cell_overrides,
+            auto_source=count_map,
         )
         if applied_overrides:
             row_totals, col_totals, grand_total = _recalc_totals(matrix, dest_cds, dates)

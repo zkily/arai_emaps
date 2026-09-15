@@ -1,0 +1,54 @@
+DB=eams_db host=localhost
+TABLE lot_forecast_attribution | InnoDB | Dynamic | 6895845 | 1434451968 | 0 | 1854177280 | 7340032 | row_format=DYNAMIC | 管理コード日内示归属 | 208
+TABLE lot_forecast_attribution_archive | InnoDB | Dynamic | 0 | 16384 | 0 | 131072 | 0 | row_format=DYNAMIC | 日内示帰属の無効版退避（lot_forecast_attribution の is_current=0 から移動） | 0
+INDEXES archive:
+  idx_archived_at | 1 | 1 | archived_at | BTREE
+  idx_lfa_aps_current | 1 | 1 | aps_batch_plan_id | BTREE
+  idx_lfa_aps_current | 1 | 2 | is_current | BTREE
+  idx_lfa_canonical_date | 1 | 1 | canonical_product_cd | BTREE
+  idx_lfa_canonical_date | 1 | 2 | forecast_attribution_date | BTREE
+  idx_lfa_dest_date | 1 | 1 | destination_cd | BTREE
+  idx_lfa_dest_date | 1 | 2 | forecast_attribution_date | BTREE
+  idx_lfa_mgmt_current_process | 1 | 1 | management_code | BTREE
+  idx_lfa_mgmt_current_process | 1 | 2 | is_current | BTREE
+  idx_lfa_mgmt_current_process | 1 | 3 | process_key | BTREE
+  idx_lfa_mgmt_entity | 1 | 1 | management_code | BTREE
+  idx_lfa_mgmt_entity | 1 | 2 | source_entity_id | BTREE
+  idx_lfa_product_mode | 1 | 1 | product_cd | BTREE
+  idx_lfa_product_mode | 1 | 2 | attribution_mode | BTREE
+  idx_lfa_product_mode | 1 | 3 | is_current | BTREE
+  idx_lfa_run_id | 1 | 1 | run_id | BTREE
+  PRIMARY | 0 | 1 | id | BTREE
+VAR ('innodb_file_per_table', 'ON')
+VAR ('innodb_data_file_path', 'ibdata1:12M:autoextend')
+VAR ('innodb_strict_mode', 'ON')
+VAR ('tmpdir', 'C:\\WINDOWS\\SERVIC~3\\NETWOR~1\\AppData\\Local\\Temp')
+VAR ('datadir', 'C:\\ProgramData\\MySQL\\MySQL Server 9.2\\Data\\')
+VAR ('max_heap_table_size', '16777216')
+VAR ('tmp_table_size', '156237824')
+VAR ('innodb_temp_data_file_path', 'ibtmp1:12M:autoextend')
+VAR ('innodb_undo_tablespaces', '2')
+VAR ('version', '9.2.0')
+VAR ('version_comment', 'MySQL Community Server - GPL')
+STATUS archive:
+  Name=lot_forecast_attribution_archive
+  Engine=InnoDB
+  Version=10
+  Row_format=Dynamic
+  Rows=0
+  Avg_row_length=0
+  Data_length=16384
+  Max_data_length=0
+  Index_length=131072
+  Data_free=0
+  Auto_increment=1
+  Create_time=2026-09-14 14:08:19
+  Update_time=None
+  Check_time=None
+  Collation=utf8mb4_unicode_ci
+  Checksum=None
+  Create_options=row_format=DYNAMIC
+  Comment=日内示帰属の無効版退避（lot_forecast_attribution の is_current=0 から移動）
+archive exact count=54000
+hot stale count=7197666
+hot current count=46650

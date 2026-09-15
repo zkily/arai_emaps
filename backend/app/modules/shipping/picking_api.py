@@ -3,6 +3,7 @@
 - GET  /new-progress: 本日のピッキング進捗（shipping_items + picking_log_matched）
 - GET  /history: ピッキング履歴（shipping_items）
 - GET  /performance-by-destination: 担当者別パフォーマンス（shipping_items）
+- GET  /performance-by-destination/details: 担当者・納入先の明細一覧（件数単位）
 """
 import asyncio
 import json
@@ -355,7 +356,7 @@ async def get_performance_by_destination(
 ) -> dict:
     """担当者＝納入先グループ（destination_groups の1行＝1つの group_name）。
     各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で shipping_items を集計。
-    件数は出荷単位 COUNT(DISTINCT shipping_no)、完了は同一パレットの全品が picking_log_matched = 1。
+    件数は shipping_items 行単位 COUNT(*)、完了は picking_log_matched = 1 の件数。
     品名 加工・アーチ・料金 除外。製品タイプは量産品のみ（空は量産品扱い）。
     """
     params: dict = {}
@@ -413,24 +414,16 @@ async def get_performance_by_destination(
             continue
         q = text(f"""
             SELECT
-                destination_cd,
-                destination_name,
+                si.destination_cd,
+                si.destination_name,
                 COUNT(*) AS total_tasks,
-                SUM(CASE WHEN unmatched_cnt = 0 THEN 1 ELSE 0 END) AS completed_tasks
-            FROM (
-                SELECT
-                    si.shipping_no,
-                    si.destination_cd,
-                    si.destination_name,
-                    SUM(CASE WHEN NOT ({completed_condition}) THEN 1 ELSE 0 END) AS unmatched_cnt
-                FROM shipping_items si
-                WHERE {date_condition}
-                  AND si.status != 'キャンセル'
-                {product_exclude}
-                AND si.destination_cd IN :dest_cds
-                GROUP BY si.shipping_no, si.destination_cd, si.destination_name
-            ) pallet_agg
-            GROUP BY destination_cd, destination_name
+                SUM(CASE WHEN {completed_condition} THEN 1 ELSE 0 END) AS completed_tasks
+            FROM shipping_items si
+            WHERE {date_condition}
+              AND si.status != 'キャンセル'
+            {product_exclude}
+            AND si.destination_cd IN :dest_cds
+            GROUP BY si.destination_cd, si.destination_name
             ORDER BY total_tasks DESC
         """).bindparams(bindparam("dest_cds", expanding=True))
         exec_params = {**params, "dest_cds": dest_cds}
@@ -464,6 +457,110 @@ async def get_performance_by_destination(
         })
     out.sort(key=lambda x: (-x["completion_rate"], -x["total_tasks"]))
     return {"success": True, "data": out}
+
+
+# ================================================================
+# 3b. GET /performance-by-destination/details  ─ 担当者・納入先の明細一覧
+# ================================================================
+@router.get("/performance-by-destination/details")
+async def get_performance_by_destination_details(
+    start_date: Optional[str] = Query(None, description="開始日"),
+    end_date: Optional[str] = Query(None, description="終了日"),
+    group_name: Optional[str] = Query(None, description="担当者＝グループ名"),
+    destination_cd: Optional[str] = Query(None, description="納入先CD（省略時はグループ全納入先）"),
+    page_key: Optional[str] = Query(
+        "picking_history",
+        description="destination_groups の page_key",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+) -> dict:
+    """担当者別納入先分析の件数明細。集計と同じ条件で shipping_items 行一覧を返す。"""
+    params: dict = {}
+    if start_date and end_date:
+        params["start_date"] = start_date
+        params["end_date"] = end_date
+        date_condition = "si.shipping_date BETWEEN :start_date AND :end_date"
+    elif start_date:
+        params["start_date"] = start_date
+        date_condition = "si.shipping_date >= :start_date"
+    elif end_date:
+        params["end_date"] = end_date
+        date_condition = "si.shipping_date <= :end_date"
+    else:
+        date_condition = "si.shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+
+    dest_cds: List[str] = []
+    resolved_group = (group_name or "").strip()
+    resolved_dest = (destination_cd or "").strip()
+
+    if resolved_group:
+        group_q = text(
+            "SELECT destinations FROM destination_groups "
+            "WHERE page_key = :page_key AND group_name = :group_name LIMIT 1"
+        )
+        group_result = await db.execute(
+            group_q, {"page_key": page_key or "picking_history", "group_name": resolved_group}
+        )
+        group_row = group_result.mappings().first()
+        if not group_row:
+            return {
+                "success": True,
+                "data": {
+                    "group_name": resolved_group,
+                    "destination_cd": resolved_dest,
+                    "total": 0,
+                    "completed": 0,
+                    "items": [],
+                },
+            }
+        dest_cds = _parse_group_destinations(group_row["destinations"])
+        if resolved_dest:
+            dest_cds = [d for d in dest_cds if d == resolved_dest]
+    elif resolved_dest:
+        dest_cds = [resolved_dest]
+    else:
+        raise HTTPException(status_code=400, detail="group_name または destination_cd が必要です")
+
+    if not dest_cds:
+        return {
+            "success": True,
+            "data": {
+                "group_name": resolved_group,
+                "destination_cd": resolved_dest,
+                "total": 0,
+                "completed": 0,
+                "items": [],
+            },
+        }
+
+    product_exclude = (
+        " AND (si.product_name NOT LIKE '%加工%' AND si.product_name NOT LIKE '%アーチ%' AND si.product_name NOT LIKE '%料金%')"
+        f" AND {_MASS_PRODUCTION_TYPE_SQL}"
+    )
+    q = text(f"""
+        SELECT si.*
+        FROM shipping_items si
+        WHERE {date_condition}
+          AND si.status != 'キャンセル'
+        {product_exclude}
+          AND si.destination_cd IN :dest_cds
+        ORDER BY si.shipping_date DESC, si.shipping_no_p ASC, si.id ASC
+    """).bindparams(bindparam("dest_cds", expanding=True))
+    result = await db.execute(q, {**params, "dest_cds": dest_cds})
+    rows = result.mappings().all()
+    items = [_shipping_item_to_picking_display_dict(dict(r)) for r in rows]
+    completed = sum(1 for it in items if int(it.get("picking_log_matched") or 0) == 1)
+    return {
+        "success": True,
+        "data": {
+            "group_name": resolved_group,
+            "destination_cd": resolved_dest,
+            "total": len(items),
+            "completed": completed,
+            "items": items,
+        },
+    }
 
 
 # ================================================================

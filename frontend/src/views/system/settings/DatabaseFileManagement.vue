@@ -1,26 +1,16 @@
 <template>
   <div class="dfm">
-    <div class="dfm-orb dfm-orb--teal" />
-    <div class="dfm-orb dfm-orb--amber" />
-    <div class="dfm-orb dfm-orb--slate" />
-
     <header class="dfm-hero">
-      <div class="dfm-hero__glow" />
       <div class="dfm-hero__left">
         <div class="dfm-hero__icon">
-          <el-icon :size="22"><FolderOpened /></el-icon>
+          <el-icon :size="18"><FolderOpened /></el-icon>
         </div>
-        <div>
-          <div class="dfm-hero__eyebrow">システム設定 · データ保全</div>
-          <h1 class="dfm-hero__title">アーカイブ管理</h1>
-          <p class="dfm-hero__sub">
-            肥大化したテーブルの過去データを退避し、業務で使う現行データだけをホットテーブルに残します
-          </p>
-        </div>
+        <h1 class="dfm-hero__title">アーカイブ管理</h1>
       </div>
       <el-button
         class="dfm-hero__refresh"
         round
+        size="small"
         :icon="Refresh"
         :loading="overviewLoading"
         @click="refreshAll"
@@ -38,54 +28,31 @@
           </span>
         </template>
 
-    <section class="dfm-policy">
-      <div class="dfm-policy__icon">
-        <el-icon :size="18"><InfoFilled /></el-icon>
-      </div>
-      <div>
-        <div class="dfm-policy__title">運用方針</div>
-        <p class="dfm-policy__text">
-          <code>shipping_log</code> は直近 {{ retentionDays }} 日を保持。それより古い行は
-          <code>shipping_log_archive</code> へ移動します。
-          <strong>picking_log_matched</strong>（完了フラグ）は再計算しないため、過去の完了状態は維持されます。
-        </p>
-      </div>
-    </section>
-
     <div class="dfm-stats">
       <article class="dfm-stat dfm-stat--hot">
-        <div class="dfm-stat__icon"><el-icon :size="18"><Coin /></el-icon></div>
         <div class="dfm-stat__label">shipping_log（ホット）</div>
         <div class="dfm-stat__value">{{ formatNumber(overview.shippingLog) }}</div>
-        <div class="dfm-stat__hint">業務で参照する直近データ</div>
       </article>
       <article class="dfm-stat dfm-stat--archive">
-        <div class="dfm-stat__icon"><el-icon :size="18"><Box /></el-icon></div>
-        <div class="dfm-stat__label">shipping_log_archive（退避）</div>
+        <div class="dfm-stat__label">shipping_log_archive</div>
         <div class="dfm-stat__value">{{ formatNumber(overview.shippingLogArchive) }}</div>
-        <div class="dfm-stat__hint">過去ログの保管先</div>
       </article>
       <article class="dfm-stat dfm-stat--days">
-        <div class="dfm-stat__icon"><el-icon :size="18"><Timer /></el-icon></div>
         <div class="dfm-stat__label">保持日数</div>
         <div class="dfm-stat__value">{{ retentionDays }}<span class="dfm-stat__unit">日</span></div>
-        <div class="dfm-stat__hint">これより古い行を退避</div>
       </article>
     </div>
 
     <section class="dfm-panel dfm-panel--archive">
       <header class="dfm-panel__head">
-        <div class="dfm-panel__badge dfm-panel__badge--amber">
-          <el-icon><Box /></el-icon>
-        </div>
         <div class="dfm-panel__titles">
           <h2>shipping_log アーカイブ</h2>
-          <p>{{ retentionDays }} 日以前のログを archive 表へ移動（削除ではなく退避）</p>
         </div>
         <el-button
           class="dfm-btn-archive"
           type="warning"
           round
+          size="small"
           :icon="Box"
           :loading="archiveLoading"
           :disabled="archiveLoading"
@@ -131,10 +98,10 @@
         <el-table
           :data="logs"
           v-loading="logsLoading"
-          height="420"
+          height="360"
           stripe
           class="dfm-table"
-          empty-text="ホットテーブルにデータがありません"
+          empty-text="データなし"
         >
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="picking_no" label="ピッキングNo" min-width="160" />
@@ -166,19 +133,16 @@
 
     <section class="dfm-panel dfm-panel--dup">
       <header class="dfm-panel__head">
-        <div class="dfm-panel__badge dfm-panel__badge--rose">
-          <el-icon><WarningFilled /></el-icon>
-        </div>
         <div class="dfm-panel__titles">
           <h2>重複データ整理</h2>
-          <p>同一 picking_no + product_code + date の重複を整理</p>
         </div>
         <div class="dfm-panel__actions">
-          <el-button round :loading="dupLoading" @click="loadDuplicateStats">重複統計</el-button>
+          <el-button round size="small" :loading="dupLoading" @click="loadDuplicateStats">重複統計</el-button>
           <el-button
             type="danger"
             plain
             round
+            size="small"
             :loading="dedupeLoading"
             @click="runDeduplicate"
           >
@@ -187,8 +151,8 @@
         </div>
       </header>
 
-      <div class="dfm-panel__body">
-        <div v-if="duplicateStats" class="dfm-dup-grid">
+      <div v-if="duplicateStats" class="dfm-panel__body">
+        <div class="dfm-dup-grid">
           <div class="dfm-dup-card">
             <div class="dfm-dup-card__label">余剰重複</div>
             <div class="dfm-dup-card__value">{{ formatNumber(duplicateStats.total_duplicates) }}</div>
@@ -199,10 +163,6 @@
             <div class="dfm-dup-card__value">{{ formatNumber(duplicateStats.unique_picking_nos) }}</div>
             <div class="dfm-dup-card__unit">件</div>
           </div>
-        </div>
-        <div v-else class="dfm-empty">
-          <el-icon :size="28"><DataAnalysis /></el-icon>
-          <p>「重複統計」を実行すると結果が表示されます</p>
         </div>
       </div>
     </section>
@@ -216,55 +176,31 @@
           </span>
         </template>
 
-        <section class="dfm-policy dfm-policy--indigo">
-          <div class="dfm-policy__icon dfm-policy__icon--indigo">
-            <el-icon :size="18"><InfoFilled /></el-icon>
-          </div>
-          <div>
-            <div class="dfm-policy__title">運用方針</div>
-            <p class="dfm-policy__text">
-              業務照会は <code>is_current = 1</code> のみ参照します。再計算で無効になった
-              <code>is_current = 0</code> の行だけを
-              <code>lot_forecast_attribution_archive</code> へ移動します（削除ではなく退避）。
-              現行行はホットテーブルに残るため、生産ロット進捗・APS 看板への影響はありません。
-            </p>
-          </div>
-        </section>
-
         <div class="dfm-stats">
           <article class="dfm-stat dfm-stat--hot">
-            <div class="dfm-stat__icon"><el-icon :size="18"><Coin /></el-icon></div>
             <div class="dfm-stat__label">現行（is_current=1）</div>
             <div class="dfm-stat__value">{{ formatNumber(lfaOverview.current) }}</div>
-            <div class="dfm-stat__hint">業務で使う有効データ</div>
           </article>
           <article class="dfm-stat dfm-stat--stale">
-            <div class="dfm-stat__icon"><el-icon :size="18"><WarningFilled /></el-icon></div>
             <div class="dfm-stat__label">無効版（退避対象）</div>
             <div class="dfm-stat__value">{{ formatNumber(lfaOverview.stale) }}</div>
-            <div class="dfm-stat__hint">is_current=0 の履歴バージョン</div>
           </article>
           <article class="dfm-stat dfm-stat--archive">
-            <div class="dfm-stat__icon"><el-icon :size="18"><Box /></el-icon></div>
             <div class="dfm-stat__label">archive（退避済）</div>
             <div class="dfm-stat__value">{{ formatNumber(lfaOverview.archive) }}</div>
-            <div class="dfm-stat__hint">lot_forecast_attribution_archive</div>
           </article>
         </div>
 
         <section class="dfm-panel dfm-panel--lfa">
           <header class="dfm-panel__head">
-            <div class="dfm-panel__badge">
-              <el-icon><DataAnalysis /></el-icon>
-            </div>
             <div class="dfm-panel__titles">
               <h2>lot_forecast_attribution アーカイブ</h2>
-              <p>無効版のみ移動。現行行（is_current=1）は残します</p>
             </div>
             <el-button
               class="dfm-btn-lfa"
               type="primary"
               round
+              size="small"
               :icon="Box"
               :loading="lfaArchiveLoading"
               :disabled="lfaArchiveLoading || lfaOverview.stale <= 0"
@@ -310,10 +246,10 @@
             <el-table
               :data="lfaLogs"
               v-loading="lfaLogsLoading"
-              height="420"
+              height="360"
               stripe
               class="dfm-table"
-              empty-text="現行データがありません"
+              empty-text="データなし"
             >
               <el-table-column prop="id" label="ID" width="90" />
               <el-table-column prop="management_code" label="管理コード" min-width="150" show-overflow-tooltip />
@@ -354,14 +290,10 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Box,
-  Coin,
   DataAnalysis,
   FolderOpened,
-  InfoFilled,
   Refresh,
   Search,
-  Timer,
-  WarningFilled,
 } from '@element-plus/icons-vue'
 import {
   getArchiveShippingLogsTask,
@@ -759,66 +691,19 @@ onMounted(() => {
 .dfm {
   --ink: #0f172a;
   --muted: #64748b;
-  --line: rgba(148, 163, 184, 0.28);
-  --hot: #0d9488;
-  --archive: #d97706;
-  --dup: #e11d48;
   position: relative;
   isolation: isolate;
   min-height: calc(100vh - 88px);
-  padding: 18px 20px 36px;
+  padding: 12px 16px 20px;
   overflow: hidden;
   color: var(--ink);
   background:
-    radial-gradient(1100px 460px at 6% -12%, rgba(13, 148, 136, 0.14), transparent 55%),
-    radial-gradient(900px 420px at 98% 4%, rgba(245, 158, 11, 0.12), transparent 50%),
+    radial-gradient(900px 360px at 6% -12%, rgba(13, 148, 136, 0.1), transparent 55%),
+    radial-gradient(700px 320px at 98% 4%, rgba(245, 158, 11, 0.08), transparent 50%),
     linear-gradient(180deg, #f8fafc 0%, #f0fdfa 46%, #f8fafc 100%);
 }
 
-.dfm-orb {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 0;
-  filter: blur(2px);
-  animation: dfm-float 10s ease-in-out infinite;
-}
-.dfm-orb--teal {
-  width: 240px;
-  height: 240px;
-  top: 30px;
-  right: 10%;
-  background: radial-gradient(circle, rgba(45, 212, 191, 0.28), transparent 70%);
-}
-.dfm-orb--amber {
-  width: 190px;
-  height: 190px;
-  bottom: 14%;
-  left: 3%;
-  background: radial-gradient(circle, rgba(251, 191, 36, 0.24), transparent 70%);
-  animation-delay: -3.2s;
-}
-.dfm-orb--slate {
-  width: 150px;
-  height: 150px;
-  top: 42%;
-  right: -30px;
-  background: radial-gradient(circle, rgba(100, 116, 139, 0.18), transparent 70%);
-  animation-delay: -6s;
-}
-
-@keyframes dfm-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(10px, -16px, 0) scale(1.06);
-  }
-}
-
 .dfm-hero,
-.dfm-policy,
 .dfm-stats,
 .dfm-panel,
 .dfm-tabs {
@@ -827,22 +712,22 @@ onMounted(() => {
 }
 
 .dfm-tabs {
-  margin-top: 2px;
+  margin-top: 0;
 }
 .dfm-tab-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 800;
+  font-weight: 700;
 }
 :deep(.dfm-tabs .el-tabs__header) {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
 }
 :deep(.dfm-tabs .el-tabs__nav-wrap::after) {
   display: none;
 }
 :deep(.dfm-tabs .el-tabs__item) {
-  height: 42px;
+  height: 36px;
   font-weight: 700;
   color: #64748b;
 }
@@ -850,177 +735,69 @@ onMounted(() => {
   color: #0f766e;
 }
 :deep(.dfm-tabs .el-tabs__active-bar) {
-  height: 3px;
+  height: 2px;
   border-radius: 99px;
   background: linear-gradient(90deg, #0d9488, #d97706);
 }
 :deep(.dfm-tabs .el-tabs__nav) {
-  padding: 4px 6px;
-  border-radius: 14px;
+  padding: 2px 4px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .dfm-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
-  padding: 18px 20px;
-  border-radius: 22px;
-  overflow: hidden;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
   color: #fff;
   background: linear-gradient(135deg, #134e4a 0%, #0f766e 48%, #d97706 100%);
-  box-shadow:
-    0 18px 40px rgba(15, 118, 110, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  transform: perspective(900px) rotateX(2deg);
-  animation: dfm-in 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.dfm-hero__glow {
-  position: absolute;
-  inset: -35% auto auto 18%;
-  width: 240px;
-  height: 240px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 65%);
-  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.22);
 }
 
 .dfm-hero__left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 .dfm-hero__icon {
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: 10px;
   background: linear-gradient(160deg, #5eead4, #0d9488);
-  box-shadow: 0 10px 20px rgba(13, 148, 136, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.dfm-hero__eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  opacity: 0.78;
-  font-weight: 700;
 }
 .dfm-hero__title {
-  margin: 2px 0 0;
-  font-size: 22px;
+  margin: 0;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0.02em;
-}
-.dfm-hero__sub {
-  margin: 4px 0 0;
-  font-size: 12px;
-  opacity: 0.86;
-  line-height: 1.45;
-  max-width: 640px;
 }
 .dfm-hero__refresh {
   color: #134e4a !important;
   background: rgba(255, 255, 255, 0.92) !important;
   border: none !important;
   font-weight: 700 !important;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
-}
-
-@keyframes dfm-in {
-  from {
-    opacity: 0;
-    transform: perspective(900px) rotateX(8deg) translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: perspective(900px) rotateX(2deg) translateY(0);
-  }
-}
-
-.dfm-policy {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(14px);
-  animation: dfm-rise 0.5s ease both;
-  animation-delay: 0.05s;
-}
-.dfm-policy__icon {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  color: #0f766e;
-  background: #ccfbf1;
-}
-.dfm-policy__icon--indigo {
-  color: #4338ca;
-  background: #e0e7ff;
-}
-.dfm-policy--indigo .dfm-policy__title {
-  color: #3730a3;
-}
-.dfm-policy__title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #115e59;
-}
-.dfm-policy__text {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--muted);
-}
-.dfm-policy__text code {
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: 11px;
-  color: #0f766e;
-  background: #f0fdfa;
 }
 
 .dfm-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .dfm-stat {
-  position: relative;
-  overflow: hidden;
-  padding: 16px 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
-  backdrop-filter: blur(12px);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  animation: dfm-rise 0.55s ease both;
-}
-.dfm-stat:nth-child(1) {
-  animation-delay: 0.08s;
-}
-.dfm-stat:nth-child(2) {
-  animation-delay: 0.14s;
-}
-.dfm-stat:nth-child(3) {
-  animation-delay: 0.2s;
-}
-.dfm-stat:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
 }
 .dfm-stat--hot {
   border-top: 3px solid #14b8a6;
@@ -1034,41 +811,18 @@ onMounted(() => {
 .dfm-stat--stale {
   border-top: 3px solid #e11d48;
 }
-.dfm-stat__icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  margin-bottom: 10px;
-}
-.dfm-stat--hot .dfm-stat__icon {
-  color: #0f766e;
-  background: #ccfbf1;
-}
-.dfm-stat--archive .dfm-stat__icon {
-  color: #b45309;
-  background: #ffedd5;
-}
-.dfm-stat--days .dfm-stat__icon {
-  color: #4338ca;
-  background: #e0e7ff;
-}
-.dfm-stat--stale .dfm-stat__icon {
-  color: #be123c;
-  background: #ffe4e6;
-}
 .dfm-stat__label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
 }
 .dfm-stat__value {
-  margin-top: 6px;
-  font-size: 30px;
+  margin-top: 2px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 .dfm-stat--hot .dfm-stat__value {
   color: #0f766e;
@@ -1083,58 +837,34 @@ onMounted(() => {
   color: #be123c;
 }
 .dfm-stat__unit {
-  margin-left: 4px;
-  font-size: 14px;
+  margin-left: 2px;
+  font-size: 12px;
   font-weight: 700;
-}
-.dfm-stat__hint {
-  margin-top: 4px;
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-@keyframes dfm-rise {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .dfm-panel {
-  margin-bottom: 16px;
-  border-radius: 22px;
+  margin-bottom: 10px;
+  border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
-  animation: dfm-rise 0.55s ease both;
-}
-.dfm-panel--archive {
-  animation-delay: 0.16s;
-}
-.dfm-panel--dup {
-  animation-delay: 0.22s;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
 }
 .dfm-panel--lfa .dfm-panel__head {
   background: linear-gradient(135deg, #818cf8 0%, #6366f1 48%, #4338ca 100%);
 }
 .dfm-btn-lfa {
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   background: #fff !important;
   color: #3730a3 !important;
   border: none !important;
-  box-shadow: 0 8px 16px rgba(67, 56, 202, 0.28) !important;
 }
 
 .dfm-panel__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 8px 12px;
   color: #fff;
 }
 .dfm-panel--archive .dfm-panel__head {
@@ -1143,55 +873,40 @@ onMounted(() => {
 .dfm-panel--dup .dfm-panel__head {
   background: linear-gradient(135deg, #fb7185 0%, #e11d48 55%, #9f1239 100%);
 }
-.dfm-panel__badge {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
 .dfm-panel__titles {
   min-width: 0;
   flex: 1;
 }
 .dfm-panel__titles h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
-}
-.dfm-panel__titles p {
-  margin: 2px 0 0;
-  font-size: 11px;
-  opacity: 0.9;
 }
 .dfm-panel__actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 .dfm-btn-archive {
-  font-weight: 800 !important;
-  box-shadow: 0 8px 16px rgba(180, 83, 9, 0.28) !important;
+  font-weight: 700 !important;
 }
 .dfm-panel__body {
-  padding: 14px 16px 16px;
+  padding: 10px 12px 12px;
 }
 
 .dfm-progress {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
   border: 1px solid #fde68a;
 }
 .dfm-progress__meta {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  font-size: 13px;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
 }
 .dfm-progress__msg {
   color: #92400e;
@@ -1215,46 +930,46 @@ onMounted(() => {
 
 .dfm-toolbar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
   align-items: center;
 }
 .dfm-search {
-  width: min(360px, 100%);
+  width: min(300px, 100%);
 }
 .dfm-toolbar__total {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
   background: #f1f5f9;
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 999px;
 }
 
 .dfm-table {
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
 }
 .dfm-pager {
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .dfm-dup-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 .dfm-dup-card {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-rows: auto auto;
-  gap: 2px 8px;
-  padding: 16px 18px;
-  border-radius: 16px;
+  gap: 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: linear-gradient(160deg, #fff1f2 0%, #ffe4e6 100%);
   border: 1px solid #fecdd3;
 }
@@ -1264,51 +979,30 @@ onMounted(() => {
 }
 .dfm-dup-card__label {
   grid-column: 1 / -1;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
 }
 .dfm-dup-card__value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: #be123c;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 .dfm-dup-card--indigo .dfm-dup-card__value {
   color: #4338ca;
 }
 .dfm-dup-card__unit {
   align-self: end;
-  padding-bottom: 6px;
-  font-size: 12px;
+  padding-bottom: 2px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted);
 }
 
-.dfm-empty {
-  display: grid;
-  place-items: center;
-  gap: 8px;
-  padding: 28px 12px;
-  color: #94a3b8;
-  border-radius: 14px;
-  background: #f8fafc;
-  border: 1px dashed #e2e8f0;
-}
-.dfm-empty p {
-  margin: 0;
-  font-size: 13px;
-}
-
 :deep(.el-button) {
   font-weight: 700;
-  transition: transform 0.16s ease, box-shadow 0.16s ease;
-}
-:deep(.el-button:not(.is-disabled):hover) {
-  transform: translateY(-1px);
-}
-:deep(.el-button:not(.is-disabled):active) {
-  transform: translateY(1px);
 }
 
 @media (max-width: 980px) {
@@ -1317,11 +1011,7 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
   .dfm-hero {
-    display: block;
-    transform: none;
-  }
-  .dfm-hero__refresh {
-    margin-top: 12px;
+    display: flex;
   }
   .dfm-panel__head {
     flex-wrap: wrap;
