@@ -473,10 +473,33 @@
           description="担当者の日次データがありません"
         />
         <div v-else class="daily-rate-scroll">
+          <div
+            v-if="dailyCompletionBoard.overall.total > 0"
+            class="daily-rate-overall"
+            :class="rateLevelClass(dailyCompletionBoard.overall.rate, dailyCompletionBoard.overall.total)"
+          >
+            <span class="overall-label">件数対比</span>
+            <div class="overall-bar">
+              <span
+                class="overall-bar-done"
+                :style="{ width: `${dailyCompletionBoard.overall.rate}%` }"
+              />
+            </div>
+            <span class="overall-nums">
+              完了 <strong>{{ dailyCompletionBoard.overall.completed }}</strong>
+              /
+              総 <strong>{{ dailyCompletionBoard.overall.total }}</strong>
+              件
+            </span>
+            <span class="overall-pending">
+              未完了 {{ dailyCompletionBoard.overall.total - dailyCompletionBoard.overall.completed }}
+            </span>
+          </div>
           <div class="daily-rate-grid" :style="dailyRateGridStyle">
             <div class="daily-rate-head">
               <div class="daily-rate-name-col">担当者</div>
               <div class="daily-rate-avg-col">平均</div>
+              <div class="daily-rate-count-col">完了 / 総</div>
               <div
                 v-for="date in dailyCompletionBoard.dates"
                 :key="`h-${date}`"
@@ -496,9 +519,22 @@
                 <span class="name-text" :title="row.name">{{ row.name }}</span>
               </div>
               <div class="daily-rate-avg-col">
-                <span class="avg-badge" :class="rateLevelClass(row.average)">
+                <span class="avg-badge" :class="rateLevelClass(row.average, row.total)">
                   {{ row.average }}%
                 </span>
+              </div>
+              <div class="daily-rate-count-col">
+                <div class="count-compare" :class="rateLevelClass(row.average, row.total)">
+                  <div class="count-bar">
+                    <span
+                      class="count-bar-done"
+                      :style="{ width: row.total ? `${(row.completed / row.total) * 100}%` : '0%' }"
+                    />
+                  </div>
+                  <span class="count-text">
+                    <b>{{ row.completed }}</b>/{{ row.total }}
+                  </span>
+                </div>
               </div>
               <div
                 v-for="(cell, cellIndex) in row.cells"
@@ -516,6 +552,9 @@
                 >
                   <span class="rate-pill-fill" />
                   <span class="rate-pill-num">{{ cell.total ? `${cell.rate}%` : '—' }}</span>
+                  <span class="rate-pill-count">
+                    {{ cell.total ? `${cell.completed}/${cell.total}` : '0/0' }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1270,12 +1309,18 @@ const dailyCompletionBoard = computed(() => {
     return selected.includes(group.group_name)
   })
   if (groups.length === 0) {
-    return { dates: [] as string[], rows: [] as Array<{
-      name: string
-      color: string
-      average: number
-      cells: Array<{ date: string; rate: number; total: number; completed: number }>
-    }> }
+    return {
+      dates: [] as string[],
+      overall: { total: 0, completed: 0, rate: 0 },
+      rows: [] as Array<{
+        name: string
+        color: string
+        average: number
+        total: number
+        completed: number
+        cells: Array<{ date: string; rate: number; total: number; completed: number }>
+      }>,
+    }
   }
 
   const dateSet = new Set<string>()
@@ -1295,6 +1340,8 @@ const dailyCompletionBoard = computed(() => {
       return { date, rate, total, completed }
     })
     const counted = cells.filter((c) => c.total > 0)
+    const total = cells.reduce((sum, c) => sum + c.total, 0)
+    const completed = cells.reduce((sum, c) => sum + c.completed, 0)
     const average =
       counted.length > 0
         ? Number((counted.reduce((sum, c) => sum + c.rate, 0) / counted.length).toFixed(1))
@@ -1303,17 +1350,29 @@ const dailyCompletionBoard = computed(() => {
       name: group.group_name,
       color: DAILY_RATE_COLORS[index % DAILY_RATE_COLORS.length],
       average,
+      total,
+      completed,
       cells,
     }
   })
-  return { dates: sortedDates, rows }
+  const overallTotal = rows.reduce((sum, r) => sum + r.total, 0)
+  const overallCompleted = rows.reduce((sum, r) => sum + r.completed, 0)
+  return {
+    dates: sortedDates,
+    overall: {
+      total: overallTotal,
+      completed: overallCompleted,
+      rate: overallTotal > 0 ? Number(((overallCompleted / overallTotal) * 100).toFixed(1)) : 0,
+    },
+    rows,
+  }
 })
 
 const dailyRateGridStyle = computed(() => {
   const n = dailyCompletionBoard.value.dates.length
   return {
     gridTemplateColumns:
-      n > 0 ? `132px 72px repeat(${n}, minmax(58px, 1fr))` : '132px 72px',
+      n > 0 ? `120px 58px 86px repeat(${n}, minmax(62px, 1fr))` : '120px 58px 86px',
   }
 })
 
@@ -3538,8 +3597,78 @@ if (app) {
   padding: 4px 2px;
 }
 
+.daily-rate-overall {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.overall-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.overall-bar {
+  flex: 1;
+  height: 10px;
+  min-width: 80px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.overall-bar-done {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  transition: width 0.5s ease;
+}
+
+.daily-rate-overall.near .overall-bar-done {
+  background: linear-gradient(90deg, #facc15, #ca8a04);
+}
+.daily-rate-overall.mid .overall-bar-done {
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+}
+.daily-rate-overall.low .overall-bar-done {
+  background: linear-gradient(90deg, #fb923c, #ea580c);
+}
+.daily-rate-overall.zero .overall-bar-done {
+  background: #f87171;
+}
+
+.overall-nums,
+.overall-pending {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.overall-nums strong {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-rate-head .daily-rate-count-col {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 4px 2px;
+  text-align: center;
+}
+
 .daily-rate-name-col,
-.daily-rate-avg-col {
+.daily-rate-avg-col,
+.daily-rate-count-col {
   position: sticky;
   z-index: 2;
   background: #fff;
@@ -3554,16 +3683,77 @@ if (app) {
 }
 
 .daily-rate-avg-col {
-  left: 132px;
+  left: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.daily-rate-count-col {
+  left: 178px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .daily-rate-head .daily-rate-name-col,
-.daily-rate-head .daily-rate-avg-col {
+.daily-rate-head .daily-rate-avg-col,
+.daily-rate-head .daily-rate-count-col {
   background: #f8fafc;
   z-index: 3;
+}
+
+.daily-rate-row .daily-rate-count-col {
+  animation: dailyRateRowIn 0.45s ease both;
+  animation-delay: var(--row-delay, 0ms);
+}
+
+.count-compare {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.count-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.count-bar-done {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e;
+}
+
+.count-compare.near .count-bar-done {
+  background: #eab308;
+}
+.count-compare.mid .count-bar-done {
+  background: #3b82f6;
+}
+.count-compare.low .count-bar-done {
+  background: #f97316;
+}
+.count-compare.zero .count-bar-done {
+  background: #ef4444;
+}
+
+.count-text {
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.count-text b {
+  color: #0f172a;
 }
 
 .daily-rate-row .daily-rate-name-col,
@@ -3609,10 +3799,11 @@ if (app) {
 
 .rate-pill {
   position: relative;
-  height: 42px;
+  height: 48px;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -3633,7 +3824,17 @@ if (app) {
   z-index: 1;
   font-size: 12px;
   font-weight: 800;
-  line-height: 42px;
+  line-height: 1.15;
+}
+
+.rate-pill-count {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
 }
 
 .rate-pill.full,
