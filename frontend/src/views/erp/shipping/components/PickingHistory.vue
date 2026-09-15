@@ -70,7 +70,7 @@
                   class="quick-btn yesterday-btn"
                 >
                   <el-icon><ArrowLeft /></el-icon>
-                  昨日
+                  -1日
                 </el-button>
                 <el-button
                   size="small"
@@ -86,7 +86,7 @@
                   @click="setQuickDate('tomorrow')"
                   class="quick-btn tomorrow-btn"
                 >
-                  明日
+                  +1日
                   <el-icon><ArrowRight /></el-icon>
                 </el-button>
               </div>
@@ -298,7 +298,7 @@
                       @click="setPerformerQuickDate('yesterday')"
                     >
                       <el-icon><ArrowLeft /></el-icon>
-                      昨日
+                      -1日
                     </el-button>
                     <el-button
                       size="small"
@@ -314,7 +314,7 @@
                       class="performer-quick-btn tomorrow-btn"
                       @click="setPerformerQuickDate('tomorrow')"
                     >
-                      明日
+                      +1日
                       <el-icon><ArrowRight /></el-icon>
                     </el-button>
                   </div>
@@ -361,7 +361,7 @@
               <div
                 class="performer-list-header"
                 @click="togglePerformerExpansion(performer.performer_id)"
-                @dblclick.stop="openPerformerDetailDialog(performer)"
+                @dblclick.stop="openPerformerDetailDialog(performer, $event)"
                 title="ダブルクリックで明細一覧を表示"
               >
                 <div class="performer-avatar">
@@ -410,7 +410,7 @@
                     class="destination-list-item"
                     v-auto-height
                     title="ダブルクリックで明細一覧を表示"
-                    @dblclick.stop="openDestinationDetailDialog(performer, destination)"
+                    @dblclick.stop="openDestinationDetailDialog(performer, destination, $event)"
                   >
                     <div class="destination-header">
                       <div class="destination-name">{{ destination.destination_name }}</div>
@@ -478,43 +478,54 @@
     <!-- 担当者別納入先 件数明細ダイアログ -->
     <el-dialog
       v-model="detailDialogVisible"
-      :title="detailDialogTitle"
-      width="90%"
-      top="5vh"
+      width="780px"
+      top="0"
+      append-to-body
       destroy-on-close
-      :close-on-click-modal="false"
+      :close-on-click-modal="true"
+      :show-close="true"
+      modal-class="performer-detail-overlay"
       class="performer-detail-dialog"
+      :style="detailDialogStyle"
     >
-      <div class="detail-dialog-summary">
-        <el-tag type="info" effect="plain">総件数 {{ detailDialogStats.total }}</el-tag>
-        <el-tag type="success" effect="plain">完了 {{ detailDialogStats.completed }}</el-tag>
-        <el-tag type="warning" effect="plain">
-          未完了 {{ Math.max(detailDialogStats.total - detailDialogStats.completed, 0) }}
-        </el-tag>
-        <span v-if="detailDialogPeriod" class="detail-dialog-period">{{ detailDialogPeriod }}</span>
-      </div>
+      <template #header>
+        <div class="detail-dialog-header">
+          <div class="detail-dialog-title-wrap">
+            <span class="detail-dialog-title">{{ detailDialogTitle }}</span>
+            <span v-if="detailDialogPeriod" class="detail-dialog-period">{{ detailDialogPeriod }}</span>
+          </div>
+          <div class="detail-dialog-summary">
+            <el-tag type="info" size="small" effect="plain">総 {{ detailDialogStats.total }}</el-tag>
+            <el-tag type="success" size="small" effect="plain">完了 {{ detailDialogStats.completed }}</el-tag>
+            <el-tag type="warning" size="small" effect="plain">
+              未完了 {{ Math.max(detailDialogStats.total - detailDialogStats.completed, 0) }}
+            </el-tag>
+          </div>
+        </div>
+      </template>
       <el-table
         v-loading="detailDialogLoading"
         :data="detailDialogItems"
         size="small"
         border
         stripe
-        height="60vh"
+        max-height="360"
         empty-text="明細データがありません"
+        class="detail-dialog-table"
       >
-        <el-table-column prop="shipping_date" label="出荷日" width="110" sortable />
-        <el-table-column prop="shipping_no_p" label="出荷番号" width="150" show-overflow-tooltip />
-        <el-table-column prop="destination_cd" label="納入先CD" width="110" show-overflow-tooltip />
+        <el-table-column prop="shipping_date" label="出荷日" width="96" sortable />
+        <el-table-column prop="shipping_no_p" label="出荷番号" width="132" show-overflow-tooltip />
+        <el-table-column prop="destination_cd" label="納入先CD" width="96" show-overflow-tooltip />
         <el-table-column
           prop="destination_name"
           label="納入先名"
-          min-width="140"
+          min-width="120"
           show-overflow-tooltip
         />
-        <el-table-column prop="product_cd" label="製品CD" width="120" show-overflow-tooltip />
-        <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="confirmed_boxes" label="箱数" width="80" align="right" />
-        <el-table-column prop="status" label="状態" width="100" align="center">
+        <el-table-column prop="product_cd" label="製品CD" width="108" show-overflow-tooltip />
+        <el-table-column prop="product_name" label="製品名" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="confirmed_boxes" label="箱数" width="64" align="right" />
+        <el-table-column prop="status" label="状態" width="80" align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusTagType(row.status)" size="small">
               {{ getStatusText(row.status) }}
@@ -522,9 +533,6 @@
           </template>
         </el-table-column>
       </el-table>
-      <template #footer>
-        <el-button @click="detailDialogVisible = false">閉じる</el-button>
-      </template>
     </el-dialog>
 
     <!-- 納入先グループ管理ダイアログ -->
@@ -742,6 +750,17 @@ const detailDialogTitle = ref('明細一覧')
 const detailDialogPeriod = ref('')
 const detailDialogStats = reactive({ total: 0, completed: 0 })
 const detailDialogItems = ref<PickingTask[]>([])
+const detailDialogX = ref(24)
+const detailDialogY = ref(24)
+const DETAIL_DIALOG_WIDTH = 780
+const DETAIL_DIALOG_EST_HEIGHT = 420
+const detailDialogStyle = computed(() => ({
+  margin: '0',
+  position: 'fixed' as const,
+  left: `${detailDialogX.value}px`,
+  top: `${detailDialogY.value}px`,
+  width: `${Math.min(DETAIL_DIALOG_WIDTH, Math.max(window.innerWidth - 24, 320))}px`,
+}))
 
 // 担当者チャート表示関連（将来のテンプレート用に保留）
 const _performerViewMode = ref<'chart' | 'list'>('chart')
@@ -1472,6 +1491,18 @@ function refreshData() {
   fetchTrendData()
 }
 
+function shiftYmd(ymd: string, days: number): string {
+  const [year, month, day] = ymd.split('-').map(Number)
+  const dt = new Date(year, (month || 1) - 1, day || 1)
+  dt.setDate(dt.getDate() + days)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+function shiftDateRange(range: [string, string] | undefined, days: number): [string, string] {
+  const base = range && range.length === 2 ? range : getCurrentMonthRange()
+  return [shiftYmd(base[0], days), shiftYmd(base[1], days)]
+}
+
 // 快捷日期设置函数
 function setQuickDate(type: string) {
   const japanTime = getJapanDate()
@@ -1479,22 +1510,22 @@ function setQuickDate(type: string) {
   let endDate: Date
 
   switch (type) {
-    case 'yesterday': // 昨日
-      startDate = new Date(japanTime)
-      startDate.setDate(startDate.getDate() - 1)
-      endDate = new Date(startDate)
-      break
+    case 'yesterday': // 当前期间 -1日
+      dateRange.value = shiftDateRange(dateRange.value, -1)
+      refreshData()
+      ElMessage.success('期間を -1日 しました')
+      return
 
     case 'today': // 今日
       startDate = new Date(japanTime)
       endDate = new Date(startDate)
       break
 
-    case 'tomorrow': // 明日
-      startDate = new Date(japanTime)
-      startDate.setDate(startDate.getDate() + 1)
-      endDate = new Date(startDate)
-      break
+    case 'tomorrow': // 当前期间 +1日
+      dateRange.value = shiftDateRange(dateRange.value, 1)
+      refreshData()
+      ElMessage.success('期間を +1日 しました')
+      return
 
     case 'lastMonth': // 先月
       startDate = new Date(japanTime.getFullYear(), japanTime.getMonth() - 1, 1)
@@ -1523,9 +1554,7 @@ function setQuickDate(type: string) {
 
   // 显示提示信息
   const dateTypeMap: Record<string, string> = {
-    yesterday: '昨日',
     today: '今日',
-    tomorrow: '明日',
     lastMonth: '先月',
     thisMonth: '今月',
     nextMonth: '来月',
@@ -1541,22 +1570,22 @@ function setPerformerQuickDate(type: string) {
   let endDate: Date
 
   switch (type) {
-    case 'yesterday': // 昨日
-      startDate = new Date(japanTime)
-      startDate.setDate(startDate.getDate() - 1)
-      endDate = new Date(startDate)
-      break
+    case 'yesterday': // 当前期间 -1日
+      performerDateRange.value = shiftDateRange(performerDateRange.value, -1)
+      fetchPerformerAnalysisData()
+      ElMessage.success('担当者分析: 期間を -1日 しました')
+      return
 
     case 'today': // 今日
       startDate = new Date(japanTime)
       endDate = new Date(startDate)
       break
 
-    case 'tomorrow': // 明日
-      startDate = new Date(japanTime)
-      startDate.setDate(startDate.getDate() + 1)
-      endDate = new Date(startDate)
-      break
+    case 'tomorrow': // 当前期间 +1日
+      performerDateRange.value = shiftDateRange(performerDateRange.value, 1)
+      fetchPerformerAnalysisData()
+      ElMessage.success('担当者分析: 期間を +1日 しました')
+      return
 
     case 'lastMonth': // 先月
       startDate = new Date(japanTime.getFullYear(), japanTime.getMonth() - 1, 1)
@@ -1585,9 +1614,7 @@ function setPerformerQuickDate(type: string) {
 
   // 提示信息を表示
   const dateTypeMap: Record<string, string> = {
-    yesterday: '昨日',
     today: '今日',
-    tomorrow: '明日',
     lastMonth: '先月',
     thisMonth: '今月',
     nextMonth: '来月',
@@ -1854,11 +1881,31 @@ function getPerformerDetailDateRange(): [string, string] {
   return getCurrentMonthRange()
 }
 
+function placeDetailDialog(evt?: MouseEvent) {
+  const padding = 12
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const width = Math.min(DETAIL_DIALOG_WIDTH, vw - padding * 2)
+  const height = Math.min(DETAIL_DIALOG_EST_HEIGHT, vh - padding * 2)
+  let x = padding
+  let y = padding
+  if (evt) {
+    x = evt.clientX + 8
+    y = evt.clientY + 8
+  }
+  if (x + width > vw - padding) x = Math.max(padding, vw - width - padding)
+  if (y + height > vh - padding) y = Math.max(padding, vh - height - padding)
+  detailDialogX.value = x
+  detailDialogY.value = y
+}
+
 async function fetchPerformanceDetailItems(options: {
   groupName: string
   destinationCd?: string
   title: string
+  event?: MouseEvent
 }) {
+  placeDetailDialog(options.event)
   const [startDate, endDate] = getPerformerDetailDateRange()
   detailDialogTitle.value = options.title
   detailDialogPeriod.value = `${startDate} 〜 ${endDate}`
@@ -1894,19 +1941,25 @@ async function fetchPerformanceDetailItems(options: {
   }
 }
 
-function openPerformerDetailDialog(performer: PerformerAnalysisData) {
+function openPerformerDetailDialog(performer: PerformerAnalysisData, event?: MouseEvent) {
   fetchPerformanceDetailItems({
     groupName: performer.performer_name || performer.performer_id,
     title: `担当者明細：${performer.performer_name || performer.performer_id}`,
+    event,
   })
 }
 
-function openDestinationDetailDialog(performer: PerformerAnalysisData, destination: DestinationData) {
+function openDestinationDetailDialog(
+  performer: PerformerAnalysisData,
+  destination: DestinationData,
+  event?: MouseEvent,
+) {
   const destLabel = destination.destination_name || destination.destination_cd
   fetchPerformanceDetailItems({
     groupName: performer.performer_name || performer.performer_id,
     destinationCd: destination.destination_cd,
     title: `納入先明細：${destLabel}（${performer.performer_name || performer.performer_id}）`,
+    event,
   })
 }
 
@@ -2589,22 +2642,39 @@ if (app) {
   font-weight: 500;
 }
 
+.detail-dialog-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 28px;
+}
+
+.detail-dialog-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-dialog-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.detail-dialog-period {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .detail-dialog-summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.detail-dialog-period {
-  margin-left: auto;
-  font-size: 13px;
-  color: #64748b;
-}
-
-.performer-detail-dialog :deep(.el-dialog__body) {
-  padding-top: 8px;
+  gap: 6px;
 }
 
 .destination-header {
@@ -3969,5 +4039,47 @@ if (app) {
   .stats-grid {
     gap: 8px;
   }
+}
+</style>
+
+<style>
+.performer-detail-overlay.el-overlay,
+.performer-detail-overlay {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.el-dialog.performer-detail-dialog {
+  margin: 0 !important;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.el-dialog.performer-detail-dialog .el-dialog__header {
+  padding: 10px 36px 8px 12px;
+  margin-right: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.el-dialog.performer-detail-dialog .el-dialog__headerbtn {
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+}
+
+.el-dialog.performer-detail-dialog .el-dialog__body {
+  padding: 8px 10px 10px;
+}
+
+.el-dialog.performer-detail-dialog .el-table th.el-table__cell {
+  padding: 5px 0;
+  background: #f8fafc;
+  font-size: 12px;
+}
+
+.el-dialog.performer-detail-dialog .el-table td.el-table__cell {
+  padding: 4px 0;
+  font-size: 12px;
 }
 </style>
