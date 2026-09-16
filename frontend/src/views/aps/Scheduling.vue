@@ -1161,12 +1161,15 @@ function getCellToneClass(row: MatrixRow, date: string, displayValue?: number): 
 
 /** 印刷用：左固定列幅（%）。日付列は残りを日数で均等分割。 */
 const PRINT_FIXED_COL_PCT = {
-  line: 3.5,
-  order: 3,
-  item: 7.7,
-  eff: 4,
-  total: 4.5,
+  line: 4.2,
+  order: 2.6,
+  item: 6.4,
+  eff: 3.8,
+  total: 4.6,
 } as const
+
+/** A3 横・@page margin を引いた実効高さ。ブラウザのヘッダー分も少し残す。 */
+const PRINT_PAGE_CONTENT_MM = 297 - 8 - 10 - 2
 
 function escHtml(s: string) {
   return String(s ?? '')
@@ -1194,7 +1197,6 @@ function buildSchedulingPrintHtml(): string {
     hour: '2-digit',
     minute: '2-digit',
   })
-  const modeLabel = matrixPlanExtendMode.value ? '拡張' : '標準'
   const dates = gridDates.value
   const cols = dateColumnMeta.value
   const nDates = dates.length
@@ -1216,11 +1218,7 @@ function buildSchedulingPrintHtml(): string {
 
   const dateHeaders = cols
     .map((col) => {
-      const cls = [
-        'date-col',
-        col.isWeekend ? 'is-weekend' : '',
-        col.isToday ? 'is-today' : '',
-      ]
+      const cls = ['date-col', col.isWeekend ? 'is-weekend' : '', col.isToday ? 'is-today' : '']
         .filter(Boolean)
         .join(' ')
       return `<th class="${cls}"><div class="date-text">${escHtml(col.dateText)}</div><div class="weekday-text">${escHtml(col.weekday)}</div></th>`
@@ -1232,21 +1230,31 @@ function buildSchedulingPrintHtml(): string {
         <th>ライン</th>
         <th>順位</th>
         <th>製品</th>
-        <th>能率(本/H)</th>
+        <th>能率<span class="th-sub">(本/H)</span></th>
         <th>生産計画</th>
         ${dateHeaders}
       </tr>
     </thead>`
 
-  const sectionsHtml = matrixSections.value
-    .map((section, sectionIdx) => {
-      const rowsHtml = section.rows
+  const selectedLine = searchForm.lineId != null ? lines.value.find((l) => l.id === searchForm.lineId) : null
+  const lineLabel = selectedLine
+    ? String(selectedLine.line_name || '').trim() || selectedLine.line_code || '-'
+    : '全ライン'
+  const productLabel = (searchForm.itemName || '').trim() || '全製品'
+  const featureLabel = matrixTitleFeatureLabel.value
+  const rangeText = displayDateRangeText.value
+
+  const bodyRows = matrixSections.value
+    .map((section) => {
+      let itemIdx = 0
+      return section.rows
         .map((row) => {
           if (row.type === 'group') {
+            itemIdx = 0
             const dayCells = dates
               .map((date) => {
-                const v = getMatrixCellDisplayValue(row, date)
-                return `<td class="num cell-day">${v ? escHtml(formatQty(v)) : ''}</td>`
+                const weekend = isWeekend(date) ? ' is-weekend' : ''
+                return `<td class="num cell-day${weekend}"></td>`
               })
               .join('')
             return `<tr class="group-row">
@@ -1259,6 +1267,7 @@ function buildSchedulingPrintHtml(): string {
             </tr>`
           }
 
+          itemIdx += 1
           const dayCells = dates
             .map((date) => {
               const entry = getMatrixCellEntry(row, date)
@@ -1273,10 +1282,8 @@ function buildSchedulingPrintHtml(): string {
               return `<td class="num cell-day ${tone}${due}${weekend}"${styleAttr}>${escHtml(text)}</td>`
             })
             .join('')
-          const shortageFlag = row.material_shortage
-            ? '<div class="flag">資材不足</div>'
-            : ''
-          return `<tr class="item-row${row.material_shortage ? ' is-shortage' : ''}">
+          const shortageFlag = row.material_shortage ? '<div class="flag">資材不足</div>' : ''
+          return `<tr class="item-row${itemIdx % 2 === 0 ? ' is-alt' : ''}${row.material_shortage ? ' is-shortage' : ''}">
             <td class="line-col"></td>
             <td class="num">${escHtml(row.order_no != null ? String(row.order_no) : '-')}</td>
             <td class="left item-col"><div class="item-name">${escHtml(row.item_name || '')}</div>${shortageFlag}</td>
@@ -1286,22 +1293,36 @@ function buildSchedulingPrintHtml(): string {
           </tr>`
         })
         .join('')
-      return `<div class="line-block${sectionIdx === 0 ? ' is-first' : ''}">
-  <table>
-    ${colgroup}
-    ${sectionIdx === 0 ? theadHtml : ''}
-    <tbody>${rowsHtml}</tbody>
-  </table>
-</div>`
     })
     .join('')
 
   const footerDayCells = dates
-    .map(
-      (date) =>
-        `<td class="num cell-day">${escHtml(formatQty(overallDailyTotals.value[date] || 0))}</td>`,
-    )
+    .map((date) => {
+      const weekend = isWeekend(date) ? ' is-weekend' : ''
+      return `<td class="num cell-day${weekend}">${escHtml(formatQty(overallDailyTotals.value[date] || 0))}</td>`
+    })
     .join('')
+
+  const conditionBits = [
+    featureLabel,
+    searchForm.lineId != null ? lineLabel : '',
+    (searchForm.itemName || '').trim() ? productLabel : '',
+    rangeText,
+  ].filter(Boolean)
+
+  const heroHtml = `<header id="head-full" class="sheet-head">
+      <div class="sheet-head-row">
+        <h1>${escHtml(title)}</h1>
+        <div class="printed-at">${escHtml(printedAt)}</div>
+      </div>
+      <div class="sheet-meta">${escHtml(conditionBits.join('　'))}</div>
+    </header>`
+
+  const compactHtml = `<header id="head-compact" class="run">
+      <div class="run-title">${escHtml(title)}</div>
+      <div class="run-meta">${escHtml(conditionBits.join('　'))}</div>
+      <div class="page-no">1 / 1</div>
+    </header>`
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -1314,148 +1335,141 @@ function buildSchedulingPrintHtml(): string {
     body {
       margin: 0;
       padding: 0;
-      color: #0f172a;
-      font: 9px/1.3 "Segoe UI", "Yu Gothic UI", Meiryo, "Hiragino Sans", sans-serif;
+      color: #1c1c1c;
+      font: 8.5px/1.35 "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif;
       background: #fff;
     }
-    .hd {
-      margin: 0 0 6px;
-      padding: 6px 8px;
-      border: 1px solid #dbe5f1;
-      border-radius: 6px;
-      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    #print-source,
+    #print-pages,
+    #measure-chrome,
+    .sheet { width: 400mm; }
+    #measure-chrome {
+      position: absolute;
+      left: 0;
+      top: 0;
+      visibility: hidden;
+      pointer-events: none;
     }
-    .tt {
-      font-size: 14px;
-      font-weight: 800;
-      color: #1e3a8a;
+    body.is-paginated #print-source,
+    body.is-paginated #measure-chrome { display: none !important; }
+    .sheet { break-after: page; page-break-after: always; }
+    .sheet:last-child { break-after: auto; page-break-after: auto; }
+    .sheet-head { margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid #1c1c1c; }
+    .sheet-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #1c1c1c;
+    }
+    .printed-at, .sheet-meta, .run-meta { color: #6b6b6b; font-size: 8px; font-weight: 400; }
+    .sheet-meta { margin-top: 2px; }
+    .run {
       display: flex;
-      flex-wrap: wrap;
       align-items: baseline;
-      gap: 4px 8px;
+      gap: 10px;
+      margin: 0 0 4px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #1c1c1c;
     }
-    .tt-feature { color: #0f766e; }
-    .tt-sep { color: #94a3b8; font-weight: 600; }
-    .meta { margin-top: 3px; color: #475569; font-size: 9px; }
-    .legend {
-      margin-top: 4px;
+    .run-title { flex: 0 0 auto; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+    .run-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .page-no { flex: 0 0 auto; color: #6b6b6b; font-size: 8px; font-variant-numeric: tabular-nums; }
+    .sheet-foot {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px 12px;
-      align-items: center;
-      font-size: 8.5px;
-      color: #334155;
+      justify-content: flex-end;
+      margin-top: 3px;
+      color: #6b6b6b;
+      font-size: 8px;
     }
-    .legend-item { display: inline-flex; align-items: center; gap: 4px; }
-    .swatch {
-      width: 12px;
-      height: 10px;
-      border: 1px solid #cbd5e1;
-      border-radius: 2px;
-      display: inline-block;
-    }
-    .swatch--actual { background: rgba(254, 249, 195, 0.95); }
-    .swatch--cm { background: rgba(254, 202, 202, 0.9); }
-    .swatch--plan { background: rgba(187, 247, 208, 0.75); }
-    .line-block {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-    .line-block:not(.is-first) table { margin-top: -1px; }
     table {
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
+      border: 1px solid #1c1c1c;
     }
     thead { display: table-header-group; }
     th, td {
-      border: 1px solid #cbd5e1;
-      padding: 2px 3px;
+      border: 1px solid #d8d8d8;
+      padding: 5px 2px;
       vertical-align: middle;
-      overflow: hidden;
     }
     th {
-      background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
-      font-weight: 700;
-      color: #334155;
+      background: #f6f6f4;
+      color: #1c1c1c;
+      font-weight: 650;
       text-align: center;
+      border-color: #cfcfcf;
+      border-bottom: 1px solid #1c1c1c;
+      font-size: 8px;
+      line-height: 1.15;
     }
+    .th-sub { display: block; font-size: 7px; font-weight: 500; color: #6b6b6b; }
     .left { text-align: left; }
     .num {
       text-align: center;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
+      font-size: 11px;
+      line-height: 1.2;
     }
     th.date-col, td.cell-day {
       text-align: center;
-      padding: 2px 1px;
-      font-size: 8px;
+      padding: 5px 1px;
+      font-size: 11px;
     }
     .date-text { font-weight: 700; line-height: 1.15; }
-    .weekday-text { color: #64748b; font-size: 7.5px; line-height: 1.1; }
+    .weekday-text { font-size: 7px; line-height: 1.1; color: #6b6b6b; font-weight: 500; }
     th.is-weekend .date-text,
-    th.is-weekend .weekday-text { color: #dc2626; }
-    th.is-today { background: linear-gradient(180deg, #fff3d4 0%, #ffeab0 100%); }
-    td.is-weekend { background-color: #fff8f8; }
+    th.is-weekend .weekday-text { color: #a33b3b; }
+    th.is-today .date-text { text-decoration: underline; text-underline-offset: 2px; }
+    td.is-weekend { background-color: #fcf8f8; }
     .line-col, .item-col {
       white-space: normal;
       word-break: break-word;
       overflow-wrap: anywhere;
-      font-size: 8.5px;
+      font-size: 8px;
     }
-    .line-col { font-weight: 800; color: #1e3a8a; }
-    .item-name { font-weight: 650; }
-    .flag { color: #dc2626; font-size: 7.5px; font-weight: 700; }
+    .line-col { font-weight: 700; }
+    .item-name { font-weight: 600; }
+    .flag { margin-top: 1px; color: #a33b3b; font-size: 7px; }
     .group-row td {
-      background: #e2e8f0;
-      font-weight: 800;
-      border-top: 2px solid #94a3b8;
-    }
-    .item-row:nth-child(even) td { background: #fcfdff; }
-    .sc-cell-actual { background: rgba(254, 249, 195, 0.88) !important; }
-    .tone-active { background: rgba(187, 247, 208, 0.5) !important; }
-    .tone-high { background: rgba(34, 197, 94, 0.22) !important; }
-    .tone-mid { background: rgba(245, 158, 11, 0.18) !important; }
-    .tone-low { background: rgba(239, 68, 68, 0.18) !important; }
-    .tone-shortage { background: rgba(239, 68, 68, 0.26) !important; }
-    .cell-due { outline: 1px solid #f59e0b; outline-offset: -2px; }
-    .total-row td {
-      background: #f3f8ff;
+      background: #f3f3f1;
       font-weight: 700;
-      border-top: 2px solid #93c5fd;
+      border-top: 1px solid #1c1c1c;
+      border-bottom: 1px solid #cfcfcf;
+    }
+    .item-row.is-alt td { background: #fafafa; }
+    .sc-cell-actual { background: #fbf6df !important; }
+    .tone-active { background: #e7f3ea !important; }
+    .tone-high { background: #dceee2 !important; }
+    .tone-mid { background: #f6eedc !important; }
+    .tone-low { background: #f6e4e2 !important; }
+    .tone-shortage { background: #f3ddd9 !important; }
+    .cell-due { box-shadow: inset 0 0 0 1px #c4a15a; }
+    .total-row td {
+      background: #fff !important;
+      font-weight: 700;
+      border-top: 1.5px solid #1c1c1c;
+      border-bottom: 1.5px solid #1c1c1c;
     }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    @page { size: A3 landscape; margin: 8mm; }
+    @page { size: A3 landscape; margin: 8mm 8mm 10mm; }
     @media print {
-      @page { size: A3 landscape; margin: 8mm; }
-      html, body { margin: 0 !important; padding: 0 !important; width: auto !important; }
-      .hd { break-inside: avoid; page-break-inside: avoid; }
-      .line-block {
-        break-inside: avoid !important;
-        page-break-inside: avoid !important;
-      }
+      @page { size: A3 landscape; margin: 8mm 8mm 10mm; }
+      html, body { margin: 0 !important; padding: 0 !important; }
     }
   </style>
 </head>
 <body>
-  <div class="hd">
-    <div class="tt">
-      <span class="tt-feature">${escHtml(matrixTitleFeatureLabel.value)}</span>
-      <span class="tt-sep">・</span>
-      <span>スケジューリングマトリクス</span>
-    </div>
-    <div class="meta">期間：${escHtml(displayDateRangeText.value)}　表示：${escHtml(modeLabel)}　印刷日時：${escHtml(printedAt)}</div>
-    <div class="legend" aria-label="凡例">
-      <span class="legend-item"><span class="swatch swatch--actual"></span>実績</span>
-      <span class="legend-item"><span class="swatch swatch--cm"></span>切断指示済</span>
-      <span class="legend-item"><span class="swatch swatch--plan"></span>計画</span>
-    </div>
-  </div>
-  ${sectionsHtml}
-  <div class="line-block">
-    <table>
+  <div id="print-source">
+    ${heroHtml}
+    <table id="source-table">
       ${colgroup}
+      ${theadHtml}
       <tbody>
+        ${bodyRows}
         <tr class="total-row">
           <td class="left">合計</td>
           <td></td>
@@ -1467,8 +1481,103 @@ function buildSchedulingPrintHtml(): string {
       </tbody>
     </table>
   </div>
+  <div id="measure-chrome" aria-hidden="true">
+    ${compactHtml}
+    <footer id="foot-proto" class="sheet-foot"><span class="page-no">1 / 1</span></footer>
+  </div>
+  <div id="print-pages"></div>
 </body>
 </html>`
+}
+
+/**
+ * ブラウザの thead 繰り返しは固定レイアウト・色付きセルで欠けることがあるため、
+ * 実測してページごとに表頭を複製する。
+ */
+function paginateSchedulingPrint(doc: Document) {
+  if (doc.body.dataset.paginated === '1') return
+  const source = doc.getElementById('print-source')
+  const pagesHost = doc.getElementById('print-pages')
+  const table = doc.getElementById('source-table')
+  const headFull = doc.getElementById('head-full')
+  const headCompact = doc.getElementById('head-compact')
+  const footProto = doc.getElementById('foot-proto')
+  if (!source || !pagesHost || !table || !headFull || !headCompact || !footProto) return
+
+  const thead = table.querySelector('thead')
+  const colgroup = table.querySelector('colgroup')
+  const tbody = table.querySelector('tbody')
+  if (!thead || !colgroup || !tbody) return
+
+  const probe = doc.createElement('div')
+  probe.style.cssText = 'position:absolute;height:1mm;width:1mm;visibility:hidden;'
+  doc.body.appendChild(probe)
+  const pxPerMm = probe.getBoundingClientRect().height || 96 / 25.4
+  probe.remove()
+
+  const pageH = PRINT_PAGE_CONTENT_MM * pxPerMm
+  const rows = Array.from(tbody.querySelectorAll(':scope > tr'))
+  if (!rows.length) return
+
+  const fullHeadH = headFull.getBoundingClientRect().height
+  const compactHeadH = headCompact.getBoundingClientRect().height
+  const footH = footProto.getBoundingClientRect().height
+  const theadH = thead.getBoundingClientRect().height
+  const slack = 14
+  const rowHeights = rows.map((row) => row.getBoundingClientRect().height)
+
+  const slices: Array<[number, number]> = []
+  let index = 0
+  let pageIndex = 0
+  while (index < rows.length) {
+    const chrome = (pageIndex === 0 ? fullHeadH : compactHeadH) + theadH + footH + slack
+    const limit = Math.max(pageH - chrome, rowHeights[index] || 0)
+    const start = index
+    let used = 0
+    while (index < rows.length && used + rowHeights[index] <= limit + 0.5) {
+      used += rowHeights[index]
+      index += 1
+    }
+    if (index === start) index += 1
+    if (
+      index < rows.length &&
+      index > start + 1 &&
+      rows[index - 1].classList.contains('group-row') &&
+      !rows[index].classList.contains('total-row')
+    ) {
+      index -= 1
+    }
+    slices.push([start, index])
+    pageIndex += 1
+  }
+
+  const total = slices.length
+  slices.forEach(([start, end], idx) => {
+    const label = `${idx + 1} / ${total}`
+    const sheet = doc.createElement('section')
+    sheet.className = 'sheet'
+    const head = (idx === 0 ? headFull : headCompact).cloneNode(true) as HTMLElement
+    head.removeAttribute('id')
+    head.querySelectorAll('.page-no').forEach((node) => {
+      node.textContent = label
+    })
+    const pageTable = doc.createElement('table')
+    pageTable.appendChild(colgroup.cloneNode(true))
+    pageTable.appendChild(thead.cloneNode(true))
+    const pageBody = doc.createElement('tbody')
+    for (let i = start; i < end; i += 1) pageBody.appendChild(rows[i].cloneNode(true))
+    pageTable.appendChild(pageBody)
+    const foot = footProto.cloneNode(true) as HTMLElement
+    foot.removeAttribute('id')
+    foot.querySelectorAll('.page-no').forEach((node) => {
+      node.textContent = label
+    })
+    sheet.append(head, pageTable, foot)
+    pagesHost.appendChild(sheet)
+  })
+
+  doc.body.classList.add('is-paginated')
+  doc.body.dataset.paginated = '1'
 }
 
 function handlePrint() {
@@ -1534,6 +1643,11 @@ function handlePrint() {
   const schedulePrint = () => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        try {
+          paginateSchedulingPrint(doc)
+        } catch {
+          /* 分页失败时仍打印源表（含 thead） */
+        }
         window.setTimeout(doPrint, 50)
       })
     })
