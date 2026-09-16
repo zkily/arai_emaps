@@ -100,20 +100,35 @@ export async function fetchPlanBaselineComparison(params: {
   return null
 }
 
-/** ベースライン生成（メッキ・検査は weekdayBaseline 必須・土日任意） */
+/** ベースライン生成
+ * - 切断・面取・メッキ・検査: planDates の各日に planQuantity を手入力
+ * - 成型・溶接・溶接SP: サマリ等から自動集計
+ */
 export async function generatePlanBaseline(params: {
   baselineMonth: string
   processName?: string
-  /** メッキ・検査：平日（月〜金）各日の基準計画 */
+  /** 手入力工程：反映する日付一覧（YYYY-MM-DD） */
+  planDates?: string[]
+  /** 手入力工程：選択日に書き込む基準計画数 */
+  planQuantity?: number
+  /** @deprecated */
+  fromDate?: string
   weekdayBaseline?: number
-  /** 土曜に行を作る場合の数量（未指定時は土曜は作らない） */
   saturdayBaseline?: number
-  /** 日曜に行を作る場合の数量（未指定時は日曜は作らない） */
   sundayBaseline?: number
 }): Promise<void> {
   const body: Record<string, unknown> = {
     baselineMonth: params.baselineMonth,
     processName: params.processName,
+  }
+  if (params.planDates?.length) {
+    body.planDates = params.planDates
+  }
+  if (params.fromDate) {
+    body.fromDate = params.fromDate
+  }
+  if (params.planQuantity != null && !Number.isNaN(params.planQuantity)) {
+    body.planQuantity = params.planQuantity
   }
   if (params.weekdayBaseline != null && !Number.isNaN(params.weekdayBaseline)) {
     body.weekdayBaseline = params.weekdayBaseline
@@ -170,19 +185,26 @@ export async function deletePlanBaselineRecord(params: {
   }
 }
 
-/** 計画数量の更新（1件） */
+/** 計画数量の更新／無い日付は新規追加 */
 export async function updatePlanBaselinePlanQuantity(params: {
   baselineMonth: string
   planDate: string
   processName?: string
   planQuantity: number
-}): Promise<void> {
-  await request.put('/api/plan-baseline/plan-quantity', {
-    baselineMonth: params.baselineMonth,
-    planDate: params.planDate,
-    processName: params.processName,
-    planQuantity: params.planQuantity,
-  })
+}): Promise<{ created?: boolean; message?: string }> {
+  const res = (await request.put<{ success?: boolean; message?: string; created?: boolean }>(
+    '/api/plan-baseline/plan-quantity',
+    {
+      baselineMonth: params.baselineMonth,
+      planDate: params.planDate,
+      processName: params.processName,
+      planQuantity: params.planQuantity,
+    },
+  )) as unknown as { success?: boolean; message?: string; created?: boolean }
+  if (res && typeof res === 'object' && res.success === false) {
+    throw new Error(res.message || '更新に失敗しました')
+  }
+  return res ?? {}
 }
 
 /** 工程別PDFを指定フォルダに保存（FormData: baselineMonth + files） */

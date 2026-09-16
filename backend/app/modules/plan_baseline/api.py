@@ -1,6 +1,8 @@
 """
 生産計画月次ベースライン API
-- POST /generate: 集計して production_plan_baselines に登録。メッキ・検査は weekdayBaseline 指定時、平日のみ同一値・土日は任意入力時のみ行を作成
+- POST /generate: 集計して production_plan_baselines に登録。
+  切断・面取・メッキ・検査は fromDate 以降の各日に同一 planQuantity を手入力で登録。
+  成型・溶接・溶接SP は production_summarys 等から自動集計。
 - DELETE /delete: ベースライン削除
 - GET /comparison: 基準 vs 現行計画・実績の比較
 - GET /records: 修正用レコード一覧
@@ -52,7 +54,10 @@ SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
 ALLOWED_SUMMARY_CURRENT_PLAN_COLUMNS = frozenset(SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS.values())
 
 # メッキ・検査は「平日一律＋土日任意」の手入力ベースラインで生成する
-FIXED_WEEKDAY_BASELINE_PROCESSES = frozenset({"メッキ", "検査"})
+# 手入力：指定日以降の各日に同一数量を書き込む工程
+MANUAL_FROM_DATE_BASELINE_PROCESSES = frozenset({"切断", "面取", "メッキ", "検査"})
+# 後方互換エイリアス
+FIXED_WEEKDAY_BASELINE_PROCESSES = MANUAL_FROM_DATE_BASELINE_PROCESSES
 
 # 成型・溶接・溶接SP は Excel(ppu) ではなく production_summarys の molding_plan / welding_plan を日次ベースラインの正とする
 BASELINE_SUMMARY_PRIORITY_PROCESSES = frozenset({"成型", "溶接", "溶接SP"})
@@ -291,6 +296,95 @@ def _optional_body_float(body: dict[str, Any], key: str) -> Optional[float]:
     return _decimal_float(v)
 
 
+async def _generate_selected_dates_baseline(
+    db: AsyncSession,
+    *,
+    month_start: str,
+    process_name: str,
+    plan_dates: list[str],
+    plan_quantity: float,
+) -> int:
+    """指定した日付だけに同一 plan_quantity を書き込む（工程・月の既存行は削除）。"""
+    delete_sql = text("""
+        DELETE FROM production_plan_baselines
+        WHERE baseline_month = :baseline_month AND process_name = :process_name
+    """)
+    await db.execute(delete_sql, {"baseline_month": month_start, "process_name": process_name})
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    insert_sql = text("""
+        INSERT INTO production_plan_baselines
+        (baseline_month, snapshot_date, plan_date, machine_name, product_cd, product_name, process_name, plan_quantity, actual_quantity, created_at)
+        VALUES (:baseline_month, :snapshot_date, :plan_date, '', '', '', :process_name, :plan_quantity, 0, :created_at)
+    """)
+
+    count = 0
+    seen: set[str] = set()
+    for raw in plan_dates:
+        plan_date = _date_str(raw)
+        if not plan_date or plan_date in seen:
+            continue
+        seen.add(plan_date)
+        await db.execute(
+            insert_sql,
+            {
+                "baseline_month": month_start,
+                "snapshot_date": now,
+                "plan_date": plan_date,
+                "process_name": process_name,
+                "plan_quantity": plan_quantity,
+                "created_at": now,
+            },
+        )
+        count += 1
+    return count
+
+
+async def _generate_from_date_baseline(
+    db: AsyncSession,
+    *,
+    month_start: str,
+    process_name: str,
+    from_date: str,
+    end_date: str,
+    plan_quantity: float,
+) -> int:
+    """月内の from_date〜月末の各日に同一 plan_quantity を書き込む（既存は工程単位で上書き削除）。"""
+    delete_sql = text("""
+        DELETE FROM production_plan_baselines
+        WHERE baseline_month = :baseline_month AND process_name = :process_name
+    """)
+    await db.execute(delete_sql, {"baseline_month": month_start, "process_name": process_name})
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    insert_sql = text("""
+        INSERT INTO production_plan_baselines
+        (baseline_month, snapshot_date, plan_date, machine_name, product_cd, product_name, process_name, plan_quantity, actual_quantity, created_at)
+        VALUES (:baseline_month, :snapshot_date, :plan_date, '', '', '', :process_name, :plan_quantity, 0, :created_at)
+    """)
+
+    d0 = date.fromisoformat(from_date[:10])
+    d1 = date.fromisoformat(end_date[:10])
+    count = 0
+    cur = d0
+    while cur <= d1:
+        plan_date_str = cur.isoformat()
+        await db.execute(
+            insert_sql,
+            {
+                "baseline_month": month_start,
+                "snapshot_date": now,
+                "plan_date": plan_date_str,
+                "process_name": process_name,
+                "plan_quantity": plan_quantity,
+                "created_at": now,
+            },
+        )
+        count += 1
+        cur += timedelta(days=1)
+    return count
+
+
 async def _generate_fixed_weekday_baseline(
     db: AsyncSession,
     *,
@@ -302,7 +396,7 @@ async def _generate_fixed_weekday_baseline(
     saturday_baseline: Optional[float],
     sunday_baseline: Optional[float],
 ) -> int:
-    """月内の各日について、平日は weekday_baseline。土日は値が指定されたときのみ INSERT。"""
+    """後方互換：平日一律＋土日任意。新規は _generate_from_date_baseline を使用。"""
     delete_sql = text("""
         DELETE FROM production_plan_baselines
         WHERE baseline_month = :baseline_month AND process_name = :process_name
@@ -333,14 +427,17 @@ async def _generate_fixed_weekday_baseline(
                 plan_qty = sunday_baseline
         if plan_qty is not None:
             plan_date_str = cur.isoformat()
-            await db.execute(insert_sql, {
-                "baseline_month": month_start,
-                "snapshot_date": now,
-                "plan_date": plan_date_str,
-                "process_name": process_name,
-                "plan_quantity": plan_qty,
-                "created_at": now,
-            })
+            await db.execute(
+                insert_sql,
+                {
+                    "baseline_month": month_start,
+                    "snapshot_date": now,
+                    "plan_date": plan_date_str,
+                    "process_name": process_name,
+                    "plan_quantity": plan_qty,
+                    "created_at": now,
+                },
+            )
             count += 1
         cur += timedelta(days=1)
     return count
@@ -352,7 +449,7 @@ async def generate_plan_baseline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_aps_operation("edit")),
 ):
-    """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接・溶接SP は production_summarys の molding_plan / welding_plan のみ（溶接SP は製品名 FE-7 / CH2 RR）。他は ppu を優先し不足をサマリで補完。"""
+    """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接・溶接SP は production_summarys の molding_plan / welding_plan のみ（溶接SP は製品名 FE-7 / CH2 RR）。他は ppu を優先し不足をサマリで補完。切断・面取・メッキ・検査は fromDate 以降に同一数量を手入力。"""
     baseline_month = body.get("baselineMonth")
     process_name = body.get("processName") or None
     if not baseline_month:
@@ -377,30 +474,92 @@ async def generate_plan_baseline(
     end_date = range_row["end_date"].isoformat()[:10] if hasattr(range_row["end_date"], "isoformat") else str(range_row["end_date"])[:10]
 
     proc_fixed = (process_name or "").strip()
-    if proc_fixed in FIXED_WEEKDAY_BASELINE_PROCESSES:
-        wb_raw = body.get("weekdayBaseline")
-        if wb_raw is None or (isinstance(wb_raw, str) and not str(wb_raw).strip()):
-            return {"success": False, "message": "平日の基準計画数（weekdayBaseline）を入力してください"}
-        weekday_baseline = _decimal_float(wb_raw)
-        if weekday_baseline <= 0:
-            return {"success": False, "message": "平日の基準計画数は 0 より大きい値にしてください"}
-        sat = _optional_body_float(body, "saturdayBaseline")
-        sun = _optional_body_float(body, "sundayBaseline")
-        count = await _generate_fixed_weekday_baseline(
+    if proc_fixed in MANUAL_FROM_DATE_BASELINE_PROCESSES:
+        qty_raw = body.get("planQuantity")
+        dates_raw = body.get("planDates") or body.get("plan_dates")
+
+        # 新方式: 選択した日付のみに同一数量
+        if isinstance(dates_raw, list) and len(dates_raw) > 0:
+            if qty_raw is None or (isinstance(qty_raw, str) and not str(qty_raw).strip()):
+                return {"success": False, "message": "基準計画数（planQuantity）を入力してください"}
+            plan_quantity = _decimal_float(qty_raw)
+            if plan_quantity < 0:
+                return {"success": False, "message": "基準計画数は 0 以上にしてください"}
+            valid_dates: list[str] = []
+            for d in dates_raw:
+                ds = _date_str(d)
+                if not ds:
+                    continue
+                if ds < start_date or ds > end_date:
+                    return {
+                        "success": False,
+                        "message": f"選択日 {ds} は対象月（{start_date}〜{end_date}）の範囲外です",
+                    }
+                valid_dates.append(ds)
+            if not valid_dates:
+                return {"success": False, "message": "反映する日付を1日以上選択してください"}
+            count = await _generate_selected_dates_baseline(
+                db,
+                month_start=month_start,
+                process_name=proc_fixed,
+                plan_dates=valid_dates,
+                plan_quantity=plan_quantity,
+            )
+            await db.commit()
+            return {"success": True, "message": "ベースラインを生成しました", "count": count}
+
+        # 後方互換: fromDate 以降 / weekdayBaseline
+        from_raw = body.get("fromDate") or body.get("from_date")
+        if qty_raw is None or (isinstance(qty_raw, str) and not str(qty_raw).strip()):
+            wb_raw = body.get("weekdayBaseline")
+            if wb_raw is None or (isinstance(wb_raw, str) and not str(wb_raw).strip()):
+                return {
+                    "success": False,
+                    "message": "基準計画数（planQuantity）と反映日（planDates）を入力してください",
+                }
+            weekday_baseline = _decimal_float(wb_raw)
+            if weekday_baseline <= 0:
+                return {"success": False, "message": "基準計画数は 0 より大きい値にしてください"}
+            sat = _optional_body_float(body, "saturdayBaseline")
+            sun = _optional_body_float(body, "sundayBaseline")
+            count = await _generate_fixed_weekday_baseline(
+                db,
+                month_start=month_start,
+                process_name=proc_fixed,
+                start_date=start_date,
+                end_date=end_date,
+                weekday_baseline=weekday_baseline,
+                saturday_baseline=sat,
+                sunday_baseline=sun,
+            )
+            await db.commit()
+            return {"success": True, "message": "ベースラインを生成しました", "count": count}
+
+        from_date = _date_str(from_raw) if from_raw else None
+        if not from_date:
+            return {"success": False, "message": "反映日（planDates）を選択してください"}
+        if from_date < start_date or from_date > end_date:
+            return {
+                "success": False,
+                "message": f"開始日は対象月（{start_date}〜{end_date}）の範囲内にしてください",
+            }
+        plan_quantity = _decimal_float(qty_raw)
+        if plan_quantity < 0:
+            return {"success": False, "message": "基準計画数は 0 以上にしてください"}
+        count = await _generate_from_date_baseline(
             db,
             month_start=month_start,
             process_name=proc_fixed,
-            start_date=start_date,
+            from_date=from_date,
             end_date=end_date,
-            weekday_baseline=weekday_baseline,
-            saturday_baseline=sat,
-            sunday_baseline=sun,
+            plan_quantity=plan_quantity,
         )
         await db.commit()
         return {"success": True, "message": "ベースラインを生成しました", "count": count}
 
     # production_plan_updates を plan_date, process_name で集計
     # 溶接を指定した場合は溶接SP（FE-7 / CH2 RR）も同時に生成する
+    # 切断・面取・メッキ・検査は手入力専用のため自動集計から除外
     generate_process_names: Optional[list[str]] = None
     if proc_fixed == WELDING_PROCESS_NAME:
         generate_process_names = [WELDING_PROCESS_NAME, WELDING_SP_PROCESS_NAME]
@@ -422,6 +581,7 @@ async def generate_plan_baseline(
         r
         for r in agg_result.mappings().fetchall()
         if (r.get("process_name") or "").strip() not in BASELINE_SUMMARY_PRIORITY_PROCESSES
+        and (r.get("process_name") or "").strip() not in MANUAL_FROM_DATE_BASELINE_PROCESSES
     ]
     ppu_keys: Set[Tuple[str, str]] = set()
     for r in rows:
@@ -432,25 +592,39 @@ async def generate_plan_baseline(
     summary_extra: list[dict[str, Any]] = []
     if generate_process_names:
         for pn in generate_process_names:
+            if pn in MANUAL_FROM_DATE_BASELINE_PROCESSES:
+                continue
             summary_extra.extend(
                 await _rows_from_summary_plan_by_date(db, start_date, end_date, pn, ppu_keys)
             )
     else:
+        # 全工程：手入力工程は自動生成しない
         summary_extra = await _rows_from_summary_plan_by_date(
             db, start_date, end_date, process_name, ppu_keys
         )
+        summary_extra = [
+            r
+            for r in summary_extra
+            if (r.get("process_name") or "").strip() not in MANUAL_FROM_DATE_BASELINE_PROCESSES
+        ]
     rows.extend(summary_extra)
 
-    # 既存の該当ベースラインを削除
+    # 既存の該当ベースラインを削除（手入力工程は全工程指定時も触らない）
     if generate_process_names:
         delete_sql = text("""
             DELETE FROM production_plan_baselines
             WHERE baseline_month = :baseline_month AND process_name = :process_name
         """)
         for pn in generate_process_names:
+            if pn in MANUAL_FROM_DATE_BASELINE_PROCESSES:
+                continue
             await db.execute(delete_sql, {"baseline_month": month_start, "process_name": pn})
     else:
-        delete_sql = text("DELETE FROM production_plan_baselines WHERE baseline_month = :baseline_month")
+        delete_sql = text("""
+            DELETE FROM production_plan_baselines
+            WHERE baseline_month = :baseline_month
+              AND process_name NOT IN ('切断', '面取', 'メッキ', '検査')
+        """)
         await db.execute(delete_sql, {"baseline_month": month_start})
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -818,13 +992,15 @@ async def update_plan_baseline_plan_quantity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_aps_operation("edit")),
 ):
-    """ベースラインの計画数量を 1 件更新（日付×工程で一意）"""
+    """ベースラインの計画数量を 1 件更新。無い場合は新規行を追加（日付追加用）。"""
     baseline_month = body.get("baselineMonth")
     plan_date = body.get("planDate")
     process_name = (body.get("processName") or "").strip()
     plan_quantity = body.get("planQuantity")
     if baseline_month is None or plan_date is None:
         return {"success": False, "message": "baselineMonth と planDate を指定してください"}
+    if not process_name:
+        return {"success": False, "message": "processName を指定してください"}
     try:
         plan_quantity = float(plan_quantity)
     except (TypeError, ValueError):
@@ -832,22 +1008,58 @@ async def update_plan_baseline_plan_quantity(
 
     month_start = _date_str(baseline_month) or str(baseline_month)[:10]
     plan_d = _date_str(plan_date) or str(plan_date)[:10]
+    if not plan_d:
+        return {"success": False, "message": "planDate の形式が不正です"}
+
+    # 対象月チェック
+    try:
+        m0 = date.fromisoformat(month_start[:10]).replace(day=1)
+        d0 = date.fromisoformat(plan_d[:10])
+    except ValueError:
+        return {"success": False, "message": "日付の形式が不正です"}
+    if d0.year != m0.year or d0.month != m0.month:
+        return {"success": False, "message": "planDate は基準月の範囲内にしてください"}
 
     sql = text("""
         UPDATE production_plan_baselines
         SET plan_quantity = :plan_quantity
         WHERE baseline_month = :baseline_month AND plan_date = :plan_date AND process_name = :process_name
     """)
-    result = await db.execute(sql, {
-        "baseline_month": month_start,
-        "plan_date": plan_d,
-        "process_name": process_name,
-        "plan_quantity": plan_quantity,
-    })
-    await db.commit()
+    result = await db.execute(
+        sql,
+        {
+            "baseline_month": month_start,
+            "plan_date": plan_d,
+            "process_name": process_name,
+            "plan_quantity": plan_quantity,
+        },
+    )
+    created = False
     if result.rowcount == 0:
-        return {"success": False, "message": "該当するベースラインがありません"}
-    return {"success": True, "message": "更新しました"}
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        insert_sql = text("""
+            INSERT INTO production_plan_baselines
+            (baseline_month, snapshot_date, plan_date, machine_name, product_cd, product_name, process_name, plan_quantity, actual_quantity, created_at)
+            VALUES (:baseline_month, :snapshot_date, :plan_date, '', '', '', :process_name, :plan_quantity, 0, :created_at)
+        """)
+        await db.execute(
+            insert_sql,
+            {
+                "baseline_month": month_start,
+                "snapshot_date": now,
+                "plan_date": plan_d,
+                "process_name": process_name,
+                "plan_quantity": plan_quantity,
+                "created_at": now,
+            },
+        )
+        created = True
+    await db.commit()
+    return {
+        "success": True,
+        "message": "追加しました" if created else "更新しました",
+        "created": created,
+    }
 
 
 @router.delete("/record")

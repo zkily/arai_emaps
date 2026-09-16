@@ -5,6 +5,7 @@ from .base import GeneratedReport, ReportAttachment, ReportGenerator
 from .cutting_actual import CuttingDailyActualGenerator
 from .inventory_trend import InventoryTrendGenerator
 from .plan_actual_compare import PlanActualCompareGenerator
+from .plan_baseline import PlanBaselineWeeklyGenerator
 
 _GENERATORS: dict[str, ReportGenerator] = {
     gen.report_code: gen
@@ -12,6 +13,7 @@ _GENERATORS: dict[str, ReportGenerator] = {
         CuttingDailyActualGenerator(),
         InventoryTrendGenerator(),
         PlanActualCompareGenerator(),
+        PlanBaselineWeeklyGenerator(),
     )
 }
 

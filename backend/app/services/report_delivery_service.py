@@ -5,7 +5,7 @@ import asyncio
 from datetime import date, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import now_jst
@@ -81,10 +81,17 @@ async def get_report_preview(
     report_code: str,
     parameters: dict,
 ) -> dict:
-    from app.modules.reports.definition_defaults import CUTTING_REPORT_CODE, ensure_cutting_email_template
+    from app.modules.reports.definition_defaults import (
+        CUTTING_REPORT_CODE,
+        PLAN_BASELINE_REPORT_CODE,
+        ensure_cutting_email_template,
+        ensure_plan_baseline_email_template,
+    )
 
     if report_code == CUTTING_REPORT_CODE:
         await ensure_cutting_email_template(db)
+    if report_code == PLAN_BASELINE_REPORT_CODE:
+        await ensure_plan_baseline_email_template(db)
     definition, report, resolved_fmt = await generate_report(
         db, report_code=report_code, parameters=parameters
     )
@@ -146,6 +153,26 @@ def _build_variables(definition: ReportDefinition, report: GeneratedReport, *, s
     }
 
 
+class _ReportSendLock:
+    """同一レポートの定時配信をプロセス間で排他（MySQL GET_LOCK）。"""
+
+    def __init__(self, db: AsyncSession, report_code: str) -> None:
+        self.db = db
+        self.name = f"rptsched:{report_code}"[:64]
+        self.held = False
+
+    async def acquire(self) -> bool:
+        result = await self.db.execute(text("SELECT GET_LOCK(:n, 0)"), {"n": self.name})
+        self.held = int(result.scalar() or 0) == 1
+        return self.held
+
+    async def release(self) -> None:
+        if not self.held:
+            return
+        await self.db.execute(text("SELECT RELEASE_LOCK(:n)"), {"n": self.name})
+        self.held = False
+
+
 async def send_report(
     db: AsyncSession,
     *,
@@ -155,15 +182,22 @@ async def send_report(
     trigger: str = "manual",
     current_user: User | None = None,
     run_date: date | None = None,
+    schedule_slot: datetime | None = None,
 ) -> dict:
     is_auto = trigger == "scheduled"
-    from app.modules.reports.definition_defaults import CUTTING_REPORT_CODE, ensure_cutting_email_template
+    from app.modules.reports.definition_defaults import (
+        CUTTING_REPORT_CODE,
+        PLAN_BASELINE_REPORT_CODE,
+        ensure_cutting_email_template,
+        ensure_plan_baseline_email_template,
+    )
 
     if report_code == CUTTING_REPORT_CODE:
         await ensure_cutting_email_template(db)
-    definition, report, resolved_fmt = await generate_report(
-        db, report_code=report_code, parameters=parameters, fmt=fmt, run_date=run_date
-    )
+    if report_code == PLAN_BASELINE_REPORT_CODE:
+        await ensure_plan_baseline_email_template(db)
+
+    definition = await _get_definition(db, report_code)
     event_code = definition.event_code
 
     setting = await _get_notification_setting(db, event_code)
@@ -180,20 +214,91 @@ async def send_report(
         raise HTTPException(status_code=400, detail="メール いずれの通知も有効ではありません")
 
     generator = get_generator(report_code)
+    if generator is None:
+        raise HTTPException(status_code=400, detail="このレポートの生成器が未実装です")
+
     run = run_date or now_jst().date()
     period_key = generator.reference_key(parameters=parameters or {}, run_date=run)
-    # 定時配信は実行日（JST）単位で重複判定（手動送信済みでも当日スケジュールは配信可能）
-    reference_key = (
-        f"{period_key}:scheduled:{run.isoformat()}" if is_auto else period_key
-    )
+    # 定時配信の重複防止は「実行枠（schedule_slot）」単位。
+    # 同日に時刻を変更して再設定した場合も、新しい枠では送信できる。
+    if is_auto:
+        slot = schedule_slot or datetime.combine(run, datetime.min.time())
+        slot_key = slot.strftime("%Y-%m-%dT%H:%M")
+        reference_key = f"{period_key}:scheduled:{slot_key}"
+    else:
+        reference_key = period_key
 
-    if is_auto and await _already_sent(db, report_code, reference_key):
+    send_lock = _ReportSendLock(db, report_code) if is_auto else None
+    if send_lock and not await send_lock.acquire():
+        from loguru import logger
+
+        logger.info("📨 定時配信スキップ（他プロセスが送信中）: code={}", report_code)
         return {
             "success": True,
             "status": "already_sent",
             "reference_key": reference_key,
-            "message": "本日の定時配信は送信済みです",
+            "message": "他プロセスが定時配信中のためスキップしました",
         }
+
+    try:
+        return await _send_report_locked(
+            db,
+            report_code=report_code,
+            parameters=parameters,
+            fmt=fmt,
+            trigger=trigger,
+            current_user=current_user,
+            is_auto=is_auto,
+            definition=definition,
+            event_code=event_code,
+            email_enabled=email_enabled,
+            line_enabled=line_enabled,
+            run=run,
+            reference_key=reference_key,
+            schedule_slot=schedule_slot,
+        )
+    finally:
+        if send_lock:
+            await send_lock.release()
+
+
+async def _send_report_locked(
+    db: AsyncSession,
+    *,
+    report_code: str,
+    parameters: dict,
+    fmt: str | None,
+    trigger: str,
+    current_user: User | None,
+    is_auto: bool,
+    definition: ReportDefinition,
+    event_code: str,
+    email_enabled: bool,
+    line_enabled: bool,
+    run: date,
+    reference_key: str,
+    schedule_slot: datetime | None,
+) -> dict:
+    if is_auto and await _already_sent(db, report_code, reference_key):
+        from loguru import logger
+
+        logger.info(
+            "📨 定時配信スキップ（送信済み）: code={} slot={} key={}",
+            report_code,
+            schedule_slot,
+            reference_key,
+        )
+        return {
+            "success": True,
+            "status": "already_sent",
+            "reference_key": reference_key,
+            "message": "この実行枠の定時配信は送信済みです",
+        }
+
+    # 重複チェック後に重い PDF 生成を実行
+    _, report, resolved_fmt = await generate_report(
+        db, report_code=report_code, parameters=parameters, fmt=fmt, run_date=run
+    )
 
     smtp = await load_smtp_config(db) if email_enabled else None
     line_cfg = await load_line_config(db) if line_enabled else None

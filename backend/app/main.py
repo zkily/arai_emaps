@@ -240,18 +240,20 @@ async def _inventory_stagnation_auto_patrol_loop():
 async def _report_scheduler_loop():
     from app.services.report_scheduler_service import run_due_report_schedules_once
 
-    logger.info("📨 レポート定時配信タスク開始（設定は報告センター）")
-    await asyncio.sleep(10)
+    logger.info("📨 レポート定時配信タスク開始（設定は報告センター・60秒間隔）")
+    await asyncio.sleep(5)
     while True:
         try:
             async with AsyncSessionLocal() as db:
-                await run_due_report_schedules_once(db)
+                result = await run_due_report_schedules_once(db)
+                if result.get("ran"):
+                    logger.info("📨 定時配信チェック結果: {}", result)
         except asyncio.CancelledError:
             logger.info("🛑 レポート定時配信タスク停止")
             raise
         except Exception as e:
             logger.warning("レポート定時配信でエラー: {}", e)
-        await asyncio.sleep(60)
+        await asyncio.sleep(30)
 
 
 @asynccontextmanager

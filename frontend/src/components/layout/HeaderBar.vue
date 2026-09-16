@@ -138,24 +138,6 @@
                 <span class="header-notif-item__link header-notif-item__link--indigo">{{ t('common.headerNotifOpenWarehouseNegative') }} →</span>
               </div>
               <div
-                v-if="stagnationAlert"
-                class="header-notif-item header-notif-item--stagnation"
-                role="button"
-                tabindex="0"
-                @click="gotoInventoryStagnation"
-                @keydown.enter.prevent="gotoInventoryStagnation"
-              >
-                <div class="header-notif-item__row">
-                  <el-icon class="header-notif-item__icon header-notif-item__icon--rose" :size="18"><TrendCharts /></el-icon>
-                  <div class="header-notif-item__text">
-                    <span class="header-notif-item__label">{{ t('common.headerNotifStagnationLabel') }}</span>
-                    <p class="header-notif-item__desc">{{ stagnationDescription }}</p>
-                    <p v-if="stagnationProcessSummary" class="header-notif-item__sub">{{ stagnationProcessSummary }}</p>
-                  </div>
-                </div>
-                <span class="header-notif-item__link header-notif-item__link--rose">{{ t('common.headerNotifOpenStagnation') }} →</span>
-              </div>
-              <div
                 v-if="retentionDeadlineAlert"
                 class="header-notif-item header-notif-item--retention"
                 role="button"
@@ -263,16 +245,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPickingNewProgress } from '@/api/shipping/picking'
-import { getInventoryStagnation, getWarehouseNegativeToday } from '@/api/database'
+import { getWarehouseNegativeToday } from '@/api/database'
 import { getBulkDisposalRetentionOverdueSummary } from '@/api/erp/bulkDisposalRetention'
 import { parseTodayOverviewFromPickingProgressResponse } from '@/utils/shippingPickingNewProgressParse'
 import type { ShippingPickingTodayOverview } from '@/utils/shippingPickingNewProgressParse'
-import {
-  INVENTORY_STAGNATION_DEFAULT_MIN_QTY,
-  INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS,
-  parseInventoryStagnationOverview,
-  type InventoryStagnationHeaderOverview,
-} from '@/utils/inventoryStagnationOverview'
 import {
   parseWarehouseNegativeOverview,
   type WarehouseNegativeHeaderOverview,
@@ -296,7 +272,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
   FullScreen, Aim, User, SwitchButton, ArrowDown, Clock, Calendar,
-  Menu, Close, Promotion, Bell, Warning, Reading, MagicStick, TrendCharts, Box
+  Menu, Close, Promotion, Bell, Warning, Reading, MagicStick, Box
 } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -357,18 +333,15 @@ const notifPopoverVisible = ref(false)
 const notifPopoverWidth = computed(() => (typeof window !== 'undefined' ? Math.min(360, Math.round(window.innerWidth * 0.92)) : 360))
 
 const PICKING_ALERT_POLL_MS = 5 * 60 * 1000
-const STAGNATION_ALERT_POLL_MS = 5 * 60 * 1000
 const WAREHOUSE_NEGATIVE_POLL_MS = 5 * 60 * 1000
 const RETENTION_DEADLINE_POLL_MS = 5 * 60 * 1000
 const pickingOverview = ref<ShippingPickingTodayOverview | null>(null)
-const stagnationOverview = ref<InventoryStagnationHeaderOverview | null>(null)
 const warehouseNegativeOverview = ref<WarehouseNegativeHeaderOverview | null>(null)
 const retentionDeadlineOverview = ref<RetentionDeadlineHeaderOverview | null>(null)
 
 const canViewProductionDataHint = computed(
   () => userStore.isAuthenticated && canAccessPath(userStore.user, '/erp/production/data-management'),
 )
-const canViewStagnationHint = canViewProductionDataHint
 const canViewRetentionDeadlineHint = computed(
   () => userStore.isAuthenticated && canAccessPath(userStore.user, '/erp/inventory/bulk-disposal-retention'),
 )
@@ -380,21 +353,18 @@ const pickingIncompleteAlert = computed(() => {
   return o
 })
 
-const stagnationAlert = computed(() => stagnationOverview.value)
 const warehouseNegativeAlert = computed(() => warehouseNegativeOverview.value)
 const retentionDeadlineAlert = computed(() => retentionDeadlineOverview.value)
 
 const notifBellActive = computed(
   () =>
     pickingIncompleteAlert.value != null ||
-    stagnationAlert.value != null ||
     warehouseNegativeAlert.value != null ||
     retentionDeadlineAlert.value != null,
 )
 const notifCount = computed(
   () =>
     (pickingIncompleteAlert.value ? 1 : 0) +
-    (stagnationAlert.value ? 1 : 0) +
     (warehouseNegativeAlert.value ? 1 : 0) +
     (retentionDeadlineAlert.value ? 1 : 0),
 )
@@ -410,25 +380,6 @@ const pickingIncompleteDescription = computed(() => {
     completed: o.completed_today,
     total: o.total_today,
   })
-})
-
-const stagnationDescription = computed(() => {
-  const o = stagnationAlert.value
-  if (!o) return ''
-  return t('common.headerNotifStagnationBody', {
-    asOf: o.as_of,
-    count: o.count,
-    processCount: o.processCount,
-    minQuantity: o.min_quantity,
-    stableDays: o.stable_calendar_days,
-  })
-})
-
-const stagnationProcessSummary = computed(() => {
-  const o = stagnationAlert.value
-  if (!o?.topProcesses.length) return ''
-  const processes = o.topProcesses.map((p) => `${p.label} ${p.count}`).join('、')
-  return t('common.headerNotifStagnationProcesses', { processes })
 })
 
 const warehouseNegativeDescription = computed(() => {
@@ -484,22 +435,6 @@ async function fetchPickingAlertOverview() {
   }
 }
 
-async function fetchStagnationAlertOverview() {
-  if (!canViewStagnationHint.value) {
-    stagnationOverview.value = null
-    return
-  }
-  try {
-    const raw = await getInventoryStagnation({
-      min_quantity: INVENTORY_STAGNATION_DEFAULT_MIN_QTY,
-      stable_calendar_days: INVENTORY_STAGNATION_DEFAULT_STABLE_DAYS,
-    })
-    stagnationOverview.value = parseInventoryStagnationOverview(raw)
-  } catch {
-    /* 静默失败，保留上次数据或空 */
-  }
-}
-
 async function fetchWarehouseNegativeAlertOverview() {
   if (!canViewProductionDataHint.value) {
     warehouseNegativeOverview.value = null
@@ -529,7 +464,6 @@ async function fetchRetentionDeadlineAlertOverview() {
 async function fetchHeaderNotifOverview() {
   await Promise.all([
     fetchPickingAlertOverview(),
-    fetchStagnationAlertOverview(),
     fetchWarehouseNegativeAlertOverview(),
     fetchRetentionDeadlineAlertOverview(),
   ])
@@ -542,14 +476,6 @@ function onNotifPopoverShow() {
 function gotoPickingProgress() {
   notifPopoverVisible.value = false
   router.push({ path: '/erp/shipping/picking', query: { tab: 'progress' } })
-}
-
-function gotoInventoryStagnation() {
-  notifPopoverVisible.value = false
-  router.push({
-    path: '/erp/production/data-management',
-    query: { openInventoryStagnation: '1' },
-  })
 }
 
 function gotoWarehouseNegative() {
@@ -619,7 +545,6 @@ async function fetchHeaderWeather() {
 let timer: number | null = null
 let weatherTimer: number | null = null
 let pickingPollTimer: number | null = null
-let stagnationPollTimer: number | null = null
 let warehouseNegativePollTimer: number | null = null
 let retentionDeadlinePollTimer: number | null = null
 
@@ -637,9 +562,6 @@ onMounted(() => {
   pickingPollTimer = window.setInterval(() => {
     void fetchPickingAlertOverview()
   }, PICKING_ALERT_POLL_MS)
-  stagnationPollTimer = window.setInterval(() => {
-    void fetchStagnationAlertOverview()
-  }, STAGNATION_ALERT_POLL_MS)
   warehouseNegativePollTimer = window.setInterval(() => {
     void fetchWarehouseNegativeAlertOverview()
   }, WAREHOUSE_NEGATIVE_POLL_MS)
@@ -659,9 +581,6 @@ onUnmounted(() => {
   }
   if (pickingPollTimer) {
     clearInterval(pickingPollTimer)
-  }
-  if (stagnationPollTimer) {
-    clearInterval(stagnationPollTimer)
   }
   if (warehouseNegativePollTimer) {
     clearInterval(warehouseNegativePollTimer)
@@ -1531,13 +1450,6 @@ const handleCommand = async (command: string) => {
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-.header-notif-item--stagnation {
-  border-color: rgba(251, 113, 133, 0.42);
-  box-shadow:
-    0 2px 12px rgba(244, 63, 94, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
 .header-notif-item--warehouse {
   border-color: rgba(129, 140, 248, 0.45);
   box-shadow:
@@ -1551,15 +1463,6 @@ const handleCommand = async (command: string) => {
   border-color: rgba(99, 102, 241, 0.58);
   box-shadow:
     0 6px 18px rgba(79, 70, 229, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-}
-
-.header-notif-item--stagnation:hover {
-  background: #fff;
-  transform: translateY(-1px);
-  border-color: rgba(244, 63, 94, 0.55);
-  box-shadow:
-    0 6px 18px rgba(244, 63, 94, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
@@ -1605,10 +1508,6 @@ const handleCommand = async (command: string) => {
   margin-top: 1px;
 }
 
-.header-notif-item__icon--rose {
-  color: #e11d48;
-}
-
 .header-notif-item__icon--indigo {
   color: #4f46e5;
 }
@@ -1647,10 +1546,6 @@ const handleCommand = async (command: string) => {
   font-weight: 600;
   color: #4f46e5;
   letter-spacing: 0.02em;
-}
-
-.header-notif-item__link--rose {
-  color: #e11d48;
 }
 
 .header-notif-item__link--indigo {

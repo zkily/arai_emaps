@@ -178,6 +178,7 @@ async def run_due_report_schedules_once(db: AsyncSession) -> dict:
                 trigger="scheduled",
                 current_user=None,
                 run_date=now_local.date(),
+                schedule_slot=snapshot.next_run_at,
             )
             next_run = compute_next_run_at(snapshot, now_local)
             await _update_schedule_run_state(
@@ -187,15 +188,26 @@ async def run_due_report_schedules_once(db: AsyncSession) -> dict:
                 next_run_at=next_run,
             )
             await db.commit()
-            ran.append({"report_code": report_code, "status": send_result.get("status")})
-            logger.info(
-                "📨 レポート定時配信: code={} status={}",
-                report_code,
-                send_result.get("status"),
-            )
+            status = send_result.get("status")
+            ran.append({"report_code": report_code, "status": status})
+            if status == "already_sent":
+                logger.info(
+                    "📨 レポート定時配信スキップ: code={} status={} next={}",
+                    report_code,
+                    status,
+                    next_run,
+                )
+            else:
+                logger.info(
+                    "📨 レポート定時配信: code={} status={} next={}",
+                    report_code,
+                    status,
+                    next_run,
+                )
         except Exception as exc:
             await db.rollback()
             logger.warning("レポート定時配信でエラー: code={} err={}", report_code, exc)
             ran.append({"report_code": report_code, "status": "error", "error": str(exc)})
+            # 失敗しても次回枠へ進めず、次ループで再試行できるように next_run は維持
 
     return {"checked": len(schedules), "ran": ran}

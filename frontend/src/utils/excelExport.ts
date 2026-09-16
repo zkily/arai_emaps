@@ -13,6 +13,19 @@ async function writeWorkbookToFile(workbook: ExcelJS.Workbook, filename: string)
   saveAs(blob, ensureXlsxExtension(filename))
 }
 
+function sanitizeSheetName(name: string, used: Set<string>): string {
+  let base = (name || 'Sheet').replace(/[\\/?*[\]:]/g, '_').slice(0, 31) || 'Sheet'
+  let candidate = base
+  let i = 2
+  while (used.has(candidate)) {
+    const suffix = `_${i}`
+    candidate = `${base.slice(0, Math.max(1, 31 - suffix.length))}${suffix}`
+    i++
+  }
+  used.add(candidate)
+  return candidate
+}
+
 /** JSON 行数组导出为 .xlsx（列顺序以首行键为准） */
 export async function downloadExcelFromJson(
   rows: Record<string, string | number>[],
@@ -41,6 +54,59 @@ export async function downloadExcelFromAoa(
   const worksheet = workbook.addWorksheet(sheetName)
   for (const row of aoa) {
     worksheet.addRow(row)
+  }
+  await writeWorkbookToFile(workbook, filename)
+}
+
+export type ExcelSheetAoa = {
+  name: string
+  aoa: (string | number | null | undefined)[][]
+  /** ヘッダー行を強調（既定 true） */
+  headerStyle?: boolean
+}
+
+/** 複数シートの .xlsx を出力 */
+export async function downloadExcelMultiSheet(
+  sheets: ExcelSheetAoa[],
+  filename: string,
+): Promise<void> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Smart-EMAPs'
+  workbook.created = new Date()
+  const usedNames = new Set<string>()
+
+  for (const sheet of sheets) {
+    if (!sheet.aoa.length) continue
+    const ws = workbook.addWorksheet(sanitizeSheetName(sheet.name, usedNames))
+    for (const row of sheet.aoa) {
+      ws.addRow(row.map((c) => (c == null ? '' : c)))
+    }
+    if (sheet.headerStyle !== false && ws.rowCount > 0) {
+      const header = ws.getRow(1)
+      header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      header.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4F46E5' },
+      }
+      header.alignment = { vertical: 'middle', horizontal: 'center' }
+    }
+    // 簡易列幅
+    const colCount = Math.max(...sheet.aoa.map((r) => r.length), 1)
+    for (let c = 1; c <= colCount; c++) {
+      const col = ws.getColumn(c)
+      let maxLen = 8
+      for (const row of sheet.aoa.slice(0, 80)) {
+        const v = row[c - 1]
+        const len = String(v ?? '').length
+        if (len > maxLen) maxLen = len
+      }
+      col.width = Math.min(36, Math.max(10, maxLen + 2))
+    }
+  }
+
+  if (workbook.worksheets.length === 0) {
+    workbook.addWorksheet('空').addRow(['データがありません'])
   }
   await writeWorkbookToFile(workbook, filename)
 }

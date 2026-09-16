@@ -3,20 +3,37 @@
     <div class="rc-page__bg" aria-hidden="true">
       <div class="rc-page__orb rc-page__orb--1" />
       <div class="rc-page__orb rc-page__orb--2" />
+      <div class="rc-page__grid" />
     </div>
 
     <header class="rc-hero">
       <div class="rc-hero__main">
         <div class="rc-hero__icon">
-          <el-icon :size="20"><Document /></el-icon>
+          <el-icon :size="22"><Document /></el-icon>
         </div>
         <div class="rc-hero__text">
-          <span class="rc-hero__eyebrow">SYSTEM · レポート</span>
+          <span class="rc-hero__eyebrow">SYSTEM · REPORT HUB</span>
           <h1 class="rc-hero__title">報告センター</h1>
-          <p class="rc-hero__desc">生成 · 手動配信 · 定時配信 · 送信履歴</p>
+          <p class="rc-hero__desc">生成・手動配信・定時配信・送信履歴を一画面で</p>
         </div>
       </div>
-      <el-button class="rc-hero__refresh" :icon="Refresh" circle size="small" :loading="pageLoading" @click="loadAll" />
+      <div class="rc-hero__aside">
+        <div class="rc-hero__metrics">
+          <div class="rc-metric rc-metric--defs">
+            <span class="rc-metric__label">レポート</span>
+            <b class="rc-metric__value">{{ definitions.length }}</b>
+          </div>
+          <div class="rc-metric rc-metric--sched">
+            <span class="rc-metric__label">スケジュール</span>
+            <b class="rc-metric__value">{{ schedules.length }}</b>
+          </div>
+          <div class="rc-metric rc-metric--logs">
+            <span class="rc-metric__label">履歴</span>
+            <b class="rc-metric__value">{{ logs.length }}</b>
+          </div>
+        </div>
+        <el-button class="rc-hero__refresh" :icon="Refresh" circle size="small" :loading="pageLoading" @click="loadAll" />
+      </div>
     </header>
 
     <nav class="rc-tabs" role="tablist">
@@ -26,11 +43,11 @@
         type="button"
         role="tab"
         class="rc-tab"
-        :class="{ 'rc-tab--active': activeTab === tab.name }"
+        :class="[`rc-tab--${tab.name}`, { 'rc-tab--active': activeTab === tab.name }]"
         :aria-selected="activeTab === tab.name"
         @click="activeTab = tab.name"
       >
-        <el-icon :size="14"><component :is="tab.icon" /></el-icon>
+        <span class="rc-tab__icon"><el-icon :size="15"><component :is="tab.icon" /></el-icon></span>
         <span>{{ tab.label }}</span>
         <span v-if="tab.name === 'schedule' && schedules.length" class="rc-tab__badge">{{ schedules.length }}</span>
         <span v-if="tab.name === 'logs' && logs.length" class="rc-tab__badge rc-tab__badge--muted">{{ logs.length }}</span>
@@ -38,7 +55,7 @@
     </nav>
 
     <!-- 配信（手動） -->
-    <section v-show="activeTab === 'send'" class="rc-shell">
+    <section v-show="activeTab === 'send'" class="rc-shell rc-shell--send">
       <div class="rc-layout">
         <aside class="rc-list">
           <div class="rc-list__head">
@@ -49,7 +66,10 @@
             v-for="d in definitions"
             :key="d.report_code"
             class="rc-def"
-            :class="{ 'rc-def--active': selected?.report_code === d.report_code }"
+            :class="[
+              `rc-def--cat-${categoryTone(d.category)}`,
+              { 'rc-def--active': selected?.report_code === d.report_code },
+            ]"
             @click="selectDefinition(d)"
           >
             <span class="rc-def__cat">{{ d.category }}</span>
@@ -62,9 +82,12 @@
         <div class="rc-detail" v-if="selected">
           <div class="rc-detail__head">
             <div>
-              <span class="rc-detail__cat">{{ selected.category }}</span>
+              <span class="rc-detail__cat" :class="`rc-detail__cat--${categoryTone(selected.category)}`">
+                {{ selected.category }}
+              </span>
               <h2 class="rc-detail__title">{{ selected.report_name }}</h2>
             </div>
+            <span class="rc-detail__code">{{ selected.report_code }}</span>
           </div>
 
           <div class="rc-toolbar">
@@ -116,9 +139,10 @@
                 <el-option label="PDF" value="pdf" />
                 <el-option label="両方" value="both" />
               </el-select>
-              <el-button :icon="View" size="small" :loading="previewLoading" @click="doPreview">プレビュー</el-button>
-              <el-button :icon="Download" size="small" @click="doDownload">DL</el-button>
+              <el-button class="rc-btn rc-btn--ghost" :icon="View" size="small" :loading="previewLoading" @click="doPreview">プレビュー</el-button>
+              <el-button class="rc-btn rc-btn--ghost" :icon="Download" size="small" @click="doDownload">DL</el-button>
               <el-button
+                class="rc-btn rc-btn--send"
                 type="primary"
                 :icon="Promotion"
                 size="small"
@@ -133,19 +157,19 @@
 
           <div v-if="preview" class="rc-preview">
             <div class="rc-preview__meta">
-              <div class="rc-stat">
+              <div class="rc-stat rc-stat--period">
                 <span class="rc-stat__label">対象期間</span>
                 <b class="rc-stat__value">{{ preview.period_label }}</b>
               </div>
-              <div class="rc-stat">
+              <div class="rc-stat rc-stat--count">
                 <span class="rc-stat__label">件数</span>
                 <b class="rc-stat__value">{{ preview.record_count }}</b>
               </div>
-              <div class="rc-stat">
+              <div class="rc-stat rc-stat--fmt">
                 <span class="rc-stat__label">形式</span>
                 <b class="rc-stat__value">{{ preview.format }}</b>
               </div>
-              <div class="rc-stat rc-stat--wide">
+              <div class="rc-stat rc-stat--file rc-stat--wide">
                 <span class="rc-stat__label">添付</span>
                 <b class="rc-stat__value rc-stat__value--truncate">{{ preview.attachments.map((a) => a.filename).join(', ') || '—' }}</b>
               </div>
@@ -161,6 +185,7 @@
                 <span v-else-if="!preview.can_send" class="rc-tag rc-tag--warn">
                   送信不可（設定を確認）
                 </span>
+                <span v-else class="rc-tag rc-tag--ok">送信可能</span>
               </div>
               <ul v-if="preview.recipients.length" class="rc-recipients">
                 <li v-for="r in preview.recipients" :key="r.email">{{ r.name }} &lt;{{ r.email }}&gt;</li>
@@ -276,24 +301,36 @@
     </section>
 
     <!-- スケジュール -->
-    <section v-show="activeTab === 'schedule'" class="rc-shell">
+    <section v-show="activeTab === 'schedule'" class="rc-shell rc-shell--schedule">
       <div class="rc-panel__head">
-        <div>
-          <h2 class="rc-panel__title">定時配信スケジュール</h2>
-          <p class="rc-panel__sub">自動送信の頻度・時刻・対象期間を管理</p>
+        <div class="rc-panel__title-wrap">
+          <span class="rc-panel__dot rc-panel__dot--sched" aria-hidden="true" />
+          <div>
+            <h2 class="rc-panel__title">定時配信スケジュール</h2>
+            <p class="rc-panel__sub">自動送信の頻度・時刻・対象期間を管理</p>
+          </div>
         </div>
-        <el-button type="primary" :icon="Plus" size="small" @click="openScheduleDialog()">新規追加</el-button>
+        <el-button class="rc-btn rc-btn--sched" type="primary" :icon="Plus" size="small" @click="openScheduleDialog()">新規追加</el-button>
       </div>
-      <el-table :data="schedules" size="small" class="rc-table" stripe>
-        <el-table-column label="レポート" min-width="160">
-          <template #default="{ row }">{{ definitionName(row.report_code) }}</template>
+      <el-table :data="schedules" size="small" class="rc-table rc-table--sched" stripe>
+        <el-table-column label="レポート" min-width="180">
+          <template #default="{ row }">
+            <div class="rc-cell-report">
+              <span class="rc-cell-report__name">{{ definitionName(row.report_code) }}</span>
+              <span class="rc-cell-report__code">{{ row.report_code }}</span>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="頻度" width="120">
-          <template #default="{ row }">{{ scheduleTypeLabel(row) }}</template>
+          <template #default="{ row }">
+            <span class="rc-pill rc-pill--freq">{{ scheduleTypeLabel(row) }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="schedule_time" label="時刻" width="90" />
         <el-table-column label="形式" width="80">
-          <template #default="{ row }">{{ row.format || '既定' }}</template>
+          <template #default="{ row }">
+            <span class="rc-pill rc-pill--fmt">{{ row.format || '既定' }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="有効" width="80">
           <template #default="{ row }">
@@ -316,22 +353,33 @@
     </section>
 
     <!-- 送信履歴 -->
-    <section v-show="activeTab === 'logs'" class="rc-shell">
+    <section v-show="activeTab === 'logs'" class="rc-shell rc-shell--logs">
       <div class="rc-panel__head">
-        <div>
-          <h2 class="rc-panel__title">送信履歴</h2>
-          <p class="rc-panel__sub">直近 100 件の配信結果</p>
+        <div class="rc-panel__title-wrap">
+          <span class="rc-panel__dot rc-panel__dot--logs" aria-hidden="true" />
+          <div>
+            <h2 class="rc-panel__title">送信履歴</h2>
+            <p class="rc-panel__sub">直近 100 件の配信結果</p>
+          </div>
         </div>
-        <el-button :icon="Refresh" size="small" @click="loadLogs">更新</el-button>
+        <el-button class="rc-btn rc-btn--ghost" :icon="Refresh" size="small" @click="loadLogs">更新</el-button>
       </div>
-      <el-table :data="logs" size="small" class="rc-table" stripe>
+      <el-table :data="logs" size="small" class="rc-table rc-table--logs" stripe>
         <el-table-column label="レポート" min-width="160">
           <template #default="{ row }">{{ definitionName(row.report_code) }}</template>
         </el-table-column>
-        <el-table-column prop="trigger_type" label="種別" width="90" />
-        <el-table-column prop="status" label="状態" width="90">
+        <el-table-column label="種別" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ row.status }}</el-tag>
+            <span class="rc-pill" :class="row.trigger_type === 'scheduled' ? 'rc-pill--auto' : 'rc-pill--manual'">
+              {{ triggerLabel(row.trigger_type) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状態" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.status)" size="small" effect="light" round>
+              {{ statusLabel(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="recipient_count" label="対象" width="70" />
@@ -343,7 +391,13 @@
     </section>
 
     <!-- スケジュール編集ダイアログ -->
-    <el-dialog v-model="scheduleDialog" :title="editingSchedule.id ? 'スケジュール編集' : 'スケジュール追加'" width="460px">
+    <el-dialog
+      v-model="scheduleDialog"
+      :title="editingSchedule.id ? 'スケジュール編集' : 'スケジュール追加'"
+      width="480px"
+      class="rc-dialog"
+      align-center
+    >
       <el-form label-width="90px">
         <el-form-item label="レポート">
           <el-select v-model="editingSchedule.report_code" :disabled="!!editingSchedule.id" style="width: 100%">
@@ -383,7 +437,7 @@
       </el-form>
       <template #footer>
         <el-button @click="scheduleDialog = false">キャンセル</el-button>
-        <el-button type="primary" :loading="savingSchedule" @click="saveSchedule">保存</el-button>
+        <el-button type="primary" class="rc-btn rc-btn--sched" :loading="savingSchedule" @click="saveSchedule">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -391,6 +445,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Download, Plus, Promotion, Refresh, View } from '@element-plus/icons-vue'
 import echarts from '@/utils/echarts'
@@ -418,7 +473,9 @@ const tabs = [
   { name: 'schedule', label: 'スケジュール', icon: Refresh },
   { name: 'logs', label: '送信履歴', icon: Document },
 ]
-const activeTab = ref('send')
+const route = useRoute()
+const initialTab = String(route.query.tab || '')
+const activeTab = ref(tabs.some((t) => t.name === initialTab) ? initialTab : 'send')
 const pageLoading = ref(false)
 
 const definitions = ref<ReportDefinition[]>([])
@@ -653,6 +710,33 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' | 'info
   if (status === 'partial') return 'warning'
   if (status === 'failed') return 'danger'
   return 'info'
+}
+
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    success: '成功',
+    partial: '一部成功',
+    failed: '失敗',
+    already_sent: '送信済',
+    skipped_inactive: '無効',
+    skipped_channels: 'チャネル無',
+    no_recipients: '宛先無',
+  }
+  return map[status] || status
+}
+
+function triggerLabel(trigger: string): string {
+  if (trigger === 'scheduled') return '定時'
+  if (trigger === 'manual') return '手動'
+  return trigger
+}
+
+function categoryTone(category: string): string {
+  const c = (category || '').toUpperCase()
+  if (c === 'MES') return 'mes'
+  if (c === 'ERP') return 'erp'
+  if (c === 'APS') return 'aps'
+  return 'other'
 }
 
 function defaultPeriodForDefinition(def?: ReportDefinition | null): string {
@@ -1155,22 +1239,23 @@ watch(isCuttingReportPreview, (val) => {
 
 <style scoped>
 .rc-page {
-  --rc-bg: #f1f5f9;
+  --rc-bg: #eef6f4;
   --rc-surface: #ffffff;
-  --rc-border: #e2e8f0;
-  --rc-border-strong: #cbd5e1;
-  --rc-text: #0f172a;
-  --rc-muted: #64748b;
-  --rc-primary: #4f46e5;
-  --rc-primary-soft: #eef2ff;
-  --rc-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 18px rgba(15, 23, 42, 0.06);
-  --rc-radius: 10px;
-  --rc-radius-sm: 8px;
+  --rc-border: #d7e5e1;
+  --rc-border-strong: #b8d0c8;
+  --rc-text: #0f1f1c;
+  --rc-muted: #5b736c;
+  --rc-primary: #0d9488;
+  --rc-primary-soft: #ccfbf1;
+  --rc-shadow: 0 1px 2px rgba(15, 31, 28, 0.04), 0 8px 24px rgba(13, 148, 136, 0.08);
+  --rc-radius: 14px;
+  --rc-radius-sm: 10px;
   position: relative;
   min-height: 100%;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   color: var(--rc-text);
   overflow: hidden;
+  background: linear-gradient(165deg, #f4fbf9 0%, #eef4f8 48%, #f7f4ef 100%);
 }
 
 .rc-page__bg {
@@ -1180,27 +1265,37 @@ watch(isCuttingReportPreview, (val) => {
   z-index: 0;
 }
 
+.rc-page__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(13, 148, 136, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 148, 136, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+}
+
 .rc-page__orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(48px);
-  opacity: 0.45;
+  filter: blur(52px);
+  opacity: 0.55;
 }
 
 .rc-page__orb--1 {
-  width: 220px;
-  height: 220px;
-  top: -60px;
-  right: 8%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.28), transparent 70%);
+  width: 260px;
+  height: 260px;
+  top: -80px;
+  right: 6%;
+  background: radial-gradient(circle, rgba(13, 148, 136, 0.32), transparent 70%);
 }
 
 .rc-page__orb--2 {
-  width: 180px;
-  height: 180px;
-  left: -40px;
-  bottom: 10%;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.2), transparent 70%);
+  width: 220px;
+  height: 220px;
+  left: -50px;
+  bottom: 8%;
+  background: radial-gradient(circle, rgba(3, 105, 161, 0.22), transparent 70%);
 }
 
 .rc-page > :not(.rc-page__bg) {
@@ -1212,19 +1307,20 @@ watch(isCuttingReportPreview, (val) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  gap: 14px;
+  margin-bottom: 10px;
+  padding: 14px 16px;
   border-radius: var(--rc-radius);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.97) 0%, rgba(240, 253, 250, 0.92) 55%, rgba(239, 246, 255, 0.9) 100%);
   box-shadow: var(--rc-shadow);
+  backdrop-filter: blur(8px);
 }
 
 .rc-hero__main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -1232,12 +1328,13 @@ watch(isCuttingReportPreview, (val) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  color: var(--rc-primary);
-  background: linear-gradient(145deg, #eef2ff, #e0e7ff);
-  border: 1px solid #c7d2fe;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg, #14b8a6, #0f766e);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
   flex-shrink: 0;
 }
 
@@ -1245,106 +1342,174 @@ watch(isCuttingReportPreview, (val) => {
   display: block;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #6366f1;
-  margin-bottom: 1px;
+  letter-spacing: 0.1em;
+  color: #0d9488;
+  margin-bottom: 2px;
 }
 
 .rc-hero__title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 
 .rc-hero__desc {
-  margin: 2px 0 0;
-  font-size: 11px;
+  margin: 3px 0 0;
+  font-size: 12px;
   color: var(--rc-muted);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-.rc-hero__refresh {
+.rc-hero__aside {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-shrink: 0;
 }
 
+.rc-hero__metrics {
+  display: flex;
+  gap: 8px;
+}
+
+.rc-metric {
+  min-width: 72px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  text-align: center;
+}
+
+.rc-metric__label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 1px;
+}
+
+.rc-metric__value {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-metric--defs {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+  color: #0f766e;
+}
+
+.rc-metric--sched {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #0369a1;
+}
+
+.rc-metric--logs {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.rc-hero__refresh { flex-shrink: 0; }
+
 .rc-tabs {
   display: inline-flex;
-  gap: 4px;
-  padding: 3px;
-  margin-bottom: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  gap: 6px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--rc-border);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 31, 28, 0.05);
 }
 
 .rc-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: none;
   background: transparent;
-  padding: 6px 12px;
-  border-radius: 999px;
+  padding: 7px 14px;
+  border-radius: 10px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--rc-muted);
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
   white-space: nowrap;
 }
+
+.rc-tab__icon { display: inline-flex; opacity: 0.85; }
 
 .rc-tab:hover {
   color: var(--rc-text);
   background: #f8fafc;
 }
 
-.rc-tab--active {
-  color: var(--rc-primary);
-  background: var(--rc-primary-soft);
-  box-shadow: inset 0 0 0 1px #c7d2fe;
-  font-weight: 600;
+.rc-tab--send.rc-tab--active {
+  color: #0f766e;
+  background: linear-gradient(180deg, #f0fdfa, #ccfbf1);
+  box-shadow: inset 0 0 0 1px #5eead4, 0 2px 8px rgba(13, 148, 136, 0.12);
+}
+
+.rc-tab--schedule.rc-tab--active {
+  color: #0369a1;
+  background: linear-gradient(180deg, #f0f9ff, #e0f2fe);
+  box-shadow: inset 0 0 0 1px #7dd3fc, 0 2px 8px rgba(3, 105, 161, 0.12);
+}
+
+.rc-tab--logs.rc-tab--active {
+  color: #b45309;
+  background: linear-gradient(180deg, #fffbeb, #fef3c7);
+  box-shadow: inset 0 0 0 1px #fcd34d, 0 2px 8px rgba(180, 83, 9, 0.1);
 }
 
 .rc-tab__badge {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
   border-radius: 999px;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 16px;
+  font-weight: 800;
+  line-height: 17px;
   text-align: center;
   color: #fff;
-  background: var(--rc-primary);
+  background: #0369a1;
 }
 
-.rc-tab__badge--muted {
-  background: #94a3b8;
-}
+.rc-tab__badge--muted { background: #d97706; }
 
 .rc-shell {
   border-radius: var(--rc-radius);
   border: 1px solid var(--rc-border);
-  background: var(--rc-surface);
+  background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--rc-shadow);
-  padding: 10px;
+  padding: 12px;
+  backdrop-filter: blur(6px);
 }
+
+.rc-shell--send { border-top: 3px solid #14b8a6; }
+.rc-shell--schedule { border-top: 3px solid #0ea5e9; }
+.rc-shell--logs { border-top: 3px solid #f59e0b; }
 
 .rc-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(220px, 256px) minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
 .rc-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: calc(100vh - 168px);
+  gap: 7px;
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -1358,18 +1523,18 @@ watch(isCuttingReportPreview, (val) => {
 
 .rc-list__label {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--rc-muted);
 }
 
 .rc-list__count {
   font-size: 10px;
-  font-weight: 700;
-  color: var(--rc-primary);
-  background: var(--rc-primary-soft);
-  padding: 1px 6px;
+  font-weight: 800;
+  color: #0f766e;
+  background: #ccfbf1;
+  padding: 1px 7px;
   border-radius: 999px;
 }
 
@@ -1377,10 +1542,10 @@ watch(isCuttingReportPreview, (val) => {
   position: relative;
   border: 1px solid var(--rc-border);
   border-radius: var(--rc-radius-sm);
-  padding: 8px 10px 8px 12px;
+  padding: 9px 11px 9px 13px;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.12s;
-  background: #fafbfc;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s, box-shadow 0.15s;
+  background: #fafcfb;
 }
 
 .rc-def::before {
@@ -1391,41 +1556,57 @@ watch(isCuttingReportPreview, (val) => {
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: transparent;
-  transition: background 0.15s;
+  background: #cbd5e1;
 }
 
 .rc-def:hover {
-  border-color: #c7d2fe;
+  border-color: #99f6e4;
   background: #fff;
+  transform: translateY(-1px);
 }
+
+.rc-def--cat-mes::before { background: #14b8a6; }
+.rc-def--cat-erp::before { background: #0ea5e9; }
+.rc-def--cat-aps::before { background: #f59e0b; }
+.rc-def--cat-other::before { background: #94a3b8; }
+.rc-def--cat-mes .rc-def__cat { color: #0f766e; }
+.rc-def--cat-erp .rc-def__cat { color: #0369a1; }
+.rc-def--cat-aps .rc-def__cat { color: #b45309; }
+.rc-def--cat-other .rc-def__cat { color: #64748b; }
 
 .rc-def--active {
-  border-color: #a5b4fc;
-  background: linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
+  border-color: #5eead4;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.12);
 }
 
-.rc-def--active::before {
-  background: linear-gradient(180deg, #6366f1, #4f46e5);
+.rc-def--active.rc-def--cat-erp {
+  border-color: #7dd3fc;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  box-shadow: 0 4px 14px rgba(3, 105, 161, 0.1);
+}
+
+.rc-def--active.rc-def--cat-aps {
+  border-color: #fcd34d;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: 0 4px 14px rgba(180, 83, 9, 0.1);
 }
 
 .rc-def__cat {
   font-size: 10px;
-  color: #6366f1;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .rc-def__name {
-  margin: 1px 0 0;
+  margin: 2px 0 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
 }
 
 .rc-def__desc {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   font-size: 11px;
   color: var(--rc-muted);
   line-height: 1.35;
@@ -1438,8 +1619,8 @@ watch(isCuttingReportPreview, (val) => {
 .rc-detail {
   border: 1px solid var(--rc-border);
   border-radius: var(--rc-radius-sm);
-  padding: 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfa 100%);
   min-height: 280px;
 }
 
@@ -1451,24 +1632,47 @@ watch(isCuttingReportPreview, (val) => {
 }
 
 .rc-detail__head {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e6f2ef;
 }
 
 .rc-detail__cat {
   display: inline-block;
   font-size: 10px;
-  font-weight: 700;
-  color: #6366f1;
-  margin-bottom: 2px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+  background: #f1f5f9;
+  color: #64748b;
 }
+
+.rc-detail__cat--mes { background: #ccfbf1; color: #0f766e; }
+.rc-detail__cat--erp { background: #e0f2fe; color: #0369a1; }
+.rc-detail__cat--aps { background: #fef3c7; color: #b45309; }
 
 .rc-detail__title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1.25;
+}
+
+.rc-detail__code {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rc-muted);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  flex-shrink: 0;
 }
 
 .rc-toolbar {
@@ -1477,11 +1681,11 @@ watch(isCuttingReportPreview, (val) => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
-  padding: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
   border-radius: var(--rc-radius-sm);
-  background: #f8fafc;
-  border: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 100%);
+  border: 1px solid #d5ebe6;
 }
 
 .rc-form {
@@ -1502,18 +1706,13 @@ watch(isCuttingReportPreview, (val) => {
 
 .rc-field__label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #475569;
   white-space: nowrap;
 }
 
-.rc-field__control {
-  width: 140px;
-}
-
-.rc-field__control--range {
-  width: 220px;
-}
+.rc-field__control { width: 140px; }
+.rc-field__control--range { width: 220px; }
 
 .rc-actions {
   display: flex;
@@ -1523,47 +1722,61 @@ watch(isCuttingReportPreview, (val) => {
   flex-shrink: 0;
 }
 
-.rc-actions__format {
-  width: 96px;
+.rc-actions__format { width: 96px; }
+
+.rc-btn--send {
+  --el-button-bg-color: #0f766e;
+  --el-button-border-color: #0f766e;
+  --el-button-hover-bg-color: #0d9488;
+  --el-button-hover-border-color: #0d9488;
+}
+
+.rc-btn--sched {
+  --el-button-bg-color: #0369a1;
+  --el-button-border-color: #0369a1;
+  --el-button-hover-bg-color: #0284c7;
+  --el-button-hover-border-color: #0284c7;
 }
 
 .rc-preview {
-  border-top: 1px solid #eef2f7;
-  padding-top: 8px;
+  border-top: 1px solid #e6f2ef;
+  padding-top: 10px;
 }
 
 .rc-preview__meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .rc-stat {
-  padding: 6px 8px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #e8edf3;
   min-width: 0;
 }
 
-.rc-stat--wide {
-  grid-column: span 1;
-}
+.rc-stat--period { background: #f0fdfa; border-color: #99f6e4; }
+.rc-stat--count { background: #eff6ff; border-color: #bfdbfe; }
+.rc-stat--fmt { background: #f8fafc; border-color: #cbd5e1; }
+.rc-stat--file { background: #fffbeb; border-color: #fde68a; }
+.rc-stat--wide { grid-column: span 1; }
 
 .rc-stat__label {
   display: block;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--rc-muted);
   margin-bottom: 2px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .rc-stat__value {
   display: block;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--rc-text);
   line-height: 1.25;
 }
@@ -1577,23 +1790,23 @@ watch(isCuttingReportPreview, (val) => {
 .rc-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
 }
 
 .rc-tag {
   display: inline-flex;
   align-items: center;
   font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
+  font-weight: 700;
+  padding: 3px 9px;
   border-radius: 999px;
   line-height: 1.4;
 }
 
 .rc-tag--mail {
-  background: #eef2ff;
-  color: #4338ca;
-  border: 1px solid #c7d2fe;
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
 }
 
 .rc-tag--line {
@@ -1606,6 +1819,12 @@ watch(isCuttingReportPreview, (val) => {
   background: #fffbeb;
   color: #b45309;
   border: 1px solid #fde68a;
+}
+
+.rc-tag--ok {
+  background: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
 }
 
 .rc-recipients {
@@ -1916,18 +2135,43 @@ watch(isCuttingReportPreview, (val) => {
   background: #f8fafc;
 }
 
+
 .rc-panel__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.rc-panel__title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.rc-panel__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.rc-panel__dot--sched {
+  background: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+
+.rc-panel__dot--logs {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
 }
 
 .rc-panel__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   line-height: 1.2;
 }
 
@@ -1943,24 +2187,97 @@ watch(isCuttingReportPreview, (val) => {
   overflow: hidden;
 }
 
+.rc-table--sched :deep(.el-table__header th) {
+  background: #f0f9ff !important;
+  color: #0369a1;
+}
+
+.rc-table--logs :deep(.el-table__header th) {
+  background: #fffbeb !important;
+  color: #b45309;
+}
+
 .rc-table :deep(.el-table__header th) {
   background: #f8fafc !important;
   color: #475569;
   font-size: 11px;
   font-weight: 700;
-  padding: 6px 0;
+  padding: 7px 0;
 }
 
 .rc-table :deep(.el-table__body td) {
   font-size: 12px;
-  padding: 5px 0;
+  padding: 6px 0;
 }
 
 .rc-table :deep(.el-table__inner-wrapper::before) {
   display: none;
 }
 
+.rc-cell-report {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rc-cell-report__name {
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.rc-cell-report__code {
+  font-size: 10px;
+  color: var(--rc-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.rc-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rc-pill--freq {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.rc-pill--fmt {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.rc-pill--auto {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.rc-pill--manual {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+
 @media (max-width: 960px) {
+  .rc-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rc-hero__aside {
+    justify-content: space-between;
+  }
+
+  .rc-hero__metrics {
+    flex: 1;
+  }
+
   .rc-layout {
     grid-template-columns: 1fr;
   }
@@ -1983,3 +2300,4 @@ watch(isCuttingReportPreview, (val) => {
   }
 }
 </style>
+

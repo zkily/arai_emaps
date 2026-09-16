@@ -59,6 +59,10 @@ CUTTING_EMAIL_TEMPLATE_BODY = (
     "送信者: {sent_by}　送信日時: {sent_at}</p>"
 )
 
+PLAN_BASELINE_REPORT_CODE = "PLAN_BASELINE_WEEKLY"
+PLAN_BASELINE_EVENT_CODE = "REPORT_PLAN_BASELINE_WEEKLY"
+PLAN_BASELINE_EMAIL_TEMPLATE_BODY = CUTTING_EMAIL_TEMPLATE_BODY
+
 
 async def ensure_cutting_email_template(db) -> None:
     from sqlalchemy import select
@@ -72,3 +76,30 @@ async def ensure_cutting_email_template(db) -> None:
     if template and template.body != CUTTING_EMAIL_TEMPLATE_BODY:
         template.body = CUTTING_EMAIL_TEMPLATE_BODY
         await db.commit()
+
+
+async def ensure_plan_baseline_email_template(db) -> None:
+    """ベースライン週次レポートのメールテンプレートが無ければ作成する。"""
+    from sqlalchemy import select
+
+    from app.modules.system.settings_models import EmailTemplate
+
+    result = await db.execute(
+        select(EmailTemplate).where(EmailTemplate.code == PLAN_BASELINE_EVENT_CODE)
+    )
+    template = result.scalar_one_or_none()
+    if template:
+        return
+    db.add(
+        EmailTemplate(
+            code=PLAN_BASELINE_EVENT_CODE,
+            name="生産計画ベースラインレポート",
+            subject="【Smart-EMAP】{report_name} {period_label}（{record_count}件）",
+            body=PLAN_BASELINE_EMAIL_TEMPLATE_BODY,
+            event_code=PLAN_BASELINE_EVENT_CODE,
+            language="ja",
+            variables=["report_name", "period_label", "record_count", "summary_html", "sent_by", "sent_at"],
+            is_active=True,
+        )
+    )
+    await db.commit()
