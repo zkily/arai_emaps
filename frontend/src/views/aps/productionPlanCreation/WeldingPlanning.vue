@@ -2,7 +2,7 @@
   <div class="planning-page">
     <!-- ─── Page Header ─── -->
     <div class="plan-hd">
-      <h2 class="plan-hd-title">溶接計画作成</h2>
+      <h2 class="plan-hd-title">{{ pageTitle }}</h2>
       <p class="plan-hd-sub">基準開始月・工程・設備の順で指定し、品目と数量を登録。ライン上で順次つなげてガントを表示します。</p>
     </div>
 
@@ -28,7 +28,8 @@
             <el-select
               v-model="selectedProcessCd"
               filterable
-              clearable
+              :clearable="!lockProcessCd"
+              :disabled="lockProcessCd"
               placeholder="先に工程を選択"
               class="setup-field setup-field--process"
               :loading="loadingProcesses"
@@ -909,7 +910,7 @@
         :key="`${selectedLineId}-${lineCapacitySingleDayRange[0]}`"
         :preset-line-id="selectedLineId"
         :preset-date-range="lineCapacitySingleDayRange"
-        preset-process-cd="KT07"
+        :preset-process-cd="defaultProcessCd"
         @saved="onLineCapacityDaySlotsSaved"
       />
       <template #footer>
@@ -931,7 +932,7 @@
         embed
         :preset-line-id="selectedLineId"
         :preset-date-range="lineCapacityDateRange"
-        preset-process-cd="KT07"
+        :preset-process-cd="defaultProcessCd"
         @saved="onLineCapacityDaySlotsSaved"
       />
     </el-dialog>
@@ -1041,6 +1042,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'WeldingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
@@ -1084,6 +1086,17 @@ import { getProductionSummarysList } from '@/api/database'
 import request from '@/shared/api/request'
 
 const { canCreate, canEdit, canDelete, canExport } = useApsOperationPermission()
+
+const route = useRoute()
+const defaultProcessCd = computed(() => {
+  const v = route.meta.planProcessCd
+  return typeof v === 'string' && v.trim() ? v.trim() : 'KT07'
+})
+const lockProcessCd = computed(() => Boolean(route.meta.lockProcessCd))
+const pageTitle = computed(() => {
+  const t = route.meta.title
+  return typeof t === 'string' && t.trim() ? t : '溶接計画作成'
+})
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
 function formatYmdInJapan(d: Date): string {
@@ -1141,7 +1154,7 @@ function offsetTodayIsoInJapan(offsetDays: number): string {
 
 const lines = ref<ProductionLine[]>([])
 const selectedLineId = ref<number | null>(null)
-const selectedProcessCd = ref<string>('KT07')
+const selectedProcessCd = ref<string>(defaultProcessCd.value)
 const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
 const loadingLines = ref(false)
@@ -1595,13 +1608,13 @@ async function loadProcessOptions() {
     processOptions.value = []
   } finally {
     loadingProcesses.value = false
-    // 默认工程：KT07（如果不存在则保持未选择状态）
-    const exists = processOptions.value.some((p) => (p.process_cd || '').trim() === 'KT07')
+    const defaultCd = defaultProcessCd.value
+    const exists = processOptions.value.some((p) => (p.process_cd || '').trim() === defaultCd)
     if (!exists) {
       selectedProcessCd.value = ''
       return
     }
-    // 触发加载设备列表
+    selectedProcessCd.value = defaultCd
     void onProcessChange()
   }
 }

@@ -67,7 +67,7 @@ export const menuConfig: MenuConfigItem[] = [
   // ===== 3. 在庫管理 (Inventory / WMS) =====
   { code: 'ERP_INVENTORY', name: '在庫管理', path: '/erp/inventory', icon: 'TakeawayBox', parentCode: 'ERP', sortOrder: 5 },
   { code: 'ERP_INVENTORY_HOME', name: '在庫ホーム', icon: 'HomeFilled', path: '/erp/inventory', parentCode: 'ERP_INVENTORY', sortOrder: 0 },
-  { code: 'ERP_INVENTORY_LIST', name: '製品在庫照会', icon: 'Goods', path: '/erp/inventory/list', parentCode: 'ERP_INVENTORY', sortOrder: 1 },
+  { code: 'ERP_INVENTORY_LIST', name: '仕掛品・製品在庫照会', icon: 'Goods', path: '/erp/inventory/list', parentCode: 'ERP_INVENTORY', sortOrder: 1 },
   { code: 'ERP_INVENTORY_MATERIAL_LIST', name: '材料在庫照会', icon: 'Collection', path: '/erp/inventory/material-list', parentCode: 'ERP_INVENTORY', sortOrder: 2 },
   { code: 'ERP_INVENTORY_PART_LIST', name: '部品在庫照会', icon: 'Grid', path: '/erp/inventory/part-list', parentCode: 'ERP_INVENTORY', sortOrder: 3 },
   { code: 'ERP_INVENTORY_STOCK_ENTRY', name: '在庫登録管理', icon: 'DocumentAdd', path: '/erp/inventory/stock-entry', parentCode: 'ERP_INVENTORY', sortOrder: 4 },
@@ -137,6 +137,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_PLANNING', name: '成型計画作成', icon: 'SetUp', path: '/aps/planning', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 2 },
   { code: 'APS_WELDING_PLANNING', name: '溶接計画作成', path: '/aps/welding-planning', icon: 'Connection', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 3 },
   { code: 'APS_PLATING_PLANNING', name: 'メッキ計画作成', path: '/aps/plating-planning', icon: 'Brush', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 4 },
+  { code: 'APS_OUTSOURCED_PLATING_PLANNING', name: '外注メッキ計画作成', path: '/aps/outsourced-plating-planning', icon: 'Brush', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 5 },
   { code: 'APS_PRODUCTION_PLAN_VIEW', name: '生産計画一覧', icon: 'View', parentCode: 'APS', sortOrder: 1.5 },
   { code: 'APS_FORMING_PLAN_LIST', name: '成型計画一覧', path: '/aps/planning-list', icon: 'SetUp', parentCode: 'APS_PRODUCTION_PLAN_VIEW', sortOrder: 1 },
   { code: 'APS_WELDING_PLAN_LIST', name: '溶接計画一覧', path: '/aps/welding-planning-list', icon: 'Connection', parentCode: 'APS_PRODUCTION_PLAN_VIEW', sortOrder: 2 },

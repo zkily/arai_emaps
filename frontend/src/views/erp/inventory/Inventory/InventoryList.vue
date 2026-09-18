@@ -13,7 +13,7 @@
           <el-icon size="24"><List /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="header-title">製品在庫照会</h1>
+          <h1 class="header-title">仕掛品・製品在庫照会</h1>
           <span class="header-meta">{{ totalCount }} 件</span>
         </div>
       </div>
@@ -118,67 +118,67 @@
         <el-table-column prop="day_of_week" label="曜日" width="60" align="center" />
         <el-table-column prop="cutting_inventory" label="切断" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.cutting_inventory)">{{ formatNum(row.cutting_inventory) }}</span>
+            <span :class="numClass(row.cutting_inventory)">{{ formatCellNum(row.cutting_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="chamfering_inventory" label="面取" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.chamfering_inventory)">{{ formatNum(row.chamfering_inventory) }}</span>
+            <span :class="numClass(row.chamfering_inventory)">{{ formatCellNum(row.chamfering_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="molding_inventory" label="成型" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.molding_inventory)">{{ formatNum(row.molding_inventory) }}</span>
+            <span :class="numClass(row.molding_inventory)">{{ formatCellNum(row.molding_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="plating_inventory" label="メッキ" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.plating_inventory)">{{ formatNum(row.plating_inventory) }}</span>
+            <span :class="numClass(row.plating_inventory)">{{ formatCellNum(row.plating_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="welding_inventory" label="溶接" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.welding_inventory)">{{ formatNum(row.welding_inventory) }}</span>
+            <span :class="numClass(row.welding_inventory)">{{ formatCellNum(row.welding_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="inspection_inventory" label="検査" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.inspection_inventory)">{{ formatNum(row.inspection_inventory) }}</span>
+            <span :class="numClass(row.inspection_inventory)">{{ formatCellNum(row.inspection_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="warehouse_inventory" label="倉庫" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.warehouse_inventory)">{{ formatNum(row.warehouse_inventory) }}</span>
+            <span :class="numClass(row.warehouse_inventory)">{{ formatCellNum(row.warehouse_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="outsourced_warehouse_inventory" label="外注倉庫" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.outsourced_warehouse_inventory)">{{ formatNum(row.outsourced_warehouse_inventory) }}</span>
+            <span :class="numClass(row.outsourced_warehouse_inventory)">{{ formatCellNum(row.outsourced_warehouse_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="outsourced_plating_inventory" label="外注メッキ" width="100" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.outsourced_plating_inventory)">{{ formatNum(row.outsourced_plating_inventory) }}</span>
+            <span :class="numClass(row.outsourced_plating_inventory)">{{ formatCellNum(row.outsourced_plating_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="outsourced_welding_inventory" label="外注溶接" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.outsourced_welding_inventory)">{{ formatNum(row.outsourced_welding_inventory) }}</span>
+            <span :class="numClass(row.outsourced_welding_inventory)">{{ formatCellNum(row.outsourced_welding_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="pre_welding_inspection_inventory" label="溶接前検査" width="100" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.pre_welding_inspection_inventory)">{{ formatNum(row.pre_welding_inspection_inventory) }}</span>
+            <span :class="numClass(row.pre_welding_inspection_inventory)">{{ formatCellNum(row.pre_welding_inspection_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="pre_inspection_inventory" label="支給前" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.pre_inspection_inventory)">{{ formatNum(row.pre_inspection_inventory) }}</span>
+            <span :class="numClass(row.pre_inspection_inventory)">{{ formatCellNum(row.pre_inspection_inventory) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="pre_outsourcing_inventory" label="検査前" width="90" align="right">
           <template #default="{ row }">
-            <span :class="numClass(row.pre_outsourcing_inventory)">{{ formatNum(row.pre_outsourcing_inventory) }}</span>
+            <span :class="numClass(row.pre_outsourcing_inventory)">{{ formatCellNum(row.pre_outsourcing_inventory) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -485,6 +485,14 @@ function formatNum(v: number | null | undefined): string {
   return Number(v).toLocaleString()
 }
 
+/** テーブル数量：0 / 空は空白表示 */
+function formatCellNum(v: number | null | undefined): string {
+  if (v == null) return ''
+  const n = Number(v)
+  if (!Number.isFinite(n) || n === 0) return ''
+  return n.toLocaleString()
+}
+
 function numClass(v: number | null | undefined): string {
   if (v == null) return ''
   const n = Number(v)
@@ -515,7 +523,7 @@ function getSummaries(param: { columns: { property?: string }[]; data: Productio
     const prop = col.property
     if (prop && inventoryKeys.includes(prop as typeof inventoryKeys[number])) {
       const total = data.reduce((acc, row) => acc + (Number((row as unknown as Record<string, unknown>)[prop]) || 0), 0)
-      sums.push(total.toLocaleString())
+      sums.push(total === 0 ? '' : total.toLocaleString())
     } else {
       sums.push('')
     }

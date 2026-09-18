@@ -94,8 +94,8 @@ def apply_molding_cascade_to_row(
 ) -> None:
     """
     按 update-plan 规则，以 molding_plan / molding_actual_plan 为基准更新 row 内各 *_plan。
-    plating / welding 保持 row 原值（来自 DB / APS）。
-    検査・外注メッキ・外注溶接・外注倉庫は内示数（forecast_quantity）を用いる。
+    plating / welding / 外注メッキ は row 原値を保持（DB / APS）。
+    検査・外注溶接・外注倉庫は内示数（forecast_quantity）を用いる。
     """
     compute_actual_plans(row)
 
@@ -110,8 +110,6 @@ def apply_molding_cascade_to_row(
         row["sw_plan"] = molding_actual_plan
     if KT_INSPECTION in route_process_cds:
         row["inspection_plan"] = forecast_qty
-    if KT_OUTSOURCED_PLATING in route_process_cds:
-        row["outsourced_plating_plan"] = forecast_qty
     if KT_OUTSOURCED_WELDING in route_process_cds:
         row["outsourced_welding_plan"] = forecast_qty
     if route_process_cds & KT_OUTSOURCED_WAREHOUSE:
@@ -121,9 +119,6 @@ def apply_molding_cascade_to_row(
     if KT_INSPECTION in route_process_cds:
         actual = _num(row, "inspection_actual")
         row["inspection_actual_plan"] = actual if actual else _num(row, "inspection_plan")
-    if KT_OUTSOURCED_PLATING in route_process_cds:
-        actual = _num(row, "outsourced_plating_actual")
-        row["outsourced_plating_actual_plan"] = actual if actual else _num(row, "outsourced_plating_plan")
     if KT_OUTSOURCED_WELDING in route_process_cds:
         actual = _num(row, "outsourced_welding_actual")
         row["outsourced_welding_actual_plan"] = actual if actual else _num(row, "outsourced_welding_plan")

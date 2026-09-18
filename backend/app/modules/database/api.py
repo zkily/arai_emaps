@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 import math
 import re
 import time
-from typing import Optional
+from typing import Any, Optional
 from collections import defaultdict
 from datetime import date, timedelta, datetime
 from datetime import time as dt_time
@@ -223,6 +223,7 @@ TREND_PREFIXES = ["cutting", "chamfering", "molding", "plating", "welding", "ins
 # 計画データ更新：schedule_details.planned_qty を集計し、設備 machine_type → processes と突合した工程名ごとに _plan 列へ反映（溶接KT07別途）
 # plating_plan・inspection_plan は schedule 集計ではなく、成型実計計画 molding_actual_plan をルート工程（KT05/KT09）で振り分け（切断・面取と同様）
 # ※ welding_plan は KT07（溶接工程）として集計した日別 planned_qty を使用（WeldingPlanning と同じ工程粒度）。
+# ※ outsourced_plating_plan は KT06（外注メッキ）の schedule_details.planned_qty を使用（外注メッキ計画作成と同じ工程粒度）。
 PLAN_PROCESS_MAPPING = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
@@ -3216,6 +3217,115 @@ async def _sync_plating_plan_from_aps_board(
     return updated_count, skipped_count
 
 
+_PLAN_FIELD_UPDATE_ALLOWLIST = frozenset(
+    {
+        "molding_plan",
+        "welding_plan",
+        "cutting_plan",
+        "chamfering_plan",
+        "plating_plan",
+        "inspection_plan",
+        "sw_plan",
+        "outsourced_plating_plan",
+        "outsourced_welding_plan",
+        "outsourced_warehouse_plan",
+    }
+)
+
+
+async def _schedule_planned_qty_rows_for_process_cd(
+    db: AsyncSession,
+    *,
+    process_cd: str,
+    start_d: date,
+    end_d: date,
+    pcd_sch: str,
+) -> list[tuple[str, Any, int]]:
+    """schedule_details を工程CDで日別集計し (product_cd, date, qty) を返す。"""
+    sql = text(
+        """
+        SELECT """
+        + pcd_sch
+        + """ AS product_cd, sd.schedule_date AS dt,
+               SUM(COALESCE(sd.planned_qty, 0)) AS quantity
+        FROM schedule_details sd
+        INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
+        INNER JOIN machines m ON m.id = sch.line_id
+        INNER JOIN processes pr ON m.machine_type IS NOT NULL
+          AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
+        INNER JOIN production_summarys ps ON """
+        + pcd_sch
+        + """ = ps.product_cd AND sd.schedule_date = ps.date
+        WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
+          AND pr.process_cd = :process_cd
+          AND sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date
+        GROUP BY """
+        + pcd_sch
+        + """, sd.schedule_date
+        """
+    )
+    result = await db.execute(sql, {"process_cd": process_cd, "start_date": start_d, "end_date": end_d})
+    rows_out: list[tuple[str, Any, int]] = []
+    for row in result.fetchall():
+        product_cd = (row[0] or "").strip() if row[0] is not None else ""
+        dt = row[1]
+        quantity = row[2]
+        if not product_cd or dt is None:
+            continue
+        try:
+            qty = int(float(quantity)) if quantity is not None else 0
+        except (TypeError, ValueError):
+            qty = 0
+        rows_out.append((product_cd, dt, qty))
+    return rows_out
+
+
+async def _batch_update_summary_plan_field(
+    db: AsyncSession,
+    field_name: str,
+    rows: list[tuple[str, Any, int]],
+) -> tuple[int, int]:
+    """production_summarys の指定 plan 列を (product_cd, date) 単位で更新する。"""
+    if field_name not in _PLAN_FIELD_UPDATE_ALLOWLIST:
+        raise ValueError(f"unsupported plan field: {field_name}")
+    updated_count = 0
+    skipped_count = 0
+    batch_size = 500
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i : i + batch_size]
+        case_parts = " ".join(
+            ["WHEN product_cd = :pc{:d} AND date = :dt{:d} THEN :q{:d}".format(j, j, j) for j in range(len(batch))]
+        )
+        in_parts = ", ".join(["(:pc{:d}, :dt{:d})".format(j, j) for j in range(len(batch))])
+        sql_str = "UPDATE production_summarys SET {} = CASE {} ELSE {} END WHERE (product_cd, date) IN ({})".format(
+            field_name, case_parts, field_name, in_parts
+        )
+        batch_params = {}
+        for j, (pc, d, q) in enumerate(batch):
+            batch_params["pc{:d}".format(j)] = pc
+            batch_params["dt{:d}".format(j)] = d
+            batch_params["q{:d}".format(j)] = q
+        try:
+            res = await db.execute(text(sql_str), batch_params)
+            updated_count += res.rowcount
+        except Exception:
+            for pc, d, q in batch:
+                try:
+                    stmt = (
+                        update(ProductionSummary)
+                        .where(ProductionSummary.product_cd == pc, ProductionSummary.date == d)
+                        .values(**{field_name: q})
+                    )
+                    res = await db.execute(stmt)
+                    if res.rowcount > 0:
+                        updated_count += 1
+                    else:
+                        skipped_count += 1
+                except Exception:
+                    skipped_count += 1
+    return updated_count, skipped_count
+
+
 @router.post("/update-plan")
 async def update_production_summarys_plan(
     body: OptionalStartDateBody = Body(default=None),
@@ -3228,9 +3338,10 @@ async def update_production_summarys_plan(
     production_summarys と同日・同製品で INNER JOIN した行のみ日別に SUM して各 *_plan 列へ反映する。
     product_cd は末尾を '1' にそろえてから突合・集計する（末尾が 1 以外の計画も同一製品へ合算）。
     社内溶接 welding_plan も KT07 の schedule_details.planned_qty 合計のみ。
+    外注メッキ outsourced_plating_plan は KT06 の schedule_details.planned_qty 合計のみ。
     続けて actual/plan から actual_plan を更新した後、ルート工程に応じて molding_actual_plan を
     cutting/chamfering/plating（KT01/KT02/KT05）の所属工程 plan 列へ反映する。
-    検査（KT09）・外注メッキ（KT06）・外注溶接（KT08）・外注倉庫（KT15/KT10）は
+    検査（KT09）・外注溶接（KT08）・外注倉庫（KT15/KT10）は
     成型計画ではなく、当該ルートに属する行の内示数 forecast_quantity を各 plan 列に反映する。
     startDate（未指定時は当月月初 JST）～+5ヶ月のみ対象。それより前の月の計画列は変更しない。
     更新前に同期間の _plan / _actual_plan 列を 0 にクリアしてから再集計する（削除済み計画の残値防止）。
@@ -3365,6 +3476,21 @@ async def update_production_summarys_plan(
                         except Exception:
                             skipped_count += 1
 
+    outsourced_plating_plan_rows = await _schedule_planned_qty_rows_for_process_cd(
+        db,
+        process_cd="KT06",
+        start_d=start_d,
+        end_d=end_d,
+        pcd_sch=_pcd_sch,
+    )
+    if outsourced_plating_plan_rows:
+        plating_updated, plating_skipped = await _batch_update_summary_plan_field(
+            db, "outsourced_plating_plan", outsourced_plating_plan_rows
+        )
+        updated_count += plating_updated
+        skipped_count += plating_skipped
+        total_plan_rows += len(outsourced_plating_plan_rows)
+
     # 2) actual_plan: 先用 actual 填，再用 plan 补空/零（対象範囲のみ）
     for actual_col, plan_col, target_col in ACTUAL_PLAN_COLUMNS:
         await db.execute(
@@ -3407,20 +3533,13 @@ async def update_production_summarys_plan(
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )
-    # 検査・外注メッキ・外注溶接・外注倉庫：成型計画ではなく、当該工程ルートの内示数を plan に反映
+    # 検査・外注溶接・外注倉庫：成型計画ではなく、当該工程ルートの内示数を plan に反映
+    # 外注メッキ（KT06）は APS 外注メッキ計画作成の schedule_details を用いるため内示上書きしない
     await db.execute(
         text("""
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT09'
             SET ps.inspection_plan = COALESCE(ps.forecast_quantity, 0)
-            WHERE 1=1""" + ps_date_filter),
-        range_params,
-    )
-    await db.execute(
-        text("""
-            UPDATE production_summarys ps
-            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT06'
-            SET ps.outsourced_plating_plan = COALESCE(ps.forecast_quantity, 0)
             WHERE 1=1""" + ps_date_filter),
         range_params,
     )

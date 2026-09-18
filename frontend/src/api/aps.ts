@@ -430,6 +430,68 @@ export function fetchEquipmentEfficiencyProducts(machineId: number): Promise<Equ
   return request.get(`${BASE}/equipment-efficiency-products`, { params: { machineId } })
 }
 
+export function fetchOutsourcedPlatingProducts(machineId: number): Promise<EquipmentEfficiencyProduct[]> {
+  return request.get(`${BASE}/outsourced-plating/products`, { params: { machineId } })
+}
+
+export interface OutsourcedPlatingPrevProcessPlan {
+  product_cd: string
+  prev_process_key?: string | null
+  prev_process_name?: string | null
+  total_qty: number
+  actual_qty: number
+  plan_qty: number
+  start_date: string
+  end_date: string
+  has_kt06: boolean
+  message?: string | null
+}
+
+export function fetchOutsourcedPlatingPrevProcessPlan(params: {
+  productCd: string
+  startDate: string
+  endDate: string
+}): Promise<OutsourcedPlatingPrevProcessPlan> {
+  return request.get(`${BASE}/outsourced-plating/prev-process-plan`, { params })
+}
+
+export interface OutsourcedPlatingPlanMatrixCell {
+  plan: number
+  actual: number
+  actual_plan: number
+}
+
+export interface OutsourcedPlatingPlanMatrixRow {
+  product_cd: string
+  product_name: string
+  supplier: string
+  prev_process_key: string
+  prev_process_name: string
+  plan_total: number
+  actual_total: number
+  actual_plan_total: number
+  by_date: Record<string, OutsourcedPlatingPlanMatrixCell>
+}
+
+export interface OutsourcedPlatingPlanMatrix {
+  start_date: string
+  end_date: string
+  dates: string[]
+  weekdays: string[]
+  suppliers: string[]
+  rows: OutsourcedPlatingPlanMatrixRow[]
+  plan_total: number
+  actual_total: number
+  actual_plan_total: number
+}
+
+export function fetchOutsourcedPlatingPlanMatrix(params: {
+  startDate: string
+  endDate: string
+}): Promise<OutsourcedPlatingPlanMatrix> {
+  return request.get(`${BASE}/outsourced-plating/plan-matrix`, { params })
+}
+
 export function createLine(lineCode: string, defaultWorkHours = 0): Promise<any> {
   return request.post(`${BASE}/lines`, null, {
     params: { line_code: lineCode, default_work_hours: defaultWorkHours },

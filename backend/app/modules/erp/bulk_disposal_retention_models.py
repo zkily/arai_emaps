@@ -10,7 +10,7 @@ class BulkDisposalRetentionRecord(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="ID")
     occurred_date = Column(Date, nullable=False, comment="発生日")
-    report_category = Column(String(20), nullable=False, comment="報告区分")
+    report_category = Column(String(20), nullable=False, comment="報告区分（大量廃棄/大量不良/保留品/在庫消滅/その他）")
     process_name = Column(String(20), nullable=False, comment="発生工程")
     product_cd = Column(String(50), nullable=True, comment="製品CD")
     product_name = Column(String(200), nullable=False, comment="製品名")

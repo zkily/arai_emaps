@@ -30,6 +30,8 @@ from app.modules.master.models import (
     Process,
     Product,
     ProductRouteStep,
+    ProcessRouteStep,
+    ProductMachineConfig,
     Material,
     Supplier,
 )
@@ -46,6 +48,10 @@ from app.modules.aps.models import (
 from app.modules.aps.schemas import (
     ProductionLineOut,
     EquipmentEfficiencyProductOut,
+    OutsourcedPlatingPrevProcessPlanOut,
+    OutsourcedPlatingPlanMatrixOut,
+    OutsourcedPlatingPlanMatrixCell,
+    OutsourcedPlatingPlanMatrixRow,
     LineCapacityOut,
     LineCapacityBatchBody,
     DaySlotsBody,
@@ -886,6 +892,553 @@ async def get_equipment_efficiency_products_by_machine(
             )
         )
     return out
+
+
+_OUTSOURCED_PLATING_PROCESS_LABEL = {
+    "cutting": "切断",
+    "chamfering": "面取",
+    "molding": "成型",
+    "plating": "メッキ",
+    "welding": "溶接",
+    "inspection": "検査",
+    "warehouse": "倉庫",
+    "outsourced_warehouse": "外注倉庫",
+    "outsourced_plating": "外注メッキ",
+    "outsourced_welding": "外注溶接",
+    "pre_welding_inspection": "溶接前検査",
+    "pre_inspection": "外注支給前",
+    "pre_outsourcing": "外注検査前",
+}
+
+
+def _product_cd_lookup_candidates(product_cd: str) -> list[str]:
+    cd = (product_cd or "").strip()
+    if not cd:
+        return []
+    out = [cd]
+    if cd.endswith("1") and len(cd) > 1:
+        out.append(cd[:-1])
+    else:
+        out.append(cd + "1")
+    return list(dict.fromkeys(out))
+
+
+def _int_col(row: Any, name: str) -> int:
+    raw = getattr(row, name, None)
+    if raw is None:
+        return 0
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _route_sequence_for_product_cd(db: AsyncSession, product_cd: str) -> list[str]:
+    from app.modules.database.api import PROCESS_CD_TO_PREFIX, _get_route_sequence
+    from app.modules.database.models import ProductionSummary
+
+    candidates = _product_cd_lookup_candidates(product_cd)
+    if not candidates:
+        return []
+    step_res = await db.execute(
+        select(ProductRouteStep.process_cd)
+        .where(ProductRouteStep.product_cd.in_(candidates))
+        .order_by(ProductRouteStep.step_no)
+    )
+    process_cds = [r[0] for r in step_res.all() if r[0]]
+    seq = [PROCESS_CD_TO_PREFIX[pc] for pc in process_cds if pc in PROCESS_CD_TO_PREFIX]
+    if seq:
+        return seq
+    ps_res = await db.execute(
+        select(ProductionSummary.route_cd)
+        .where(ProductionSummary.product_cd.in_(candidates))
+        .order_by(ProductionSummary.date.desc())
+        .limit(1)
+    )
+    route_cd = ps_res.scalar_one_or_none()
+    if route_cd:
+        return await _get_route_sequence(db, str(route_cd).strip())
+    return []
+
+
+@router.get("/outsourced-plating/products", response_model=List[EquipmentEfficiencyProductOut])
+async def get_outsourced_plating_products(
+    machineId: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    外注メッキ計画作成の品名一覧。
+    設備能率マスタに加え、product_machine_config.outsourced_plating_machine が当該設備と一致する製品も含む。
+    """
+    ee_rows = await get_equipment_efficiency_products_by_machine(machineId, db, current_user)
+    machine = await db.get(Machine, machineId)
+    if machine is None:
+        raise HTTPException(404, "設備が見つかりません")
+    m_cd = (machine.machine_cd or "").strip()
+    m_name = (machine.machine_name or "").strip()
+    match_vals = [v for v in (m_cd, m_name) if v]
+    if not match_vals:
+        return ee_rows
+
+    cfg_res = await db.execute(
+        select(ProductMachineConfig).where(ProductMachineConfig.outsourced_plating_machine.in_(match_vals))
+    )
+    cfg_rows = list(cfg_res.scalars().all())
+    seen_cd = {(r.product_cd or "").strip().lower() for r in ee_rows if (r.product_cd or "").strip()}
+    extra_cds: list[str] = []
+    extras: list[ProductMachineConfig] = []
+    for cfg in cfg_rows:
+        cd = (cfg.product_cd or "").strip()
+        if not cd or cd.lower() in seen_cd:
+            continue
+        seen_cd.add(cd.lower())
+        extra_cds.append(cd)
+        extras.append(cfg)
+
+    lot_by_cd: dict[str, int] = {}
+    if extra_cds:
+        pr_res = await db.execute(select(Product.product_cd, Product.lot_size).where(Product.product_cd.in_(extra_cds)))
+        for prow in pr_res.mappings().all():
+            pcd = (prow.get("product_cd") or "").strip()
+            ls = prow.get("lot_size")
+            if pcd and ls is not None:
+                lot_by_cd[pcd] = int(ls)
+
+    out = list(ee_rows)
+    for cfg in extras:
+        cd = (cfg.product_cd or "").strip()
+        out.append(
+            EquipmentEfficiencyProductOut(
+                id=-(int(cfg.id) or 0) or -1,
+                product_cd=cd or None,
+                product_name=(cfg.product_name or "").strip() or cd or None,
+                efficiency_rate=0.0,
+                step_time=None,
+                lot_size=lot_by_cd.get(cd),
+            )
+        )
+    return out
+
+
+@router.get("/outsourced-plating/prev-process-plan", response_model=OutsourcedPlatingPrevProcessPlanOut)
+async def get_outsourced_plating_prev_process_plan(
+    productCd: str = Query(..., min_length=1),
+    startDate: str = Query(...),
+    endDate: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    製品ルート上の外注メッキ(KT06)直前工程について、期間内の計画数量を返す。
+    当日に実績があれば実績、なければ計画（actual > 0 なら actual、否则 plan）。
+    """
+    from app.modules.database.models import ProductionSummary
+
+    try:
+        start_d = date.fromisoformat(startDate.strip()[:10])
+        end_d = date.fromisoformat(endDate.strip()[:10])
+    except ValueError:
+        raise HTTPException(400, "日付は YYYY-MM-DD 形式で指定してください")
+    if end_d < start_d:
+        raise HTTPException(400, "endDate は startDate 以降を指定してください")
+
+    product_cd = productCd.strip()
+    seq = await _route_sequence_for_product_cd(db, product_cd)
+    try:
+        kt06_idx = seq.index("outsourced_plating")
+    except ValueError:
+        return OutsourcedPlatingPrevProcessPlanOut(
+            product_cd=product_cd,
+            total_qty=0,
+            start_date=start_d,
+            end_date=end_d,
+            has_kt06=False,
+            message="この製品のルートに外注メッキ工程がありません",
+        )
+    if kt06_idx <= 0:
+        return OutsourcedPlatingPrevProcessPlanOut(
+            product_cd=product_cd,
+            total_qty=0,
+            start_date=start_d,
+            end_date=end_d,
+            has_kt06=True,
+            message="外注メッキの前工程がルート上にありません",
+        )
+
+    prev_key = seq[kt06_idx - 1]
+    prev_name = _OUTSOURCED_PLATING_PROCESS_LABEL.get(prev_key, prev_key)
+    actual_col = f"{prev_key}_actual"
+    plan_col = f"{prev_key}_plan"
+    if not hasattr(ProductionSummary, actual_col) or not hasattr(ProductionSummary, plan_col):
+        return OutsourcedPlatingPrevProcessPlanOut(
+            product_cd=product_cd,
+            prev_process_key=prev_key,
+            prev_process_name=prev_name,
+            total_qty=0,
+            start_date=start_d,
+            end_date=end_d,
+            has_kt06=True,
+            message=f"前工程「{prev_name}」の計画列がありません",
+        )
+
+    candidates = _product_cd_lookup_candidates(product_cd)
+    rows_res = await db.execute(
+        select(ProductionSummary).where(
+            ProductionSummary.product_cd.in_(candidates),
+            ProductionSummary.date >= start_d,
+            ProductionSummary.date <= end_d,
+        )
+    )
+    actual_qty = 0
+    plan_qty = 0
+    total_qty = 0
+    for row in rows_res.scalars().all():
+        a = _int_col(row, actual_col)
+        p = _int_col(row, plan_col)
+        if a > 0:
+            actual_qty += a
+            total_qty += a
+        elif p > 0:
+            plan_qty += p
+            total_qty += p
+
+    return OutsourcedPlatingPrevProcessPlanOut(
+        product_cd=product_cd,
+        prev_process_key=prev_key,
+        prev_process_name=prev_name,
+        total_qty=total_qty,
+        actual_qty=actual_qty,
+        plan_qty=plan_qty,
+        start_date=start_d,
+        end_date=end_d,
+        has_kt06=True,
+        message=None if total_qty > 0 else "前工程の計画・実績が期間内にありません",
+    )
+
+
+_OUTSOURCED_PLATING_MATRIX_MAX_DAYS = 93
+_WEEKDAYS_JA = ("月", "火", "水", "木", "金", "土", "日")
+
+
+def _prev_process_key_for_kt06(seq: list[str]) -> Optional[str]:
+    try:
+        idx = seq.index("outsourced_plating")
+    except ValueError:
+        return None
+    if idx <= 0:
+        return None
+    return seq[idx - 1]
+
+
+async def _kt06_product_cds(db: AsyncSession) -> set[str]:
+    cds: set[str] = set()
+    prs = await db.execute(
+        select(ProductRouteStep.product_cd).where(ProductRouteStep.process_cd == "KT06")
+    )
+    for (pc,) in prs.all():
+        key = (pc or "").strip()
+        if key:
+            cds.add(key)
+    route_res = await db.execute(
+        select(ProcessRouteStep.route_cd).where(ProcessRouteStep.process_cd == "KT06").distinct()
+    )
+    route_cds = [(r[0] or "").strip() for r in route_res.all() if (r[0] or "").strip()]
+    if route_cds:
+        prod_res = await db.execute(select(Product.product_cd).where(Product.route_cd.in_(route_cds)))
+        for (pc,) in prod_res.all():
+            key = (pc or "").strip()
+            if key:
+                cds.add(key)
+    return cds
+
+
+async def _route_seq_by_product_cd(
+    db: AsyncSession,
+    product_cds: list[str],
+    route_cd_by_product: dict[str, str],
+) -> dict[str, list[str]]:
+    from app.modules.database.api import PROCESS_CD_TO_PREFIX, _get_route_sequence
+
+    if not product_cds:
+        return {}
+    lookup_cds: list[str] = []
+    for cd in product_cds:
+        lookup_cds.extend(_product_cd_lookup_candidates(cd))
+    lookup_cds = list(dict.fromkeys(lookup_cds))
+
+    step_res = await db.execute(
+        select(ProductRouteStep.product_cd, ProductRouteStep.process_cd)
+        .where(ProductRouteStep.product_cd.in_(lookup_cds))
+        .order_by(ProductRouteStep.product_cd, ProductRouteStep.step_no)
+    )
+    steps_by_cd: dict[str, list[str]] = defaultdict(list)
+    for pc, pcd in step_res.all():
+        key = (pc or "").strip()
+        if key and pcd:
+            steps_by_cd[key].append(str(pcd))
+
+    out: dict[str, list[str]] = {}
+    missing: list[str] = []
+    for cd in product_cds:
+        seq: list[str] = []
+        for cand in _product_cd_lookup_candidates(cd):
+            pcs = steps_by_cd.get(cand)
+            if pcs:
+                seq = [PROCESS_CD_TO_PREFIX[pc] for pc in pcs if pc in PROCESS_CD_TO_PREFIX]
+                break
+        if seq and "outsourced_plating" in seq:
+            out[cd] = seq
+        else:
+            missing.append(cd)
+
+    for cd in missing:
+        route_cd = (route_cd_by_product.get(cd) or "").strip()
+        if not route_cd:
+            continue
+        seq = await _get_route_sequence(db, route_cd)
+        if seq and "outsourced_plating" in seq:
+            out[cd] = seq
+    return out
+
+
+@router.get("/outsourced-plating/plan-matrix", response_model=OutsourcedPlatingPlanMatrixOut)
+async def get_outsourced_plating_plan_matrix(
+    startDate: str = Query(..., description="開始日 YYYY-MM-DD"),
+    endDate: str = Query(..., description="終了日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    生産データ管理から、ルート上 KT06（外注メッキ）の直前工程の計画・実績を
+    製品×日付の二次元表で返す。実績があれば実績、なければ計画（実計）。
+    """
+    from app.modules.database.models import ProductionSummary
+
+    try:
+        start_d = date.fromisoformat(startDate)
+        end_d = date.fromisoformat(endDate)
+    except ValueError:
+        raise HTTPException(400, "日付は YYYY-MM-DD 形式で指定してください")
+    if end_d < start_d:
+        raise HTTPException(400, "終了日は開始日以降を指定してください")
+    if (end_d - start_d).days + 1 > _OUTSOURCED_PLATING_MATRIX_MAX_DAYS:
+        raise HTTPException(400, f"期間は最大 {_OUTSOURCED_PLATING_MATRIX_MAX_DAYS} 日までです")
+
+    dates: list[date] = []
+    cur = start_d
+    while cur <= end_d:
+        dates.append(cur)
+        cur += timedelta(days=1)
+    date_keys = [d.isoformat() for d in dates]
+    weekdays = [_WEEKDAYS_JA[d.weekday()] for d in dates]
+
+    empty = OutsourcedPlatingPlanMatrixOut(
+        start_date=start_d,
+        end_date=end_d,
+        dates=date_keys,
+        weekdays=weekdays,
+        suppliers=[],
+        rows=[],
+    )
+
+    kt06_cds = await _kt06_product_cds(db)
+    if not kt06_cds:
+        return empty
+    expanded_cds: set[str] = set()
+    for cd in kt06_cds:
+        expanded_cds.update(_product_cd_lookup_candidates(cd))
+
+    result = await db.execute(
+        select(ProductionSummary)
+        .where(
+            ProductionSummary.date >= start_d,
+            ProductionSummary.date <= end_d,
+            ProductionSummary.product_cd.in_(list(expanded_cds)),
+        )
+        .order_by(ProductionSummary.product_cd, ProductionSummary.date)
+    )
+    summary_rows = list(result.scalars().all())
+    if not summary_rows:
+        return empty
+
+    product_cds = list(
+        dict.fromkeys((r.product_cd or "").strip() for r in summary_rows if (r.product_cd or "").strip())
+    )
+    route_cd_by_product: dict[str, str] = {}
+    for row in summary_rows:
+        cd = (row.product_cd or "").strip()
+        rc = (row.route_cd or "").strip()
+        if cd and rc and cd not in route_cd_by_product:
+            route_cd_by_product[cd] = rc
+
+    seq_by_cd = await _route_seq_by_product_cd(db, product_cds, route_cd_by_product)
+
+    by_product: dict[str, dict[str, Any]] = {}
+    for row in summary_rows:
+        cd = (row.product_cd or "").strip()
+        if not cd:
+            continue
+        seq = seq_by_cd.get(cd) or []
+        prev_key = _prev_process_key_for_kt06(seq)
+        if not prev_key:
+            continue
+        plan_col = f"{prev_key}_plan"
+        actual_col = f"{prev_key}_actual"
+        actual_plan_col = f"{prev_key}_actual_plan"
+        plan = _int_col(row, plan_col) if hasattr(row, plan_col) else 0
+        actual = _int_col(row, actual_col) if hasattr(row, actual_col) else 0
+        if hasattr(row, actual_plan_col):
+            actual_plan = _int_col(row, actual_plan_col)
+        else:
+            actual_plan = actual if actual > 0 else plan
+        if actual_plan == 0:
+            actual_plan = actual if actual > 0 else plan
+
+        rec = by_product.get(cd)
+        if rec is None:
+            rec = {
+                "product_cd": cd,
+                "product_name": (row.product_name or "").strip(),
+                "supplier_raw": (row.outsourced_plating_machine or "").strip(),
+                "prev_process_key": prev_key,
+                "plan_total": 0,
+                "actual_total": 0,
+                "actual_plan_total": 0,
+                "by_date": {},
+            }
+            by_product[cd] = rec
+        name = (row.product_name or "").strip()
+        if name:
+            rec["product_name"] = name
+        machine = (row.outsourced_plating_machine or "").strip()
+        if machine:
+            rec["supplier_raw"] = machine
+        rec["prev_process_key"] = prev_key
+        if plan == 0 and actual == 0 and actual_plan == 0:
+            continue
+        dkey = row.date.isoformat() if row.date else ""
+        if not dkey:
+            continue
+        cell: dict[str, int] = rec["by_date"].get(dkey)
+        if cell is None:
+            cell = {"plan": 0, "actual": 0, "actual_plan": 0}
+            rec["by_date"][dkey] = cell
+        cell["plan"] += plan
+        cell["actual"] += actual
+        cell["actual_plan"] += actual_plan
+        rec["plan_total"] += plan
+        rec["actual_total"] += actual
+        rec["actual_plan_total"] += actual_plan
+
+    if not by_product:
+        return empty
+
+    cds = list(by_product.keys())
+    prod_res = await db.execute(
+        select(Product.product_cd, Product.product_name, Product.status).where(Product.product_cd.in_(cds))
+    )
+    inactive: set[str] = set()
+    for pc, pname, st in prod_res.all():
+        key = (pc or "").strip()
+        if not key:
+            continue
+        if st is not None and str(st).strip().lower() == "inactive":
+            inactive.add(key)
+            continue
+        rec = by_product.get(key)
+        if rec is not None and not rec["product_name"] and pname:
+            rec["product_name"] = str(pname).strip()
+
+    for cd in inactive:
+        by_product.pop(cd, None)
+
+    empty_supplier_cds = [cd for cd, rec in by_product.items() if not rec["supplier_raw"]]
+    if empty_supplier_cds:
+        cfg_res = await db.execute(
+            select(ProductMachineConfig.product_cd, ProductMachineConfig.outsourced_plating_machine).where(
+                ProductMachineConfig.product_cd.in_(empty_supplier_cds)
+            )
+        )
+        for pc, machine in cfg_res.all():
+            key = (pc or "").strip()
+            rec = by_product.get(key)
+            if rec is None or rec["supplier_raw"]:
+                continue
+            rec["supplier_raw"] = (machine or "").strip()
+
+    raw_suppliers = {(rec["supplier_raw"] or "").strip() for rec in by_product.values() if rec["supplier_raw"]}
+    label_by_raw: dict[str, str] = {}
+    if raw_suppliers:
+        m_res = await db.execute(
+            select(Machine.machine_cd, Machine.machine_name).where(
+                or_(
+                    Machine.machine_cd.in_(list(raw_suppliers)),
+                    Machine.machine_name.in_(list(raw_suppliers)),
+                )
+            )
+        )
+        for m_cd, m_name in m_res.all():
+            cd = (m_cd or "").strip()
+            name = (m_name or "").strip()
+            label = name or cd
+            if cd:
+                label_by_raw[cd] = label
+            if name:
+                label_by_raw[name] = label
+
+    rows_out: list[OutsourcedPlatingPlanMatrixRow] = []
+    suppliers: set[str] = set()
+    plan_total = 0
+    actual_total = 0
+    actual_plan_total = 0
+    for cd in sorted(by_product.keys()):
+        rec = by_product[cd]
+        supplier = label_by_raw.get(rec["supplier_raw"], rec["supplier_raw"] or "")
+        if supplier:
+            suppliers.add(supplier)
+        plan_total += rec["plan_total"]
+        actual_total += rec["actual_total"]
+        actual_plan_total += rec["actual_plan_total"]
+        prev_key = rec["prev_process_key"] or ""
+        rows_out.append(
+            OutsourcedPlatingPlanMatrixRow(
+                product_cd=cd,
+                product_name=rec["product_name"] or "",
+                supplier=supplier,
+                prev_process_key=prev_key,
+                prev_process_name=_OUTSOURCED_PLATING_PROCESS_LABEL.get(prev_key, prev_key),
+                plan_total=rec["plan_total"],
+                actual_total=rec["actual_total"],
+                actual_plan_total=rec["actual_plan_total"],
+                by_date={
+                    dkey: OutsourcedPlatingPlanMatrixCell(
+                        plan=cell["plan"],
+                        actual=cell["actual"],
+                        actual_plan=cell["actual_plan"],
+                    )
+                    for dkey, cell in rec["by_date"].items()
+                },
+            )
+        )
+
+    rows_out.sort(
+        key=lambda r: (
+            (r.supplier or "\uffff").casefold(),
+            r.product_cd.casefold(),
+        )
+    )
+    return OutsourcedPlatingPlanMatrixOut(
+        start_date=start_d,
+        end_date=end_d,
+        dates=date_keys,
+        weekdays=weekdays,
+        suppliers=sorted(suppliers, key=lambda s: s.casefold()),
+        rows=rows_out,
+        plan_total=plan_total,
+        actual_total=actual_total,
+        actual_plan_total=actual_plan_total,
+    )
 
 
 # ═══════════════════ Line Capacities ═══════════════════

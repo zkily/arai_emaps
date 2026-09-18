@@ -155,7 +155,7 @@ const routes: RouteRecordRaw[] = [
 
       // ========== ERP - 在庫管理 (Inventory / WMS) ==========
       { path: 'erp/inventory', name: 'Inventory', component: () => import('@/views/erp/Inventory.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
-      { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '製品在庫照会', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '仕掛品・製品在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/material-list', name: 'MaterialInventoryList', component: () => import('@/views/erp/inventory/Inventory/MaterialInventoryList.vue'), meta: { title: '材料在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/part-list', name: 'PartInventoryList', component: () => import('@/views/erp/inventory/Inventory/PartInventoryList.vue'), meta: { title: '部品在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-entry', name: 'StockEntryManagement', component: () => import('@/views/erp/inventory/stockEntry/UnifiedStockEntry.vue'), meta: { title: '在庫登録管理', group: '在庫管理', requiresAuth: true } },
@@ -259,6 +259,15 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
       { path: 'aps/welding-planning', name: 'WeldingPlanning', component: () => import('@/views/aps/productionPlanCreation/WeldingPlanning.vue'), meta: { title: '溶接計画作成', requiresAuth: true } },
       { path: 'aps/plating-planning', name: 'PlatingPlanning', component: () => import('@/views/aps/productionPlanCreation/PlatingPlanning.vue'), meta: { title: 'メッキ計画作成', requiresAuth: true } },
+      {
+        path: 'aps/outsourced-plating-planning',
+        name: 'OutsourcedPlatingPlanning',
+        component: () => import('@/views/aps/productionPlanCreation/OutsourcedPlatingPlanning.vue'),
+        meta: {
+          title: '外注メッキ計画作成',
+          requiresAuth: true,
+        },
+      },
       { path: 'aps/planning-list', name: 'FormingPlanningList', component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'), meta: { title: '成型計画一覧', requiresAuth: true } },
       { path: 'aps/welding-planning-list', name: 'WeldingPlanningList', component: () => import('@/views/aps/productionPlanOverview/WeldingPlanningList.vue'), meta: { title: '溶接計画一覧', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },

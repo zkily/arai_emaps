@@ -941,6 +941,7 @@ function bulkCategoryClass(category: string | null | undefined) {
   if (s.includes('廃棄')) return 'bulk-chip--rose'
   if (s.includes('不良')) return 'bulk-chip--violet'
   if (s.includes('保留')) return 'bulk-chip--amber'
+  if (s.includes('消滅')) return 'bulk-chip--cyan'
   return 'bulk-chip--slate'
 }
 
@@ -3299,6 +3300,11 @@ onBeforeUnmount(() => {
   color: #6d28d9;
   background: rgba(124, 58, 237, 0.1);
   border: 1px solid rgba(109, 40, 217, 0.28);
+}
+.bulk-chip--cyan {
+  color: #0e7490;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(8, 145, 178, 0.28);
 }
 .bulk-chip--slate {
   color: #475569;

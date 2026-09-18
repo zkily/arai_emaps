@@ -233,7 +233,7 @@ type QuickNavItem = {
 const quickNavModules: QuickNavItem[] = [
   {
     path: '/erp/inventory/list',
-    title: '製品在庫照会',
+    title: '仕掛品・製品在庫照会',
     icon: markRaw(List),
     gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
   },

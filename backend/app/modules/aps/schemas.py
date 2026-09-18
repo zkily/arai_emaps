@@ -49,6 +49,52 @@ class EquipmentEfficiencyProductOut(BaseModel):
     )
 
 
+class OutsourcedPlatingPrevProcessPlanOut(BaseModel):
+    """外注メッキ計画追加：ルート上 KT06 の直前工程計画（実績があれば実績）"""
+    product_cd: str
+    prev_process_key: Optional[str] = None
+    prev_process_name: Optional[str] = None
+    total_qty: int = 0
+    actual_qty: int = 0
+    plan_qty: int = 0
+    start_date: date
+    end_date: date
+    has_kt06: bool = False
+    message: Optional[str] = None
+
+
+class OutsourcedPlatingPlanMatrixCell(BaseModel):
+    """外注メッキ直前工程の計画・実績・実計（1 製品×1 日）"""
+    plan: int = 0
+    actual: int = 0
+    actual_plan: int = 0
+
+
+class OutsourcedPlatingPlanMatrixRow(BaseModel):
+    product_cd: str
+    product_name: str = ""
+    supplier: str = ""
+    prev_process_key: str = ""
+    prev_process_name: str = ""
+    plan_total: int = 0
+    actual_total: int = 0
+    actual_plan_total: int = 0
+    by_date: Dict[str, OutsourcedPlatingPlanMatrixCell] = Field(default_factory=dict)
+
+
+class OutsourcedPlatingPlanMatrixOut(BaseModel):
+    """外注メッキ計画作成：生産データ管理の KT06 直前工程を製品×日付の二次元表にしたもの"""
+    start_date: date
+    end_date: date
+    dates: List[str]
+    weekdays: List[str]
+    suppliers: List[str]
+    rows: List[OutsourcedPlatingPlanMatrixRow]
+    plan_total: int = 0
+    actual_total: int = 0
+    actual_plan_total: int = 0
+
+
 # ──────────────────── Line Capacities ────────────────────
 
 class LineCapacityItem(BaseModel):

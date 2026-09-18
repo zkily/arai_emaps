@@ -17,7 +17,7 @@ from app.modules.erp.bulk_disposal_retention_models import BulkDisposalRetention
 
 router = APIRouter(prefix="/bulk-disposal-retention", tags=["BulkDisposalRetention"])
 
-REPORT_CATEGORIES = ("大量廃棄", "大量不良", "保留品", "その他")
+REPORT_CATEGORIES = ("大量廃棄", "大量不良", "保留品", "在庫消滅", "その他")
 PROCESS_NAMES = ("切断", "面取", "成型", "メッキ", "溶接", "検査", "その他")
 HANDLING_STATUSES = ("未処理", "処理済")
 BULK_DEFECT_MIN_QTY = 200
