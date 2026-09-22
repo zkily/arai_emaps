@@ -69,6 +69,25 @@
               >
                 分類: {{ filters.kind }}
               </el-tag>
+              <el-tag
+                v-if="filters.status"
+                closable
+                @close="handleClearFilter('status')"
+                type="info"
+                size="small"
+              >
+                状態: {{ filters.status === 'active' ? '現行' : '終息' }}
+              </el-tag>
+              <el-tag
+                v-if="filters.material_cd"
+                closable
+                @close="handleClearFilter('material_cd')"
+                type="primary"
+                effect="plain"
+                size="small"
+              >
+                材料CD: {{ filters.material_cd }}
+              </el-tag>
             </div>
           </div>
         </div>
@@ -138,90 +157,114 @@
         </div>
       </div>
 
-      <!-- 筛选内容 -->
+      <!-- 筛选内容：标签与控件同行 -->
       <div class="filters-grid">
-        <el-row :gutter="16">
-          <el-col :lg="6" :md="12" :sm="12" :xs="24">
-            <!-- 搜索关键词 -->
-            <el-form-item label="🔍 キーワード">
-              <el-input
-                v-model="filters.keyword"
-                placeholder="製品名 / 品番 / 別名"
-                clearable
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <!-- 类别 -->
-          <el-col :lg="6" :md="12" :sm="12" :xs="24">
-            <el-form-item label="📁 カテゴリ">
-              <el-select
-                v-model="filters.category"
-                clearable
-                placeholder="選択"
-                style="min-width: 100px; width: 100%"
-              >
-                <el-option label="一般" value="一般" />
-                <el-option label="一般溶接" value="一般溶接" />
-                <el-option label="メカ溶接" value="メカ溶接" />
-                <el-option label="自動車" value="自動車" />
-                <el-option label="その他" value="その他" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :lg="6" :md="12" :sm="12" :xs="24">
-            <el-form-item label="🏷️ 分類(kind)">
-              <el-select
-                v-model="filters.kind"
-                clearable
-                placeholder="選択"
-                style="width: 100%"
-              >
-                <el-option label="T" value="T" />
-                <el-option label="N" value="N" />
-                <el-option label="F" value="F" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <!-- 材料CD -->
-          <el-col :lg="6" :md="12" :sm="12" :xs="24">
-            <el-form-item label="🧱 材料CD">
-              <el-select
-                v-model="filters.material_cd"
-                filterable
-                clearable
-                placeholder="選択"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="item in materialOptions"
-                  :key="item.cd"
-                  :label="`${item.cd}｜${item.name}`"
-                  :value="item.cd"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="filter-item filter-item--keyword">
+          <label class="filter-label">
+            <el-icon><Search /></el-icon>
+            キーワード
+          </label>
+          <el-input
+            v-model="filters.keyword"
+            placeholder="製品名 / 品番 / 別名"
+            clearable
+            size="small"
+            class="filter-control"
+          />
+        </div>
+        <div class="filter-item filter-item--category">
+          <label class="filter-label">
+            <el-icon><FolderOpened /></el-icon>
+            カテゴリ
+          </label>
+          <el-select
+            v-model="filters.category"
+            clearable
+            placeholder="選択"
+            size="small"
+            class="filter-control"
+          >
+            <el-option label="一般" value="一般" />
+            <el-option label="一般溶接" value="一般溶接" />
+            <el-option label="メカ溶接" value="メカ溶接" />
+            <el-option label="自動車" value="自動車" />
+            <el-option label="その他" value="その他" />
+          </el-select>
+        </div>
+        <div class="filter-item filter-item--kind">
+          <label class="filter-label">
+            <el-icon><CollectionTag /></el-icon>
+            分類
+          </label>
+          <el-select
+            v-model="filters.kind"
+            clearable
+            placeholder="選択"
+            size="small"
+            class="filter-control"
+          >
+            <el-option label="T" value="T" />
+            <el-option label="N" value="N" />
+            <el-option label="F" value="F" />
+          </el-select>
+        </div>
+        <div class="filter-item filter-item--material">
+          <label class="filter-label">
+            <el-icon><Box /></el-icon>
+            材料CD
+          </label>
+          <el-select
+            v-model="filters.material_cd"
+            filterable
+            clearable
+            placeholder="選択"
+            size="small"
+            class="filter-control"
+          >
+            <el-option
+              v-for="item in materialOptions"
+              :key="item.cd"
+              :label="`${item.cd}｜${item.name}`"
+              :value="item.cd"
+            />
+          </el-select>
+        </div>
+        <div class="filter-item filter-item--status">
+          <label class="filter-label">
+            <el-icon><CircleCheck /></el-icon>
+            状態
+          </label>
+          <el-select
+            v-model="filters.status"
+            clearable
+            placeholder="選択"
+            size="small"
+            class="filter-control"
+          >
+            <el-option label="現行" value="active" />
+            <el-option label="終息" value="inactive" />
+          </el-select>
+        </div>
       </div>
-
-      <!-- 筛选结果摘要 -->
     </div>
 
     <!-- 数据表格 -->
-    <el-table
-      :data="productList"
-      v-loading="loading"
-      stripe
-      border
-      highlight-current-row
-      :style="{ width: '100%' }"
-      height="600"
-      :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
-      :cell-style="{ padding: '4px 8px' }"
-      :default-sort="{ prop: 'product_name', order: 'ascending' }"
-      :scrollbar-always-on="true"
-    >
+    <div class="table-section">
+      <el-table
+        :data="productList"
+        v-loading="loading"
+        stripe
+        border
+        highlight-current-row
+        size="small"
+        class="product-table"
+        :style="{ width: '100%' }"
+        height="600"
+        :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
+        :cell-style="{ padding: '4px 8px' }"
+        :default-sort="{ prop: 'product_name', order: 'ascending' }"
+        :scrollbar-always-on="true"
+      >
       <el-table-column fixed prop="product_cd" label="製品CD" min-width="85" />
       <el-table-column prop="product_name" label="製品名称" min-width="155" />
       <el-table-column
@@ -252,7 +295,14 @@
         min-width="101"
         align="center"
         v-show="visibleColumns.category"
-      />
+      >
+        <template #default="{ row }">
+          <el-tag v-if="row.category" size="small" effect="plain" class="category-tag">
+            {{ row.category }}
+          </el-tag>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="kind"
         label="分類"
@@ -261,7 +311,14 @@
         v-show="visibleColumns.kind"
       >
         <template #default="{ row }">
-          {{ row.kind || '—' }}
+          <el-tag
+            v-if="row.kind"
+            size="small"
+            :type="row.kind === 'T' ? 'success' : row.kind === 'N' ? 'warning' : 'info'"
+          >
+            {{ row.kind }}
+          </el-tag>
+          <span v-else>—</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -542,17 +599,21 @@
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <!-- 分页 -->
-    <el-pagination
-      v-model:current-page="pagination.page"
-      :page-size="pagination.pageSize"
-      :total="pagination.total"
-      layout="prev, pager, next"
-      class="pagination"
-      @current-change="fetchList"
-    />
+      <!-- 分页 -->
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          :page-size="pagination.pageSize"
+          :total="pagination.total"
+          layout="total, prev, pager, next"
+          class="pagination"
+          background
+          @current-change="fetchList"
+        />
+      </div>
+    </div>
 
     <!-- 编辑弹窗 -->
     <ProductEditDialog
@@ -640,6 +701,10 @@ import {
   Setting,
   Printer,
   DataAnalysis,
+  Search,
+  FolderOpened,
+  CollectionTag,
+  CircleCheck,
 } from '@element-plus/icons-vue'
 import {
   getProductList,
@@ -1920,10 +1985,31 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 
+.stat-card:nth-child(1) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.stat-card:nth-child(2) {
+  background: rgba(16, 185, 129, 0.28);
+}
+
+.stat-card:nth-child(3) {
+  background: rgba(245, 158, 11, 0.28);
+}
+
+.stat-card:nth-child(4) {
+  background: rgba(6, 182, 212, 0.28);
+}
+
+.stat-card:nth-child(5) {
+  background: rgba(139, 92, 246, 0.28);
+}
+
 .stat-number {
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
@@ -2106,30 +2192,171 @@ onMounted(async () => {
 }
 
 .filters-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 14px;
-  background: white;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
-.filters-grid :deep(.el-form-item) {
-  margin-bottom: 8px;
+.filter-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left-width: 3px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.filters-grid :deep(.el-form-item__label) {
-  font-size: 12px;
+.filter-item:hover {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.filter-item--keyword {
+  flex: 1.55;
+  border-left-color: #667eea;
+}
+
+.filter-item--keyword:hover {
+  border-color: #c7d2fe;
+  border-left-color: #667eea;
+}
+
+.filter-item--category {
+  border-left-color: #f59e0b;
+}
+
+.filter-item--category:hover {
+  border-color: #fde68a;
+  border-left-color: #f59e0b;
+}
+
+.filter-item--kind {
+  flex: 0.75;
+  border-left-color: #10b981;
+}
+
+.filter-item--kind:hover {
+  border-color: #a7f3d0;
+  border-left-color: #10b981;
+}
+
+.filter-item--material {
+  flex: 1.15;
+  border-left-color: #06b6d4;
+}
+
+.filter-item--material:hover {
+  border-color: #a5f3fc;
+  border-left-color: #06b6d4;
+}
+
+.filter-item--status {
+  flex: 0.85;
+  border-left-color: #8b5cf6;
+}
+
+.filter-item--status:hover {
+  border-color: #ddd6fe;
+  border-left-color: #8b5cf6;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #475569;
-  padding-bottom: 2px;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
-.filters-grid :deep(.el-input__wrapper),
-.filters-grid :deep(.el-select .el-input__wrapper) {
+.filter-item--keyword .filter-label .el-icon {
+  color: #667eea;
+}
+
+.filter-item--category .filter-label .el-icon {
+  color: #f59e0b;
+}
+
+.filter-item--kind .filter-label .el-icon {
+  color: #10b981;
+}
+
+.filter-item--material .filter-label .el-icon {
+  color: #06b6d4;
+}
+
+.filter-item--status .filter-label .el-icon {
+  color: #8b5cf6;
+}
+
+.filter-label .el-icon {
+  font-size: 0.85rem;
+}
+
+.filter-control {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.filter-control :deep(.el-input__wrapper),
+.filter-control :deep(.el-select__wrapper),
+.filter-control :deep(.el-select .el-input__wrapper) {
   border-radius: 6px;
   box-shadow: 0 0 0 1px #e2e8f0;
+  background: #f8fafc;
+  transition: box-shadow 0.2s ease;
 }
 
-.filters-grid :deep(.el-input__wrapper:hover),
-.filters-grid :deep(.el-select .el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #667eea;
+.filter-control :deep(.el-input__wrapper:hover),
+.filter-control :deep(.el-select__wrapper:hover),
+.filter-control :deep(.el-select .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #a5b4fc;
+}
+
+.filter-control :deep(.el-input__wrapper.is-focus),
+.filter-control :deep(.el-select__wrapper.is-focused),
+.filter-control :deep(.el-select .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #667eea !important;
+  background: #fff;
+}
+
+.table-section {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.product-table {
+  --el-table-border-color: #e2e8f0;
+  --el-table-row-hover-bg-color: #f1f5f9;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 12px 10px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-top: 1px solid #e2e8f0;
 }
 
 .summary-text {
@@ -2162,7 +2389,7 @@ onMounted(async () => {
 
 /* 表格样式优化 */
 :deep(.el-table) {
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   font-size: 12px;
 }
@@ -2203,8 +2430,9 @@ onMounted(async () => {
 }
 
 .pagination {
-  margin-top: 8px;
+  margin-top: 0;
   text-align: center;
+  justify-content: center;
 }
 
 .pagination :deep(.el-pager li) {
@@ -2231,6 +2459,15 @@ onMounted(async () => {
     align-self: stretch;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .filters-grid {
+    flex-wrap: wrap;
+  }
+
+  .filter-item {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 220px;
   }
 }
 
@@ -2259,19 +2496,30 @@ onMounted(async () => {
     justify-content: flex-start;
   }
 
+  .filter-item {
+    flex: 1 1 100%;
+  }
+
   .stat-card {
     min-width: 60px;
     padding: 5px 8px;
   }
-  
+
   .stat-number {
     font-size: 1.1rem;
   }
 }
 
+.category-tag {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+}
+
 /* 动画效果 */
 .page-header,
-.action-section {
+.action-section,
+.table-section {
   animation: fadeIn 0.4s ease-out;
 }
 
