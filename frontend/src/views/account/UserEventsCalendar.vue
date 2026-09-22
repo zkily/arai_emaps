@@ -92,10 +92,13 @@
 
       <main class="uevents-main">
         <div class="uevents-toolbar">
-          <el-button size="small" round @click="goToday">{{ t('common.userMemoToday') }}</el-button>
-          <div class="uevents-toolbar__nav">
+          <div class="uevents-toolbar__cluster">
+            <button type="button" class="uevents-toolbar__today" @click="goToday">
+              {{ t('common.userMemoToday') }}
+            </button>
+            <span class="uevents-toolbar__divider" aria-hidden="true" />
             <button type="button" class="uevents-toolbar__nav-btn" @click="shiftPeriod(-1)">
-              <el-icon :size="14"><ArrowLeft /></el-icon>
+              <el-icon :size="13"><ArrowLeft /></el-icon>
             </button>
             <el-date-picker
               v-model="toolbarMonth"
@@ -108,10 +111,12 @@
               :title="t('common.userEventPickMonth')"
             />
             <button type="button" class="uevents-toolbar__nav-btn" @click="shiftPeriod(1)">
-              <el-icon :size="14"><ArrowRight /></el-icon>
+              <el-icon :size="13"><ArrowRight /></el-icon>
             </button>
+            <span class="uevents-toolbar__divider" aria-hidden="true" />
             <span class="uevents-toolbar__workday-total" :title="t('common.userEventWorkdayTotalHint')">
-              {{ t('common.userEventWorkdayTotal', { n: monthWorkdayCount }) }}
+              <span class="uevents-toolbar__workday-label">{{ t('common.userEventWorkdayTotalLabel') }}</span>
+              <span class="uevents-toolbar__workday-num">{{ monthWorkdayCount }}</span>
             </span>
           </div>
           <el-radio-group v-model="viewMode" size="small" class="uevents-view-switch">
@@ -424,6 +429,14 @@ const weekdayHeaders = computed(() => {
   return ['日', '月', '火', '水', '木', '金', '土']
 })
 
+/** 表頭・月グリッドと揃え、常に日曜始まり（locale の weekStart に依存しない） */
+function startOfWeekSun(d: dayjs.Dayjs) {
+  return d.subtract(d.day(), 'day').startOf('day')
+}
+function endOfWeekSun(d: dayjs.Dayjs) {
+  return startOfWeekSun(d).add(6, 'day').endOf('day')
+}
+
 const periodLabel = computed(() => {
   const d = dayjs(anchorDate.value)
   const loc = locale.value
@@ -433,7 +446,7 @@ const periodLabel = computed(() => {
     return d.format('YYYY年M月')
   }
   if (viewMode.value === 'week') {
-    const start = d.startOf('week')
+    const start = startOfWeekSun(d)
     const end = start.add(6, 'day')
     if (loc === 'en') return `${start.format('MMM D')} – ${end.format('MMM D, YYYY')}`
     return `${start.format('M/D')} – ${end.format('M/D')}`
@@ -483,12 +496,12 @@ const sidebarMonthLabel = computed(() => {
 const fetchRange = computed(() => {
   const d = dayjs(anchorDate.value)
   if (viewMode.value === 'month') {
-    const start = d.startOf('month').startOf('week')
-    const end = d.endOf('month').endOf('week')
+    const start = startOfWeekSun(d.startOf('month'))
+    const end = endOfWeekSun(d.endOf('month'))
     return { from: start.format('YYYY-MM-DD'), to: end.format('YYYY-MM-DD') }
   }
   if (viewMode.value === 'week') {
-    const start = d.startOf('week')
+    const start = startOfWeekSun(d)
     return { from: start.format('YYYY-MM-DD'), to: start.add(6, 'day').format('YYYY-MM-DD') }
   }
   return { from: d.format('YYYY-MM-DD'), to: d.format('YYYY-MM-DD') }
@@ -557,7 +570,7 @@ const timeColumns = computed((): TimeColumn[] => {
   const dates =
     viewMode.value === 'day'
       ? [d.format('YYYY-MM-DD')]
-      : Array.from({ length: 7 }, (_, i) => d.startOf('week').add(i, 'day').format('YYYY-MM-DD'))
+      : Array.from({ length: 7 }, (_, i) => startOfWeekSun(d).add(i, 'day').format('YYYY-MM-DD'))
   const wd = weekdayHeaders.value
   const today = todayStr.value
 
@@ -1353,18 +1366,72 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
   border: 1px solid rgba(226, 232, 240, 0.95);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
 }
 
-.uevents-toolbar__nav {
-  display: flex;
+.uevents-toolbar__cluster {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  height: 36px;
+  padding: 3px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f0fdfa 0%, #ecfeff 55%, #f8fafc 100%);
+  border: 1px solid rgba(153, 246, 228, 0.7);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+.uevents-toolbar__today {
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 118, 110, 0.08);
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.uevents-toolbar__today:hover {
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.28);
+}
+
+.uevents-toolbar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: rgba(148, 163, 184, 0.35);
+  flex-shrink: 0;
+}
+
+.uevents-toolbar__nav-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  transition: all 0.12s ease;
+}
+
+.uevents-toolbar__nav-btn:hover {
+  color: #0f766e;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 3px rgba(15, 118, 110, 0.1);
 }
 
 .uevents-toolbar__month-picker {
@@ -1373,72 +1440,61 @@ onUnmounted(() => {
 
 .uevents-toolbar__month-picker :deep(.el-input__wrapper) {
   box-shadow: none !important;
-  background: transparent;
-  padding: 0 4px;
+  background: transparent !important;
+  padding: 0 6px !important;
   cursor: pointer;
+  height: 30px;
 }
 
 .uevents-toolbar__month-picker :deep(.el-input__wrapper:hover),
 .uevents-toolbar__month-picker :deep(.el-input__wrapper.is-focus) {
   box-shadow: none !important;
-  background: #f0fdfa;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 9px;
 }
 
-.uevents-toolbar__month-picker :deep(.el-input__prefix) {
-  display: none;
+.uevents-toolbar__month-picker :deep(.el-input__prefix),
+.uevents-toolbar__month-picker :deep(.el-input__suffix) {
+  display: none !important;
 }
 
 .uevents-toolbar__month-picker :deep(.el-input__inner) {
-  width: 7.5em;
-  padding: 0;
+  width: 6.8em;
+  padding: 0 !important;
   text-align: center;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.02em;
   cursor: pointer;
-  height: 32px;
-  line-height: 32px;
-}
-
-.uevents-toolbar__month-picker :deep(.el-input__suffix) {
-  display: none;
+  height: 30px;
+  line-height: 30px;
 }
 
 .uevents-toolbar__workday-total {
   display: inline-flex;
-  align-items: center;
-  height: 28px;
+  align-items: baseline;
+  gap: 4px;
+  height: 30px;
   padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #0f766e;
-  background: rgba(204, 251, 241, 0.9);
-  border: 1px solid rgba(153, 246, 228, 0.95);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #ccfbf1, #99f6e4);
+  color: #115e59;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
 }
 
-.uevents-toolbar__nav-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #475569;
-  transition: all 0.15s ease;
+.uevents-toolbar__workday-label {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
 }
 
-.uevents-toolbar__nav-btn:hover {
-  border-color: #99f6e4;
-  color: #0f766e;
-  background: #f0fdfa;
+.uevents-toolbar__workday-num {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .uevents-view-switch {

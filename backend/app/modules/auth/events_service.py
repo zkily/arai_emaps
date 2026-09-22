@@ -472,13 +472,19 @@ async def _visibility_clause(db: AsyncSession, user: User):
 
 
 async def get_viewer_scope_label(db: AsyncSession, user: User) -> str:
-    """カレンダー実効範囲（全社横断はしない）。"""
+    """カレンダー実効範囲ラベル。
+
+    - department: 自部門の部門公開 + 全社公開を閲覧可
+    - all: 所属部門なし（全社公開 + 自分のみ）
+    - self: フォールバック
+    """
     scope = await resolve_user_data_scope(db, user)
     if scope.kind == "departments" and scope.department_ids:
         return "department"
     if getattr(user, "department_id", None) is not None:
         return "department"
-    return "self"
+    # 部門未所属でも visibility=all は見える
+    return "all"
 
 
 async def _get_user_event(db: AsyncSession, user: User, event_id: int) -> UserEvent:
@@ -754,10 +760,12 @@ async def update_event(
             # 先頭から「これ以降」= 全件更新扱い
             scope = "all"
         else:
+            original_until = row.recurrence_until
             row.recurrence_until = day_before
-            until = row.recurrence_until
             if recurrence_until is not None:
                 until = _parse_date(recurrence_until) if recurrence_until.strip() else None
+            else:
+                until = original_until
             rule = row.recurrence_rule
             if recurrence_rule is not None:
                 rule = _validate_recurrence(recurrence_rule)
@@ -776,6 +784,40 @@ async def update_event(
             await db.commit()
             await db.refresh(new_row)
             return await _serialize_owned(db, new_row, user)
+
+    # 繰り返し「すべて」: occurrence の絶対日時をシリーズ起点にしない。
+    # 当該 occurrence の時刻差分をシリーズ全体に平行移動する。
+    if (
+        has_recurrence
+        and scope == "all"
+        and occ_date is not None
+        and (start_at is not None or end_at is not None or all_day is not None)
+    ):
+        orig_occ_start = _occurrence_start_for(row, occ_date)
+        orig_duration = row.end_at - row.start_at
+        next_all_day = bool(row.all_day) if all_day is None else bool(all_day)
+        new_occ_start = (
+            _parse_datetime(start_at) if start_at is not None else orig_occ_start
+        )
+        new_occ_end = (
+            _parse_datetime(end_at) if end_at is not None else new_occ_start + orig_duration
+        )
+        delta = new_occ_start - orig_occ_start
+        new_duration = new_occ_end - new_occ_start
+        shifted_start = row.start_at + delta
+        shifted_end = shifted_start + new_duration
+        start_norm, end_norm, all_day_flag = _normalize_range(
+            shifted_start, shifted_end, all_day=next_all_day
+        )
+        row.start_at = start_norm
+        row.end_at = end_norm
+        row.all_day = all_day_flag
+        if row.remind_offset_minutes is not None:
+            _refresh_remind_at(row)
+        # 以降の汎用パスで日時を二重適用しない
+        start_at = None
+        end_at = None
+        all_day = None
 
     if title is not None:
         row.title = _validate_title(title)
