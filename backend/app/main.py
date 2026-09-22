@@ -36,6 +36,7 @@ from app.modules import (
     inventory_projection,
     outsourcing,
     material,
+    quality,
     material_data_generation,
     part,
     part_data_generation,
@@ -376,6 +377,7 @@ app.include_router(budget.router, prefix="/api/budget", tags=["予算管理"])
 app.include_router(database.router, prefix="/api/database", tags=["データベース"])
 app.include_router(outsourcing.router, prefix="/api/outsourcing", tags=["外注管理"])
 app.include_router(material.router, prefix="/api/material", tags=["材料管理"])
+app.include_router(quality.router, prefix="/api/quality", tags=["品質管理"])
 app.include_router(
     material_data_generation.router,
     prefix="/api/material-data-generation",

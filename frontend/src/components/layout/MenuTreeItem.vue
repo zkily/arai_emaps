@@ -106,16 +106,18 @@ const handleTogglePin = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
-  border-radius: 4px;
-  background: transparent;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none;
   color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease, color 0.15s ease;
 }
 
 :deep(.menu-tree-leaf:hover) .menu-tree-leaf__pin,
@@ -125,10 +127,15 @@ const handleTogglePin = () => {
 
 .menu-tree-leaf__pin:hover {
   color: #fbbf24;
-  background: rgba(251, 191, 36, 0.15);
+  background: transparent !important;
 }
 
 .menu-tree-leaf__pin.is-pinned {
   color: #fbbf24;
+  background: transparent !important;
+}
+
+.menu-tree-leaf__pin :deep(.el-icon) {
+  font-size: 14px;
 }
 </style>

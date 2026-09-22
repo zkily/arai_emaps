@@ -196,7 +196,7 @@ const toggleCollapse = () => {
   --el-menu-base-level-padding: 10px;
   --el-menu-level-padding: 10px;
   border-right: none;
-  padding: 4px 5px 4px 8px;
+  padding: 4px 8px 4px 8px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -415,6 +415,33 @@ const toggleCollapse = () => {
   width: auto;
   box-sizing: border-box;
   color: rgb(255, 255, 255);
+}
+
+/* ピンボタン右側が切れないように余白と overflow を確保 */
+:deep(.el-menu-item.menu-tree-leaf) {
+  padding-right: 8px !important;
+  overflow: visible !important;
+}
+
+:deep(.el-menu-item.menu-tree-leaf > .el-icon) {
+  flex-shrink: 0;
+}
+
+:deep(.el-menu-item.menu-tree-leaf > span),
+:deep(.el-menu-item.menu-tree-leaf .el-menu-tooltip__trigger) {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+}
+
+:deep(.el-menu-item.menu-tree-leaf .menu-tree-leaf__row) {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* 一级下的叶子(販売ホーム/生産ホーム/出荷構成表管理等) - 高亮白色 */
@@ -759,6 +786,20 @@ const toggleCollapse = () => {
   white-space: nowrap !important;
 }
 
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-tree-leaf {
+  padding-right: 8px !important;
+  overflow: visible !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-tree-leaf > span,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-tree-leaf .el-menu-tooltip__trigger {
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  text-overflow: unset !important;
+}
+
 .el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item:hover {
   background: rgba(102, 126, 234, 0.25) !important;
   color: #fff !important;
@@ -857,5 +898,14 @@ const toggleCollapse = () => {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu-item.menu-tree-leaf > span,
+.el-menu--vertical.el-menu--popup-container .el-menu-item.menu-tree-leaf .el-menu-tooltip__trigger {
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  text-overflow: unset !important;
 }
 </style>

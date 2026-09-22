@@ -12,9 +12,6 @@
       </div>
       <div class="pma-bar__right">
         <span class="pma-pill">{{ total.toLocaleString() }} 件</span>
-        <el-button class="pma-btn pma-btn--help" size="small" :icon="Reading" @click="goToHelp">
-          操作説明
-        </el-button>
         <el-button
           class="pma-btn pma-btn--print"
           size="small"
@@ -210,9 +207,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Box, Printer, Reading, Refresh, Search } from '@element-plus/icons-vue'
+import { Box, Printer, Refresh, Search } from '@element-plus/icons-vue'
 import {
   getMaterialLogs,
   getProductMaterialAssociation,
@@ -268,12 +264,6 @@ const PRINT_DOCUMENT_STYLES = `
       .print-table thead { display: table-header-group; }
     }
 `
-
-const router = useRouter()
-
-const goToHelp = () => {
-  router.push({ name: 'QualityProductMaterialAssociationHelp' })
-}
 
 const loading = ref(false)
 const printLoading = ref(false)
@@ -608,23 +598,6 @@ onMounted(() => {
 
 .pma-btn:not(:disabled):active {
   transform: translateY(1px);
-}
-
-.pma-btn--help.el-button {
-  --el-button-bg-color: transparent;
-  --el-button-border-color: #a5b4fc;
-  --el-button-text-color: #4338ca;
-  --el-button-hover-bg-color: #eef2ff;
-  --el-button-hover-border-color: #818cf8;
-  --el-button-hover-text-color: #3730a3;
-  --el-button-active-border-color: #6366f1;
-  background: linear-gradient(180deg, #f5f7ff 0%, #eef2ff 100%);
-  border-width: 1px;
-  box-shadow: 0 1px 2px rgba(67, 56, 202, 0.08);
-}
-
-.pma-btn--help.el-button:hover {
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.18);
 }
 
 .pma-btn--print.el-button {

@@ -160,7 +160,7 @@ watch(
 }
 
 .layout-sidebar {
-  width: 220px;
+  width: 240px;
   flex-shrink: 0;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;

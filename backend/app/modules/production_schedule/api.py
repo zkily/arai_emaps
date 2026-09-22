@@ -12,7 +12,7 @@ import re
 from collections import defaultdict
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import bindparam, text
@@ -3896,6 +3896,7 @@ async def get_cutting_management_list(
 
 @router.post("/plan/cutting-management/confirm-actual")
 async def confirm_cutting_actual(
+    background_tasks: BackgroundTasks,
     production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
     cutting_machine: Optional[str] = Query(None, description="切断機（完全一致でフィルタ）"),
     db: AsyncSession = Depends(get_db),
@@ -3936,10 +3937,26 @@ async def confirm_cutting_actual(
         SELECT id, product_cd, management_code, cutting_machine, actual_production_quantity, defect_qty, production_day
         FROM cutting_management
         WHERE """ + " AND ".join(conditions))
+    def _schedule_newspaper_notify() -> None:
+        # 在庫登録の有無に関わらず、当日の完了済み対象製品を走査する。
+        try:
+            from app.services.inspection_newspaper_notification import (
+                run_inspection_newspaper_auto_notify,
+            )
+
+            background_tasks.add_task(
+                run_inspection_newspaper_auto_notify,
+                prod_day.isoformat(),
+                (current_user.full_name or current_user.username or ""),
+            )
+        except Exception:
+            logger.exception("検査新聞紙通知のバックグラウンド登録に失敗")
+
     res = await db.execute(sel, params)
     rows = res.mappings().fetchall()
     if not rows:
         await db.commit()
+        _schedule_newspaper_notify()
         return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
     # transaction_time: date → datetime (00:00:00)
     ins = text("""
@@ -3990,6 +4007,8 @@ async def confirm_cutting_actual(
             })
             inserted += 1
     await db.commit()
+    _schedule_newspaper_notify()
+
     return {
         "success": True,
         "message": f"実績 {inserted} 件を登録しました",
