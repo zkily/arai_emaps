@@ -97,9 +97,22 @@
             <button type="button" class="uevents-toolbar__nav-btn" @click="shiftPeriod(-1)">
               <el-icon :size="14"><ArrowLeft /></el-icon>
             </button>
+            <el-date-picker
+              v-model="toolbarMonth"
+              type="month"
+              value-format="YYYY-MM"
+              :format="monthPickerFormat"
+              :clearable="false"
+              :editable="false"
+              class="uevents-toolbar__month-picker"
+              :title="t('common.userEventPickMonth')"
+            />
             <button type="button" class="uevents-toolbar__nav-btn" @click="shiftPeriod(1)">
               <el-icon :size="14"><ArrowRight /></el-icon>
             </button>
+            <span class="uevents-toolbar__workday-total" :title="t('common.userEventWorkdayTotalHint')">
+              {{ t('common.userEventWorkdayTotal', { n: monthWorkdayCount }) }}
+            </span>
           </div>
           <el-radio-group v-model="viewMode" size="small" class="uevents-view-switch">
             <el-radio-button value="month">{{ t('common.userEventViewMonth') }}</el-radio-button>
@@ -430,6 +443,36 @@ const periodLabel = computed(() => {
   return d.format('YYYY年M月D日')
 })
 
+const monthPickerFormat = computed(() => {
+  const loc = locale.value
+  if (loc === 'en') return 'MMMM YYYY'
+  if (loc === 'vi') return 'MM/YYYY'
+  return 'YYYY年M月'
+})
+
+const toolbarMonth = computed({
+  get: () => dayjs(anchorDate.value).format('YYYY-MM'),
+  set: (ym: string | null) => {
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return
+    const prevDay = dayjs(anchorDate.value).date()
+    const dim = dayjs(`${ym}-01`).daysInMonth()
+    const day = Math.min(prevDay, dim)
+    anchorDate.value = `${ym}-${String(day).padStart(2, '0')}`
+    sidebarMonth.value = ym
+  },
+})
+
+/** 表示中の月の会社合計稼働日数 */
+const monthWorkdayCount = computed(() => {
+  const start = dayjs(anchorDate.value).startOf('month')
+  const days = start.daysInMonth()
+  let n = 0
+  for (let d = 1; d <= days; d++) {
+    if (isCompanyWorkday(start.date(d).format('YYYY-MM-DD'))) n += 1
+  }
+  return n
+})
+
 const sidebarMonthLabel = computed(() => {
   const d = dayjs(`${sidebarMonth.value}-01`)
   const loc = locale.value
@@ -597,7 +640,11 @@ async function loadEvents() {
 
 async function loadWorkCalendar(from: string, to: string) {
   try {
-    const res = await fetchCompanyWorkCalendar({ start_date: from, end_date: to })
+    const monthStart = dayjs(anchorDate.value).startOf('month').format('YYYY-MM-DD')
+    const monthEnd = dayjs(anchorDate.value).endOf('month').format('YYYY-MM-DD')
+    const start_date = from < monthStart ? from : monthStart
+    const end_date = to > monthEnd ? to : monthEnd
+    const res = await fetchCompanyWorkCalendar({ start_date, end_date })
     const map = new Map<string, CompanyWorkCalendarItem>()
     for (const item of res.data?.items ?? []) {
       map.set(item.calendar_date, item)
@@ -1316,7 +1363,62 @@ onUnmounted(() => {
 
 .uevents-toolbar__nav {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+}
+
+.uevents-toolbar__month-picker {
+  width: auto !important;
+}
+
+.uevents-toolbar__month-picker :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  background: transparent;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.uevents-toolbar__month-picker :deep(.el-input__wrapper:hover),
+.uevents-toolbar__month-picker :deep(.el-input__wrapper.is-focus) {
+  box-shadow: none !important;
+  background: #f0fdfa;
+  border-radius: 8px;
+}
+
+.uevents-toolbar__month-picker :deep(.el-input__prefix) {
+  display: none;
+}
+
+.uevents-toolbar__month-picker :deep(.el-input__inner) {
+  width: 7.5em;
+  padding: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 750;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  height: 32px;
+  line-height: 32px;
+}
+
+.uevents-toolbar__month-picker :deep(.el-input__suffix) {
+  display: none;
+}
+
+.uevents-toolbar__workday-total {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f766e;
+  background: rgba(204, 251, 241, 0.9);
+  border: 1px solid rgba(153, 246, 228, 0.95);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .uevents-toolbar__nav-btn {
