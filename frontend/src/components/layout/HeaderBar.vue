@@ -159,6 +159,26 @@
           </div>
         </el-popover>
 
+        <div
+          class="header-action header-action--events"
+          role="button"
+          tabindex="0"
+          :title="t('common.headerEventsTitle')"
+          :aria-label="t('common.headerEventsTitle')"
+          @click="openEventsCalendar"
+          @keydown.enter.prevent="openEventsCalendar"
+        >
+          <span class="header-events-core" aria-hidden="true">
+            <el-icon class="header-events-icon" :size="16"><Calendar /></el-icon>
+          </span>
+          <span class="header-events-label">{{ t('common.headerEventsLabel') }}</span>
+          <span
+            v-if="eventsBadgeCount > 0"
+            class="header-events-badge"
+            :aria-label="`${eventsBadgeCount}${t('common.headerEventsTitle')}`"
+          >{{ eventsBadgeDisplay }}</span>
+        </div>
+
         <!-- マニュアル -->
         <div
           class="header-action header-action--icon header-action--manual"
@@ -238,6 +258,7 @@
 
     <UserMemoDrawer />
     <UserMemoReminderDialog />
+    <UserEventReminderDialog />
   </div>
 </template>
 
@@ -261,8 +282,10 @@ import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import UserMemoDrawer from '@/components/account/UserMemoDrawer.vue'
 import UserMemoReminderDialog from '@/components/account/UserMemoReminderDialog.vue'
+import UserEventReminderDialog from '@/components/account/UserEventReminderDialog.vue'
 import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
 import { useUserMemos } from '@/composables/useUserMemos'
+import { useUserEvents } from '@/composables/useUserEvents'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
 import { ElMessageBox } from 'element-plus'
@@ -303,10 +326,17 @@ defineEmits<{
 const router = useRouter()
 const userStore = useUserStore()
 const userMemos = useUserMemos()
+const userEvents = useUserEvents()
 
 const memoBadgeCount = computed(() => userMemos.badgeCount.value)
 const memoBadgeDisplay = computed(() => {
   const n = memoBadgeCount.value
+  return n > 99 ? '99+' : String(n)
+})
+
+const eventsBadgeCount = computed(() => userEvents.todayCount.value)
+const eventsBadgeDisplay = computed(() => {
+  const n = eventsBadgeCount.value
   return n > 99 ? '99+' : String(n)
 })
 
@@ -323,6 +353,10 @@ const userAvatarGradient = computed(() => avatarGradientFor(userDisplayName.valu
 function openManualHome() {
   const resolved = router.resolve({ name: 'ManualHome' })
   window.open(resolved.href, '_blank', 'noopener,noreferrer')
+}
+
+function openEventsCalendar() {
+  router.push({ name: 'UserEventsCalendar' })
 }
 
 const currentTime = ref(dayjs().tz('Asia/Tokyo').format('MM/DD (ddd) HH:mm'))
@@ -958,6 +992,110 @@ const handleCommand = async (command: string) => {
 }
 
 /* マニュアル */
+.header-action--events {
+  position: relative;
+  flex-shrink: 0;
+  gap: 6px;
+  min-width: auto;
+  height: 36px;
+  padding: 0 12px 0 8px;
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(129, 140, 248, 0.32) 55%,
+    rgba(67, 56, 202, 0.42) 100%
+  );
+  border: 1px solid rgba(165, 180, 252, 0.55);
+  box-shadow:
+    var(--hdr-inset),
+    0 2px 12px rgba(79, 70, 229, 0.28);
+}
+
+.header-action--events:hover {
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(165, 180, 252, 0.42) 55%,
+    rgba(55, 48, 163, 0.52) 100%
+  );
+  border-color: rgba(199, 210, 254, 0.75);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    var(--hdr-inset),
+    0 4px 16px rgba(99, 102, 241, 0.35);
+}
+
+.header-action--events:focus-visible {
+  outline: 2px solid rgba(165, 180, 252, 0.9);
+  outline-offset: 2px;
+}
+
+.header-events-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #5eead4 0%, #14b8a6 48%, #0d9488 100%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 4px 12px rgba(13, 148, 136, 0.45),
+    0 0 0 2px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+}
+
+.header-events-core {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: radial-gradient(
+    125% 125% at 28% 18%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(199, 210, 254, 0.45) 50%,
+    rgba(99, 102, 241, 0.28) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 2px 8px rgba(67, 56, 202, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.header-events-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #eef2ff;
+  text-shadow: 0 1px 2px rgba(49, 46, 129, 0.45);
+}
+
+.header-action--events:hover .header-events-core {
+  transform: scale(1.06);
+}
+
+.header-events-icon {
+  color: #312e81;
+  filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.35));
+}
+
+.header-action--events:hover .header-events-icon {
+  color: #1e1b4b;
+  filter: drop-shadow(0 0 6px rgba(199, 210, 254, 0.65));
+}
+
 .header-action--manual {
   position: relative;
   background: linear-gradient(
