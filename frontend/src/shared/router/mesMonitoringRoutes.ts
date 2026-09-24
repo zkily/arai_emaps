@@ -20,4 +20,15 @@ export const mesMonitoringRoutes: RouteRecordRaw[] = [
       menuCode: process.menuCode,
     },
   })),
+  {
+    path: 'mes/monitoring/factory-layout',
+    name: 'MesFactoryLayout',
+    component: () => import('@/views/mes/factoryLayout/FactoryLayoutPage.vue'),
+    meta: {
+      title: '工場レイアウト',
+      group: routeGroup,
+      requiresAuth: true,
+      menuCode: 'MES_MONITOR_FACTORY_LAYOUT',
+    },
+  },
 ]

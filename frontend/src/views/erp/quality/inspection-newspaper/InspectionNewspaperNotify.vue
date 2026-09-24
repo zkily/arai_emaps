@@ -52,10 +52,22 @@
               <span class="inn-panel-badge"><el-icon><Goods /></el-icon></span>
               <div>
                 <h2>対象製品</h2>
-                <p>登録した製品が切断確定分に含まれると通知されます</p>
+                <p>製品名順で表示。切断確定分に含まれると通知されます</p>
               </div>
             </div>
-            <el-tag type="success" effect="dark" round size="small">{{ targetProducts.length }} 件</el-tag>
+            <div class="inn-head-tools">
+              <el-button
+                class="inn-btn inn-btn--pdf"
+                size="small"
+                :loading="productPdfExporting"
+                :disabled="productsLoading || targetProducts.length === 0"
+                @click="exportProductsPdf"
+              >
+                <el-icon><Download /></el-icon>
+                PDF出力
+              </el-button>
+              <el-tag type="success" effect="dark" round size="small">{{ targetProducts.length }} 件</el-tag>
+            </div>
           </header>
           <div class="inn-panel-body">
             <div class="inn-add-row">
@@ -86,7 +98,7 @@
               </el-button>
             </div>
             <el-table
-              :data="targetProducts"
+              :data="sortedTargetProducts"
               stripe
               size="small"
               max-height="320"
@@ -429,7 +441,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, CircleCheck, Clock, Goods, Message, Plus, Promotion, Refresh, User, View, Warning } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Clock, Download, Goods, Message, Plus, Promotion, Refresh, User, View, Warning } from '@element-plus/icons-vue'
+import { exportInspectionNewspaperProductsPdf } from './exportTargetProductsPdf'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { isAdminUser } from '@/utils/menuPermissions'
 import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
@@ -498,10 +511,28 @@ async function onAutoSendChange(value: string | number | boolean) {
 // ===== 対象製品 =====
 const productsLoading = ref(false)
 const productSaving = ref(false)
+const productPdfExporting = ref(false)
 const targetProducts = ref<InspectionNewspaperProduct[]>([])
 const productToAdd = ref('')
 const productOptions = ref<Product[]>([])
 const productOptionsLoading = ref(false)
+
+function compareByProductName(
+  a: { product_name?: string | null; product_cd?: string | null },
+  b: { product_name?: string | null; product_cd?: string | null },
+) {
+  const nameA = (a.product_name || '').trim()
+  const nameB = (b.product_name || '').trim()
+  if (!nameA && nameB) return 1
+  if (nameA && !nameB) return -1
+  const byName = nameA.localeCompare(nameB, 'ja')
+  if (byName !== 0) return byName
+  return (a.product_cd || '').localeCompare(b.product_cd || '', 'ja')
+}
+
+const sortedTargetProducts = computed(() =>
+  [...targetProducts.value].sort(compareByProductName),
+)
 
 const availableProductOptions = computed(() => {
   const registered = new Set(targetProducts.value.map((p) => p.product_cd))
@@ -559,6 +590,23 @@ async function addProduct() {
     ElMessage.error(e?.response?.data?.detail || '追加に失敗しました')
   } finally {
     productSaving.value = false
+  }
+}
+
+async function exportProductsPdf() {
+  if (!targetProducts.value.length) {
+    ElMessage.warning('対象製品がありません')
+    return
+  }
+  productPdfExporting.value = true
+  try {
+    await exportInspectionNewspaperProductsPdf(sortedTargetProducts.value)
+    ElMessage.success('PDFを出力しました')
+  } catch (e) {
+    console.error('対象製品PDFの出力に失敗:', e)
+    ElMessage.error('PDFの出力に失敗しました')
+  } finally {
+    productPdfExporting.value = false
   }
 }
 
@@ -1047,6 +1095,12 @@ onMounted(() => {
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 }
 
+.inn-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .inn-panel-title {
   display: flex;
   align-items: center;
@@ -1125,6 +1179,24 @@ onMounted(() => {
 .inn-btn:not(:disabled):hover {
   transform: translateY(-1px);
   filter: brightness(1.05);
+}
+
+.inn-btn--pdf {
+  --el-button-bg-color: #fff;
+  --el-button-text-color: #047857;
+  --el-button-hover-bg-color: #ecfdf5;
+  --el-button-hover-text-color: #047857;
+  background: #fff !important;
+  color: #047857 !important;
+  border: 1px solid #6ee7b7 !important;
+  box-shadow: none;
+}
+
+.inn-btn--pdf.is-disabled,
+.inn-btn--pdf:disabled {
+  color: #94a3b8 !important;
+  border-color: #e2e8f0 !important;
+  background: #f8fafc !important;
 }
 
 .inn-btn--product {

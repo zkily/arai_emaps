@@ -85,7 +85,10 @@ async def list_newspaper_products(
                     """
                     SELECT id, product_cd, product_name, updated_by, created_at, updated_at
                     FROM quality_inspection_newspaper_products
-                    ORDER BY product_cd ASC
+                    ORDER BY
+                      (product_name IS NULL OR TRIM(product_name) = '') ASC,
+                      product_name ASC,
+                      product_cd ASC
                     """
                 )
             )

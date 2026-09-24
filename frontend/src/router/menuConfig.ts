@@ -170,6 +170,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MES_MONITORING', name: 'モニタリング', icon: 'View', parentCode: 'MES', sortOrder: 1.5 },
   { code: 'MES_MONITOR_INSPECTION', name: '検査モニタ', path: '/mes/monitoring/inspection', icon: 'DocumentChecked', parentCode: 'MES_MONITORING', sortOrder: 1 },
   { code: 'MES_MONITOR_WELDING', name: '溶接モニタ', path: '/mes/monitoring/welding', icon: 'Connection', parentCode: 'MES_MONITORING', sortOrder: 2 },
+  { code: 'MES_MONITOR_FACTORY_LAYOUT', name: '工場レイアウト', path: '/mes/monitoring/factory-layout', icon: 'MapLocation', parentCode: 'MES_MONITORING', sortOrder: 3 },
   { code: 'MES_ACTUAL_COLLECTION_REGISTRATION', name: '実績登録', icon: 'Edit', parentCode: 'MES', sortOrder: 1.8 },
   { code: 'MES_ACTUAL_REG_CUTTING', name: '切断実績登録', path: '/mes/actualCollectionRegistration/cutting', icon: 'Scissor', parentCode: 'MES_ACTUAL_COLLECTION_REGISTRATION', sortOrder: 1 },
   { code: 'MES_ACTUAL_REG_CHAMFERING', name: '面取実績登録', path: '/mes/actualCollectionRegistration/chamfering', icon: 'Crop', parentCode: 'MES_ACTUAL_COLLECTION_REGISTRATION', sortOrder: 2 },
