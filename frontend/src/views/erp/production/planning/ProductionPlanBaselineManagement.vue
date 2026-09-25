@@ -11,7 +11,7 @@
         </div>
         <div class="title-content">
           <h2>生産計画ベースライン管理</h2>
-          <p>基準計画の固定化から、現行計画・実績との差異把握までを一画面で</p>
+          <p>基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
         </div>
         <el-tooltip content="操作説明を開く" placement="bottom" :show-after="0">
           <el-icon class="help-icon help-icon--header" @click="goHelpPage" :size="18">
@@ -327,7 +327,7 @@
             </div>
             <div class="trend-chart-head__titles">
               <span class="trend-chart-head__title">日次推移</span>
-              <span class="trend-chart-head__sub">基準計画 × 現行実績（柱状・単位：千・小数1位／差異は柱の中央）</span>
+              <span class="trend-chart-head__sub">基準計画 × 実績（柱状・単位：千・小数1位／差異は柱の中央）</span>
             </div>
             <el-tag
               v-if="activeTrendProcessLabel"
@@ -450,7 +450,7 @@
             </div>
             <div class="comparison-list-head__titles">
               <span class="comparison-list-head__title">ベースライン比較一覧</span>
-              <span class="comparison-list-head__sub">工程別タブで日次の基準・現行・差異を表示</span>
+              <span class="comparison-list-head__sub">工程別タブで日次の基準・変更・差異を表示</span>
             </div>
             <el-tag
               v-if="comparisonResult?.baselineMonth"
@@ -617,7 +617,7 @@
               </template>
             </el-table-column>
             <el-table-column
-              label="現行計画"
+              label="変更計画"
               min-width="128"
               align="right"
               class-name="col-current"
@@ -625,9 +625,9 @@
             >
               <template #header>
                 <div class="column-header">
-                  <span>現行計画</span>
+                  <span>変更計画</span>
                   <el-tooltip
-                    content="切断・面取・メッキ・検査・外注倉庫は現行計画＝基準計画（常に同期）。成型は molding_plan、溶接／溶接SP は welding_actual_plan（溶接SP は製品名 FE-7・CH2 RR、サマリのみ、Excel は使用しない。合計 0 の日も反映、該当日サマリが無い日は 0）。上記以外は production_plan_updates を優先し、無い日はサマリの各 plan 列で補完。"
+                    content="切断・面取・メッキ・検査・外注倉庫は変更計画＝基準計画（常に同期）。成型は molding_plan、溶接／溶接SP は welding_actual_plan（溶接SP は製品名 FE-7・CH2 RR、サマリのみ、Excel は使用しない。合計 0 の日も反映、該当日サマリが無い日は 0）。上記以外は production_plan_updates を優先し、無い日はサマリの各 plan 列で補完。"
                     placement="top"
                     effect="dark"
                   >
@@ -651,7 +651,7 @@
               <template #header>
                 <div class="column-header">
                   <span>計画差異</span>
-                  <el-tooltip content="現行計画 - 基準計画" placement="top" effect="dark">
+                  <el-tooltip content="変更計画 - 基準計画" placement="top" effect="dark">
                     <el-icon class="help-icon"><QuestionFilled /></el-icon>
                   </el-tooltip>
                 </div>
@@ -669,7 +669,7 @@
               </template>
             </el-table-column>
             <el-table-column
-              label="現行実績合計"
+              label="実績合計"
               min-width="140"
               align="right"
               class-name="col-actual"
@@ -677,7 +677,7 @@
             >
               <template #header>
                 <div class="column-header">
-                  <span>現行実績合計</span>
+                  <span>実績合計</span>
                   <el-tooltip
                     content="stock_transaction_logs から当月の日次実績を再集計。溶接／溶接SP は製品名 FE-7・CH2 RR を溶接SP、それ以外を溶接に分割"
                     placement="top"
@@ -709,7 +709,7 @@
               <template #header>
                 <div class="column-header">
                   <span>計画対実績差</span>
-                  <el-tooltip content="ベースライン計画 - 現行実績" placement="top" effect="dark">
+                  <el-tooltip content="ベースライン計画 - 実績" placement="top" effect="dark">
                     <el-icon class="help-icon"><QuestionFilled /></el-icon>
                   </el-tooltip>
                 </div>
@@ -763,7 +763,7 @@
                   <span class="total-item-icon-wrap">
                     <el-icon class="total-item-icon"><DataLine /></el-icon>
                   </span>
-                  <span class="total-item-label">現行計画</span>
+                  <span class="total-item-label">変更計画</span>
                 </div>
                 <div class="total-item-value">
                   {{ formatNumber(processTotals.get(process.name)?.currentPlan) }}
@@ -800,7 +800,7 @@
                   <span class="total-item-icon-wrap">
                     <el-icon class="total-item-icon"><CircleCheck /></el-icon>
                   </span>
-                  <span class="total-item-label">現行実績</span>
+                  <span class="total-item-label">実績</span>
                 </div>
                 <div class="total-item-value">
                   {{ formatNumber(processTotals.get(process.name)?.currentActual) }}
@@ -1868,7 +1868,7 @@ function getHeatmapMetricValue(row: PlanBaselineComparisonItem, metric: HeatmapM
   if (metric === 'actualDiff') {
     if (row.actual_diff == null && row.current_actual == null) return null
     if (row.actual_diff != null) return Number(row.actual_diff)
-    // fallback: 基準計画 − 現行実績（サマリー定義に合わせる）
+    // fallback: 基準計画 − 実績（サマリー定義に合わせる）
     return Number(row.baseline_plan ?? 0) - Number(row.current_actual ?? 0)
   }
   // actualQty：表示用に千単位へ
@@ -2134,7 +2134,7 @@ function buildTrendChartOption(items: PlanBaselineComparisonItem[]) {
   })
   const baselineSeries = items.map((row) => toTrendUnit(row.baseline_plan ?? 0) ?? 0)
   const actualSeries = items.map((row) => toTrendUnit(row.current_actual))
-  // 差異 = 現行実績 − 基準計画（実績がない日は null）
+  // 差異 = 実績 − 基準計画（実績がない日は null）
   const diffSeries = items.map((row, i) => {
     if (row.current_actual == null) return null
     if (row.actual_diff != null && row.actual_diff !== undefined) {
@@ -2185,7 +2185,7 @@ function buildTrendChartOption(items: PlanBaselineComparisonItem[]) {
       emphasis: { focus: 'series' as const },
     },
     {
-      name: '現行実績',
+      name: '実績',
       type: 'bar',
       z: 2,
       data: actualSeries,
@@ -2246,7 +2246,7 @@ function buildTrendChartOption(items: PlanBaselineComparisonItem[]) {
     })
   }
 
-  const legendData = ['基準計画', '現行実績', ...(showDiffLabels ? ['差異(実績−基準)'] : [])]
+  const legendData = ['基準計画', '実績', ...(showDiffLabels ? ['差異(実績−基準)'] : [])]
 
   return {
     animationDuration: 420,
@@ -2417,7 +2417,7 @@ const summaryCards = computed(() => {
         tone: 'baseline',
       },
       {
-        label: '現行計画合計',
+        label: '変更計画合計',
         value: '-',
         isNegative: false,
         description: '最新計画合計',
@@ -2427,11 +2427,11 @@ const summaryCards = computed(() => {
         label: '計画差異',
         value: '-',
         isNegative: false,
-        description: '現行計画 - ベースライン計画',
+        description: '変更計画 - ベースライン計画',
         tone: 'diff',
       },
       {
-        label: '現行実績合計',
+        label: '実績合計',
         value: '-',
         isNegative: false,
         description: '最新実績合計',
@@ -2441,14 +2441,14 @@ const summaryCards = computed(() => {
         label: '計画対実績差',
         value: '-',
         isNegative: false,
-        description: 'ベースライン計画 - 現行実績',
+        description: 'ベースライン計画 - 実績',
         tone: 'actual-diff',
       },
       {
         label: '計画達成率',
         value: '-',
         isNegative: false,
-        description: '現行実績 ÷ 現行計画',
+        description: '実績 ÷ 変更計画',
         tone: 'rate',
       },
       {
@@ -2482,7 +2482,7 @@ const summaryCards = computed(() => {
       tone: 'baseline',
     },
     {
-      label: '現行計画合計',
+      label: '変更計画合計',
       value: formatNumber(summary.currentPlanTotal),
       isNegative: currentPlanTotal < 0,
       description: '最新計画合計',
@@ -2492,11 +2492,11 @@ const summaryCards = computed(() => {
       label: '計画差異',
       value: formatNumber(summary.planDifference),
       isNegative: planDifference < 0,
-      description: '現行計画 - ベースライン計画',
+      description: '変更計画 - ベースライン計画',
       tone: 'diff',
     },
     {
-      label: '現行実績合計',
+      label: '実績合計',
       value: summary.currentActualTotal === null ? '-' : formatNumber(summary.currentActualTotal),
       isNegative: false,
       description: '最新実績合計',
@@ -2506,14 +2506,14 @@ const summaryCards = computed(() => {
       label: '計画対実績差',
       value: summary.actualDifference == null ? '-' : formatNumber(summary.actualDifference),
       isNegative: actualDifference !== 0 && actualDifference < 0,
-      description: 'ベースライン計画 - 現行実績',
+      description: 'ベースライン計画 - 実績',
       tone: 'actual-diff',
     },
     {
       label: '計画達成率',
       value: planAchievement === null ? '-' : `${planAchievement.toFixed(1)}%`,
       isNegative: planAchievement !== null && planAchievement < 100,
-      description: '現行実績 ÷ 現行計画',
+      description: '実績 ÷ 変更計画',
       tone: 'rate',
     },
     {
@@ -3274,9 +3274,9 @@ function renderCompactDetailTableHtml(opts: {
         <tr style="background:linear-gradient(135deg,#0f766e 0%,#0d9488 45%,#0284c7 100%);color:#fff;font-weight:800;">
           <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:left;">日付</th>
           <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">基準計画</th>
-          <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">現行計画</th>
+          <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">変更計画</th>
           <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">計画差異</th>
-          <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">現行実績</th>
+          <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">実績</th>
           <th style="border:1px solid rgba(255,255,255,0.2);padding:6px 5px;text-align:right;">計画対実績差</th>
         </tr>
       </thead>`
@@ -3315,7 +3315,7 @@ function renderCompactDetailTableHtml(opts: {
     ? `<div style="margin-top:6px;display:grid;grid-template-columns:auto repeat(5,1fr);gap:6px;padding:6px 8px;border-radius:8px;background:linear-gradient(90deg,#ecfdf5,#f0f9ff);border:1px solid #99f6e4;font-size:9px;font-weight:800;">
         <div style="color:#0f766e;align-self:center;">合計</div>
         <div style="text-align:right;font-variant-numeric:tabular-nums;">基準 <span style="font-size:11px;">${pdfFmtNum(opts.totals.baseline)}</span></div>
-        <div style="text-align:right;font-variant-numeric:tabular-nums;">現行計画 <span style="font-size:11px;">${pdfFmtNum(opts.totals.currentPlan)}</span></div>
+        <div style="text-align:right;font-variant-numeric:tabular-nums;">変更計画 <span style="font-size:11px;">${pdfFmtNum(opts.totals.currentPlan)}</span></div>
         <div style="text-align:right;font-variant-numeric:tabular-nums;color:${opts.totals.planDiff < 0 ? '#dc2626' : '#15803d'};">計画差 <span style="font-size:11px;">${pdfFmtNum(opts.totals.planDiff)}</span></div>
         <div style="text-align:right;font-variant-numeric:tabular-nums;">実績 <span style="font-size:11px;">${pdfFmtNum(opts.totals.currentActual)}</span></div>
         <div style="text-align:right;font-variant-numeric:tabular-nums;color:${opts.totals.actualDiff < 0 ? '#dc2626' : '#15803d'};">対実績差 <span style="font-size:11px;">${pdfFmtNum(opts.totals.actualDiff)}</span></div>
@@ -3352,7 +3352,7 @@ async function renderTrendChartImage(
   option.animationDuration = 0
   option.tooltip = { show: false }
   option.title = {
-    text: `日次推移（基準計画 × 現行実績・単位：千）`,
+    text: `日次推移（基準計画 × 実績・単位：千）`,
     subtext: `${monthLabel} ／ ${processName}`,
     left: 'center',
     top: 2,
@@ -3509,7 +3509,7 @@ async function buildCombinedBaselineReportPdf(
             <div style="font-size:13px;font-weight:900;font-variant-numeric:tabular-nums;">${pdfFmtNum(baselinePlanTotal)}</div>
           </div>
           <div style="padding:4px 6px;border-radius:7px;background:#eff6ff;border:1px solid #bfdbfe;">
-            <div style="font-size:8px;font-weight:800;color:#1d4ed8;">現行計画</div>
+            <div style="font-size:8px;font-weight:800;color:#1d4ed8;">変更計画</div>
             <div style="font-size:13px;font-weight:900;">${pdfFmtNum(currentPlanTotal)}</div>
           </div>
           <div style="padding:4px 6px;border-radius:7px;background:#fff7ed;border:1px solid #fed7aa;">
@@ -3517,7 +3517,7 @@ async function buildCombinedBaselineReportPdf(
             <div style="font-size:13px;font-weight:900;color:${planDiffTotal < 0 ? '#dc2626' : '#15803d'};">${pdfFmtNum(planDiffTotal)}</div>
           </div>
           <div style="padding:4px 6px;border-radius:7px;background:#ecfdf5;border:1px solid #a7f3d0;">
-            <div style="font-size:8px;font-weight:800;color:#047857;">現行実績</div>
+            <div style="font-size:8px;font-weight:800;color:#047857;">実績</div>
             <div style="font-size:13px;font-weight:900;">${pdfFmtNum(currentActualTotal)}</div>
           </div>
           <div style="padding:4px 6px;border-radius:7px;background:#fff1f2;border:1px solid #fecdd3;">
@@ -3631,9 +3631,9 @@ const handleExportComparisonExcel = async () => {
       [],
       ['KPI', '値'],
       ['基準計画合計', summary?.baselinePlanTotal ?? ''],
-      ['現行計画合計', summary?.currentPlanTotal ?? ''],
+      ['変更計画合計', summary?.currentPlanTotal ?? ''],
       ['計画差異', summary?.planDifference ?? ''],
-      ['現行実績合計', summary?.currentActualTotal ?? ''],
+      ['実績合計', summary?.currentActualTotal ?? ''],
       ['計画対実績差', summary?.actualDifference ?? ''],
       [],
       ['時点比較', '基準計画', '計画達成率(%)', '計画対実績差'],
@@ -3654,7 +3654,7 @@ const handleExportComparisonExcel = async () => {
         periodCompareYoy.value?.summary?.actualDifference ?? '',
       ],
       [],
-      ['工程', '行数', 'アラート件数', '基準計画合計', '現行計画合計', '計画差異', '現行実績合計', '計画対実績差'],
+      ['工程', '行数', 'アラート件数', '基準計画合計', '変更計画合計', '計画差異', '実績合計', '計画対実績差'],
     ]
 
     for (const tab of processTabs.value) {
@@ -3676,10 +3676,10 @@ const handleExportComparisonExcel = async () => {
       '工程',
       '日付',
       '基準計画',
-      '現行計画',
+      '変更計画',
       '計画差異',
       '計画差異率(%)',
-      '現行実績合計',
+      '実績合計',
       '計画対実績差',
       '実績差異率(%)',
       'アラート',
@@ -3973,7 +3973,7 @@ function handlePrintBaselineComparison() {
   const monthSource = comparisonResult.value?.baselineMonth || compareForm.baselineMonth
   const monthLabel = monthSource ? dayjs(monthSource).format('YYYY年MM月') : '—'
 
-  const headCells = ['日付', '基準計画', '現行計画', '計画差異', '現行実績合計', '計画対実績差']
+  const headCells = ['日付', '基準計画', '変更計画', '計画差異', '実績合計', '計画対実績差']
   const headerRow = headCells.map((h) => `<th>${esc(h)}</th>`).join('')
 
   const wrapDiff = (v: number | null | undefined) => {

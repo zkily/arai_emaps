@@ -75,6 +75,9 @@ class PlanBaselineWeeklyGenerator(ReportGenerator):
         baseline_month = month_start.isoformat()
         period_label = month_start.strftime("%Y年%m月")
         generated_at = now_jst().strftime("%Y/%m/%d %H:%M")
+        last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+        month_end = month_start.replace(day=last_day)
+        as_of_date = min(run_date, month_end)
 
         comparison = await build_plan_baseline_comparison(
             db, baseline_month=baseline_month, process_name=None
@@ -119,9 +122,17 @@ class PlanBaselineWeeklyGenerator(ReportGenerator):
                 }
             )
 
-        as_of_label = run_date.strftime("%Y年%m月%d日")
-        summary_html = _build_summary_html(period_label, process_summaries, as_of_label)
-        summary_text = _build_summary_text(period_label, process_summaries, as_of_label)
+        # メール本文用：月初〜送信日までの工程別集計
+        as_of_summaries = _summarize_processes_as_of(by_process, ordered_names, as_of_date)
+        as_of_label = as_of_date.strftime("%Y年%m月%d日")
+        as_of_short = f"{as_of_date.month}/{as_of_date.day}"
+        period_range_label = f"{month_start.strftime('%Y年%m月%d日')}〜{as_of_label}"
+        summary_html = _build_summary_html(
+            period_label, as_of_summaries, period_range_label, as_of_short
+        )
+        summary_text = _build_summary_text(
+            period_label, as_of_summaries, period_range_label, as_of_short
+        )
         record_count = sum(
             1 for i in items if (i.get("process_name") or "") not in _EXCLUDED_PROCESSES
         )
@@ -170,6 +181,19 @@ def _fmt_num(value: float | None) -> str:
     return f"{int(round(value)):,}"
 
 
+def _fmt_num_signed_html(value: float | None) -> str:
+    """正数は緑・負数は赤（メール HTML 用）。"""
+    if value is None:
+        return "—"
+    text = f"{int(round(value)):,}"
+    n = float(value)
+    if n > 0:
+        return f'<span style="color:#16a34a;font-weight:600;">{text}</span>'
+    if n < 0:
+        return f'<span style="color:#dc2626;font-weight:600;">{text}</span>'
+    return text
+
+
 def _fmt_rate(rate: float | None) -> str:
     return f"{rate:.1f}%" if rate is not None else "—"
 
@@ -178,56 +202,132 @@ def _tone(name: str) -> str:
     return _PROCESS_TONES.get(name, "#64748b")
 
 
+def _summarize_processes_as_of(
+    by_process: dict[str, list[dict[str, Any]]],
+    ordered_names: list[str],
+    as_of: date,
+) -> list[dict[str, Any]]:
+    """工程別集計。
+
+    - baseline_month: 当月全日の基準計画合計（表①）
+    - baseline_period: 月初〜送信日の基準計画合計（表②）
+    - current_actual / progress_rate / diff: 実績は送信日まで。差異＝実績−基準計画（期間）
+    """
+    as_of_s = as_of.isoformat()
+    summaries: list[dict[str, Any]] = []
+    for name in ordered_names:
+        all_rows = by_process.get(name) or []
+        period_rows = [
+            r for r in all_rows if str(r.get("plan_date") or "")[:10] <= as_of_s
+        ]
+        baseline_month = sum(float(r.get("baseline_plan") or 0) for r in all_rows)
+        baseline_period = sum(float(r.get("baseline_plan") or 0) for r in period_rows)
+        has_actual = any(r.get("current_actual") is not None for r in period_rows)
+        actual_sum = sum(
+            float(r["current_actual"])
+            for r in period_rows
+            if r.get("current_actual") is not None
+        )
+        actual = actual_sum if has_actual else None
+        # 差異 = 実績 − 基準計画（期間）
+        diff = (actual - baseline_period) if actual is not None else None
+        # 進捗率 = 送信日までの実績 ÷ 当月基準計画（月全体）
+        progress = (
+            (actual / baseline_month * 100) if actual is not None and baseline_month else None
+        )
+        summaries.append(
+            {
+                "name": name,
+                "baseline_month": baseline_month,
+                "baseline_period": baseline_period,
+                "current_actual": actual,
+                "diff": diff,
+                "progress_rate": round(progress, 1) if progress is not None else None,
+            }
+        )
+    return summaries
+
+
 def _build_summary_html(
-    period_label: str, summaries: list[dict[str, Any]], as_of_label: str
+    period_label: str,
+    summaries: list[dict[str, Any]],
+    period_range_label: str,
+    as_of_label: str,
 ) -> str:
     if not summaries:
         return (
-            f"<p>{_esc(period_label)}（{_esc(as_of_label)}時点）の"
+            f"<p>{_esc(period_label)}（{_esc(period_range_label)}）の"
             "ベースライン比較データがありません。</p>"
         )
-    body = "".join(
+    baseline_period_header = f"{as_of_label}までの計画合計"
+    progress_body = "".join(
         "<tr>"
         f"<td>{_esc(s['name'])}</td>"
-        f"<td align='right'>{_fmt_num(s['baseline'])}</td>"
-        f"<td align='right'>{_fmt_num(s['current_plan'])}</td>"
-        f"<td align='right'>{_fmt_num(s['plan_diff'])}</td>"
+        f"<td align='right'>{_fmt_num(s['baseline_month'])}</td>"
         f"<td align='right'>{_fmt_num(s['current_actual'])}</td>"
-        f"<td align='right'>{_fmt_num(s['actual_diff'])}</td>"
-        f"<td align='right'>{_fmt_rate(s['rate'])}</td>"
+        f"<td align='right'>{_fmt_rate(s['progress_rate'])}</td>"
+        "</tr>"
+        for s in summaries
+    )
+    diff_body = "".join(
+        "<tr>"
+        f"<td>{_esc(s['name'])}</td>"
+        f"<td align='right'>{_fmt_num(s['baseline_period'])}</td>"
+        f"<td align='right'>{_fmt_num(s['current_actual'])}</td>"
+        f"<td align='right'>{_fmt_num_signed_html(s['diff'])}</td>"
         "</tr>"
         for s in summaries
     )
     return (
-        f"<p>生産計画ベースライン比較（{_esc(period_label)}・工程別合計・"
-        f"{_esc(as_of_label)}）:</p>"
+        f"<p>生産計画ベースライン（{_esc(period_label)}）:</p>"
+        "<p style='margin:10px 0 4px;font-weight:600;'>"
+        "① 工程別　基準計画／実績／進捗率"
+        f"<span style='font-weight:400;color:#64748b;'>（基準計画＝{_esc(period_label)}月全体、"
+        f"実績＝{_esc(period_range_label)}）</span></p>"
         "<table border='1' cellpadding='6' cellspacing='0'>"
-        "<tr><th>工程</th><th>基準計画</th><th>現行計画</th><th>計画差異</th>"
-        "<th>現行実績</th><th>対実績差</th><th>達成率</th></tr>"
-        f"{body}</table>"
+        "<tr><th>工程</th><th>基準計画</th><th>実績</th><th>進捗率</th></tr>"
+        f"{progress_body}</table>"
+        "<p style='margin:14px 0 4px;font-weight:600;'>"
+        "② 工程別　基準計画合計／実績／差異（実績−基準計画）"
+        f"<span style='font-weight:400;color:#64748b;'>（{_esc(period_range_label)}）</span></p>"
+        "<table border='1' cellpadding='6' cellspacing='0'>"
+        f"<tr><th>工程</th><th>{_esc(baseline_period_header)}</th><th>実績</th><th>差異</th></tr>"
+        f"{diff_body}</table>"
         "<p style='margin-top:8px;font-size:12px;color:#64748b;'>"
-        "詳細は添付PDF（画面レポート生成と同レイアウト）をご確認ください。</p>"
+        "詳細は添付PDFをご確認ください。</p>"
     )
 
 
 def _build_summary_text(
-    period_label: str, summaries: list[dict[str, Any]], as_of_label: str
+    period_label: str,
+    summaries: list[dict[str, Any]],
+    period_range_label: str,
+    as_of_label: str,
 ) -> str:
     if not summaries:
-        return f"{period_label}（{as_of_label}時点）のベースライン比較データがありません。"
-    lines = [
-        f"  {s['name']}: 基準 {_fmt_num(s['baseline'])} / 現行計画 {_fmt_num(s['current_plan'])} "
-        f"/ 実績 {_fmt_num(s['current_actual'])} / 達成率 {_fmt_rate(s['rate'])}"
+        return f"{period_label}（{period_range_label}）のベースライン比較データがありません。"
+    baseline_period_header = f"{as_of_label}までの計画合計"
+    progress_lines = [
+        f"  {s['name']}: 基準(月全体) {_fmt_num(s['baseline_month'])} / "
+        f"実績 {_fmt_num(s['current_actual'])} / 進捗率 {_fmt_rate(s['progress_rate'])}"
+        for s in summaries
+    ]
+    diff_lines = [
+        f"  {s['name']}: {baseline_period_header} {_fmt_num(s['baseline_period'])} / "
+        f"実績 {_fmt_num(s['current_actual'])} / 差異 {_fmt_num(s['diff'])}"
         for s in summaries
     ]
     return (
-        f"生産計画ベースライン比較（{period_label}・工程別合計・{as_of_label}）:\n"
-        + "\n".join(lines)
+        f"生産計画ベースライン（{period_label}）:\n"
+        f"① 工程別 基準計画／実績／進捗率（基準計画＝{period_label}月全体、実績＝{period_range_label}）:\n"
+        + "\n".join(progress_lines)
+        + f"\n② 工程別 {baseline_period_header}／実績／差異（{period_range_label}、実績−基準計画）:\n"
+        + "\n".join(diff_lines)
     )
 
 
 def _build_sheets(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str], list[list]]]:
-    summary_headers = ["工程", "基準計画", "現行計画", "計画差異", "現行実績", "対実績差", "達成率(%)"]
+    summary_headers = ["工程", "基準計画", "変更計画", "計画差異", "実績", "対実績差", "達成率(%)"]
     summary_rows = [
         [
             s["name"],
@@ -241,7 +341,7 @@ def _build_sheets(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str],
         for s in summaries
     ]
     sheets: list[tuple[str, list[str], list[list]]] = [("工程サマリー", summary_headers, summary_rows)]
-    detail_headers = ["日付", "工程", "基準計画", "現行計画", "計画差異", "現行実績", "対実績差"]
+    detail_headers = ["日付", "工程", "基準計画", "変更計画", "計画差異", "実績", "対実績差"]
     detail_rows: list[list] = []
     for s in summaries:
         for r in s["rows"]:
@@ -266,8 +366,8 @@ def _build_sheets(summaries: list[dict[str, Any]]) -> list[tuple[str, list[str],
 def _detail_table_html(rows: list[dict[str, Any]]) -> str:
     thead = (
         "<thead><tr>"
-        "<th>日付</th><th>基準計画</th><th>現行計画</th>"
-        "<th>計画差異</th><th>現行実績</th><th>計画対実績差</th>"
+        "<th>日付</th><th>基準計画</th><th>変更計画</th>"
+        "<th>計画差異</th><th>実績</th><th>計画対実績差</th>"
         "</tr></thead>"
     )
     body_rows = []
@@ -304,7 +404,7 @@ def _two_col_detail_html(s: dict[str, Any]) -> str:
         "<div class='totals'>"
         f"<div class='totals-label'>合計</div>"
         f"<div>基準 <b>{_fmt_num(s['baseline'])}</b></div>"
-        f"<div>現行計画 <b>{_fmt_num(s['current_plan'])}</b></div>"
+        f"<div>変更計画 <b>{_fmt_num(s['current_plan'])}</b></div>"
         f"<div class=\"{'neg' if (s['plan_diff'] or 0) < 0 else 'pos'}\">計画差 <b>{_fmt_num(s['plan_diff'])}</b></div>"
         f"<div>実績 <b>{_fmt_num(s['current_actual'])}</b></div>"
         f"<div class=\"{'neg' if (s.get('actual_diff') or 0) < 0 else 'pos'}\">対実績差 <b>{_fmt_num(s['actual_diff'])}</b></div>"
@@ -454,7 +554,7 @@ def _fmt_trend_unit(value: float | None, digits: int = 1) -> str:
 
 
 def _trend_svg(rows: list[dict[str, Any]], process_name: str, period_label: str) -> str:
-    """画面と同じグループ柱状図（基準計画 / 現行実績 + 差異バッジ）。"""
+    """画面と同じグループ柱状図（基準計画 / 実績 + 差異バッジ）。"""
     w, h = 1040, 280
     pad_l, pad_r, pad_t, pad_b = 44, 14, 58, 30
     plot_w = w - pad_l - pad_r
@@ -466,7 +566,7 @@ def _trend_svg(rows: list[dict[str, Any]], process_name: str, period_label: str)
         (float(r["current_actual"]) / 1000.0) if r.get("current_actual") is not None else None
         for r in rows
     ]
-    # 画面: 差異 = 現行実績 − 基準計画（千単位）
+    # 画面: 差異 = 実績 − 基準計画（千単位）
     diffs: list[float | None] = []
     for i, r in enumerate(rows):
         if r.get("current_actual") is None:
@@ -536,7 +636,7 @@ def _trend_svg(rows: list[dict[str, Any]], process_name: str, period_label: str)
                 f"<rect x='{x0:.1f}' y='{yb:.1f}' width='{bar_w:.1f}' height='{max(0.5, y_base0 - yb):.1f}' "
                 f"rx='2' fill='url(#gradBase)'/>"
             )
-        # 現行実績 bar
+        # 実績 bar
         if act is not None and act > 0:
             ya = y_at(act)
             parts.append(
@@ -585,13 +685,13 @@ def _trend_svg(rows: list[dict[str, Any]], process_name: str, period_label: str)
         f"</defs>"
         f"<rect x='0' y='0' width='{w}' height='{h}' rx='8' fill='#fff' stroke='#e2e8f0'/>"
         f"<text x='{w/2}' y='18' text-anchor='middle' font-size='14' font-weight='800' fill='#0f172a'>"
-        f"日次推移（基準計画 × 現行実績・単位：千）</text>"
+        f"日次推移（基準計画 × 実績・単位：千）</text>"
         f"<text x='{w/2}' y='34' text-anchor='middle' font-size='11' fill='#64748b'>"
         f"{_esc(period_label)} ／ {_esc(process_name)}</text>"
         f"<rect x='{w/2 - 130}' y='40' width='12' height='7' rx='2' fill='#0d9488'/>"
         f"<text x='{w/2 - 114}' y='47' font-size='11' fill='#475569'>基準計画</text>"
         f"<rect x='{w/2 - 40}' y='40' width='12' height='7' rx='2' fill='#2563eb'/>"
-        f"<text x='{w/2 - 24}' y='47' font-size='11' fill='#475569'>現行実績</text>"
+        f"<text x='{w/2 - 24}' y='47' font-size='11' fill='#475569'>実績</text>"
         f"<text x='{w/2 + 60}' y='47' font-size='11' fill='#64748b'>差異(実績−基準)</text>"
         f"{''.join(parts)}"
         f"</svg>"
@@ -639,9 +739,9 @@ def _process_page1_html(period_label: str, s: dict[str, Any]) -> str:
   <div class="body compact">
     <div class="kpi-grid">
       <div class="kpi k1"><div class="k-label">基準計画</div><div class="k-val">{_fmt_num(s['baseline'])}</div></div>
-      <div class="kpi k2"><div class="k-label">現行計画</div><div class="k-val">{_fmt_num(s['current_plan'])}</div></div>
+      <div class="kpi k2"><div class="k-label">変更計画</div><div class="k-val">{_fmt_num(s['current_plan'])}</div></div>
       <div class="kpi k3"><div class="k-label">計画差異</div><div class="k-val" style="color:{plan_diff_color}">{_fmt_num(s['plan_diff'])}</div></div>
-      <div class="kpi k4"><div class="k-label">現行実績</div><div class="k-val">{_fmt_num(s['current_actual'])}</div></div>
+      <div class="kpi k4"><div class="k-label">実績</div><div class="k-val">{_fmt_num(s['current_actual'])}</div></div>
       <div class="kpi k5"><div class="k-label">対実績差</div><div class="k-val" style="color:{actual_diff_color}">{_fmt_num(s['actual_diff'])}</div></div>
       <div class="kpi k6"><div class="k-label">達成率</div><div class="k-val">{_fmt_rate(s['rate'])}</div></div>
     </div>
@@ -933,7 +1033,7 @@ def _build_baseline_pdf_reportlab(
         Paragraph(f"対象月: {period_label} / 発行: {generated_at}", body),
         Spacer(1, 8),
     ]
-    headers = ["工程", "基準計画", "現行計画", "計画差異", "現行実績", "対実績差", "達成率"]
+    headers = ["工程", "基準計画", "変更計画", "計画差異", "実績", "対実績差", "達成率"]
     data = [headers] + [
         [
             s["name"],
@@ -962,7 +1062,7 @@ def _build_baseline_pdf_reportlab(
     for s in summaries:
         flow.append(PageBreak())
         flow.append(Paragraph(f"{s['name']} 日別明細", title))
-        dheaders = ["日付", "基準", "現行計画", "計画差", "実績", "対実績差"]
+        dheaders = ["日付", "基準", "変更計画", "計画差", "実績", "対実績差"]
         ddata = [dheaders]
         for r in s["rows"]:
             ddata.append(

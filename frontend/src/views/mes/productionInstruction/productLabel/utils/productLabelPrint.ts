@@ -230,9 +230,9 @@ export function normalizePrintSlots(slots?: (string | null)[] | null): (string |
 }
 
 /**
- * 参考レイアウトに合わせた印刷用グリッド
- * 上段：枠1〜3（成型設備）＋空欄
- * 下段：枠5（空欄可）｜枠4（手直し）｜枠5〜8の後工程（右寄せ・末尾2件を表示）
+ * 印刷用グリッド（設定画面の枠1〜8と同一対応）
+ * 上段：枠1〜3（成型設備）＋枠4（手直し）
+ * 下段：枠5〜8（成型後工程）をそのまま表示
  */
 export function buildPrintGridFromSlots(slots?: (string | null)[] | null): {
   topRow: string[]
@@ -240,17 +240,8 @@ export function buildPrintGridFromSlots(slots?: (string | null)[] | null): {
 } {
   const s = normalizePrintSlots(slots)
 
-  const topRow = [s[0] || '', s[1] || '', s[2] || '', '']
-
-  const postMolding = s.slice(4, 8).filter((v) => v)
-  const postTail = postMolding.slice(-2)
-
-  const bottomRow = [
-    s[4] || '',
-    s[3] || TENAOSHI,
-    postTail[0] || '',
-    postTail[1] || '',
-  ]
+  const topRow = [s[0] || '', s[1] || '', s[2] || '', s[3] || TENAOSHI]
+  const bottomRow = [s[4] || '', s[5] || '', s[6] || '', s[7] || '']
 
   return { topRow, bottomRow }
 }

@@ -33,6 +33,7 @@ import {
   resolveInspectionDataSource,
 } from './inspectionDataSource'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import { lookupProcessCautions } from '@/api/erp/quality/processCaution'
 import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
 /** keep-alive の include はタブの route.name と一致させる */
@@ -236,6 +237,34 @@ const displayProductCd = computed(
 )
 const displayProductName = computed(
   () => activeRow.value?.product_name ?? selectedProduct.value?.product_name ?? '—',
+)
+
+const productionCautionText = ref('')
+let productionCautionReq = 0
+
+watch(
+  displayProductCd,
+  async (cd) => {
+    const code = (cd || '').trim()
+    const req = ++productionCautionReq
+    if (!code || code === '—') {
+      productionCautionText.value = ''
+      return
+    }
+    try {
+      const res = await lookupProcessCautions({ process_code: 'inspection', product_cd: code })
+      if (req !== productionCautionReq) return
+      const texts = (res.data?.list ?? [])
+        .filter((row) => (row.product_cd || '').trim() === code && row.is_active !== false)
+        .map((row) => (row.caution_text || '').trim())
+        .filter(Boolean)
+      productionCautionText.value = texts.join(' / ')
+    } catch {
+      if (req !== productionCautionReq) return
+      productionCautionText.value = ''
+    }
+  },
+  { immediate: true },
 )
 
 const currentSession = computed(() => workSession())
@@ -862,6 +891,11 @@ onUnmounted(() => {
             >
               {{ timerPhaseLabel(currentSession) }}
             </el-tag>
+            <span
+              v-if="productionCautionText"
+              class="plan-row-caution"
+              :title="productionCautionText"
+            >{{ productionCautionText }}</span>
           </div>
 
           <div class="plan-row__meta">
@@ -2494,6 +2528,16 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
+}
+
+.plan-row-caution {
+  margin-left: auto;
+  max-width: min(56%, 40rem);
+  color: #dc2626;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .plan-row-scan-remarks-cluster {

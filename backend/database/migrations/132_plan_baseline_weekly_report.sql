@@ -9,7 +9,7 @@ VALUES
   (
     'REPORT_PLAN_BASELINE_WEEKLY',
     '生産計画ベースラインレポート',
-    '基準計画と現行計画・実績の比較PDFを週次添付配信（金曜19:00）',
+    '基準計画と実績の比較PDFを週次添付配信（金曜19:00）',
     0, 1, 0, 0, 1
   )
 ON DUPLICATE KEY UPDATE
@@ -28,7 +28,7 @@ VALUES
     'pdf',
     '{"fields":[{"key":"month","label":"基準月","type":"month","default":"this_month"}]}',
     'REPORT_PLAN_BASELINE_WEEKLY',
-    '基準計画と現行計画・実績の工程別比較をPDF添付で週次配信',
+    '基準計画と実績の工程別比較をPDF添付で週次配信',
     1
   )
 ON DUPLICATE KEY UPDATE

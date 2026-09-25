@@ -53,7 +53,7 @@ def main() -> int:
             (
                 EVENT_CODE,
                 "生産計画ベースラインレポート",
-                "基準計画と現行計画・実績の比較PDFを週次添付配信（金曜19:00）",
+                "基準計画と実績の比較PDFを週次添付配信（金曜19:00）",
             ),
         )
         cur.execute(
@@ -76,7 +76,7 @@ def main() -> int:
                 "生産計画ベースラインレポート",
                 json.dumps(PARAM_SCHEMA, ensure_ascii=False),
                 EVENT_CODE,
-                "基準計画と現行計画・実績の工程別比較をPDF添付で週次配信",
+                "基準計画と実績の工程別比較をPDF添付で週次配信",
             ),
         )
         cur.execute(

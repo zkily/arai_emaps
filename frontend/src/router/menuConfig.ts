@@ -128,9 +128,11 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_QUALITY_MATERIAL_TOLERANCE', name: '材料公差管理', icon: 'ScaleToOriginal', path: '/erp/quality/material-association/tolerance-management', parentCode: 'ERP_QUALITY_MATERIAL_RELATION', sortOrder: 2 },
   { code: 'ERP_QUALITY_MATERIAL_CUTTING', name: '材料使用取込', icon: 'Scissor', path: '/erp/quality/material-association/cutting-logs', parentCode: 'ERP_QUALITY_MATERIAL_RELATION', sortOrder: 3 },
   { code: 'ERP_QUALITY_PRODUCT_MATERIAL', name: '製品材料照会', icon: 'Search', path: '/erp/quality/material-association/product-material', parentCode: 'ERP_QUALITY_MATERIAL_RELATION', sortOrder: 4 },
-  { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', icon: 'Goods', path: '/erp/quality/product-association', parentCode: 'ERP_QUALITY', sortOrder: 2 },
+  { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', icon: 'Goods', parentCode: 'ERP_QUALITY', sortOrder: 2 },
+  { code: 'ERP_QUALITY_PRODUCT_PROCESS_CAUTION', name: '生産注意事項', icon: 'Warning', path: '/erp/quality/product-association/process-cautions', parentCode: 'ERP_QUALITY_PRODUCT', sortOrder: 1 },
   { code: 'ERP_QUALITY_EQUIPMENT_RELATION', name: '設備関係', icon: 'Cpu', parentCode: 'ERP_QUALITY', sortOrder: 3 },
   { code: 'ERP_QUALITY_EQUIPMENT', name: 'ローラー使用管理', icon: 'SetUp', path: '/erp/quality/equipment-association', parentCode: 'ERP_QUALITY_EQUIPMENT_RELATION', sortOrder: 1 },
+  { code: 'ERP_QUALITY_EQUIPMENT_MAINTENANCE', name: '設備保全管理', icon: 'Tools', path: '/erp/quality/equipment-maintenance', parentCode: 'ERP_QUALITY_EQUIPMENT_RELATION', sortOrder: 2 },
   { code: 'ERP_QUALITY_NOTIFICATION_RELATION', name: '通知関係', icon: 'Bell', parentCode: 'ERP_QUALITY', sortOrder: 4 },
   { code: 'ERP_QUALITY_INSPECTION_NEWSPAPER', name: '検査通知(防錆)', icon: 'Message', path: '/erp/quality/inspection-newspaper', parentCode: 'ERP_QUALITY_NOTIFICATION_RELATION', sortOrder: 1 },
 

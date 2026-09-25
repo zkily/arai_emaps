@@ -256,8 +256,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/quality/material-association/tolerance-management', name: 'QualityMaterialToleranceManagement', component: () => import('@/views/erp/quality/material-association/MaterialToleranceManagement.vue'), meta: { title: '材料公差管理', group: '品質管理 > 材料関係', requiresAuth: true } },
       { path: 'erp/quality/material-association/cutting-logs', name: 'QualityMaterialCuttingLogs', component: () => import('@/views/erp/quality/material-association/MaterialCuttingLogs.vue'), meta: { title: '材料使用取込', group: '品質管理 > 材料関係', requiresAuth: true } },
       { path: 'erp/quality/material-association/product-material', name: 'QualityProductMaterialAssociation', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociation.vue'), meta: { title: '製品材料照会', group: '品質管理 > 材料関係', requiresAuth: true } },
-      { path: 'erp/quality/product-association', name: 'QualityProductAssociation', component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'), meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true } },
+      { path: 'erp/quality/product-association', redirect: '/erp/quality/product-association/process-cautions' },
+      { path: 'erp/quality/product-association/process-cautions', name: 'QualityProductProcessCaution', component: () => import('@/views/erp/quality/product-association/ProcessCautionManagement.vue'), meta: { title: '生産注意事項', group: '品質管理 > 製品関連', requiresAuth: true } },
       { path: 'erp/quality/equipment-association', name: 'QualityEquipmentAssociation', component: () => import('@/views/erp/quality/equipment-association/EquipmentAssociationHome.vue'), meta: { title: 'ローラー使用管理', group: '品質管理 > 設備関係', requiresAuth: true } },
+      { path: 'erp/quality/equipment-maintenance', name: 'QualityEquipmentMaintenance', component: () => import('@/views/erp/quality/equipment-maintenance/EquipmentMaintenance.vue'), meta: { title: '設備保全管理', group: '品質管理 > 設備関係', requiresAuth: true } },
       { path: 'erp/quality/inspection-newspaper', name: 'QualityInspectionNewspaper', component: () => import('@/views/erp/quality/inspection-newspaper/InspectionNewspaperNotify.vue'), meta: { title: '検査通知(防錆)', group: '品質管理 > 通知関係', requiresAuth: true } },
 
       // ========== APS モジュール ==========
