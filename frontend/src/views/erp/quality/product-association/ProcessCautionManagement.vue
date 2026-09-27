@@ -9,7 +9,7 @@
         </div>
         <div>
           <h1 class="pc-title">生産注意事項</h1>
-          <p class="pc-subtitle">工程別に生産時の注意・ヒントを管理（例：検査時新聞紙投入）</p>
+          <p class="pc-subtitle">工程別に注意事項・品質事項を管理（App検査画面に表示）</p>
         </div>
       </div>
       <div class="pc-header-stats">
@@ -152,12 +152,22 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="caution_text" label="注意事項" min-width="280" show-overflow-tooltip sortable>
+        <el-table-column label="注意事項" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="pc-caution" :style="cautionStyle(row.process_code)">
+            <span v-if="row.caution_text" class="pc-caution pc-caution--note" :style="cautionStyle(row.process_code)">
               <el-icon :size="13" class="pc-caution-ico"><WarningFilled /></el-icon>
               {{ row.caution_text }}
             </span>
+            <span v-else class="pc-empty">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="品質事項" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.quality_text" class="pc-caution pc-caution--quality">
+              <el-icon :size="13" class="pc-caution-ico"><CircleCheck /></el-icon>
+              {{ row.quality_text }}
+            </span>
+            <span v-else class="pc-empty">—</span>
           </template>
         </el-table-column>
         <el-table-column label="並び" prop="sort_order" width="72" align="center" sortable>
@@ -229,7 +239,7 @@
           </div>
           <div>
             <div class="pc-dlg-title">{{ editingId ? '生産注意事項の編集' : '生産注意事項の追加' }}</div>
-            <div class="pc-dlg-sub">{{ processLabel(form.process_code) }}向けの注意事項を登録</div>
+            <div class="pc-dlg-sub">{{ processLabel(form.process_code) }} · Appの注意/品質パネルに対応</div>
           </div>
         </div>
       </template>
@@ -291,15 +301,27 @@
             <el-input :model-value="form.product_name" disabled />
           </el-form-item>
 
-          <el-form-item label="注意事項" prop="caution_text" required class="pc-form-item">
+          <el-form-item label="注意事項" class="pc-form-item">
             <el-input
               v-model="form.caution_text"
               type="textarea"
               :rows="3"
               maxlength="500"
               show-word-limit
-              placeholder="例：検査時新聞紙投入"
+              placeholder="例：検査時新聞紙投入（App「注意事項」に表示）"
               class="pc-caution-input"
+            />
+          </el-form-item>
+
+          <el-form-item label="品質事項" class="pc-form-item">
+            <el-input
+              v-model="form.quality_text"
+              type="textarea"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+              placeholder="例：寸法公差・外観基準（App「品質事項」に表示）"
+              class="pc-quality-input"
             />
           </el-form-item>
 
@@ -323,14 +345,21 @@
         </el-form>
 
         <div class="pc-preview" :style="{ borderColor: `${processColor(form.process_code)}44` }">
-          <div class="pc-preview-label">プレビュー</div>
-          <div class="pc-preview-card" :style="cautionStyle(form.process_code)">
-            <el-icon :size="14"><WarningFilled /></el-icon>
-            <div>
-              <div class="pc-preview-proc">{{ processLabel(form.process_code) }}
-                <span class="pc-preview-scope">{{ form.product_cd ? form.product_cd : '工程共通' }}</span>
+          <div class="pc-preview-label">App表示プレビュー</div>
+          <div class="pc-preview-grid">
+            <div class="pc-preview-card pc-preview-card--note" :style="cautionStyle(form.process_code)">
+              <div class="pc-preview-proc">
+                <el-icon :size="14"><WarningFilled /></el-icon>
+                注意事項
               </div>
-              <div class="pc-preview-text">{{ form.caution_text.trim() || '（注意事項を入力）' }}</div>
+              <div class="pc-preview-text">{{ form.caution_text.trim() || '（なし）' }}</div>
+            </div>
+            <div class="pc-preview-card pc-preview-card--quality">
+              <div class="pc-preview-proc">
+                <el-icon :size="14"><CircleCheck /></el-icon>
+                品質事項
+              </div>
+              <div class="pc-preview-text">{{ form.quality_text.trim() || '（なし）' }}</div>
             </div>
           </div>
         </div>
@@ -423,13 +452,12 @@ const form = reactive({
   product_cd: '' as string,
   product_name: '' as string,
   caution_text: '',
+  quality_text: '',
   is_active: true,
   sort_order: 0,
 })
 
-const formRules: FormRules = {
-  caution_text: [{ required: true, message: '注意事項を入力してください', trigger: 'blur' }],
-}
+const formRules: FormRules = {}
 
 const processLabel = (code: string) => processes.find((p) => p.code === code)?.label ?? code
 const processColor = (code: string) => processes.find((p) => p.code === code)?.color ?? '#64748b'
@@ -466,7 +494,7 @@ const filteredRows = computed(() => {
     if (scopeFilter.value === 'common' && r.product_cd) return false
     if (!includeInactive.value && !r.is_active) return false
     if (!kw) return true
-    const hay = `${r.product_cd || ''} ${r.product_name || ''} ${r.caution_text}`.toLowerCase()
+    const hay = `${r.product_cd || ''} ${r.product_name || ''} ${r.caution_text || ''} ${r.quality_text || ''}`.toLowerCase()
     return hay.includes(kw)
   })
 })
@@ -574,7 +602,8 @@ function openDialog(row?: ProcessCaution) {
     form.process_code = row.process_code
     form.product_cd = row.product_cd || ''
     form.product_name = row.product_name || ''
-    form.caution_text = row.caution_text
+    form.caution_text = row.caution_text || ''
+    form.quality_text = row.quality_text || ''
     form.is_active = row.is_active
     form.sort_order = row.sort_order ?? 0
   } else {
@@ -584,6 +613,7 @@ function openDialog(row?: ProcessCaution) {
     form.product_cd = ''
     form.product_name = ''
     form.caution_text = ''
+    form.quality_text = ''
     form.is_active = true
     form.sort_order = 0
   }
@@ -600,8 +630,9 @@ async function saveRow() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   const cautionText = form.caution_text.trim()
-  if (!cautionText) {
-    ElMessage.warning('注意事項を入力してください')
+  const qualityText = form.quality_text.trim()
+  if (!cautionText && !qualityText) {
+    ElMessage.warning('注意事項または品質事項を入力してください')
     return
   }
   if (editingId.value) {
@@ -615,7 +646,8 @@ async function saveRow() {
       process_code: form.process_code,
       product_cd: form.product_cd?.trim() || null,
       product_name: form.product_name?.trim() || null,
-      caution_text: cautionText,
+      caution_text: cautionText || null,
+      quality_text: qualityText || null,
       is_active: form.is_active,
       sort_order: form.sort_order ?? 0,
     }
@@ -655,10 +687,13 @@ async function toggleActive(row: ProcessCaution, next: boolean) {
 async function removeRow(row: ProcessCaution) {
   if (!guardQualityOperation(canDelete)) return
   const target = row.product_cd
-    ? `${row.product_cd} / ${row.caution_text}`
-    : `工程共通 / ${row.caution_text}`
+    ? `${row.product_cd}`
+    : '工程共通'
   try {
-    await ElMessageBox.confirm(`「${target}」を削除しますか？`, '削除確認', {
+    await ElMessageBox.confirm(
+      `「${target}」の注意/品質事項を削除しますか？`,
+      '削除確認',
+      {
       type: 'warning',
       confirmButtonText: '削除',
       cancelButtonText: 'キャンセル',
@@ -1072,6 +1107,15 @@ onMounted(() => {
   font-weight: 600;
   line-height: 1.35;
 }
+.pc-caution--quality {
+  color: #0369a1;
+  background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 100%);
+  border-color: #bae6fd;
+}
+.pc-empty {
+  color: #cbd5e1;
+  font-size: 12px;
+}
 .pc-caution-ico {
   flex-shrink: 0;
 }
@@ -1261,6 +1305,15 @@ onMounted(() => {
   border-color: #f8b4c0;
   box-shadow: 0 0 0 3px rgba(248, 180, 192, 0.35);
 }
+.pc-quality-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+.pc-quality-input :deep(.el-textarea__inner:focus) {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
 .pc-preview {
   border: 1px dashed;
   border-radius: 12px;
@@ -1271,37 +1324,42 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 700;
   color: #94a3b8;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   letter-spacing: 0.04em;
+}
+.pc-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 .pc-preview-card {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid;
   font-weight: 600;
+  min-height: 72px;
+}
+.pc-preview-card--quality {
+  color: #0369a1;
+  background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 100%);
+  border-color: #bae6fd;
 }
 .pc-preview-proc {
   font-size: 11px;
-  opacity: 0.85;
-  margin-bottom: 2px;
+  opacity: 0.9;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-.pc-preview-scope {
-  display: inline-flex;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.06);
-  font-size: 10px;
+  gap: 5px;
   font-weight: 700;
 }
 .pc-preview-text {
   font-size: 13px;
   line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .pc-dlg-footer {
   display: flex;
@@ -1346,6 +1404,9 @@ onMounted(() => {
     width: 100%;
   }
   .pc-form-row {
+    grid-template-columns: 1fr;
+  }
+  .pc-preview-grid {
     grid-template-columns: 1fr;
   }
   .pc-header-stats {

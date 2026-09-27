@@ -8,6 +8,7 @@ import {
   Calendar,
   CircleCheck,
   Clock,
+  CloseBold,
   Coffee,
   Camera,
   DataLine,
@@ -102,6 +103,7 @@ const {
   canBreak,
   canResumeBreak,
   canEnd,
+  canCancelProduction,
   endBlockedTitle,
   resumePulseActive,
   productSelectionLocked,
@@ -120,6 +122,7 @@ const {
   onResumeProduction,
   onBreakProduction,
   onResumeBreakProduction,
+  onCancelProduction,
   openEndDialog,
   closeEndDialog,
   submitProductionEnd,
@@ -240,32 +243,133 @@ const displayProductName = computed(
 )
 
 const productionCautionText = ref('')
+const productionQualityText = ref('')
 let productionCautionReq = 0
 
+function extractCautionList(
+  res: unknown,
+): Array<{
+  product_cd?: string | null
+  caution_text?: string | null
+  quality_text?: string | null
+  is_active?: boolean
+  matter_kind?: string | null
+}> {
+  if (!res || typeof res !== 'object') return []
+  const root = res as Record<string, unknown>
+  const data = root.data
+  if (data && typeof data === 'object') {
+    const list = (data as Record<string, unknown>).list
+    if (Array.isArray(list)) return list
+  }
+  if (Array.isArray(root.list)) return root.list
+  if (Array.isArray(root)) {
+    return root as Array<{
+      product_cd?: string | null
+      caution_text?: string | null
+      quality_text?: string | null
+      is_active?: boolean
+      matter_kind?: string | null
+    }>
+  }
+  return []
+}
+
+/** lookup 結果（工程共通 + 当該製品）を表示用テキストに整形 */
+function productCdMatches(rowCd: string, selectedCd: string): boolean {
+  const a = rowCd.trim().toLowerCase()
+  const b = selectedCd.trim().toLowerCase()
+  if (!a || !b) return false
+  if (a === b) return true
+  // 検査製品は末尾「1」が多いため、注意事項側と差がある場合も照合する
+  const strip = (s: string) => (s.length > 1 && s.endsWith('1') ? s.slice(0, -1) : s)
+  return strip(a) === strip(b)
+}
+
+function formatMatterTexts(
+  rows: Array<{
+    product_cd?: string | null
+    caution_text?: string | null
+    quality_text?: string | null
+    is_active?: boolean
+    matter_kind?: string | null
+  }>,
+  productCd: string,
+  kind: 'caution' | 'quality',
+): string {
+  const matched = rows
+    .filter((row) => row.is_active !== false)
+    .filter((row) => {
+      const rowCd = (row.product_cd || '').trim()
+      if (!rowCd) return true
+      return productCdMatches(rowCd, productCd)
+    })
+
+  const texts: string[] = []
+  for (const row of matched) {
+    const kindLegacy = String(row.matter_kind || '').trim().toLowerCase()
+    if (kind === 'caution') {
+      const t = (row.caution_text || '').trim()
+      if (t && kindLegacy !== 'quality') texts.push(t)
+    } else {
+      // 品質事項は必ず quality_text を優先
+      const q = (row.quality_text || '').trim()
+      if (q) {
+        texts.push(q)
+      } else if (kindLegacy === 'quality') {
+        const t = (row.caution_text || '').trim()
+        if (t) texts.push(t)
+      }
+    }
+  }
+  return [...new Set(texts)].join('\n')
+}
+
+async function refreshProductionCaution(productCd: string | null | undefined): Promise<void> {
+  const code = (productCd || '').trim()
+  const req = ++productionCautionReq
+  if (!code || code === '—') {
+    productionCautionText.value = ''
+    productionQualityText.value = ''
+    return
+  }
+  try {
+    const res = await lookupProcessCautions({ process_code: 'inspection', product_cd: code })
+    if (req !== productionCautionReq) return
+    const root = (res || {}) as Record<string, unknown>
+    const data = (root.data || {}) as Record<string, unknown>
+    const aggregatedCaution = String(data.caution_text || '').trim()
+    const aggregatedQuality = String(data.quality_text || '').trim()
+    const list = extractCautionList(res)
+    // 集約値と list をマージ（片方だけ先行 return すると欠落することがある）
+    const fromListCaution = formatMatterTexts(list, code, 'caution')
+    const fromListQuality = formatMatterTexts(list, code, 'quality')
+    const mergeLines = (...parts: string[]) =>
+      [...new Set(parts.flatMap((p) => p.split('\n').map((x) => x.trim()).filter(Boolean)))].join('\n')
+    productionCautionText.value = mergeLines(aggregatedCaution, fromListCaution)
+    productionQualityText.value = mergeLines(aggregatedQuality, fromListQuality)
+  } catch (e) {
+    console.warn('[inspection] process caution lookup failed', e)
+    if (req !== productionCautionReq) return
+    productionCautionText.value = ''
+    productionQualityText.value = ''
+  }
+}
+
 watch(
-  displayProductCd,
-  async (cd) => {
-    const code = (cd || '').trim()
-    const req = ++productionCautionReq
-    if (!code || code === '—') {
-      productionCautionText.value = ''
-      return
-    }
-    try {
-      const res = await lookupProcessCautions({ process_code: 'inspection', product_cd: code })
-      if (req !== productionCautionReq) return
-      const texts = (res.data?.list ?? [])
-        .filter((row) => (row.product_cd || '').trim() === code && row.is_active !== false)
-        .map((row) => (row.caution_text || '').trim())
-        .filter(Boolean)
-      productionCautionText.value = texts.join(' / ')
-    } catch {
-      if (req !== productionCautionReq) return
-      productionCautionText.value = ''
-    }
+  () => selectedProductCode.value || activeRow.value?.product_cd || '',
+  (cd) => {
+    void refreshProductionCaution(cd)
   },
   { immediate: true },
 )
+
+watch(displayProductCd, (cd) => {
+  const code = (cd || '').trim()
+  if (!code || code === '—') return
+  if (productionCautionText.value || productionQualityText.value) return
+  void refreshProductionCaution(code)
+})
 
 const currentSession = computed(() => workSession())
 
@@ -543,6 +647,27 @@ onUnmounted(() => {
 <template>
 
   <div class="inspection-actual-page">
+    <aside
+      v-if="productionCautionText || productionQualityText"
+      class="matter-float-panel"
+      role="complementary"
+      aria-label="注意・品質事項"
+    >
+      <section class="matter-float-panel__section matter-float-panel__section--caution">
+        <header class="matter-float-panel__head">
+          <el-icon aria-hidden="true"><Warning /></el-icon>
+          <span>注意事項</span>
+        </header>
+        <p class="matter-float-panel__body">{{ productionCautionText || '（なし）' }}</p>
+      </section>
+      <section class="matter-float-panel__section matter-float-panel__section--quality">
+        <header class="matter-float-panel__head">
+          <el-icon aria-hidden="true"><CircleCheck /></el-icon>
+          <span>品質事項</span>
+        </header>
+        <p class="matter-float-panel__body">{{ productionQualityText || '（なし）' }}</p>
+      </section>
+    </aside>
     <header class="page-head">
       <div class="page-head-row">
         <div class="page-head-main">
@@ -891,15 +1016,12 @@ onUnmounted(() => {
             >
               {{ timerPhaseLabel(currentSession) }}
             </el-tag>
-            <span
-              v-if="productionCautionText"
-              class="plan-row-caution"
-              :title="productionCautionText"
-            >{{ productionCautionText }}</span>
           </div>
 
           <div class="plan-row__meta">
+            <div class="plan-meta-body">
             <div class="plan-meta-primary">
+              <span class="plan-meta-cd" :title="displayProductCd">{{ displayProductCd }}</span>
               <span class="plan-product-name" :title="displayProductName || ''">{{
                 displayProductName || '—'
               }}</span>
@@ -954,6 +1076,7 @@ onUnmounted(() => {
                   </el-tooltip>
                 </div>
               </div>
+            </div>
             </div>
           </div>
 
@@ -1078,6 +1201,14 @@ onUnmounted(() => {
               <el-button v-else class="plan-act-btn plan-act-btn--break" disabled>
                 <el-icon><Coffee /></el-icon>
                 {{ t('mesInspectionActual.btnBreak') }}
+              </el-button>
+              <el-button
+                class="plan-act-btn plan-act-btn--cancel"
+                :disabled="!canCancelProduction"
+                @click="onCancelProduction"
+              >
+                <el-icon><CloseBold /></el-icon>
+                {{ t('mesInspectionActual.btnCancelProduction') }}
               </el-button>
             </div>
           </div>
@@ -2530,14 +2661,60 @@ onUnmounted(() => {
   gap: 6px 8px;
 }
 
-.plan-row-caution {
-  margin-left: auto;
-  max-width: min(56%, 40rem);
-  color: #dc2626;
-  font-size: 0.95rem;
+.matter-float-panel {
+  position: fixed;
+  top: 25%;
+  right: 16px;
+  z-index: 40;
+  width: min(300px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  pointer-events: none;
+}
+
+.matter-float-panel__section {
+  padding: 8px 10px;
+}
+
+.matter-float-panel__section + .matter-float-panel__section {
+  border-top: 1px solid #e2e8f0;
+}
+
+.matter-float-panel__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.matter-float-panel__section--caution .matter-float-panel__head {
+  color: #e11d48;
+  background: linear-gradient(90deg, #ffe4e6, #fecaca);
+}
+
+.matter-float-panel__section--quality .matter-float-panel__head {
+  color: #2563eb;
+  background: linear-gradient(90deg, #dbeafe, #bfdbfe);
+}
+
+.matter-float-panel__body {
+  margin: 0;
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.35;
-  text-align: right;
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .plan-row-scan-remarks-cluster {
@@ -2571,7 +2748,7 @@ onUnmounted(() => {
 
 .plan-row__meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 8px 10px;
   padding: 8px 10px;
@@ -2584,6 +2761,15 @@ onUnmounted(() => {
   );
   border: 1px solid var(--el-color-primary-light-8);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.plan-meta-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .plan-row-card--confirmed .plan-row__meta {
@@ -2605,6 +2791,19 @@ onUnmounted(() => {
   border-radius: 8px;
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
   border: 1px solid #93c5fd;
+}
+
+.plan-meta-cd {
+  flex-shrink: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #6b21a8;
+  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+  border: 1px solid #c084fc;
+  border-radius: 6px;
+  padding: 2px 7px;
+  line-height: 1.3;
 }
 
 .plan-row-card--confirmed .plan-meta-primary {
@@ -3459,6 +3658,15 @@ onUnmounted(() => {
   --el-button-text-color: #fff;
   background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
   color: #fff;
+}
+
+.plan-act-btn--cancel:not(.is-disabled) {
+  --el-button-bg-color: #9f1239;
+  --el-button-border-color: #881337;
+  --el-button-text-color: #fff;
+  background: linear-gradient(180deg, #fb7185 0%, #be123c 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(190, 18, 60, 0.35);
 }
 
 .timer-compact__pause-value--break {

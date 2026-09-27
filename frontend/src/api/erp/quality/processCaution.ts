@@ -1,6 +1,6 @@
 /**
  * 生産注意事項 API（品質管理 > 製品関連）
- * 工程別に製品生産時の注意事項を管理する。
+ * 工程別に注意事項・品質事項を管理（App表示対応）。
  */
 import request from '@/shared/api/request'
 
@@ -21,7 +21,10 @@ export interface ProcessCaution {
   process_code: ProcessCautionCode
   product_cd: string | null
   product_name: string | null
-  caution_text: string
+  /** 注意事項（App「注意事項」） */
+  caution_text: string | null
+  /** 品質事項（App「品質事項」） */
+  quality_text: string | null
   is_active: boolean
   sort_order: number
   created_by: string | null
@@ -34,7 +37,8 @@ export interface ProcessCautionPayload {
   process_code: ProcessCautionCode
   product_cd?: string | null
   product_name?: string | null
-  caution_text: string
+  caution_text?: string | null
+  quality_text?: string | null
   is_active?: boolean
   sort_order?: number
 }

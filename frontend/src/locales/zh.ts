@@ -2035,6 +2035,12 @@ export default {
     endBlockedWhilePaused: '暂时停止中无法结束生产，请先点击继续',
     endBlockedWhileBreak: '休息中无法结束生产，请先点击休息继续',
     btnEnd: '生产结束',
+    btnCancelProduction: '生产取消',
+    cancelProductionConfirmTitle: '确认取消生产',
+    cancelProductionConfirm:
+      '要取消进行中的生产吗？今日该产品的计时与不良输入将被清除，产品选择也会清空。已确定的实绩不会删除。',
+    cancelProductionSuccess: '已取消生产',
+    needOnlineForCancelProduction: '生产取消仅可在在线时执行',
     btnConfirmEnd: '确定实绩',
     productionStart: '开始时间',
     productionEnd: '结束时间',

@@ -72,6 +72,18 @@ export function getOfflineQueueCount(scopeKey?: string | null): number {
   return store.items.filter((x) => x.scopeKey === scopeKey).length
 }
 
+/** 生産取消時：当該計画の未送信 patch を捨てる */
+export function removeOfflinePatchesForPlan(planId: number, scopeKey?: string | null): void {
+  const store = readQueue()
+  const next = store.items.filter((x) => {
+    if (x.planId !== planId) return true
+    if (scopeKey != null && x.scopeKey !== scopeKey) return true
+    return false
+  })
+  if (next.length === store.items.length) return
+  writeQueue({ v: 1, items: next })
+}
+
 export async function flushOfflinePatchQueue(
   patchFn: (
     planId: number,

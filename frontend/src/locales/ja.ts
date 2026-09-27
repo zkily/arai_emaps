@@ -2040,6 +2040,12 @@ export default {
     endBlockedWhilePaused: '一時停止中は生産終了できません。先に再開してください。',
     endBlockedWhileBreak: '休憩中は生産終了できません。先に休憩再開してください。',
     btnEnd: '生産終了',
+    btnCancelProduction: '生産取消',
+    cancelProductionConfirmTitle: '生産取消の確認',
+    cancelProductionConfirm:
+      '進行中の生産を取消しますか？本日のこの製品の計測・不良入力は削除され、製品選択もクリアされます。確定済み実績は消えません。',
+    cancelProductionSuccess: '生産を取消しました',
+    needOnlineForCancelProduction: '生産取消はオンライン時のみ実行できます',
     btnConfirmEnd: '実績を確定',
     productionStart: '生産開始',
     productionEnd: '生産終了',

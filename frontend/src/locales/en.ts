@@ -2042,6 +2042,12 @@ export default {
     endBlockedWhilePaused: 'Cannot end production while paused. Resume first.',
     endBlockedWhileBreak: 'Cannot end production during break. Resume break first.',
     btnEnd: 'End',
+    btnCancelProduction: 'Cancel production',
+    cancelProductionConfirmTitle: 'Cancel production?',
+    cancelProductionConfirm:
+      'Cancel the in-progress production? Timer and defect entries for this product today will be discarded and product selection will be cleared. Confirmed history is kept.',
+    cancelProductionSuccess: 'Production cancelled',
+    needOnlineForCancelProduction: 'Cancel production requires an online connection',
     btnConfirmEnd: 'Confirm actuals',
     productionStart: 'Start time',
     productionEnd: 'End time',

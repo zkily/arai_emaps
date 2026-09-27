@@ -59,6 +59,7 @@ import {
   flushOfflinePatchQueue,
   getOfflineQueueCount,
   isNetworkOrServerDownError,
+  removeOfflinePatchesForPlan,
 } from './inspectionActualOfflineSync'
 import { getMesClientInstanceId, restoreMesClientInstanceFromUserBackup } from './mesClientInstance'
 import { subscribeWebSocketMessage } from '@/modules/websocket/utils'
@@ -1276,6 +1277,13 @@ export function useInspectionMesCollection() {
     return true
   })
 
+  /** App と同様：本端末で操作中の在産セッションを破棄可能 */
+  const canCancelProduction = computed(() => {
+    if (!canOperateActivePlan.value) return false
+    const sess = session.value
+    return sess != null && isProductionInProgress(sess)
+  })
+
   const endBlockedTitle = computed(() => {
     const sess = session.value
     if (sess != null && isTimerPaused(sess)) return t('mesInspectionActual.endBlockedWhilePaused')
@@ -1690,6 +1698,70 @@ export function useInspectionMesCollection() {
     markLocalMesEcho(id)
     void persistMesTimerCheckpoints(id)
     schedulePersist()
+  }
+
+  async function onCancelProduction(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
+    if (!canCancelProduction.value) return
+    const id = activePlanId.value
+    const s = id != null ? sessions[id] : null
+    if (id == null || !s || !isProductionInProgress(s) || !isPlanLocallyOperated(id)) return
+    try {
+      await ElMessageBox.confirm(
+        t('mesInspectionActual.cancelProductionConfirm'),
+        t('mesInspectionActual.cancelProductionConfirmTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('mesInspectionActual.btnCancelProduction'),
+          cancelButtonText: t('common.cancel'),
+          confirmButtonClass: 'el-button--danger',
+        },
+      )
+    } catch {
+      return
+    }
+    if (!navigator.onLine) {
+      ElMessage.warning(t('mesInspectionActual.needOnlineForCancelProduction'))
+      return
+    }
+    try {
+      const payload: PatchInspectionManagementBody = {
+        mes_force_release: true,
+        mes_abandon_in_progress: true,
+      }
+      try {
+        const res = await patchInspectionManagement(id, mesPatchBody(payload))
+        if (res && res.success === false) {
+          ElMessage.warning(res.message || t('mesInspectionActual.saveFailed'))
+          return
+        }
+      } catch (e: unknown) {
+        const { status, detail } = httpErrorFromUnknown(e)
+        if (status === 409) {
+          // サーバ側ですでに在産でない場合も取消完了として扱う（App と同様）
+        } else if (isNetworkOrServerDownError(e)) {
+          ElMessage.warning(t('mesInspectionActual.needOnlineForCancelProduction'))
+          return
+        } else {
+          ElMessage.error(detail || t('mesInspectionActual.saveFailed'))
+          return
+        }
+      }
+      removeOfflinePatchesForPlan(id, currentScopeKey())
+      refreshOfflineQueueCount()
+      unmarkPlanLocallyOperated(id)
+      Object.assign(sessions[id], emptySession(makeEmptyDefectCounts()))
+      endDialogVisible.value = false
+      activePlanId.value = null
+      selectedProductCode.value = null
+      ElMessage.success(t('mesInspectionActual.cancelProductionSuccess'))
+      await loadPlans()
+      await syncMyNextAssignment()
+      flushPersistToStorage()
+    } catch (e: unknown) {
+      const { detail } = httpErrorFromUnknown(e)
+      ElMessage.error(detail || t('mesInspectionActual.saveFailed'))
+    }
   }
 
   function openEndDialog(): void {
@@ -2511,6 +2583,7 @@ export function useInspectionMesCollection() {
     canBreak,
     canResumeBreak,
     canEnd,
+    canCancelProduction,
     endBlockedTitle,
     resumePulseActive,
     productSelectionLocked,
@@ -2528,6 +2601,7 @@ export function useInspectionMesCollection() {
     onResumeProduction,
     onBreakProduction,
     onResumeBreakProduction,
+    onCancelProduction,
     openEndDialog,
     closeEndDialog,
     submitProductionEnd,

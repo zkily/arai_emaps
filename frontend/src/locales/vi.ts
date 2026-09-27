@@ -1915,6 +1915,12 @@ export default {
     endBlockedWhilePaused: 'Không thể kết thúc khi đang tạm dừng. Hãy bấm tiếp tục trước.',
     endBlockedWhileBreak: 'Không thể kết thúc khi đang nghỉ. Hãy bấm tiếp tục sau nghỉ trước.',
     btnEnd: 'Kết thúc',
+    btnCancelProduction: 'Hủy sản xuất',
+    cancelProductionConfirmTitle: 'Xác nhận hủy sản xuất',
+    cancelProductionConfirm:
+      'Hủy sản xuất đang chạy? Đồng hồ và nhập lỗi của sản phẩm hôm nay sẽ bị xóa, lựa chọn sản phẩm cũng được xóa. Thực tế đã xác nhận vẫn giữ.',
+    cancelProductionSuccess: 'Đã hủy sản xuất',
+    needOnlineForCancelProduction: 'Chỉ hủy sản xuất khi đang trực tuyến',
     btnConfirmEnd: 'Xác nhận thực tế',
     productionStart: 'Bắt đầu',
     productionEnd: 'Kết thúc',
