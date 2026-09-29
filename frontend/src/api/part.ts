@@ -21,10 +21,61 @@ export function getPartStockList(params?: {
   start_date?: string
   end_date?: string
   order_only?: boolean
-}): Promise<{ success?: boolean; data?: { list: unknown[]; total: number } }> {
+}): Promise<{
+  success?: boolean
+  data?: { list: unknown[]; total: number; summary?: PartStockListSummary }
+}> {
   const p = { ...params }
   if (p.material_cd && !p.part_cd) p.part_cd = p.material_cd
   return request.get(`${PREFIX}/stock`, { params: p })
+}
+
+/** 一覧と同じ絞り込み条件での全件集計 */
+export interface PartStockListSummary {
+  part_count: number
+  total_current_stock: number
+  avg_unit_price: number
+  total_usage: number
+  total_order_quantity: number
+  total_order_amount: number
+}
+
+/** 注文取消（手入力で追加された重複行は削除、それ以外は注文数を 0 に戻す） */
+export function cancelPartStockOrder(
+  id: number,
+): Promise<{ success?: boolean; data?: { action: 'deleted' | 'cleared'; part_cd: string } }> {
+  return request.post(`${PREFIX}/stock/${id}/cancel-order`)
+}
+
+export interface PartReorderSuggestion {
+  part_cd: string
+  part_name: string
+  supplier_name: string
+  lead_time: number
+  unit_price: number
+  pieces_per_bundle: number
+  base_stock_trend: number
+  shortage_date: string
+  min_stock_trend: number
+  min_stock_trend_date: string
+  suggested_quantity: number
+  order_deadline: string
+  urgent: boolean
+  target_row_id: number
+  target_order_quantity: number
+}
+
+/** 発注提案（在庫推移がリードタイム＋見込日数内に 0 未満となる部品） */
+export function getPartReorderSuggestions(params: {
+  base_date?: string
+  horizon_days?: number
+  part_cd?: string
+  suppliers?: string
+}): Promise<{
+  success?: boolean
+  data?: { base_date: string; horizon_days: number; list: PartReorderSuggestion[] }
+}> {
+  return request.get(`${PREFIX}/stock/reorder-suggestions`, { params })
 }
 
 export function updatePartStock(

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, distinct, update, text
+from sqlalchemy import select, func, or_, distinct, update, text, case
 from collections import defaultdict
 from typing import Optional, Any
 from datetime import date, timedelta
@@ -102,6 +102,9 @@ _STOCK_RECALC_FIELDS = frozenset(
     {"initial_stock", "order_quantity", "adjustment_quantity", "planned_usage", "manual_usage"}
 )
 
+# stock_trend に線形に効く項目（増減分を当日以降へ平行移動できる）
+_TREND_SHIFT_FIELDS = ("order_quantity", "adjustment_quantity")
+
 
 def _int_qty(v: Any) -> int:
     """在庫計算用。None / 空は 0。"""
@@ -151,6 +154,26 @@ def _apply_part_current_stock_formula(
             updated += 1
         prev_current = new_current
     return updated
+
+
+async def _shift_part_stock_trend(
+    db: AsyncSession, part_cd: str, from_date: Optional[date], delta: int
+) -> None:
+    """
+    stock_trend は在庫計算時に錨点日から累積した値のため、注文数・調整数の増減分を
+    当該部品の当日以降へそのまま加算する（錨点日より前の変更は累積対象外なので何もしない）。
+    """
+    if not delta or not part_cd or from_date is None:
+        return
+    anchor = await _global_initial_anchor_date(db)
+    if anchor is None or from_date < anchor:
+        return
+    await db.execute(
+        update(PartStock)
+        .where(PartStock.part_cd == part_cd, PartStock.date >= from_date)
+        .values(stock_trend=PartStock.stock_trend + delta)
+        .execution_options(synchronize_session=False)
+    )
 
 
 async def recalculate_part_current_stock(
@@ -234,6 +257,32 @@ def _stock_to_dict_with_parts_status(r: PartStock, parts_status: Optional[int] =
     return d
 
 
+async def _summarize_stock_query(db: AsyncSession, q) -> dict:
+    """一覧と同じ絞り込み条件での全件集計（統計カード用。ページングの影響を受けない）"""
+    sq = q.subquery()
+    ppb = func.coalesce(func.nullif(sq.c.pieces_per_bundle, 0), 1)
+    order_qty = case((sq.c.order_quantity > 0, sq.c.order_quantity), else_=0)
+    agg = select(
+        func.count(distinct(sq.c.part_cd)),
+        func.coalesce(func.sum(sq.c.current_stock), 0),
+        func.avg(sq.c.unit_price),
+        func.coalesce(
+            func.sum(func.coalesce(sq.c.planned_usage, 0) + func.coalesce(sq.c.manual_usage, 0)), 0
+        ),
+        func.coalesce(func.sum(order_qty), 0),
+        func.coalesce(func.sum(order_qty * ppb * func.coalesce(sq.c.unit_price, 0)), 0),
+    )
+    row = (await db.execute(agg)).one()
+    return {
+        "part_count": int(row[0] or 0),
+        "total_current_stock": int(row[1] or 0),
+        "avg_unit_price": float(row[2] or 0),
+        "total_usage": int(row[3] or 0),
+        "total_order_quantity": int(row[4] or 0),
+        "total_order_amount": float(row[5] or 0),
+    }
+
+
 @router.get("")
 async def list_part_stocks(
     page: int = Query(1, ge=1),
@@ -304,16 +353,14 @@ async def list_part_stocks(
 
         total_q = select(func.count()).select_from(q.subquery())
         total = (await db.execute(total_q)).scalar() or 0
+        summary = await _summarize_stock_query(db, q)
 
-        if order_only:
-            q = q.order_by(PartStock.date.asc(), PartStock.part_cd)
-        else:
-            q = q.order_by(PartStock.part_cd, PartStock.date.asc())
+        q = q.order_by(PartStock.part_name.asc(), PartStock.part_cd, PartStock.date.asc())
         q = q.offset((page - 1) * pageSize).limit(pageSize)
         raw_rows = (await db.execute(q)).all()
         list_out = [_stock_to_dict_with_parts_status(row[0], row[1]) for row in raw_rows]
 
-        return {"success": True, "data": {"list": list_out, "total": total}}
+        return {"success": True, "data": {"list": list_out, "total": total, "summary": summary}}
     except HTTPException:
         raise
     except Exception as e:
@@ -696,6 +743,97 @@ async def get_part_stock_summary(
     }
 
 
+@router.get("/reorder-suggestions")
+async def get_part_reorder_suggestions(
+    base_date: Optional[str] = Query(None, description="基準日（YYYY-MM-DD）。未指定は本日"),
+    horizon_days: int = Query(14, ge=1, le=180, description="リードタイム経過後に見込む日数"),
+    part_cd: Optional[str] = Query(None),
+    suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    発注提案:
+      部品ごとに 基準日 ～ 基準日＋リードタイム＋horizon_days の在庫推移（stock_trend）を日付順に走査し、
+      最初に 0 未満となる日を欠品予定日とする。
+      推奨注文数 = 欠品予定日以降（対象期間内）の最小在庫推移を 0 に戻す数量。
+      発注期限 = 欠品予定日 − リードタイム。基準日より前なら緊急（通常の納期では間に合わない）。
+    """
+    try:
+        base = date.fromisoformat(base_date.strip()) if base_date and base_date.strip() else date.today()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"無効な基準日: {base_date}") from e
+
+    join_cond = PartStock.part_cd.collate("utf8mb4_unicode_ci") == PartMaster.part_cd.collate("utf8mb4_unicode_ci")
+    supplier_list = [s.strip() for s in (suppliers or "").split(",") if s.strip()]
+
+    def _apply_filters(stmt):
+        stmt = stmt.join(PartMaster, join_cond).where(PartMaster.status != 0)
+        if part_cd and part_cd.strip():
+            stmt = stmt.where(PartStock.part_cd == part_cd.strip())
+        if supplier_list:
+            stmt = stmt.where(PartStock.supplier_name.in_(supplier_list))
+        return stmt
+
+    try:
+        max_lt = (
+            await db.execute(
+                _apply_filters(select(func.max(PartStock.lead_time))).where(PartStock.date >= base)
+            )
+        ).scalar() or 0
+        max_lt = max(0, min(int(max_lt), 365))
+        end = base + timedelta(days=max_lt + horizon_days)
+        q = _apply_filters(select(PartStock)).where(PartStock.date >= base, PartStock.date <= end)
+        rows = (await db.execute(q.order_by(PartStock.part_cd, PartStock.date, PartStock.id))).scalars().all()
+    except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            return {"success": True, "data": {"base_date": base.isoformat(), "list": []}}
+        logger.exception("get_part_reorder_suggestions failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"発注提案の取得に失敗しました: {str(e)}") from e
+
+    by_part: dict[str, list[PartStock]] = defaultdict(list)
+    for r in rows:
+        by_part[r.part_cd].append(r)
+
+    items: list[dict] = []
+    for cd, part_rows in by_part.items():
+        lt = max(0, max(_int_qty(r.lead_time) for r in part_rows))
+        window_end = base + timedelta(days=lt + horizon_days)
+        window = [r for r in part_rows if r.date <= window_end]
+        shortage = next((r for r in window if _int_qty(r.stock_trend) < 0), None)
+        if shortage is None:
+            continue
+        after = [r for r in window if r.date >= shortage.date]
+        min_row = min(after, key=lambda r: _int_qty(r.stock_trend))
+        deadline = shortage.date - timedelta(days=lt)
+        head = window[0]
+        items.append(
+            {
+                "part_cd": cd,
+                "part_name": head.part_name or "",
+                "supplier_name": head.supplier_name or "",
+                "lead_time": lt,
+                "unit_price": _safe_float(head.unit_price) or 0.0,
+                "pieces_per_bundle": _int_qty(head.pieces_per_bundle),
+                "base_stock_trend": _int_qty(head.stock_trend),
+                "shortage_date": shortage.date.isoformat(),
+                "min_stock_trend": _int_qty(min_row.stock_trend),
+                "min_stock_trend_date": min_row.date.isoformat(),
+                "suggested_quantity": -_int_qty(min_row.stock_trend),
+                "order_deadline": deadline.isoformat(),
+                "urgent": deadline < base,
+                "target_row_id": shortage.id,
+                "target_order_quantity": _int_qty(shortage.order_quantity),
+            }
+        )
+
+    items.sort(key=lambda x: (not x["urgent"], x["shortage_date"], x["part_name"]))
+    return {
+        "success": True,
+        "data": {"base_date": base.isoformat(), "horizon_days": horizon_days, "list": items},
+    }
+
+
 @router.get("/supplier-names")
 async def list_distinct_part_stock_supplier_names(
     db: AsyncSession = Depends(get_db),
@@ -858,14 +996,66 @@ async def update_part_stock(
     if not row:
         raise HTTPException(status_code=404, detail="レコードが見つかりません")
     changed = body.model_dump(exclude_unset=True)
+    trend_delta = sum(
+        _int_qty(changed[f]) - _int_qty(getattr(row, f)) for f in _TREND_SHIFT_FIELDS if f in changed
+    )
     for field, value in changed.items():
         setattr(row, field, value)
     if _STOCK_RECALC_FIELDS & set(changed.keys()):
         await db.flush()
         await recalculate_part_current_stock(db, [row.part_cd])
+        await _shift_part_stock_trend(db, row.part_cd, row.date, trend_delta)
     await db.commit()
     await db.refresh(row)
     return {"success": True, "data": _stock_to_dict(row)}
+
+
+@router.post("/{item_id}/cancel-order")
+async def cancel_part_stock_order(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_purchase_operation("delete")),
+):
+    """
+    注文取消:
+      同一部品・同日に他の行があり、かつ本行が注文以外の数量を持たない（手入力注文で追加された行）場合は行ごと削除。
+      それ以外は注文数・注文束数・注文金額を 0 に戻す。いずれも現在在庫を再計算し、在庫推移を補正する。
+    """
+    row = (await db.execute(select(PartStock).where(PartStock.id == item_id))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="レコードが見つかりません")
+    qty = _int_qty(row.order_quantity)
+    if qty <= 0:
+        raise HTTPException(status_code=400, detail="取消対象の注文がありません")
+
+    part_cd, row_date = row.part_cd, row.date
+    sibling_count = (
+        await db.execute(
+            select(func.count()).where(
+                PartStock.part_cd == part_cd,
+                PartStock.date == row_date,
+                PartStock.id != row.id,
+            )
+        )
+    ).scalar() or 0
+    order_only_row = not any(
+        _int_qty(getattr(row, f))
+        for f in ("initial_stock", "adjustment_quantity", "planned_usage", "manual_usage")
+    )
+
+    if sibling_count > 0 and order_only_row:
+        await db.delete(row)
+        action = "deleted"
+    else:
+        row.order_quantity = 0
+        row.order_bundle_quantity = 0
+        row.order_amount = 0
+        action = "cleared"
+    await db.flush()
+    await recalculate_part_current_stock(db, [part_cd])
+    await _shift_part_stock_trend(db, part_cd, row_date, -qty)
+    await db.commit()
+    return {"success": True, "data": {"action": action, "part_cd": part_cd}}
 
 
 @router.delete("/{item_id}")

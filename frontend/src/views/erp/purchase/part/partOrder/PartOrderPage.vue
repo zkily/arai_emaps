@@ -9,12 +9,13 @@
           </div>
           <div class="title-text">
             <h1 class="main-title">部品在庫管理(発注・使用)</h1>
+            <p class="subtitle">部品の在庫推移・使用実績・発注を一元管理</p>
           </div>
         </div>
       </div>
       <div class="header-actions">
         <el-button
-          class="action-btn"
+          class="action-btn sync-btn"
           @click="handleSyncPartMaster"
           :loading="partMasterSyncLoading"
         >
@@ -46,10 +47,10 @@
         <!-- 第一行統計 -->
         <div class="stat-card primary">
           <div class="stat-icon">
-            <el-icon><Box /></el-icon>
+            <el-icon><Goods /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ stats.totalParts || 0 }}</div>
+            <div class="stat-value">{{ formatNumber(stats.totalParts) }}</div>
             <div class="stat-label">総部品種類数</div>
           </div>
         </div>
@@ -59,8 +60,8 @@
             <el-icon><Box /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">
-              {{ stats.totalCurrentStock || 0 }}<span class="unit">束</span>
+            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalCurrentStock) }">
+              {{ formatNumber(stats.totalCurrentStock) }}<span class="unit">束</span>
             </div>
             <div class="stat-label">在庫数合計</div>
           </div>
@@ -68,7 +69,7 @@
 
         <div class="stat-card warning">
           <div class="stat-icon">
-            <el-icon><Money /></el-icon>
+            <el-icon><Coin /></el-icon>
           </div>
           <div class="stat-content">
             <div class="stat-value">
@@ -80,11 +81,11 @@
 
         <div class="stat-card success">
           <div class="stat-icon">
-            <el-icon><Operation /></el-icon>
+            <el-icon><TrendCharts /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">
-              {{ stats.totalUsageQuantity || 0 }}
+            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalUsageQuantity) }">
+              {{ formatNumber(stats.totalUsageQuantity) }}
             </div>
             <div class="stat-label">使用数合計</div>
           </div>
@@ -97,7 +98,7 @@
           </div>
           <div class="stat-content">
             <div class="stat-value">
-              {{ stats.totalOrderQuantity || 0 }}
+              {{ formatNumber(stats.totalOrderQuantity) }}
             </div>
             <div class="stat-label">注文本数</div>
           </div>
@@ -108,7 +109,9 @@
             <el-icon><Money /></el-icon>
           </div>
           <div class="stat-content">
-            <div class="stat-value">{{ formatCurrency(stats.totalOrderValue || 0) }}</div>
+            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalOrderValue) }">
+              {{ formatCurrency(stats.totalOrderValue || 0) }}
+            </div>
             <div class="stat-label">参考注文金額</div>
           </div>
         </div>
@@ -207,11 +210,11 @@
 
     <!-- 材料受注テーブル -->
     <div class="table-section">
-      <div class="table-container">
+      <div class="table-container" @keydown.enter="handleTableEnterNav">
         <div class="table-header">
           <div class="table-tabs">
             <div
-              class="tab-item"
+              class="tab-item tab-item--initial"
               :class="{ active: activeTab === 'initial' }"
               @click="handleTabChange('initial')"
             >
@@ -219,15 +222,15 @@
               <span>初期在庫管理</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--stock"
               :class="{ active: activeTab === 'stock' }"
               @click="handleTabChange('stock')"
             >
-              <el-icon><Box /></el-icon>
+              <el-icon><DataLine /></el-icon>
               <span>部品日別在庫</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--usage"
               :class="{ active: activeTab === 'usage' }"
               @click="handleTabChange('usage')"
             >
@@ -235,7 +238,7 @@
               <span>部品使用管理</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--order"
               :class="{ active: activeTab === 'order' }"
               @click="handleTabChange('order')"
             >
@@ -243,7 +246,7 @@
               <span>部品注文</span>
             </div>
             <div
-              class="tab-item"
+              class="tab-item tab-item--history"
               :class="{ active: activeTab === 'orderHistory' }"
               @click="handleTabChange('orderHistory')"
             >
@@ -251,7 +254,21 @@
               <span>部品注文履歴</span>
             </div>
           </div>
+          <div class="table-hint" v-if="activeTab !== 'orderHistory'">
+            <kbd>Enter</kbd> 次の行　<kbd>Shift</kbd>+<kbd>Enter</kbd> 前の行
+          </div>
           <div class="table-actions" v-if="activeTab === 'order'">
+            <el-badge
+              :value="reorderBadge.count"
+              :hidden="!reorderBadge.count"
+              :type="reorderBadge.urgent ? 'danger' : 'warning'"
+              class="reorder-badge"
+            >
+              <el-button @click="openReorderDialog" class="reorder-btn">
+                <el-icon><Bell /></el-icon>
+                発注提案
+              </el-button>
+            </el-badge>
             <el-button type="success" @click="handleAddManualOrder" class="add-btn">
               <el-icon><Plus /></el-icon>
               部品注文追加
@@ -274,10 +291,10 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
-            stripe
             border
+            @cell-click="handleTableCellClick"
             class="modern-table"
-            :default-sort="{ prop: 'date', order: 'ascending' }"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="calc(100vh - 280px)"
             :max-height="800"
           >
@@ -293,6 +310,8 @@
             <el-table-column
               prop="part_name"
               label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
               width="180"
               show-overflow-tooltip
               sortable
@@ -318,7 +337,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.usage_quantity) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_quantity) }"
+                >{{ formatValue(row.usage_quantity) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -351,7 +373,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.usage_plan_qty) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
+                >{{ formatValue(row.usage_plan_qty) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -361,7 +386,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.stock_trend) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.stock_trend) }"
+                >{{ formatValue(row.stock_trend) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -391,10 +419,10 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
-            stripe
             border
+            @cell-click="handleTableCellClick"
             class="modern-table"
-            :default-sort="{ prop: 'date', order: 'ascending' }"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="calc(100vh - 280px)"
             :max-height="800"
           >
@@ -411,6 +439,8 @@
             <el-table-column
               prop="part_name"
               label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
               width="180"
               show-overflow-tooltip
               sortable
@@ -437,7 +467,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.usage_quantity) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_quantity) }"
+                >{{ formatValue(row.usage_quantity) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -470,7 +503,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.usage_plan_qty) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
+                >{{ formatValue(row.usage_plan_qty) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -480,7 +516,10 @@
               class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span class="usage-quantity-readonly">{{ formatValue(row.stock_trend) }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.stock_trend) }"
+                >{{ formatValue(row.stock_trend) }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -491,10 +530,10 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
-            stripe
             border
+            @cell-click="handleTableCellClick"
             class="modern-table"
-            :default-sort="{ prop: 'date', order: 'ascending' }"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="calc(100vh - 280px)"
             :max-height="800"
           >
@@ -503,6 +542,8 @@
             <el-table-column
               prop="part_name"
               label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
               min-width="180"
               show-overflow-tooltip
               sortable
@@ -565,6 +606,20 @@
                 />
               </template>
             </el-table-column>
+            <el-table-column v-if="canDelete" label="操作" width="80" align="center">
+              <template #default="{ row }">
+                <el-button
+                  v-if="(row.order_quantity || 0) > 0"
+                  link
+                  type="danger"
+                  size="small"
+                  class="cancel-order-btn"
+                  @click="handleCancelOrder(row)"
+                >
+                  取消
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
 
@@ -573,10 +628,10 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
-            stripe
             border
+            @cell-click="handleTableCellClick"
             class="modern-table order-history-table"
-            :default-sort="{ prop: 'date', order: 'ascending' }"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="calc(100vh - 280px)"
             :max-height="800"
             show-summary
@@ -587,6 +642,8 @@
             <el-table-column
               prop="part_name"
               label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
               min-width="180"
               show-overflow-tooltip
               sortable
@@ -612,7 +669,9 @@
             </el-table-column>
             <el-table-column prop="order_quantity" label="注文本数" width="110" align="center" sortable>
               <template #default="{ row }">
-                {{ formatValue(row.order_quantity) }}
+                <span :class="{ 'negative-number': isNegative(row.order_quantity) }">{{
+                  formatValue(row.order_quantity)
+                }}</span>
               </template>
             </el-table-column>
             <el-table-column prop="order_amount" label="注文金額" width="120" align="center">
@@ -633,10 +692,10 @@
           <el-table
             v-loading="loading"
             :data="initialStockData"
-            stripe
             border
+            @cell-click="handleTableCellClick"
             class="modern-table"
-            :default-sort="{ prop: 'date', order: 'ascending' }"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="calc(100vh - 280px)"
             :max-height="800"
           >
@@ -652,6 +711,8 @@
             <el-table-column
               prop="part_name"
               label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
               width="180"
               show-overflow-tooltip
               sortable
@@ -680,7 +741,10 @@
                   :step="1"
                   :controls="false"
                   @change="handleAdjustmentQuantityChange(row)"
-                  class="adjustment-quantity-input"
+                  :class="[
+                    'adjustment-quantity-input',
+                    { 'is-negative': isNegative(row.adjustment_quantity) },
+                  ]"
                 />
               </template>
             </el-table-column>
@@ -702,78 +766,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 受注確認ダイアログ -->
-    <el-dialog
-      v-model="orderConfirmDialogVisible"
-      title="受注確認"
-      width="800px"
-      :destroy-on-close="true"
-    >
-      <div class="order-confirm-content">
-        <div class="order-summary">
-          <h3>受注サマリー</h3>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="受注材料数">
-              {{ selectedOrderItems.length }}件
-            </el-descriptions-item>
-            <el-descriptions-item label="注文本数合計">
-              {{ totalOrderQuantity }}
-            </el-descriptions-item>
-            <el-descriptions-item label="総受注金額">
-              {{ formatCurrency(totalOrderValue) }}
-            </el-descriptions-item>
-            <el-descriptions-item label="受注日">
-              {{ new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
-
-        <div class="order-details">
-          <h3>受注詳細</h3>
-          <el-table
-            :data="selectedOrderItems"
-            border
-            size="small"
-            :default-sort="{ prop: 'part_name', order: 'ascending' }"
-          >
-            <el-table-column prop="part_cd" label="部品CD" width="120" />
-            <el-table-column prop="part_name" label="部品名" min-width="150" sortable />
-            <el-table-column prop="order_quantity" label="注文本数" width="100" align="center" />
-            <el-table-column prop="unit" label="単位" width="80" align="center" />
-            <el-table-column prop="unit_price" label="単価" width="100" align="right">
-              <template #default="{ row }">
-                {{ formatCurrency(row.unit_price) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="金額" width="120" align="right">
-              <template #default="{ row }">
-                {{ formatCurrency((row.order_quantity || 0) * (row.unit_price || 0)) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="supplier_name" label="仕入先" width="150" />
-          </el-table>
-        </div>
-
-        <div class="order-notes">
-          <el-form-item label="備考">
-            <el-input
-              v-model="orderNotes"
-              type="textarea"
-              :rows="3"
-              placeholder="受注に関する備考を入力してください"
-            />
-          </el-form-item>
-        </div>
-      </div>
-
-      <template #footer>
-        <el-button @click="orderConfirmDialogVisible = false">キャンセル</el-button>
-        <el-button type="primary" @click="handleConfirmOrder" :loading="orderLoading">
-          受注確定
-        </el-button>
-      </template>
-    </el-dialog>
 
     <!-- データ生成日付選択ダイアログ -->
     <el-dialog
@@ -1117,6 +1109,211 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 発注提案ダイアログ -->
+    <el-dialog
+      v-model="reorderDialogVisible"
+      title="発注提案"
+      width="1100px"
+      :close-on-click-modal="false"
+      class="reorder-dialog"
+    >
+      <div class="reorder-toolbar">
+        <div class="reorder-toolbar__field">
+          <span class="reorder-toolbar__label">基準日</span>
+          <el-date-picker
+            v-model="reorderForm.baseDate"
+            type="date"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            size="small"
+            style="width: 140px"
+          />
+        </div>
+        <div class="reorder-toolbar__field">
+          <span class="reorder-toolbar__label">見込日数（LT後）</span>
+          <el-input-number
+            v-model="reorderForm.horizonDays"
+            :min="1"
+            :max="180"
+            :precision="0"
+            size="small"
+            controls-position="right"
+            style="width: 100px"
+          />
+        </div>
+        <el-button size="small" type="primary" :loading="reorderLoading" @click="loadReorderSuggestions()">
+          <el-icon><Refresh /></el-icon>
+          再計算
+        </el-button>
+        <div class="reorder-toolbar__summary">
+          対象 <b>{{ reorderList.length }}</b> 件
+          <span v-if="reorderBadge.urgent" class="reorder-toolbar__urgent">
+            （緊急 {{ reorderBadge.urgent }} 件）
+          </span>
+        </div>
+      </div>
+      <p class="reorder-note">
+        在庫推移が「基準日〜基準日＋リードタイム＋見込日数」の間に 0 未満となる部品を表示します。
+        推奨注文数は欠品予定日の注文本数に加算されます（仕入先フィルターは一覧と共通）。
+      </p>
+
+      <el-table
+        ref="reorderTableRef"
+        v-loading="reorderLoading"
+        :data="reorderList"
+        row-key="target_row_id"
+        max-height="460"
+        class="reorder-table"
+        @selection-change="(rows: any[]) => (reorderSelection = rows as ReorderRow[])"
+      >
+        <el-table-column type="selection" width="40" align="center" />
+        <el-table-column label="部品" min-width="200">
+          <template #default="{ row }">
+            <div class="reorder-part" @click="openPartChart(row)">
+              <span class="reorder-part__name">{{ row.part_name }}</span>
+              <span class="reorder-part__cd">{{ row.part_cd }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="supplier_name" label="仕入先" width="130" show-overflow-tooltip />
+        <el-table-column prop="lead_time" label="LT(日)" width="70" align="center" />
+        <el-table-column label="基準日推移" width="95" align="right">
+          <template #default="{ row }">
+            <span :class="{ 'negative-number': row.base_stock_trend < 0 }">
+              {{ formatNumber(row.base_stock_trend) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="shortage_date" label="欠品予定日" width="105" align="center" />
+        <el-table-column label="最小推移" width="120" align="right">
+          <template #default="{ row }">
+            <span class="negative-number">{{ formatNumber(row.min_stock_trend) }}</span>
+            <span class="reorder-sub">{{ row.min_stock_trend_date.slice(5) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="発注期限" width="125" align="center">
+          <template #default="{ row }">
+            <span :class="{ 'negative-number': row.urgent }">{{ row.order_deadline }}</span>
+            <el-tag v-if="row.urgent" type="danger" size="small" effect="dark" class="reorder-tag">
+              緊急
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="既存注文" width="80" align="right">
+          <template #default="{ row }">{{ formatValue(row.target_order_quantity) }}</template>
+        </el-table-column>
+        <el-table-column label="推奨注文数" width="110" align="center">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.apply_quantity"
+              :min="0"
+              :max="999999"
+              :precision="0"
+              :controls="false"
+              size="small"
+              class="order-quantity-input"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="参考金額" width="110" align="right">
+          <template #default="{ row }">
+            {{ formatCurrency(reorderAmount(row)) }}
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <div class="reorder-footer">
+          <span class="reorder-footer__total">
+            選択 {{ reorderSelection.length }} 件 ／ 参考金額
+            {{ formatCurrency(reorderSelection.reduce((s, r) => s + reorderAmount(r), 0)) }}
+          </span>
+          <el-button @click="reorderDialogVisible = false">閉じる</el-button>
+          <el-button
+            type="primary"
+            :loading="reorderApplying"
+            :disabled="!reorderSelection.length"
+            @click="applyReorderSuggestions"
+          >
+            <el-icon><Check /></el-icon>
+            選択した提案を注文に反映
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 部品在庫推移グラフ -->
+    <el-drawer
+      v-model="chartDrawerVisible"
+      size="62%"
+      class="part-chart-drawer"
+      :title="chartPart ? `${chartPart.part_name}（${chartPart.part_cd}）` : '在庫推移'"
+    >
+      <div class="part-chart">
+        <div class="part-chart__toolbar">
+          <el-date-picker
+            v-model="chartRange"
+            type="daterange"
+            range-separator="~"
+            start-placeholder="開始日"
+            end-placeholder="終了日"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            :clearable="false"
+            size="small"
+            style="width: 240px"
+            @change="loadPartChart"
+          />
+          <el-radio-group v-model="chartPreset" size="small" @change="applyChartPreset">
+            <el-radio-button label="short" value="short">前1週〜後2週</el-radio-button>
+            <el-radio-button label="mid" value="mid">前2週〜後1ヶ月</el-radio-button>
+            <el-radio-button label="long" value="long">前1ヶ月〜後3ヶ月</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div class="part-chart__kpis">
+          <div class="part-chart__kpi">
+            <span class="part-chart__kpi-label">仕入先</span>
+            <span class="part-chart__kpi-value">{{ chartPart?.supplier_name || '—' }}</span>
+          </div>
+          <div class="part-chart__kpi">
+            <span class="part-chart__kpi-label">リードタイム</span>
+            <span class="part-chart__kpi-value">{{ chartKpis.leadTime }} 日</span>
+          </div>
+          <div class="part-chart__kpi">
+            <span class="part-chart__kpi-label">期間内 最小在庫推移</span>
+            <span class="part-chart__kpi-value" :class="{ 'negative-number': chartKpis.minTrend < 0 }">
+              {{ formatNumber(chartKpis.minTrend) }}
+              <small v-if="chartKpis.minTrendDate">（{{ chartKpis.minTrendDate }}）</small>
+            </span>
+          </div>
+          <div class="part-chart__kpi">
+            <span class="part-chart__kpi-label">欠品予定日</span>
+            <span class="part-chart__kpi-value" :class="{ 'negative-number': !!chartKpis.shortageDate }">
+              {{ chartKpis.shortageDate || 'なし' }}
+            </span>
+          </div>
+          <div class="part-chart__kpi">
+            <span class="part-chart__kpi-label">期間内 使用数／注文本数</span>
+            <span class="part-chart__kpi-value">
+              {{ formatNumber(chartKpis.totalUsage) }} ／ {{ formatNumber(chartKpis.totalOrder) }}
+            </span>
+          </div>
+        </div>
+
+        <div v-loading="chartLoading" class="part-chart__canvas">
+          <ChartWrapper
+            v-if="chartDays.length"
+            :data="chartData"
+            :options="chartOptions"
+            height="420px"
+          />
+          <el-empty v-else-if="!chartLoading" description="期間内のデータがありません" />
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -1142,6 +1339,11 @@ import {
   Plus,
   Check,
   List,
+  Goods,
+  Coin,
+  TrendCharts,
+  DataLine,
+  Bell,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
@@ -1151,7 +1353,11 @@ import {
   updatePartStock,
   createPartStock,
   saveMaruichiPartOrderPdf,
+  cancelPartStockOrder,
+  getPartReorderSuggestions,
 } from '@/api/part'
+import type { PartStockListSummary, PartReorderSuggestion } from '@/api/part'
+import ChartWrapper from '@/components/ChartWrapper.vue'
 import { getPartList } from '@/api/master/partMaster'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -1228,7 +1434,6 @@ interface InitialStockItem {
 
 // 响应式数据
 const loading = ref(false)
-const orderLoading = ref(false)
 const stockCalculationLoading = ref(false)
 const dataGenerationLoading = ref(false)
 const dataGenerationStartDate = ref('')
@@ -1247,20 +1452,8 @@ const lastSavedManualUsage = new Map<number, number>()
 const initialStockData = ref<InitialStockItem[]>([])
 /** 部品注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
 const orderHistoryData = ref<PartOrderItem[]>([])
-const orderConfirmDialogVisible = ref(false)
-const orderNotes = ref('')
 const activeTab = ref('stock') // デフォルトは部品日別在庫タブ
 const partMasterSyncLoading = ref(false)
-
-// 统计数据
-const stats = ref({
-  totalParts: 0,
-  totalCurrentStock: 0,
-  averageUnitPrice: 0,
-  totalUsageQuantity: 0,
-  totalOrderQuantity: 0,
-  totalOrderValue: 0,
-})
 
 // 検索表单（默认日期为「日本时间」的当天）
 const getTodayJapanStr = () => {
@@ -1379,44 +1572,50 @@ const filteredTableData = computed(() => {
   return tableData.value
 })
 
-// 注文があるデータをフィルタリング
-const selectedOrderItems = computed(() => {
-  return tableData.value.filter((row) => row.order_quantity && row.order_quantity > 0)
-})
+// 統計カード：サーバー側の全件集計 ＋ 表示中ページで編集された差分
+interface PageSums {
+  currentStock: number
+  usage: number
+  orderQty: number
+  orderValue: number
+}
 
-// 総材料数：フィルタリングされたデータの材料数（ページネーション総数を使用、現在ページのデータではない）
-const totalParts = computed(() => {
-  return pagination.total
-})
-
-// 在庫数合計：一覧表示中データの現在在庫合計
-const totalCurrentStock = computed(() => {
-  return tableData.value.reduce((total, row) => total + (row.current_stock || 0), 0)
-})
-
-// 受注予定：注文本数（order_quantity）合計
-const totalOrderQuantity = computed(() => {
-  return selectedOrderItems.value.reduce((total, row) => total + (row.order_quantity || 0), 0)
-})
-
-// 受注予定金額：统计注文金額
-const totalOrderValue = computed(() => {
-  return selectedOrderItems.value.reduce((total, row) => total + (row.order_amount || 0), 0)
-})
-
-// 平均単価：统计unit_price字段的平均值
-const averageUnitPrice = computed(() => {
-  if (tableData.value.length === 0) return 0
-  const totalPrice = tableData.value.reduce((total, row) => total + (row.unit_price || 0), 0)
-  return totalPrice / tableData.value.length
-})
-
-// 使用数合計：実績使用数 + 手動使用数
-const totalUsageQuantity = computed(() => {
-  return tableData.value.reduce(
-    (total, row) => total + (row.usage_quantity || 0) + (row.manual_usage || 0),
-    0,
+const sumPageRows = (rows: Partial<PartOrderItem>[]): PageSums =>
+  rows.reduce<PageSums>(
+    (acc, row) => {
+      const oq = Number(row.order_quantity) || 0
+      acc.currentStock += Number(row.current_stock) || 0
+      acc.usage += (Number(row.usage_quantity) || 0) + (Number(row.manual_usage) || 0)
+      if (oq > 0) {
+        acc.orderQty += oq
+        acc.orderValue += Number(row.order_amount) || 0
+      }
+      return acc
+    },
+    { currentStock: 0, usage: 0, orderQty: 0, orderValue: 0 },
   )
+
+const serverSummary = ref<PartStockListSummary | null>(null)
+const pageBaseline = ref<PageSums>(sumPageRows([]))
+
+const applyServerSummary = (summary: PartStockListSummary | undefined, rows: Partial<PartOrderItem>[]) => {
+  serverSummary.value = summary ?? null
+  pageBaseline.value = sumPageRows(rows)
+}
+
+const stats = computed(() => {
+  const s = serverSummary.value
+  const editable = ['stock', 'usage', 'order'].includes(activeTab.value)
+  const live = editable ? sumPageRows(tableData.value) : pageBaseline.value
+  const base = pageBaseline.value
+  return {
+    totalParts: s?.part_count ?? 0,
+    totalCurrentStock: (s?.total_current_stock ?? 0) + live.currentStock - base.currentStock,
+    averageUnitPrice: s?.avg_unit_price ?? 0,
+    totalUsageQuantity: (s?.total_usage ?? 0) + live.usage - base.usage,
+    totalOrderQuantity: (s?.total_order_quantity ?? 0) + live.orderQty - base.orderQty,
+    totalOrderValue: (s?.total_order_amount ?? 0) + live.orderValue - base.orderValue,
+  }
 })
 
 // 手入力：注文本数×梱本数×単価（参考金額）
@@ -1468,7 +1667,7 @@ const fetchData = async () => {
         if (row.id) lastSavedManualUsage.set(row.id, Number(row.manual_usage) || 0)
       }
       pagination.total = total
-      updateStats()
+      applyServerSummary((result as any)?.data?.summary, tableData.value)
     } else {
       ElMessage.error('データ取得に失敗しました')
     }
@@ -1498,6 +1697,7 @@ const fetchOrderHistory = async () => {
       const filtered = list.filter((item: any) => excludePartsStatusZero(item))
       orderHistoryData.value = filtered.map((item: any) => mapPartStockRow(item))
       pagination.total = total
+      applyServerSummary((result as any)?.data?.summary, orderHistoryData.value)
     } else {
       ElMessage.error('注文履歴の取得に失敗しました')
       orderHistoryData.value = []
@@ -1537,7 +1737,7 @@ const fetchInitialStockData = async () => {
           }
         })
         pagination.total = (result as any)?.data?.total ?? list.length
-        updateStats()
+        applyServerSummary((result as any)?.data?.summary, filtered)
         console.log('初期在庫管理データ取得成功:', initialStockData.value.length, '件')
       } else {
         ElMessage.error('初期在庫管理データ取得に失敗しました')
@@ -1561,7 +1761,7 @@ const fetchInitialStockData = async () => {
             adjustment_quantity: 0,
           }))
           pagination.total = (fallbackResult as any)?.data?.total ?? fallbackList.length
-          updateStats()
+          applyServerSummary((fallbackResult as any)?.data?.summary, fbFiltered)
           ElMessage.info('初期在庫管理機能は開発中です。材料在庫データを表示しています。')
           console.log('バックアップデータを使用:', initialStockData.value.length, '件')
         } else {
@@ -1593,16 +1793,8 @@ const refreshListForActiveTab = () => {
     fetchOrderHistory()
   } else {
     fetchData()
+    if (activeTab.value === 'order') loadReorderSuggestions(true)
   }
-}
-
-const updateStats = () => {
-  stats.value.totalParts = totalParts.value
-  stats.value.totalCurrentStock = totalCurrentStock.value
-  stats.value.averageUnitPrice = averageUnitPrice.value
-  stats.value.totalUsageQuantity = totalUsageQuantity.value
-  stats.value.totalOrderQuantity = totalOrderQuantity.value
-  stats.value.totalOrderValue = totalOrderValue.value
 }
 
 // 仕入先选项来自 /api/material/stock/supplier-names（material_stock.supplier_name 去重、名称排序）。label/value 均为 supplier_name（与列表筛选 suppliers 一致）
@@ -1835,8 +2027,25 @@ const formatValue = (value: number | null | undefined): string => {
   if (value === null || value === undefined || value === 0) {
     return ''
   }
-  return value.toString()
+  return Number(value).toLocaleString('ja-JP')
 }
+
+// 統計カード用：0 も表示する千区切り
+const formatNumber = (value: number | null | undefined): string => {
+  const n = Number(value)
+  return (Number.isFinite(n) ? n : 0).toLocaleString('ja-JP')
+}
+
+const isNegative = (value: number | string | null | undefined): boolean => {
+  const n = Number(value)
+  return Number.isFinite(n) && n < 0
+}
+
+const comparePartName = (a: { part_name?: string | null }, b: { part_name?: string | null }) =>
+  (a.part_name || '').localeCompare(b.part_name || '', 'ja-JP', {
+    numeric: true,
+    sensitivity: 'base',
+  })
 
 // 格式化货币，添加日本円マーク和3位数逗号
 const formatCurrency = (num: number): string => {
@@ -1862,7 +2071,7 @@ const getOrderHistorySummaries = (param: {
     }
     if (prop === 'order_quantity') {
       const t = data.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0)
-      sums[index] = t ? String(t) : ''
+      sums[index] = t ? t.toLocaleString('ja-JP') : ''
       return
     }
     if (prop === 'order_amount') {
@@ -1901,6 +2110,30 @@ const preventNumberSpinnerKeys = (e: Event) => {
   }
 }
 
+/** 表内入力欄で Enter → 次の行の同じ列、Shift+Enter → 前の行へフォーカス移動（IME 変換中は無視） */
+const handleTableEnterNav = (e: KeyboardEvent) => {
+  if (e.isComposing || e.keyCode === 229) return
+  const target = e.target as HTMLElement | null
+  if (!target || target.tagName !== 'INPUT' || target.closest('.el-select')) return
+  const td = target.closest('td.el-table__cell') as HTMLTableCellElement | null
+  let tr = td?.parentElement as HTMLTableRowElement | null
+  if (!td || !tr || !tr.closest('.el-table__body')) return
+
+  const colIndex = td.cellIndex
+  const step = (row: HTMLTableRowElement) =>
+    (e.shiftKey ? row.previousElementSibling : row.nextElementSibling) as HTMLTableRowElement | null
+  for (tr = step(tr); tr; tr = step(tr)) {
+    const input = tr.cells[colIndex]?.querySelector<HTMLInputElement>('input:not([disabled])')
+    if (input) {
+      input.focus()
+      input.select()
+      tr.scrollIntoView({ block: 'nearest' })
+      return
+    }
+  }
+  target.blur()
+}
+
 const commitQty = (val: number | null | undefined): number => {
   if (val === null || val === undefined) return 0
   const n = Number(val)
@@ -1926,11 +2159,10 @@ const patchCurrentStockForPart = async (partCd: string) => {
     const byId = new Map<number, any>(list.map((item: any) => [item.id, item]))
     for (const row of tableData.value) {
       const fresh = byId.get(row.id)
-      if (fresh && fresh.current_stock !== undefined) {
-        row.current_stock = fresh.current_stock
-      }
+      if (!fresh) continue
+      if (fresh.current_stock !== undefined) row.current_stock = fresh.current_stock
+      if (fresh.stock_trend !== undefined) row.stock_trend = Number(fresh.stock_trend) || 0
     }
-    updateStats()
   } catch (error) {
     console.warn('現在在庫の再取得に失敗:', error)
   }
@@ -1973,7 +2205,6 @@ const handleOrderQuantityChange = async (row: PartOrderItem) => {
     row.order_amount = 0
   }
 
-  updateStats()
   await saveQuantityToDatabase(row)
 }
 
@@ -2007,7 +2238,7 @@ const saveQuantityToDatabase = async (row: PartOrderItem) => {
     } else {
       const errorMessage = response?.message || '不明なエラー'
       console.error(`保存材料 ${row.part_cd} 的数量失败:`, errorMessage)
-      ElMessage.warning(`保存失败: ${errorMessage}`)
+      ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
     }
   } catch (error: any) {
     console.error(`保存材料 ${row.part_cd} 的数量时发生错误:`, error)
@@ -2015,54 +2246,337 @@ const saveQuantityToDatabase = async (row: PartOrderItem) => {
   }
 }
 
-const handleConfirmOrder = async () => {
-  if (!guardPurchaseOperation(canApprove)) return
+/** 注文取消（行ごと削除されるのは手入力で追加された重複行のみ） */
+const handleCancelOrder = async (row: PartOrderItem) => {
+  if (!guardPurchaseOperation(canDelete)) return
+  try {
+    await ElMessageBox.confirm(
+      `${row.date}　${row.part_name}（${row.part_cd}）\n注文本数 ${formatNumber(row.order_quantity)} を取り消しますか？`,
+      '注文取消確認',
+      { confirmButtonText: '取消', cancelButtonText: 'キャンセル', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  try {
+    const res = await cancelPartStockOrder(row.id)
+    const action = res?.data?.action
+    ElMessage.success(action === 'deleted' ? '手入力の注文行を削除しました' : '注文を取り消しました')
+    await fetchData()
+  } catch (error: any) {
+    console.error('注文取消に失敗しました:', error)
+    ElMessage.error(error?.response?.data?.detail || '注文取消に失敗しました')
+  }
+}
 
-  if (selectedOrderItems.value.length === 0) {
-    ElMessage.warning('受注数量を入力してください')
+const addDaysStr = (base: string, days: number): string => {
+  const [y, m, d] = base.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + days)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+// ─────────────────────────────────────────────
+// 発注提案
+// ─────────────────────────────────────────────
+type ReorderRow = PartReorderSuggestion & { apply_quantity: number }
+
+const reorderDialogVisible = ref(false)
+const reorderLoading = ref(false)
+const reorderApplying = ref(false)
+const reorderList = ref<ReorderRow[]>([])
+const reorderSelection = ref<ReorderRow[]>([])
+const reorderTableRef = ref()
+const reorderForm = reactive({ baseDate: getTodayJapanStr(), horizonDays: 14 })
+
+const reorderBadge = computed(() => ({
+  count: reorderList.value.length,
+  urgent: reorderList.value.filter((r) => r.urgent).length,
+}))
+
+const reorderAmount = (row: { apply_quantity?: number; pieces_per_bundle?: number; unit_price?: number }) =>
+  (row.apply_quantity || 0) * (row.pieces_per_bundle || 1) * (row.unit_price || 0)
+
+const loadReorderSuggestions = async (silent = false) => {
+  reorderLoading.value = true
+  try {
+    const res = await getPartReorderSuggestions({
+      base_date: reorderForm.baseDate,
+      horizon_days: reorderForm.horizonDays,
+      part_cd: searchForm.part_cd?.trim() || undefined,
+      suppliers: searchForm.supplier.length ? searchForm.supplier.join(',') : undefined,
+    })
+    reorderList.value = (res?.data?.list ?? []).map((item) => ({
+      ...item,
+      apply_quantity: item.suggested_quantity,
+    }))
+    if (reorderDialogVisible.value) {
+      await nextTick()
+      reorderList.value.forEach((r) => reorderTableRef.value?.toggleRowSelection(r, true))
+    }
+  } catch (error) {
+    console.error('発注提案の取得に失敗しました:', error)
+    if (!silent) ElMessage.error('発注提案の取得に失敗しました')
+  } finally {
+    reorderLoading.value = false
+  }
+}
+
+const openReorderDialog = async () => {
+  reorderDialogVisible.value = true
+  await loadReorderSuggestions()
+}
+
+const applyReorderSuggestions = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+  const targets = reorderSelection.value.filter((r) => (r.apply_quantity || 0) > 0)
+  if (!targets.length) {
+    ElMessage.warning('推奨注文数が 0 の行は反映できません')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `${targets.length} 件の注文を反映しますか？\n（各部品の欠品予定日の注文本数に加算します）`,
+      '発注提案の反映',
+      { confirmButtonText: '反映', cancelButtonText: 'キャンセル', type: 'info' },
+    )
+  } catch {
     return
   }
 
-  try {
-    orderLoading.value = true
-
-    const orderData = {
-      items: selectedOrderItems.value.map((item) => ({
-        part_cd: item.part_cd,
-        part_name: item.part_name,
-        order_quantity: item.order_quantity,
-        unit_price: item.unit_price,
-        supplier_cd: item.supplier_cd,
-        supplier_name: item.supplier_name,
-      })),
-      notes: orderNotes.value,
-      total_quantity: totalOrderQuantity.value,
-      total_value: totalOrderValue.value,
-    }
-
-    const response = await request.post('/api/part-order/create', orderData) as any
-
-    if (response?.data?.success ?? response?.success) {
-      ElMessage.success('受注が確定されました')
-      orderConfirmDialogVisible.value = false
-      orderNotes.value = ''
-
-      // 清空受注数量
-      tableData.value.forEach((row) => {
-        row.order_quantity = 0
-        row.order_bundle_quantity = 0
-        row.order_amount = 0
+  reorderApplying.value = true
+  let ok = 0
+  const failed: string[] = []
+  for (const r of targets) {
+    const qty = (r.target_order_quantity || 0) + r.apply_quantity
+    const ppb = r.pieces_per_bundle || 1
+    try {
+      await updatePartStock(r.target_row_id, {
+        order_quantity: qty,
+        order_bundle_quantity: qty * ppb,
+        order_amount: qty * ppb * (r.unit_price || 0),
       })
-      updateStats()
-    } else {
-      ElMessage.error('受注の確定に失敗しました')
+      ok++
+    } catch (error) {
+      console.error('発注提案の反映に失敗:', r.part_cd, error)
+      failed.push(r.part_name || r.part_cd)
     }
-  } catch (error) {
-    console.error('受注の確定に失敗しました:', error)
-    ElMessage.error('受注の確定に失敗しました')
-  } finally {
-    orderLoading.value = false
   }
+  reorderApplying.value = false
+
+  if (ok) ElMessage.success(`${ok} 件の注文を反映しました`)
+  if (failed.length) ElMessage.error(`反映に失敗しました: ${failed.join('、')}`)
+  await loadReorderSuggestions()
+  refreshListForActiveTab()
+}
+
+// ─────────────────────────────────────────────
+// 部品在庫推移グラフ
+// ─────────────────────────────────────────────
+interface ChartDay {
+  date: string
+  rowId: number
+  current: number
+  trend: number
+  usage: number
+  plan: number
+  order: number
+}
+
+interface ChartPart {
+  part_cd: string
+  part_name: string
+  supplier_name?: string
+  lead_time?: number
+}
+
+const CHART_PRESETS = { short: [-7, 14], mid: [-14, 30], long: [-30, 90] } as const
+type ChartPreset = keyof typeof CHART_PRESETS
+
+const chartDrawerVisible = ref(false)
+const chartLoading = ref(false)
+const chartPart = ref<ChartPart | null>(null)
+const chartRange = ref<string[]>([])
+const chartPreset = ref<ChartPreset | ''>('mid')
+const chartDays = ref<ChartDay[]>([])
+
+const loadPartChart = async () => {
+  if (!chartPart.value || chartRange.value?.length !== 2) return
+  chartLoading.value = true
+  try {
+    const res = await getPartStockList({
+      part_cd: chartPart.value.part_cd,
+      start_date: chartRange.value[0],
+      end_date: chartRange.value[1],
+      page: 1,
+      pageSize: 1000,
+    })
+    const byDate = new Map<string, ChartDay>()
+    for (const item of (res?.data?.list ?? []) as any[]) {
+      const d = String(item.date || '').slice(0, 10)
+      if (!d) continue
+      const day = byDate.get(d) ?? { date: d, rowId: -1, current: 0, trend: 0, usage: 0, plan: 0, order: 0 }
+      // 同日に複数行がある場合、累積値（現在在庫・在庫推移）は後に登録された行を採用
+      if ((Number(item.id) || 0) > day.rowId) {
+        day.rowId = Number(item.id) || 0
+        day.current = Number(item.current_stock) || 0
+        day.trend = Number(item.stock_trend) || 0
+      }
+      day.usage += (Number(item.planned_usage) || 0) + (Number(item.manual_usage) || 0)
+      day.plan += Number(item.usage_plan_qty) || 0
+      day.order += Number(item.order_quantity) || 0
+      byDate.set(d, day)
+      if (chartPart.value && !chartPart.value.lead_time && item.lead_time) {
+        chartPart.value.lead_time = Number(item.lead_time) || 0
+      }
+    }
+    chartDays.value = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+  } catch (error) {
+    console.error('在庫推移の取得に失敗しました:', error)
+    ElMessage.error('在庫推移の取得に失敗しました')
+    chartDays.value = []
+  } finally {
+    chartLoading.value = false
+  }
+}
+
+const applyChartPreset = () => {
+  if (!chartPreset.value) return
+  const [from, to] = CHART_PRESETS[chartPreset.value]
+  const today = getTodayJapanStr()
+  chartRange.value = [addDaysStr(today, from), addDaysStr(today, to)]
+  loadPartChart()
+}
+
+const openPartChart = (row: Partial<ChartPart> | null | undefined) => {
+  if (!row?.part_cd) return
+  chartPart.value = {
+    part_cd: row.part_cd,
+    part_name: row.part_name || '',
+    supplier_name: row.supplier_name,
+    lead_time: row.lead_time,
+  }
+  chartDays.value = []
+  chartPreset.value = 'mid'
+  chartDrawerVisible.value = true
+  applyChartPreset()
+}
+
+const handleTableCellClick = (row: any, column: { property?: string }) => {
+  if (column?.property === 'part_name') openPartChart(row)
+}
+
+const chartKpis = computed(() => {
+  const days = chartDays.value
+  let minTrend = 0
+  let minTrendDate = ''
+  days.forEach((d, i) => {
+    if (i === 0 || d.trend < minTrend) {
+      minTrend = d.trend
+      minTrendDate = d.date
+    }
+  })
+  const today = getTodayJapanStr()
+  return {
+    leadTime: chartPart.value?.lead_time ?? 0,
+    minTrend,
+    minTrendDate,
+    shortageDate: days.find((d) => d.date >= today && d.trend < 0)?.date ?? '',
+    totalUsage: days.reduce((s, d) => s + d.usage, 0),
+    totalOrder: days.reduce((s, d) => s + d.order, 0),
+  }
+})
+
+const chartData = computed(() => ({
+  labels: chartDays.value.map((d) => d.date.slice(5).replace('-', '/')),
+  datasets: [
+    {
+      type: 'line',
+      label: '在庫推移',
+      data: chartDays.value.map((d) => d.trend),
+      borderColor: '#8b5cf6',
+      borderDash: [6, 4],
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.25,
+      fill: false,
+      yAxisID: 'y',
+      order: 0,
+    },
+    {
+      type: 'line',
+      label: '現在在庫',
+      data: chartDays.value.map((d) => d.current),
+      borderColor: '#4f46e5',
+      backgroundColor: 'rgba(79, 70, 229, 0.08)',
+      borderWidth: 2,
+      pointRadius: 2,
+      tension: 0.25,
+      fill: true,
+      yAxisID: 'y',
+      order: 1,
+    },
+    {
+      type: 'bar',
+      label: '使用数（実績＋手動）',
+      data: chartDays.value.map((d) => d.usage),
+      backgroundColor: 'rgba(16, 185, 129, 0.55)',
+      borderRadius: 3,
+      yAxisID: 'y1',
+      order: 2,
+    },
+    {
+      type: 'bar',
+      label: '使用計画',
+      data: chartDays.value.map((d) => d.plan),
+      backgroundColor: 'rgba(14, 165, 233, 0.35)',
+      borderRadius: 3,
+      yAxisID: 'y1',
+      order: 3,
+    },
+    {
+      type: 'bar',
+      label: '注文本数',
+      data: chartDays.value.map((d) => d.order),
+      backgroundColor: 'rgba(245, 158, 11, 0.75)',
+      borderRadius: 3,
+      yAxisID: 'y1',
+      order: 4,
+    },
+  ],
+}))
+
+const formatTick = (v: number | string) => Number(v).toLocaleString('ja-JP')
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } },
+    tooltip: {
+      callbacks: {
+        label: (ctx: any) => `${ctx.dataset.label}: ${formatTick(ctx.parsed.y || 0)}`,
+      },
+    },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true } },
+    y: {
+      position: 'left',
+      title: { display: true, text: '在庫' },
+      grid: {
+        color: (ctx: any) => (ctx.tick?.value === 0 ? 'rgba(239, 68, 68, 0.6)' : 'rgba(226, 232, 240, 0.7)'),
+      },
+      ticks: { callback: formatTick },
+    },
+    y1: {
+      position: 'right',
+      beginAtZero: true,
+      title: { display: true, text: '数量' },
+      grid: { drawOnChartArea: false },
+      ticks: { callback: formatTick },
+    },
+  },
 }
 
 // 部品マスタ更新: parts（status=1）→ 既存 part_stock 行のマスタ項目を上書き（期間で絞り可）
@@ -2177,7 +2691,7 @@ const handlePrintOrder = async () => {
 
   // 检查是否有选择日期
   if (!searchForm.dateRange || searchForm.dateRange.length === 0) {
-    ElMessage.warning('请先选择日期范围')
+    ElMessage.warning('先に日付（期間）を選択してください')
     return
   }
 
@@ -2185,7 +2699,7 @@ const handlePrintOrder = async () => {
   const mergedOrderItems = await getMergedOrderData()
 
   if (mergedOrderItems.length === 0) {
-    ElMessage.warning('没有找到符合条件的注文数据')
+    ElMessage.warning('対象の注文データがありません（丸一NST・丸一ﾒﾀﾙｱｸﾄ／開始日分）')
     return
   }
 
@@ -2201,7 +2715,7 @@ const confirmPrint = async () => {
     const mergedOrderItems = await getMergedOrderData()
 
     if (mergedOrderItems.length === 0) {
-      ElMessage.warning('没有找到符合条件的注文数据')
+      ElMessage.warning('対象の注文データがありません（丸一NST・丸一ﾒﾀﾙｱｸﾄ／開始日分）')
       return
     }
 
@@ -2829,59 +3343,126 @@ onMounted(() => {
 
 <style scoped>
 .part-order-container {
+  --po-indigo: #4f46e5;
+  --po-violet: #7c3aed;
+  --po-sky: #0284c7;
+  --po-emerald: #059669;
+  --po-amber: #d97706;
+  --po-rose: #e11d48;
+  --po-ink: #0f172a;
+  --po-muted: #64748b;
+  --po-line: #e2e8f0;
   padding: 10px 12px;
-  background: linear-gradient(135deg, #eef2f7 0%, #dce4f0 100%);
+  background:
+    radial-gradient(1200px 380px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(139, 92, 246, 0.09), transparent 60%),
+    linear-gradient(180deg, #f5f7fc 0%, #eef1f8 100%);
   min-height: 100vh;
+  animation: pageFadeIn 0.45s ease-out;
 }
 
-/* 页面头部样式 */
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes headerShine {
+  0% { transform: translateX(-120%) skewX(-18deg); }
+  60%, 100% { transform: translateX(320%) skewX(-18deg); }
+}
+
+/* ページヘッダー */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 10px 18px;
-  margin-bottom: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
+  border-radius: 14px;
   color: white;
-  box-shadow: 0 4px 18px rgba(102, 126, 234, 0.35);
+  box-shadow:
+    0 10px 28px rgba(79, 70, 229, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
   position: relative;
   overflow: hidden;
+  animation: slideDown 0.45s ease-out;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 34px rgba(124, 58, 237, 0.32),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+}
+
+/* 装飾用の光の円 */
 .page-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 88% -30%, rgba(255, 255, 255, 0.28) 0, transparent 38%),
+    radial-gradient(circle at 62% 140%, rgba(255, 255, 255, 0.16) 0, transparent 34%),
+    radial-gradient(circle at 8% 120%, rgba(56, 189, 248, 0.28) 0, transparent 30%);
+  pointer-events: none;
+}
+
+.page-header::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-  opacity: 0.1;
+  width: 30%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  animation: headerShine 7s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  position: relative;
   z-index: 1;
 }
 
 .title-section {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .title-icon {
-  width: 34px;
-  height: 34px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 20px;
   backdrop-filter: blur(10px);
+  box-shadow:
+    0 6px 14px rgba(30, 27, 75, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: transform 0.3s ease;
+}
+
+.page-header:hover .title-icon {
+  transform: rotate(-6deg) scale(1.06);
 }
 
 .title-text {
@@ -2893,176 +3474,271 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 700;
   margin: 0;
-  letter-spacing: 0.5px;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .subtitle {
   font-size: 11px;
-  opacity: 0.85;
-  margin: 2px 0 0 0;
-  font-weight: 400;
+  opacity: 0.88;
+  margin: 1px 0 0 0;
+  font-weight: 500;
+  letter-spacing: 0.03em;
 }
 
 .header-actions {
   display: flex;
   gap: 8px;
+  position: relative;
   z-index: 1;
 }
 
 .action-btn {
-  padding: 6px 14px;
-  border-radius: 7px;
+  --btn-bg: rgba(255, 255, 255, 0.16);
+  --btn-bg-hover: rgba(255, 255, 255, 0.26);
+  --btn-glow: rgba(15, 23, 42, 0.25);
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 9px;
   font-weight: 600;
   font-size: 12px;
-  transition: all 0.3s ease;
+  color: #fff;
+  background: var(--btn-bg);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.action-btn:hover,
+.action-btn:focus-visible {
+  color: #fff;
+  background: var(--btn-bg-hover);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 22px var(--btn-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.action-btn:active {
+  transform: translateY(0);
+}
+
+.action-btn :deep(.el-icon) {
+  margin-right: 4px;
 }
 
 .success-btn {
-  background: rgba(67, 233, 123, 0.9);
-  color: white;
-}
-
-.success-btn:hover {
-  background: rgba(67, 233, 123, 1);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(67, 233, 123, 0.4);
+  --btn-bg: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --btn-bg-hover: linear-gradient(135deg, #6ee7b7 0%, #10b981 100%);
+  --btn-glow: rgba(5, 150, 105, 0.45);
 }
 
 .warning-btn {
-  background: rgba(250, 173, 20, 0.9);
-  color: white;
+  --btn-bg: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --btn-bg-hover: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%);
+  --btn-glow: rgba(217, 119, 6, 0.45);
 }
 
-.warning-btn:hover {
-  background: rgba(250, 173, 20, 1);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(250, 173, 20, 0.4);
-}
-
-/* 统计卡片样式 */
+/* 統計カード */
 .stats-container {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 8px 10px;
+  --card-color: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  --card-solid: #4f46e5;
+  --card-soft: rgba(79, 70, 229, 0.08);
+  --card-glow: rgba(79, 70, 229, 0.28);
+  background:
+    linear-gradient(135deg, var(--card-soft) 0%, rgba(255, 255, 255, 0) 55%),
+    #ffffff;
+  border-radius: 12px;
+  padding: 9px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
-  transition: all 0.25s ease;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  gap: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 14px rgba(15, 23, 42, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   position: relative;
   overflow: hidden;
-  min-height: 56px;
+  min-height: 58px;
+  animation: cardRise 0.45s ease-out both;
 }
 
+.stat-card:nth-child(1) { animation-delay: 0.02s; }
+.stat-card:nth-child(2) { animation-delay: 0.06s; }
+.stat-card:nth-child(3) { animation-delay: 0.1s; }
+.stat-card:nth-child(4) { animation-delay: 0.14s; }
+.stat-card:nth-child(5) { animation-delay: 0.18s; }
+.stat-card:nth-child(6) { animation-delay: 0.22s; }
+
+/* 上端のアクセントライン */
 .stat-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 3px;
-  height: 100%;
+  right: 0;
+  height: 3px;
   background: var(--card-color);
-  transition: width 0.3s ease;
+  opacity: 0.9;
 }
 
-.stat-card:hover::before {
-  width: 5px;
+/* 右上の装飾バブル */
+.stat-card::after {
+  content: '';
+  position: absolute;
+  right: -18px;
+  top: -22px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--card-color);
+  opacity: 0.08;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  pointer-events: none;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.11);
+  transform: translateY(-3px);
+  border-color: transparent;
+  box-shadow:
+    0 12px 26px var(--card-glow),
+    0 0 0 1px var(--card-soft);
+}
+
+.stat-card:hover::after {
+  transform: scale(1.35);
+  opacity: 0.14;
 }
 
 .stat-card.primary {
-  --card-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --card-color: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  --card-solid: #4f46e5;
+  --card-soft: rgba(79, 70, 229, 0.08);
+  --card-glow: rgba(79, 70, 229, 0.22);
 }
 
 .stat-card.info {
-  --card-color: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --card-color: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+  --card-solid: #0284c7;
+  --card-soft: rgba(2, 132, 199, 0.08);
+  --card-glow: rgba(2, 132, 199, 0.22);
 }
 
 .stat-card.warning {
-  --card-color: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  --card-color: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --card-solid: #d97706;
+  --card-soft: rgba(217, 119, 6, 0.08);
+  --card-glow: rgba(217, 119, 6, 0.22);
 }
 
 .stat-card.success {
-  --card-color: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  --card-color: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --card-solid: #059669;
+  --card-soft: rgba(5, 150, 105, 0.08);
+  --card-glow: rgba(5, 150, 105, 0.22);
 }
 
 .stat-card.order {
-  --card-color: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.stat-card.bundle {
-  --card-color: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
-}
-
-.stat-card.weight {
-  --card-color: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  --card-color: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --card-solid: #7c3aed;
+  --card-soft: rgba(124, 58, 237, 0.08);
+  --card-glow: rgba(124, 58, 237, 0.22);
 }
 
 .stat-card.amount {
-  --card-color: linear-gradient(135deg, #a8caba 0%, #5d4e75 100%);
+  --card-color: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  --card-solid: #e11d48;
+  --card-soft: rgba(225, 29, 72, 0.07);
+  --card-glow: rgba(225, 29, 72, 0.2);
 }
 
 .stat-card .stat-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: var(--card-color);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-size: 17px;
+  box-shadow:
+    0 6px 14px var(--card-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: translateY(-1px) rotate(-6deg) scale(1.06);
 }
 
 .stat-content {
   flex: 1;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .stat-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: #2d3748;
-  margin-bottom: 2px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--po-ink);
+  margin-bottom: 1px;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 .stat-value .unit {
   font-size: 11px;
-  font-weight: 500;
-  color: #718096;
-  margin-left: 2px;
+  font-weight: 600;
+  color: var(--card-solid);
+  margin-left: 3px;
 }
 
 .stat-label {
-  font-size: 10px;
-  color: #718096;
-  font-weight: 500;
+  font-size: 11px;
+  color: var(--po-muted);
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--card-solid);
+  box-shadow: 0 0 0 3px var(--card-soft);
+  flex-shrink: 0;
 }
 
 /* ===== Filter Bar ===== */
@@ -3071,11 +3747,22 @@ onMounted(() => {
 }
 
 .search-container {
-  background: white;
-  border-radius: 10px;
-  padding: 6px 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 12px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 4px 20px rgba(79, 70, 229, 0.07),
+    0 0 0 1px rgba(99, 102, 241, 0.08);
+  transition: box-shadow 0.25s ease;
+}
+
+.search-container:hover {
+  box-shadow:
+    0 8px 26px rgba(79, 70, 229, 0.1),
+    0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
 /* 全フィルターアイテムを1行に並べる */
@@ -3128,19 +3815,35 @@ onMounted(() => {
 
 /* ラベル: アイコン + テキスト */
 .filter-label {
+  --label-color: #4f46e5;
+  --label-soft: rgba(79, 70, 229, 0.1);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
+  font-weight: 700;
+  color: #475569;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .filter-label .el-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
   font-size: 12px;
-  color: #667eea;
+  color: var(--label-color);
+  background: var(--label-soft);
+}
+
+.part-filter-item .filter-label {
+  --label-color: #0284c7;
+  --label-soft: rgba(2, 132, 199, 0.1);
+}
+
+.supplier-item .filter-label {
+  --label-color: #7c3aed;
+  --label-soft: rgba(124, 58, 237, 0.1);
 }
 
 /* 統一された入力欄スタイル */
@@ -3163,14 +3866,14 @@ onMounted(() => {
 
 .filter-input :deep(.el-input__wrapper:hover),
 .filter-select :deep(.el-select__wrapper:hover) {
-  border-color: #667eea;
+  border-color: #a5b4fc;
   background: white;
 }
 
 .filter-input :deep(.el-input__wrapper.is-focus),
 .filter-select :deep(.el-select__wrapper.is-focused) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.12);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
   background: white;
 }
 
@@ -3199,7 +3902,14 @@ onMounted(() => {
 }
 
 .filter-date-picker :deep(.el-input__wrapper:hover) {
-  border-color: #667eea;
+  border-color: #a5b4fc;
+  background: white;
+}
+
+.filter-date-picker :deep(.el-input__wrapper.is-active),
+.filter-date-picker :deep(.el-range-editor.is-active) {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
   background: white;
 }
 
@@ -3238,32 +3948,43 @@ onMounted(() => {
 }
 
 .date-nav-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.06);
+  border-color: #a5b4fc;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.08);
+  transform: translateY(-1px);
 }
 
 .date-nav-btn.today-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
   color: white;
   border: none;
-  padding: 0 10px;
+  padding: 0 11px;
+  font-weight: 700;
+  box-shadow:
+    0 3px 8px rgba(99, 102, 241, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .date-nav-btn.today-btn:hover {
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  color: white;
+  box-shadow:
+    0 6px 14px rgba(99, 102, 241, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 
 
 
-/* 表格区域样式 */
+/* テーブルエリア */
 .table-section {
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 6px 24px rgba(79, 70, 229, 0.07),
+    0 0 0 1px rgba(99, 102, 241, 0.08);
   overflow: hidden;
+  animation: cardRise 0.5s ease-out 0.1s both;
 }
 
 .table-container {
@@ -3274,39 +3995,97 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-bottom: 1px solid #dee2e6;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, #fbfcff 0%, #f3f5fb 100%);
+  border-bottom: 1px solid #e6e9f4;
 }
 
 .table-tabs {
   display: flex;
-  gap: 3px;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgba(226, 232, 240, 0.55);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .tab-item {
+  --tab-color: #4f46e5;
+  --tab-gradient: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  --tab-soft: rgba(79, 70, 229, 0.1);
+  --tab-glow: rgba(79, 70, 229, 0.35);
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
-  border-radius: 7px;
+  padding: 5px 13px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.25s ease;
-  color: #6b7280;
+  user-select: none;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  color: #64748b;
   background: transparent;
 }
 
+.tab-item .el-icon {
+  font-size: 14px;
+  color: var(--tab-color);
+  transition: color 0.2s ease, transform 0.25s ease;
+}
+
 .tab-item:hover {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
+  background: #ffffff;
+  color: var(--tab-color);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+.tab-item:hover .el-icon {
+  transform: scale(1.12);
 }
 
 .tab-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--tab-gradient);
   color: white;
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 14px var(--tab-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+}
+
+.tab-item.active .el-icon {
+  color: white;
+}
+
+.tab-item--initial {
+  --tab-color: #0284c7;
+  --tab-gradient: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+  --tab-glow: rgba(2, 132, 199, 0.35);
+}
+
+.tab-item--stock {
+  --tab-color: #4f46e5;
+  --tab-gradient: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  --tab-glow: rgba(79, 70, 229, 0.35);
+}
+
+.tab-item--usage {
+  --tab-color: #059669;
+  --tab-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --tab-glow: rgba(5, 150, 105, 0.35);
+}
+
+.tab-item--order {
+  --tab-color: #d97706;
+  --tab-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --tab-glow: rgba(217, 119, 6, 0.35);
+}
+
+.tab-item--history {
+  --tab-color: #7c3aed;
+  --tab-gradient: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  --tab-glow: rgba(124, 58, 237, 0.35);
 }
 
 .table-actions {
@@ -3314,11 +4093,37 @@ onMounted(() => {
   gap: 6px;
 }
 
-.print-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
+.table-actions :deep(.el-button) {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
+  border: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.table-actions :deep(.el-button .el-icon) {
+  margin-right: 4px;
+}
+
+.print-btn,
+.month-start-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  box-shadow:
+    0 4px 12px rgba(99, 102, 241, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.print-btn:hover,
+.print-btn:focus-visible,
+.month-start-btn:hover,
+.month-start-btn:focus-visible {
+  background: linear-gradient(135deg, #818cf8 0%, #8b5cf6 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 18px rgba(99, 102, 241, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .table-content {
@@ -3326,16 +4131,17 @@ onMounted(() => {
 }
 
 .modern-table {
-  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e2e8f0;
+  border: none;
   background: white;
 }
 
 .order-history-table :deep(.el-table__footer-wrapper .el-table__cell) {
-  font-weight: 600;
+  padding: 10px 0;
+  font-weight: 700;
+  color: #0f172a;
   background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
 }
 
 /* 现代化滚动条样式 */
@@ -3370,30 +4176,60 @@ onMounted(() => {
   backdrop-filter: blur(4px);
 }
 
-.modern-table :deep(.el-loading-spinner) {
-  color: #667eea;
+.modern-table :deep(.el-loading-spinner .path) {
+  stroke: #6366f1;
 }
 
-/* 表格行间距优化 */
+.modern-table :deep(.el-loading-spinner .el-loading-text) {
+  color: #4f46e5;
+}
+
 .modern-table :deep(.el-table__row) {
-  transition: all 0.2s ease;
-}
-
-.modern-table :deep(.el-table__row):hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.2s ease;
 }
 
 .pagination-wrapper {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-top: 1px solid #dee2e6;
+  padding: 7px 16px;
+  background: linear-gradient(180deg, #f8f9fd 0%, #f1f4fa 100%);
+  border-top: 1px solid #e6e9f4;
   display: flex;
   justify-content: center;
 }
 
 .modern-pagination {
-  --el-pagination-button-color: #6b7280;
-  --el-pagination-hover-color: #667eea;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #4f46e5;
+}
+
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  border-radius: 7px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  margin: 0 2px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.modern-pagination :deep(.el-pager li:hover:not(.is-active)),
+.modern-pagination :deep(.btn-prev:hover:not(:disabled)),
+.modern-pagination :deep(.btn-next:hover:not(:disabled)) {
+  color: #4f46e5;
+  border-color: #c7d2fe;
+  transform: translateY(-1px);
+}
+
+.modern-pagination :deep(.el-pager li.is-active) {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+}
+
+.modern-pagination :deep(.el-pagination__total) {
+  font-weight: 600;
+  color: #475569;
 }
 
 /* データ生成ダイアログ - コンパクト */
@@ -3409,7 +4245,7 @@ onMounted(() => {
 
 .data-generation-dialog :deep(.el-dialog__header) {
   padding: 10px 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   color: white;
   border-bottom: none;
 }
@@ -3456,7 +4292,7 @@ onMounted(() => {
 
 .data-generation-content-compact .form-section-compact:hover {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-  border-color: #667eea;
+  border-color: #6366f1;
 }
 
 .data-generation-content-compact .section-header-compact {
@@ -3472,7 +4308,7 @@ onMounted(() => {
 }
 
 .data-generation-content-compact .section-icon {
-  color: #667eea;
+  color: #6366f1;
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -3521,8 +4357,8 @@ onMounted(() => {
 }
 
 .date-picker-compact :deep(.el-input.is-focus .el-input__wrapper) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
 .date-picker-compact :deep(.el-input__inner) {
@@ -3575,13 +4411,13 @@ onMounted(() => {
 }
 
 .confirm-btn-compact {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   border: none;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
 }
 
 .confirm-btn-compact:hover:not(:disabled) {
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
   transform: translateY(-1px);
 }
 
@@ -3838,7 +4674,7 @@ onMounted(() => {
 }
 
 .manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   color: white;
   padding: 20px 24px;
   border-radius: 16px 16px 0 0;
@@ -3895,7 +4731,7 @@ onMounted(() => {
 
 .manual-order-form:not(.manual-order-form--compact) .section-header .el-icon {
   margin-right: 8px;
-  color: #667eea;
+  color: #6366f1;
   font-size: 16px;
 }
 
@@ -3937,8 +4773,8 @@ onMounted(() => {
 .form-input :deep(.el-input__inner:focus),
 .form-select :deep(.el-input__inner:focus),
 .form-textarea :deep(.el-textarea__inner:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .material-info {
@@ -3995,7 +4831,7 @@ onMounted(() => {
 }
 
 :deep(.data-generation-confirm-dialog .el-message-box__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
   color: white !important;
   padding: 20px 24px !important;
   border-radius: 16px 16px 0 0 !important;
@@ -4058,14 +4894,14 @@ onMounted(() => {
 }
 
 :deep(.data-generation-confirm-dialog .el-button--primary) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
   border: none !important;
   color: white !important;
 }
 
 :deep(.data-generation-confirm-dialog .el-button--primary:hover) {
   transform: translateY(-2px) !important;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4) !important;
 }
 
 :deep(.data-generation-confirm-dialog .el-button--default) {
@@ -4089,8 +4925,19 @@ onMounted(() => {
 /* Large screen: <= 1280px */
 @media (max-width: 1280px) {
   .stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .stat-card {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .stat-card .stat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
   }
 
   .stat-value {
@@ -4109,7 +4956,7 @@ onMounted(() => {
   }
 
   .stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 7px;
   }
 
@@ -4179,7 +5026,7 @@ onMounted(() => {
   }
 
   .stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -4292,7 +5139,7 @@ onMounted(() => {
 /* Phone: <= 640px */
 @media (max-width: 640px) {
   .stats-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
   }
 
@@ -4303,7 +5150,7 @@ onMounted(() => {
   }
 
   .stat-card::before {
-    width: 2px;
+    height: 2px;
   }
 
   .stat-value {
@@ -4400,104 +5247,68 @@ onMounted(() => {
   }
 }
 
-/* ElementPlus现代化覆盖样式（行高约 70%：内边距与行高调小约 30%） */
+/* テーブル：シンプルスタイル（横罫線のみ・ゆとりある行高） */
 :deep(.el-table) {
-  --el-table-border-color: #e2e8f0;
+  --el-table-border-color: transparent;
   --el-table-bg-color: #ffffff;
   --el-table-tr-bg-color: #ffffff;
+  --el-table-row-hover-bg-color: #f8fafc;
   --el-table-expanded-cell-bg-color: #fafbfc;
+  color: #334155;
 }
 
 :deep(.el-table th.el-table__cell) {
-  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
-  color: #2d3748;
-  font-weight: 700;
-  font-size: 13px;
-  padding: calc(8px * 0.7) calc(6px * 0.7);
-  line-height: calc(1.3 * 0.7);
-  border-bottom: 2px solid #cbd5e0;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e7eb;
+  letter-spacing: 0.02em;
 }
 
-:deep(.el-table th.el-table__cell::after) {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  opacity: 0.6;
+:deep(.el-table th.el-table__cell .cell) {
+  line-height: 20px;
 }
 
 :deep(.el-table td.el-table__cell) {
-  padding: calc(4px * 0.7) calc(6px * 0.7);
+  padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
   font-size: 13px;
-  line-height: calc(1.3 * 0.7);
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
-/* 現在在庫：字号加大一号、粗体、纯黑（行高压缩时略放大行距以免裁字） */
-:deep(.el-table td.current-stock-column) {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
-}
-
-:deep(.el-table td.current-stock-column .cell) {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
-}
-
-/* 使用数・注文本数：字号加大一号、粗体、纯黑（与現在在庫一致） */
-:deep(.el-table td.usage-quantity-column) {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
-}
-
-:deep(.el-table td.usage-quantity-column .cell) {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
-}
-
-:deep(.el-table td.order-quantity-column) {
-  font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
-}
-
+/* 数量列：字号加大一号、粗体 */
+:deep(.el-table td.current-stock-column .cell),
+:deep(.el-table td.usage-quantity-column .cell),
 :deep(.el-table td.order-quantity-column .cell) {
   font-size: 14px;
-  font-weight: bold;
-  color: #000000;
-  line-height: 1.1;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 列の色分けはヘッダー文字色のみで控えめに表現 */
+:deep(.el-table th.current-stock-column) {
+  color: #4f46e5;
+}
+
+:deep(.el-table th.usage-quantity-column) {
+  color: #059669;
+}
+
+:deep(.el-table th.order-quantity-column) {
+  color: #d97706;
 }
 
 :deep(.el-table td.usage-quantity-column .el-input-number .el-input__inner),
 :deep(.el-table td.order-quantity-column .el-input-number .el-input__inner) {
   font-size: 14px !important;
-  font-weight: bold !important;
-  color: #000000 !important;
+  font-weight: 700 !important;
 }
 
-:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background-color: #f8fafc;
-}
-
-:deep(.el-table__body tr:hover td) {
-  background-color: #e0f2fe !important;
-  transform: scale(1.001);
+:deep(.el-table .el-table__body tr:hover > td.el-table__cell) {
+  background-color: #f8fafc !important;
 }
 
 :deep(.el-input-number) {
@@ -4509,13 +5320,8 @@ onMounted(() => {
   font-size: 12px;
   height: calc(20px * 0.7);
   border-radius: 5px;
-  border: 1px solid #e2e8f0;
+  border: none;
   transition: all 0.2s ease;
-}
-
-:deep(.el-input-number .el-input__inner):focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
 :deep(.el-input-number__increase),
@@ -4531,15 +5337,22 @@ onMounted(() => {
 
 :deep(.el-input-number__increase):hover,
 :deep(.el-input-number__decrease):hover {
-  background: #667eea;
+  background: #6366f1;
   color: white;
-  border-color: #667eea;
+  border-color: #6366f1;
 }
 
+/* 手動使用数：文字色とフォーカス色のみエメラルド */
 :deep(.usage-quantity-input .el-input__inner) {
-  background-color: #e0f2fe !important;
-  border-color: #0ea5e9 !important;
-  font-weight: 600;
+  color: #047857 !important;
+}
+
+:deep(.el-table .usage-quantity-input .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #6ee7b7 inset;
+}
+
+:deep(.el-table .usage-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #10b981 inset, 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
 /* 删除按钮样式 */
@@ -4566,94 +5379,63 @@ onMounted(() => {
   padding: calc(2px * 0.7) calc(6px * 0.7);
   height: calc(20px * 0.7);
   border-radius: 5px;
-  border: 1px solid #e2e8f0;
+  border: none;
   transition: all 0.2s ease;
   font-size: 11px;
 }
 
-:deep(.el-input .el-input__inner):focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+/* 表内入力欄：白地・細い枠線 */
+:deep(.el-table .el-input__wrapper) {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
 }
 
-/* 表格内文本样式优化 */
+:deep(.el-table .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+}
+
+:deep(.el-table .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #6366f1 inset, 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+:deep(.el-table .el-input__inner) {
+  height: 26px;
+  line-height: 26px;
+  font-size: 13px;
+}
+
+/* 表格内文本样式 */
 :deep(.el-table .cell) {
-  padding: calc(2px * 0.7) calc(6px * 0.7);
-  line-height: calc(1.3 * 0.7);
-  font-size: 12px;
+  padding: 0 12px;
+  line-height: 22px;
+  font-size: 13px;
 }
 
-/* 数值显示样式优化 */
+/* 負数：赤字のみ */
 .negative-number {
-  color: #ef4444 !important;
+  color: #dc2626 !important;
   font-weight: 700 !important;
-  background-color: #fef2f2;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid #fecaca;
 }
 
-/* 表格容器优化 */
 .table-section {
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  overflow: hidden;
   margin-bottom: 8px;
 }
 
-/* 表格头部优化 */
-.table-header {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-bottom: 1px solid #dee2e6;
-  padding: 8px 12px;
-}
-
-/* 分页样式优化 */
-.pagination-wrapper {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-top: 1px solid #dee2e6;
-  display: flex;
-  justify-content: center;
-}
-
-:deep(.order-quantity-column) {
-  background-color: #fef3c7 !important;
-}
-
-:deep(.order-quantity-column .cell) {
-  background-color: #fef3c7 !important;
-  padding: 4px !important;
-}
-
+/* 注文本数：文字色とフォーカス色のみアンバー */
 :deep(.order-quantity-input .el-input__inner) {
-  background-color: #fde68a !important;
-  border-color: #f59e0b !important;
-  font-weight: 600;
+  color: #b45309 !important;
 }
 
-/* 对话框样式 */
-.order-confirm-content {
-  padding: 20px 0;
+:deep(.el-table .order-quantity-input .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #fcd34d inset;
 }
 
-.order-summary,
-.order-details {
-  margin-bottom: 24px;
-}
-
-.order-summary h3,
-.order-details h3 {
-  margin: 0 0 16px;
-  color: #2d3748;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.order-notes {
-  margin-top: 20px;
+:deep(.el-table .order-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #f59e0b inset, 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
 /* 负数显示样式 */
@@ -4674,9 +5456,10 @@ onMounted(() => {
 }
 
 .print-confirm-dialog :deep(.el-dialog__header) {
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: rgb(8, 8, 8);
+  padding: 10px 44px 10px 14px;
+  margin-right: 0;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
+  color: #ffffff;
   border-bottom: none;
 }
 
@@ -4685,32 +5468,39 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  gap: 12px;
 }
 
 .dialog-title {
   font-size: 14px;
-  font-weight: 600;
-  color: rgb(10, 10, 10);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.03em;
 }
 
 .confirm-btn-header {
-  border-radius: 5px;
-  padding: 5px 12px;
-  font-weight: 600;
-  font-size: 11px;
-  background: rgba(23, 241, 158, 0.589);
-  border: 1px solid rgba(8, 7, 7, 0.774);
-  color: rgb(7, 7, 7);
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  margin-left: 200px;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-weight: 700;
+  font-size: 12px;
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  box-shadow:
+    0 4px 12px rgba(5, 150, 105, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.confirm-btn-header:hover {
-  background: rgba(210, 230, 103, 0.3);
-  border-color: rgba(5, 180, 28, 0.5);
+.confirm-btn-header:hover,
+.confirm-btn-header:focus-visible {
+  color: #ffffff;
+  background: linear-gradient(135deg, #6ee7b7 0%, #10b981 100%);
+  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 8px 18px rgba(5, 150, 105, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .confirm-btn-header :deep(.el-icon) {
@@ -4762,7 +5552,7 @@ onMounted(() => {
 
 .form-section-compact:hover {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-  border-color: #667eea;
+  border-color: #6366f1;
 }
 
 .section-header-compact {
@@ -4778,7 +5568,7 @@ onMounted(() => {
 }
 
 .section-icon {
-  color: #667eea;
+  color: #6366f1;
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -4828,8 +5618,8 @@ onMounted(() => {
 }
 
 .form-input-compact :deep(.el-input.is-focus .el-input__wrapper) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
 .form-input-compact :deep(.el-input__inner) {
@@ -4856,8 +5646,8 @@ onMounted(() => {
 }
 
 .form-textarea-compact :deep(.el-textarea__inner:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
 /* フィルターボタン */
@@ -4889,9 +5679,9 @@ onMounted(() => {
 }
 
 .filter-btn.el-button--primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 /* 紧凑表格样式 */
@@ -4959,15 +5749,272 @@ onMounted(() => {
 }
 
 .initial-stock-input.positive-stock :deep(.el-input__inner) {
-  background-color: #f0f9ff;
-  border-color: #0ea5e9;
   color: #0369a1;
+  font-weight: 700;
+}
+
+.initial-stock-input.positive-stock :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #0ea5e9 inset, 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.adjustment-quantity-input :deep(.el-input__inner) {
+  font-weight: 600;
+  color: #334155;
+}
+
+.adjustment-quantity-input.is-negative :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #fca5a5 inset;
+}
+
+.adjustment-quantity-input.is-negative :deep(.el-input__inner) {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.stat-value.is-negative {
+  color: #dc2626;
+}
+
+/* 表ヘッダー：キー操作ヒント */
+.table-hint {
+  margin-left: auto;
+  margin-right: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.table-hint kbd {
+  display: inline-block;
+  padding: 0 5px;
+  margin: 0 2px;
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 16px;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+/* 部品名セル：クリックで在庫推移グラフ */
+:deep(.el-table td.part-name-cell .cell) {
+  color: #4338ca;
+  cursor: pointer;
+}
+
+:deep(.el-table td.part-name-cell:hover .cell) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cancel-order-btn {
   font-weight: 600;
 }
 
-.initial-stock-input.positive-stock :deep(.el-input__inner):focus {
-  border-color: #0284c7;
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+/* 発注提案ボタン */
+.reorder-badge {
+  margin-right: 4px;
+}
+
+.table-actions .reorder-btn {
+  color: #b45309;
+  background: #fffbeb;
+  box-shadow: 0 0 0 1px #fcd34d inset;
+}
+
+.table-actions .reorder-btn:hover,
+.table-actions .reorder-btn:focus-visible {
+  color: #92400e;
+  background: #fef3c7;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px #f59e0b inset, 0 6px 14px rgba(245, 158, 11, 0.25);
+}
+
+/* 発注提案ダイアログ */
+.reorder-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.reorder-dialog :deep(.el-dialog__header) {
+  padding: 12px 16px;
+  margin-right: 0;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.reorder-dialog :deep(.el-dialog__title) {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.reorder-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: #ffffff;
+}
+
+.reorder-dialog :deep(.el-dialog__body) {
+  padding: 14px 16px 6px;
+}
+
+.reorder-dialog :deep(.el-dialog__footer) {
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+}
+
+.reorder-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.reorder-toolbar__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reorder-toolbar__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.reorder-toolbar__summary {
+  margin-left: auto;
+  font-size: 13px;
+  color: #334155;
+}
+
+.reorder-toolbar__urgent {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.reorder-note {
+  margin: 8px 0 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+.reorder-part {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+.reorder-part__name {
+  color: #4338ca;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.reorder-part:hover .reorder-part__name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reorder-part__cd,
+.reorder-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 16px;
+}
+
+.reorder-sub {
+  margin-left: 6px;
+}
+
+.reorder-tag {
+  margin-left: 4px;
+}
+
+.reorder-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reorder-footer__total {
+  margin-right: auto;
+  font-size: 12px;
+  color: #475569;
+}
+
+/* 部品在庫推移グラフ */
+.part-chart-drawer :deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 14px 18px;
+  color: #0f172a;
+  font-weight: 700;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.part-chart-drawer :deep(.el-drawer__body) {
+  padding: 14px 18px;
+  background: #fbfcfe;
+}
+
+.part-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.part-chart__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.part-chart__kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.part-chart__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+}
+
+.part-chart__kpi-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.part-chart__kpi-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.part-chart__kpi-value small {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.part-chart__canvas {
+  min-height: 440px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
 }
 
 .initial-stock-input.positive-stock :deep(.el-input-number__increase),

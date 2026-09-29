@@ -5785,7 +5785,7 @@ function buildRecommendedProductionPrintHtml(
             '<b>外注先</b>：外注工程製品管理（外注メッキ・有効）に登録された外注先（製品名で照合、未登録は「（未設定）」）',
             '<b>推奨生産日</b>：外注メッキ推移がマイナスとなる最初の日の外注メッキ生産日（(有)三和電工・八洲金属(株)・矢田川電鍍工業(株)は外注検査前推移で判定）。本日以前は赤字',
             '<b>外注メッキ在庫</b>：推奨生産日の判定日における外注メッキの在庫',
-            '<b>前工程在庫</b>：推奨生産日の判定日における、工程ルート上で外注メッキの直前工程の在庫',
+            '<b>日当たり平均消化数</b>（参考）：対象期間内の内示数の合計 ÷ 内示のある日数（小数点以下四捨五入）',
           ].join('<br/>'),
         }
         : kind === 'molding'
@@ -5922,22 +5922,22 @@ p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
       return row[field] == null || row[field] === '' || Number.isNaN(n) ? sum : sum + n
     }, 0)
 
-  /** 外注先ページ用の表（製品名／推奨生産日／外注メッキ在庫／前工程在庫） */
+  /** 外注先ページ用の表（製品名／推奨生産日／外注メッキ在庫／日当たり平均消化数） */
   const renderSupplierTable = (g: { heading: string; rows: any[] }) => {
-    let html = `<table class="sup-table"><colgroup><col class="c-pname"/><col class="c-date"/><col class="c-inv"/><col class="c-inv"/></colgroup>`
+    let html = `<table class="sup-table"><colgroup><col class="c-pname"/><col class="c-date"/><col class="c-inv"/><col class="c-avg"/></colgroup>`
     html += `<thead><tr><th colspan="4" class="sup-title">${pc.machineHeading}: ${escapeHtmlRecommended(g.heading)}（${g.rows.length} 件）</th></tr>`
-    html += `<tr><th class="th-pname">製品名</th><th>${pc.dateLabel}</th><th>外注メッキ在庫</th><th>${pc.invColHeader}</th></tr></thead><tbody>`
+    html += `<tr><th class="th-pname">製品名</th><th>${pc.dateLabel}</th><th>外注メッキ在庫</th><th class="th-ref">日当たり平均消化数</th></tr></thead><tbody>`
     for (const row of g.rows) {
       const pname = row.product_name || row.product_cd || ''
       const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
       html += `<tr><td class="td-pname">${escapeHtmlRecommended(String(pname))}</td>`
       html += `<td class="td-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</td>`
       html += `<td class="td-num">${numCell(row.outsourced_plating_inventory)}</td>`
-      html += `<td class="td-num">${numCell(row[pc.preInvField])}</td></tr>`
+      html += `<td class="td-num td-ref">${numCell(row.avg_daily_forecast)}</td></tr>`
     }
     html += `</tbody><tfoot><tr><td colspan="2" class="td-sum-label">合計</td>`
     html += `<td class="td-num">${sumField(g.rows, 'outsourced_plating_inventory').toLocaleString('ja-JP')}</td>`
-    html += `<td class="td-num">${sumField(g.rows, pc.preInvField).toLocaleString('ja-JP')}</td></tr></tfoot></table>`
+    html += `<td class="td-num td-ref">${sumField(g.rows, 'avg_daily_forecast').toLocaleString('ja-JP')}</td></tr></tfoot></table>`
     return html
   }
 
@@ -6003,6 +6003,9 @@ ${hidePreInvCols ? '' : `<p class="print-note">${pc.footNote}</p>`}`
 .sup-table + .sup-table{margin-top:14px;}
 .sup-table col.c-date{width:30mm;}
 .sup-table col.c-inv{width:32mm;}
+.sup-table col.c-avg{width:36mm;}
+.sup-table thead th.th-ref{color:#64748b;}
+.sup-table .td-ref{color:#475569;}
 .sup-table th,.sup-table td{border:1px solid #94a3b8;padding:5px 8px;vertical-align:middle;}
 .sup-table thead th{background:#f1f5f9;color:#334155;font-size:9pt;font-weight:600;text-align:center;white-space:nowrap;}
 .sup-table thead th.sup-title{background:#e2e8f0;color:#0f172a;font-size:10.5pt;font-weight:700;text-align:left;}
@@ -6063,7 +6066,25 @@ async function handleRecommendedProductionPrint(
     })
     if (resolveSuppliers) {
       const resolver = resolveSuppliers
-      rawRows = rawRows.map((row) => ({ ...row, outsourced_plating_supplier_name: resolver(row).join('・') }))
+      const forecastAgg = new Map<string, { sum: number; days: number }>()
+      for (const r of list) {
+        const d = rowCalendarDateStr(r)
+        if (!r.product_cd || !d || d < monthStart) continue
+        const q = Number(r.forecast_quantity)
+        if (!(q > 0)) continue
+        const agg = forecastAgg.get(r.product_cd) ?? { sum: 0, days: 0 }
+        agg.sum += q
+        agg.days += 1
+        forecastAgg.set(r.product_cd, agg)
+      }
+      rawRows = rawRows.map((row) => {
+        const agg = forecastAgg.get(row.product_cd)
+        return {
+          ...row,
+          outsourced_plating_supplier_name: resolver(row).join('・'),
+          avg_daily_forecast: agg && agg.days > 0 ? Math.round(agg.sum / agg.days) : null,
+        }
+      })
     }
     const rows = sortRecommendedPrintRows(rawRows, kind)
     const html = buildRecommendedProductionPrintHtml(rows, kind, monthStart, rangeEnd, {

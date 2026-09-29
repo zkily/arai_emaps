@@ -321,23 +321,14 @@
             <div ref="qtyCompareChartRef" class="chart-canvas" />
           </div>
         </section>
-        <section class="panel panel--chart animate-in" style="--delay: 520ms">
-          <div class="panel-head panel-head--chart-export">
+        <section class="panel panel--chart panel--crisp animate-in" style="--delay: 520ms">
+          <div class="panel-head">
             <span class="panel-accent panel-accent--orange" />
             <span class="panel-title">修正比率推移</span>
+            <span v-if="appliedProcessName" class="panel-meta panel-meta--process">
+              工程：{{ appliedProcessName }}
+            </span>
             <span class="panel-meta">件数は22日換算</span>
-            <el-button
-              size="small"
-              type="success"
-              plain
-              class="panel-export-btn"
-              :icon="Download"
-              :loading="exportingRatioTrend"
-              :disabled="!(stats?.byMonthTrend?.length)"
-              @click="exportRatioTrendExcel"
-            >
-              Excel出力
-            </el-button>
           </div>
           <div class="chart-canvas-wrap">
             <div ref="trendChartRef" class="chart-canvas" />
@@ -767,10 +758,15 @@ const router = useRouter()
 
 const loading = ref(false)
 const exportingProcessCompare = ref(false)
-const exportingRatioTrend = ref(false)
 const contentReady = ref(false)
 const stats = ref<StatsResponse | null>(null)
 const processOptions = ref<OptionItem[]>([])
+const appliedProcessCd = ref('')
+const appliedProcessName = computed(() => {
+  if (!appliedProcessCd.value) return ''
+  const found = processOptions.value.find((p) => p.cd === appliedProcessCd.value)
+  return found?.name || appliedProcessCd.value
+})
 const tableMaxHeight = ref(360)
 
 const defaultMonth = dayjs().format('YYYY-MM')
@@ -1097,7 +1093,9 @@ async function fetchStats() {
   loading.value = true
   contentReady.value = false
   try {
-    stats.value = (await request.get(API_BASE, { params: buildParams() })) as StatsResponse
+    const params = buildParams()
+    stats.value = (await request.get(API_BASE, { params })) as StatsResponse
+    appliedProcessCd.value = params.process_cd ?? ''
     if (!filters.value.compareMonth && stats.value?.compareMonth) {
       filters.value.compareMonth = stats.value.compareMonth
     }
@@ -1210,6 +1208,34 @@ function lineTopLabel(color: string, suffix = '') {
     color,
     formatter: (p: { value: number }) =>
       p.value == null || Number.isNaN(Number(p.value)) ? '' : `${p.value}${suffix}`,
+  }
+}
+
+function niceStep(raw: number, integer = false) {
+  if (!(raw > 0)) return 1
+  const exp = 10 ** Math.floor(Math.log10(raw))
+  const f = raw / exp
+  const factor = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((s) => s >= f - 1e-9) ?? 10
+  const step = factor * exp
+  return integer ? Math.max(1, Math.ceil(step)) : Number(step.toPrecision(6))
+}
+
+/** 比率折れ線がグラフ縦方向の中央付近に来るよう、左右軸の範囲と目盛数を揃えて算出 */
+function centeredDualAxis(barValues: number[], ratioValues: number[]) {
+  const ratios = ratioValues.filter((v) => Number.isFinite(v))
+  const rMax = ratios.length ? Math.max(...ratios) : 0
+  const rMin = ratios.length ? Math.min(...ratios) : 0
+  const mid = (rMax + rMin) / 2
+  const target = Math.max(mid * 2, rMax / 0.85, 1)
+  const rStep = niceStep(target / 5)
+  const splits = Math.max(2, Math.ceil(target / rStep - 1e-9))
+
+  const bMax = Math.max(0, ...barValues.filter((v) => Number.isFinite(v)))
+  const bStep = niceStep((Math.max(bMax, 1) * 1.15) / splits, true)
+
+  return {
+    bar: { min: 0, max: bStep * splits, interval: bStep },
+    ratio: { min: 0, max: Number((rStep * splits).toPrecision(6)), interval: rStep },
   }
 }
 
@@ -1349,34 +1375,50 @@ function renderCharts() {
   if (trendChartRef.value) {
     trendChart = initChart(trendChartRef.value)
     const trend = stats.value.byMonthTrend
+    const countData = trend.map((t) => trendCountAdj(t))
+    const ratioData = trend.map((t) => Number((t.prodDataMgmtCountRatio * 100).toFixed(2)))
+    const axisRange = centeredDualAxis(countData, ratioData)
+    const ratioColor = '#e11d48'
     trendChart.setOption({
       ...anim,
       textStyle: chartTextStyle(),
-      tooltip: chartTooltipBase(),
+      tooltip: chartTooltipBase({
+        extraCssText: 'border-radius:8px;box-shadow:0 4px 12px rgba(15,23,42,0.18);',
+        valueFormatter: (v: number, _idx: number, series: { seriesName?: string }) =>
+          series?.seriesName === '修正比率' ? `${Number(v).toFixed(2)}%` : fmtNum(Number(v)),
+      }),
       legend: chartLegendBase(['修正件数(22日換算)', '修正比率']),
       grid: { ...baseChartGrid(), right: 48, bottom: 48 },
       xAxis: {
         type: 'category',
         data: trend.map((t) => t.month),
-        axisLabel: { color: '#475569', fontSize: 11, fontWeight: 500, fontFamily: CHART_FONT },
-        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#334155', fontSize: 11, fontWeight: 600, fontFamily: CHART_FONT },
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
         axisTick: { show: false },
       },
       yAxis: [
         {
           type: 'value',
           name: '件数',
-          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
-          minInterval: 1,
+          nameTextStyle: { fontSize: 11, color: '#64748b', fontFamily: CHART_FONT },
+          ...axisRange.bar,
           ...axisStyle(),
+          splitLine: { lineStyle: { color: '#e2e8f0', type: 'solid' as const } },
         },
         {
           type: 'value',
           name: '%',
-          min: 0,
-          max: 20,
-          nameTextStyle: { fontSize: 11, color: '#94a3b8', fontFamily: CHART_FONT },
-          axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11, fontFamily: CHART_FONT },
+          ...axisRange.ratio,
+          nameTextStyle: { fontSize: 11, color: '#64748b', fontFamily: CHART_FONT },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: {
+            formatter: (v: number) => `${Number(v.toFixed(2))}%`,
+            color: ratioColor,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: CHART_FONT,
+          },
           splitLine: { show: false },
         },
       ],
@@ -1384,36 +1426,34 @@ function renderCharts() {
         {
           name: '修正件数(22日換算)',
           type: 'bar',
-          barMaxWidth: 22,
-          label: barTopLabel('#ca8a04', 10),
-          emphasis: barEmphasis('#fbbf24'),
-          itemStyle: {
-            borderRadius: [5, 5, 0, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#fef9c3' },
-              { offset: 1, color: '#fbbf24' },
-            ]),
-          },
-          data: trend.map((t) => trendCountAdj(t)),
+          barMaxWidth: 26,
+          label: barTopLabel('#92400e', 10),
+          emphasis: { focus: 'series', itemStyle: { color: '#d97706' } },
+          itemStyle: { borderRadius: [4, 4, 0, 0], color: '#f5b83d' },
+          data: countData,
         },
         {
           name: '修正比率',
           type: 'line',
           yAxisIndex: 1,
-          smooth: true,
+          z: 5,
+          smooth: 0.25,
           symbol: 'circle',
           symbolSize: 8,
-          label: lineTopLabel(CHART_THEME.danger, '%'),
-          lineStyle: { width: 3, color: CHART_THEME.danger, shadowColor: 'rgba(239,68,68,0.4)', shadowBlur: 8 },
-          itemStyle: { color: '#fff', borderColor: CHART_THEME.danger, borderWidth: 2.5 },
-          emphasis: { scale: 1.4 },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(239, 68, 68, 0.22)' },
-              { offset: 1, color: 'rgba(239, 68, 68, 0)' },
-            ]),
+          label: {
+            ...lineTopLabel(ratioColor, '%'),
+            position: 'bottom' as const,
+            distance: 8,
+            backgroundColor: '#ffffff',
+            borderColor: ratioColor,
+            borderWidth: 1,
+            borderRadius: 4,
+            padding: [2, 5],
           },
-          data: trend.map((t) => Number((t.prodDataMgmtCountRatio * 100).toFixed(2))),
+          lineStyle: { width: 2.5, color: ratioColor },
+          itemStyle: { color: '#ffffff', borderColor: ratioColor, borderWidth: 2 },
+          emphasis: { scale: 1.3 },
+          data: ratioData,
         },
       ],
     })
@@ -1683,44 +1723,6 @@ function selectedProcessLabel(): string {
   if (!filters.value.processCd) return '全工程'
   const found = processOptions.value.find((p) => p.cd === filters.value.processCd)
   return found?.name || filters.value.processCd
-}
-
-async function exportRatioTrendExcel() {
-  const trend = stats.value?.byMonthTrend ?? []
-  if (!trend.length) {
-    ElMessage.warning('出力するデータがありません。先に検索を実行してください。')
-    return
-  }
-
-  const months = filters.value.trendMonths || stats.value?.trendMonths || trend.length
-  const pct = (v?: number | null) =>
-    v == null ? 0 : Number((Number(v) * 100).toFixed(2))
-
-  exportingRatioTrend.value = true
-  try {
-    const exportRows = trend.map((row) => ({
-      月: row.month,
-      稼働日: row.workingDays ?? '',
-      修正件数: row.prodDataMgmtCount,
-      '修正件数(22日換算)': trendCountAdj(row),
-      実績集計件数: row.autoCount,
-      '実績集計件数(22日換算)': row.autoCountAdj ?? row.autoCount,
-      総件数: row.totalCount,
-      '修正比率(%)': pct(row.prodDataMgmtCountRatio),
-    }))
-
-    await downloadExcelFromJson(
-      exportRows,
-      '修正比率推移',
-      `修正比率推移_${months}ヶ月.xlsx`,
-    )
-    ElMessage.success('Excelを出力しました')
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('Excel出力に失敗しました')
-  } finally {
-    exportingRatioTrend.value = false
-  }
 }
 
 async function exportProcessCompareExcel() {
@@ -2987,6 +2989,22 @@ onBeforeUnmount(() => {
   grid-column: 1 / -1;
 }
 
+.panel--crisp,
+.panel--crisp:hover {
+  transform: none;
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.panel--crisp .chart-canvas-wrap {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.panel--crisp .chart-canvas-wrap::after {
+  display: none;
+}
+
 .panel-head {
   display: flex;
   align-items: center;
@@ -3000,14 +3018,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-bottom: 8px;
   gap: 10px;
-}
-
-.panel-head--chart-export {
-  width: 100%;
-}
-
-.panel-head--chart-export .panel-export-btn {
-  margin-left: auto;
 }
 
 .panel-head-left {
@@ -3059,6 +3069,12 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.045);
   border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.panel-meta--process {
+  color: #c2410c;
+  background: #fff7ed;
+  border-color: #fed7aa;
 }
 
 .chart-canvas-wrap {
