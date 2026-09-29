@@ -296,6 +296,10 @@
                 <el-icon><Printer /></el-icon>
                 <span>メッキ推奨生産日（印刷）</span>
               </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-outsourced-plating')">
+                <el-icon><Printer /></el-icon>
+                <span>外注メッキ推奨生産日（印刷）</span>
+              </div>
               <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-welding')">
                 <el-icon><Printer /></el-icon>
                 <span>溶接推奨生産日（印刷）</span>
@@ -354,6 +358,7 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="print-rec-plating">メッキ推奨生産日</el-dropdown-item>
+              <el-dropdown-item command="print-rec-outsourced-plating">外注メッキ推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-welding">溶接推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-welding-plan">溶接計画推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-molding">成型推奨生産日</el-dropdown-item>
@@ -738,7 +743,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初（JST）～+5ヶ月の plan / actual_plan 列を先に 0 クリアしてから再集計します。それより前の月の計画データは変更しません。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan。外注メッキ(KT06)は APS 外注メッキ計画作成の schedule_details を集計します。検査(KT09)・外注溶接(KT08)・外注倉庫(KT15/KT10)は成型計画ではなく、当該工程を持つルート行の内示数（forecast_quantity）を各 plan 列に反映します。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初（JST）～+5ヶ月の plan / actual_plan 列を先に 0 クリアしてから再集計します。それより前の月の計画データは変更しません。schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、成型実計計画（molding_actual_plan）をルート工程に応じて所属工程へ反映します：切断(KT01)→cutting_plan、面取(KT02)→chamfering_plan、社内メッキ(KT05)→plating_plan、外注メッキ(KT06)→outsourced_plating_plan。検査(KT09)・外注溶接(KT08)・外注倉庫(KT15/KT10)は成型計画ではなく、当該工程を持つルート行の内示数（forecast_quantity）を各 plan 列に反映します。product_machine_config に sw_machine が設定されている製品のみ sw_plan も molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>
@@ -2448,6 +2453,7 @@ import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
 import { fetchScheduledWorkdaysForMonth, calcWeekdayFallbackForMonth } from '@/api/master/companyWorkCalendar'
 import { getProductsByCdPrefix } from '@/api/master/productMaster'
+import { getProcessProducts, type OutsourcingProcessProduct } from '@/api/outsourcing'
 import {
   getStockActualLogs,
   updateStockTransactionLog,
@@ -3963,6 +3969,9 @@ const handleDropdownCommand = (command: string) => {
     case 'print-rec-plating':
       handleRecommendedProductionPrint('plating')
       break
+    case 'print-rec-outsourced-plating':
+      handleRecommendedProductionPrint('outsourced_plating')
+      break
     case 'print-rec-welding':
       handleRecommendedProductionPrint('welding')
       break
@@ -3992,6 +4001,7 @@ const handleDropdownCommand = (command: string) => {
 
 const handleRecommendedPrintCommand = (command: string) => {
   if (command === 'print-rec-plating') handleRecommendedProductionPrint('plating')
+  else if (command === 'print-rec-outsourced-plating') handleRecommendedProductionPrint('outsourced_plating')
   else if (command === 'print-rec-welding') handleRecommendedProductionPrint('welding')
   else if (command === 'print-rec-molding') handleRecommendedProductionPrint('molding')
   else if (command === 'print-rec-molding-plan') {
@@ -5607,6 +5617,77 @@ function pickBetterRecommendedRow(
   return ta <= tb ? prev : row
 }
 
+type RecommendedPrintKind = 'plating' | 'outsourced_plating' | 'molding' | 'welding'
+
+const RECOMMENDED_PRINT_COLUMNS: Record<
+  RecommendedPrintKind,
+  { machineKey: string; dateKey: string; trendKey: string }
+> = {
+  plating: { machineKey: 'plating_machine', dateKey: 'plating_production_date', trendKey: 'plating_trend' },
+  outsourced_plating: {
+    machineKey: 'outsourced_plating_supplier_name',
+    dateKey: 'outsourced_plating_production_date',
+    trendKey: 'outsourced_plating_trend',
+  },
+  molding: { machineKey: 'molding_machine', dateKey: 'molding_production_date', trendKey: 'molding_trend' },
+  welding: { machineKey: 'welding_machine', dateKey: 'welding_production_date', trendKey: 'welding_trend' },
+}
+
+function normalizeProductNameForLookup(v: unknown): string {
+  return String(v ?? '').replace(/[\s\u3000]+/g, '')
+}
+
+function normalizeSupplierNameForMatch(v: unknown): string {
+  return String(v ?? '').normalize('NFKC').replace(/\s+/g, '')
+}
+
+/** 外注メッキ推奨生産日：これらの外注先の製品は外注検査前推移で判定する */
+const PRE_OUTSOURCING_TREND_SUPPLIERS = new Set(
+  ['(有)三和電工', '八洲金属(株)', '矢田川電鍍工業(株)'].map(normalizeSupplierNameForMatch),
+)
+
+function outsourcedPlatingTrendKeyForSuppliers(suppliers: string[]): string {
+  return suppliers.some((s) => PRE_OUTSOURCING_TREND_SUPPLIERS.has(normalizeSupplierNameForMatch(s)))
+    ? 'pre_outsourcing_trend'
+    : 'outsourced_plating_trend'
+}
+
+/**
+ * 外注工程製品管理（外注メッキ・有効）を読み込み、行 → 外注先名一覧 の解決関数を返す。
+ * 製品名で照合し、見つからなければ品番で照合。
+ */
+async function loadOutsourcedPlatingSupplierResolver(): Promise<(row: any) => string[]> {
+  const byName = new Map<string, Set<string>>()
+  const byCd = new Map<string, Set<string>>()
+  const add = (map: Map<string, Set<string>>, key: string, supplier: string) => {
+    if (!key) return
+    const set = map.get(key) ?? new Set<string>()
+    set.add(supplier)
+    map.set(key, set)
+  }
+  const pageSize = 500
+  for (let page = 1; ; page++) {
+    const raw = (await getProcessProducts({ processType: 'plating', isActive: 'true', page, pageSize })) as unknown as {
+      data?: OutsourcingProcessProduct[]
+      pagination?: { total: number }
+    }
+    const list = Array.isArray(raw?.data) ? raw.data : []
+    for (const p of list) {
+      const supplier = String(p.supplier_name || p.supplier_cd || '').trim()
+      if (!supplier) continue
+      add(byName, normalizeProductNameForLookup(p.product_name), supplier)
+      add(byCd, String(p.product_cd ?? '').trim(), supplier)
+    }
+    const total = raw?.pagination?.total ?? list.length
+    if (list.length < pageSize || page * pageSize >= total) break
+  }
+  return (row: any) => {
+    const suppliers =
+      byName.get(normalizeProductNameForLookup(row.product_name)) ?? byCd.get(String(row.product_cd ?? '').trim())
+    return suppliers ? Array.from(suppliers) : []
+  }
+}
+
 /**
  * 当月月初（JST）～取得終了日までの日別行から、製品ごとに trend&lt;0 の行から1行を選ぶ。
  * メッキ・成型とも **日付列 date が最も早い**行（同日内なら当工程 production_date 昇順、同順なら推移がより小さい方＝先勝ち）。
@@ -5614,12 +5695,11 @@ function pickBetterRecommendedRow(
 function collectRecommendedProductionRows(
   allData: any[],
   monthStart: string,
-  trendKey: string,
-  kind: 'plating' | 'molding' | 'welding',
+  trendKeyOrResolver: string | ((row: any) => string),
+  kind: RecommendedPrintKind,
   options?: { primaryDateKeyForPick?: string },
 ): any[] {
-  const productionDateKey =
-    kind === 'plating' ? 'plating_production_date' : kind === 'molding' ? 'molding_production_date' : 'welding_production_date'
+  const productionDateKey = RECOMMENDED_PRINT_COLUMNS[kind].dateKey
   const primaryDateKeyForPick = options?.primaryDateKeyForPick ?? 'date'
   const secondaryDateKeyForPick = primaryDateKeyForPick === 'date' ? productionDateKey : 'date'
   const bestByProduct = new Map<string, any>()
@@ -5627,6 +5707,7 @@ function collectRecommendedProductionRows(
     if (!row.product_cd) continue
     const d = rowCalendarDateStr(row)
     if (!d || d < monthStart) continue
+    const trendKey = typeof trendKeyOrResolver === 'function' ? trendKeyOrResolver(row) : trendKeyOrResolver
     const trendVal = numForRecommendedPrint(row[trendKey])
     if (trendVal == null || trendVal >= 0) continue
     const pid = row.product_cd
@@ -5644,10 +5725,8 @@ function collectRecommendedProductionRows(
 }
 
 /** 治具／成型機名 → 推奨生産日 の順（メッキ・成型で同一ルール） */
-function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding' | 'welding'): any[] {
-  const machineKey = kind === 'plating' ? 'plating_machine' : kind === 'molding' ? 'molding_machine' : 'welding_machine'
-  const dateKey =
-    kind === 'plating' ? 'plating_production_date' : kind === 'molding' ? 'molding_production_date' : 'welding_production_date'
+function sortRecommendedPrintRows(rows: any[], kind: RecommendedPrintKind): any[] {
+  const { machineKey, dateKey } = RECOMMENDED_PRINT_COLUMNS[kind]
   const dateKeyForSort = (row: any, key: string) => {
     const v = row[key]
     if (v == null || v === '') return '\uffff'
@@ -5670,7 +5749,7 @@ function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding' | 'we
 
 function buildRecommendedProductionPrintHtml(
   rows: any[],
-  kind: 'plating' | 'molding' | 'welding',
+  kind: RecommendedPrintKind,
   monthStart: string,
   rangeEnd: string,
   options?: { titleOverride?: string; hidePreInventoryColumns?: boolean },
@@ -5690,6 +5769,24 @@ function buildRecommendedProductionPrintHtml(
           sumLabel: 'メッキ前在庫合計',
           footNote:
             'メッキ前在庫・直前工程は、工程ルート上でメッキ（または外注メッキ）の直前工程の前日15時の集計在庫です（一覧と同じ計算）。',
+        }
+      : kind === 'outsourced_plating'
+        ? {
+          title: '外注メッキ推奨生産日リスト',
+          machineHeading: '外注先',
+          machineKey: 'outsourced_plating_supplier_name' as const,
+          dateKey: 'outsourced_plating_production_date' as const,
+          dateLabel: '推奨生産日',
+          preInvField: 'pre_outsourced_plating_inventory' as const,
+          prePrevField: 'pre_outsourced_plating_prev_process' as const,
+          invColHeader: '前工程在庫',
+          sumLabel: '前工程在庫合計',
+          footNote: [
+            '<b>外注先</b>：外注工程製品管理（外注メッキ・有効）に登録された外注先（製品名で照合、未登録は「（未設定）」）',
+            '<b>推奨生産日</b>：外注メッキ推移がマイナスとなる最初の日の外注メッキ生産日（(有)三和電工・八洲金属(株)・矢田川電鍍工業(株)は外注検査前推移で判定）。本日以前は赤字',
+            '<b>外注メッキ在庫</b>：推奨生産日の判定日における外注メッキの在庫',
+            '<b>前工程在庫</b>：推奨生産日の判定日における、工程ルート上で外注メッキの直前工程の在庫',
+          ].join('<br/>'),
         }
         : kind === 'molding'
         ? {
@@ -5769,49 +5866,115 @@ p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
   const prePrevPlain = (row: any) =>
     escapeHtmlRecommended(formatPrePlatingPrevKey(row[pc.prePrevField]))
 
-  let blocks = ''
+  // 外注メッキは外注先ごとに改ページ（各ページを外注先へそのまま渡せるよう見出しも毎ページ出す）
+  const pagePerGroup = kind === 'outsourced_plating'
+
+  const groups: { heading: string; rows: any[] }[] = []
   let prevGroupKey: string | null = null
   for (const row of rows) {
     const mRaw = String(row[pc.machineKey] ?? '').trim()
     const groupKey = mRaw || '__empty__'
     if (groupKey !== prevGroupKey) {
-      if (prevGroupKey !== null) {
-        blocks += '</div></section>'
-      }
       prevGroupKey = groupKey
-      const mHeading = mRaw || '（未設定）'
-      blocks += `<section class="machine-group"><header class="machine-title">${pc.machineHeading}: ${escapeHtmlRecommended(mHeading)}</header>`
-      blocks += `<div class="machine-body">`
-      blocks += `<div class="col-head"><span class="ch-pname">製品名</span><span class="ch-date">${pc.dateLabel}</span>`
-      if (!hidePreInvCols) {
-        blocks += `<span class="ch-inv">${pc.invColHeader}</span><span class="ch-prev">直前工程</span>`
-      }
-      blocks += `</div>`
+      groups.push({ heading: mRaw || '（未設定）', rows: [] })
     }
-    const pname = row.product_name || row.product_cd || ''
-    const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
-    blocks += `<div class="item-row"><span class="cell-pname">${escapeHtmlRecommended(String(pname))}</span>`
-    blocks += `<span class="cell-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</span>`
+    groups[groups.length - 1].rows.push(row)
+  }
+
+  const sumPreInv = (list: any[]) =>
+    list.reduce((sum, row) => {
+      const v = row[pc.preInvField]
+      if (v == null || v === '') return sum
+      const n = Number(v)
+      return Number.isNaN(n) ? sum : sum + n
+    }, 0)
+
+  const renderGroup = (g: { heading: string; rows: any[] }) => {
+    let html = `<section class="machine-group"><header class="machine-title">${pc.machineHeading}: ${escapeHtmlRecommended(g.heading)}</header>`
+    html += `<div class="machine-body">`
+    html += `<div class="col-head"><span class="ch-pname">製品名</span><span class="ch-date">${pc.dateLabel}</span>`
     if (!hidePreInvCols) {
-      blocks += `<span class="cell-inv">${preInvPlain(row)}</span><span class="cell-prev">${prePrevPlain(row)}</span>`
+      html += `<span class="ch-inv">${pc.invColHeader}</span><span class="ch-prev">直前工程</span>`
     }
-    blocks += `</div>`
-  }
-  if (prevGroupKey !== null) {
-    blocks += '</div></section>'
+    html += `</div>`
+    for (const row of g.rows) {
+      const pname = row.product_name || row.product_cd || ''
+      const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
+      html += `<div class="item-row"><span class="cell-pname">${escapeHtmlRecommended(String(pname))}</span>`
+      html += `<span class="cell-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</span>`
+      if (!hidePreInvCols) {
+        html += `<span class="cell-inv">${preInvPlain(row)}</span><span class="cell-prev">${prePrevPlain(row)}</span>`
+      }
+      html += `</div>`
+    }
+    html += '</div></section>'
+    return html
   }
 
-  if (!rows.length) {
-    blocks = '<p class="empty-msg">該当データがありません</p>'
-  }
-
-  const preInvSum = rows.reduce((sum, row) => {
-    const v = row[pc.preInvField]
-    if (v == null || v === '') return sum
+  const numCell = (v: any) => {
+    if (v == null || v === '') return '—'
     const n = Number(v)
-    return Number.isNaN(n) ? sum : sum + n
-  }, 0)
-  const preInvSumStr = preInvSum.toLocaleString('ja-JP')
+    return Number.isNaN(n) ? '—' : escapeHtmlRecommended(n.toLocaleString('ja-JP'))
+  }
+  const sumField = (list: any[], field: string) =>
+    list.reduce((sum, row) => {
+      const n = Number(row[field])
+      return row[field] == null || row[field] === '' || Number.isNaN(n) ? sum : sum + n
+    }, 0)
+
+  /** 外注先ページ用の表（製品名／推奨生産日／外注メッキ在庫／前工程在庫） */
+  const renderSupplierTable = (g: { heading: string; rows: any[] }) => {
+    let html = `<table class="sup-table"><colgroup><col class="c-pname"/><col class="c-date"/><col class="c-inv"/><col class="c-inv"/></colgroup>`
+    html += `<thead><tr><th colspan="4" class="sup-title">${pc.machineHeading}: ${escapeHtmlRecommended(g.heading)}（${g.rows.length} 件）</th></tr>`
+    html += `<tr><th class="th-pname">製品名</th><th>${pc.dateLabel}</th><th>外注メッキ在庫</th><th>${pc.invColHeader}</th></tr></thead><tbody>`
+    for (const row of g.rows) {
+      const pname = row.product_name || row.product_cd || ''
+      const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
+      html += `<tr><td class="td-pname">${escapeHtmlRecommended(String(pname))}</td>`
+      html += `<td class="td-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</td>`
+      html += `<td class="td-num">${numCell(row.outsourced_plating_inventory)}</td>`
+      html += `<td class="td-num">${numCell(row[pc.preInvField])}</td></tr>`
+    }
+    html += `</tbody><tfoot><tr><td colspan="2" class="td-sum-label">合計</td>`
+    html += `<td class="td-num">${sumField(g.rows, 'outsourced_plating_inventory').toLocaleString('ja-JP')}</td>`
+    html += `<td class="td-num">${sumField(g.rows, pc.preInvField).toLocaleString('ja-JP')}</td></tr></tfoot></table>`
+    return html
+  }
+
+  const renderSheetHeader = (sumValue: number | null) => `<h1 class="sheet-title">${sheetTitle}</h1>
+<div class="print-meta-row">
+<p class="subtitle">対象期間: ${monthStart} ～ ${rangeEnd} / 出力: ${now}</p>
+${hidePreInvCols || sumValue == null ? '' : `<p class="subtitle-total">${pc.sumLabel}: <strong>${sumValue.toLocaleString('ja-JP')}</strong></p>`}
+</div>
+${hidePreInvCols ? '' : `<p class="print-note">${pc.footNote}</p>`}`
+
+  let bodyHtml: string
+  if (!rows.length) {
+    bodyHtml = `${renderSheetHeader(pagePerGroup ? null : 0)}<p class="empty-msg">該当データがありません</p>`
+  } else if (pagePerGroup) {
+    // 外注検査前推移で判定する外注先（三和電工・八洲金属・矢田川電鍍）は 1 ページにまとめる
+    const pages: { heading: string; rows: any[] }[][] = []
+    let preOutsourcingPage: { heading: string; rows: any[] }[] | null = null
+    for (const g of groups) {
+      const isPreOutsourcing =
+        g.heading !== '（未設定）' &&
+        outsourcedPlatingTrendKeyForSuppliers(g.heading.split('・')) === 'pre_outsourcing_trend'
+      if (!isPreOutsourcing) {
+        pages.push([g])
+        continue
+      }
+      if (!preOutsourcingPage) {
+        preOutsourcingPage = []
+        pages.push(preOutsourcingPage)
+      }
+      preOutsourcingPage.push(g)
+    }
+    bodyHtml = pages
+      .map((p) => `<section class="group-page">${renderSheetHeader(null)}${p.map(renderSupplierTable).join('')}</section>`)
+      .join('')
+  } else {
+    bodyHtml = `${renderSheetHeader(sumPreInv(rows))}<div class="columns-wrap">${groups.map(renderGroup).join('')}</div>`
+  }
 
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>${sheetTitle}</title>
 <style>${sharedPageCss}
@@ -5834,19 +5997,31 @@ p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
 .cell-date.cell-date--due{color:#dc2626;font-weight:700;}
 .empty-msg{color:#64748b;font-size:10pt;}
 .print-note{font-size:8pt;color:#64748b;margin:4px 0 0 0;line-height:1.35;}
+.group-page + .group-page{break-before:page;page-break-before:always;}
+.group-page .print-note{margin-bottom:10px;}
+.sup-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:10pt;}
+.sup-table + .sup-table{margin-top:14px;}
+.sup-table col.c-date{width:30mm;}
+.sup-table col.c-inv{width:32mm;}
+.sup-table th,.sup-table td{border:1px solid #94a3b8;padding:5px 8px;vertical-align:middle;}
+.sup-table thead th{background:#f1f5f9;color:#334155;font-size:9pt;font-weight:600;text-align:center;white-space:nowrap;}
+.sup-table thead th.sup-title{background:#e2e8f0;color:#0f172a;font-size:10.5pt;font-weight:700;text-align:left;}
+.sup-table thead th.th-pname{text-align:left;}
+.sup-table tbody tr:nth-child(even) td{background:#f8fafc;}
+.sup-table tr{break-inside:avoid;page-break-inside:avoid;}
+.sup-table .td-pname{word-break:break-word;overflow-wrap:anywhere;}
+.sup-table .td-date{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.sup-table .td-date.cell-date--due{color:#dc2626;font-weight:700;}
+.sup-table .td-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.sup-table tfoot td{background:#e2e8f0;font-weight:700;}
+.sup-table .td-sum-label{text-align:right;}
 </style></head><body>
-<h1 class="sheet-title">${sheetTitle}</h1>
-<div class="print-meta-row">
-<p class="subtitle">対象期間: ${monthStart} ～ ${rangeEnd} / 出力: ${now}</p>
-${hidePreInvCols ? '' : `<p class="subtitle-total">${pc.sumLabel}: <strong>${preInvSumStr}</strong></p>`}
-</div>
-${hidePreInvCols ? '' : `<p class="print-note">${pc.footNote}</p>`}
-<div class="columns-wrap">${blocks}</div>
+${bodyHtml}
 </body></html>`
 }
 
 async function handleRecommendedProductionPrint(
-  kind: 'plating' | 'molding' | 'welding',
+  kind: RecommendedPrintKind,
   options?: {
     trendKeyOverride?: string
     titleOverride?: string
@@ -5872,11 +6047,24 @@ async function handleRecommendedProductionPrint(
     })
     const data = (res as any)?.data ?? res
     const list = data?.list ?? []
-    const trendKey =
-      options?.trendKeyOverride ?? (kind === 'plating' ? 'plating_trend' : kind === 'molding' ? 'molding_trend' : 'welding_trend')
-    const rawRows = collectRecommendedProductionRows(list, monthStart, trendKey, kind, {
+    let trendKey: string | ((row: any) => string) =
+      options?.trendKeyOverride ?? RECOMMENDED_PRINT_COLUMNS[kind].trendKey
+    let resolveSuppliers: ((row: any) => string[]) | null = null
+    if (kind === 'outsourced_plating') {
+      progressText.value = '外注工程製品管理から外注先を取得しています...'
+      const resolver = await loadOutsourcedPlatingSupplierResolver()
+      resolveSuppliers = resolver
+      if (!options?.trendKeyOverride) {
+        trendKey = (row: any) => outsourcedPlatingTrendKeyForSuppliers(resolver(row))
+      }
+    }
+    let rawRows = collectRecommendedProductionRows(list, monthStart, trendKey, kind, {
       primaryDateKeyForPick: options?.pickDateKeyOverride,
     })
+    if (resolveSuppliers) {
+      const resolver = resolveSuppliers
+      rawRows = rawRows.map((row) => ({ ...row, outsourced_plating_supplier_name: resolver(row).join('・') }))
+    }
     const rows = sortRecommendedPrintRows(rawRows, kind)
     const html = buildRecommendedProductionPrintHtml(rows, kind, monthStart, rangeEnd, {
       titleOverride: options?.titleOverride,

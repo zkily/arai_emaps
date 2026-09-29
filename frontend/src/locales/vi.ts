@@ -1485,6 +1485,7 @@ export default {
     weldingPeriod: 'Kỳ',
     weldingProduct: 'Sản phẩm đích',
     selectWeldingProduct: 'Chọn sản phẩm đích',
+    selectProductInDestination: 'Để trống = tất cả sản phẩm của đích đến',
     searchExecute: 'Tìm',
     weldingSchedule: 'Kế hoạch xuất',
     printExport: 'Xuất để in',

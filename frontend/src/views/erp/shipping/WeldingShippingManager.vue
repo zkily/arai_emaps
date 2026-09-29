@@ -42,8 +42,8 @@
 
           <el-form-item :label="t('shipping.weldingProduct')" class="form-item-compact">
             <el-select v-model="searchForm.selectedProducts" multiple collapse-tags collapse-tags-tooltip
-              :placeholder="t('shipping.selectWeldingProduct')" class="product-select" :loading="productLoading"
-              :disabled="isProductFilterDisabled" @change="onProductsChange">
+              filterable clearable :placeholder="productPlaceholder" class="product-select"
+              :loading="productLoading">
               <el-option v-for="product in weldingProducts" :key="product.value" :label="product.label"
                 :value="product.value" />
             </el-select>
@@ -52,8 +52,7 @@
           <el-form-item :label="t('shipping.destination')" class="form-item-compact">
             <el-select v-model="searchForm.selectedDestinations" multiple collapse-tags collapse-tags-tooltip
               filterable :placeholder="t('shipping.selectDestination')" class="destination-select"
-              :loading="destinationLoading" clearable :disabled="isDestinationFilterDisabled"
-              @change="onDestinationsChange">
+              :loading="destinationLoading" clearable @change="onDestinationsChange">
               <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label"
                 :value="dest.value" />
             </el-select>
@@ -373,8 +372,11 @@ const displayedProductCount = computed(() => {
   return tableData.value.products.length
 })
 
-const isProductFilterDisabled = computed(() => searchForm.selectedDestinations.length > 0)
-const isDestinationFilterDisabled = computed(() => searchForm.selectedProducts.length > 0)
+const productPlaceholder = computed(() =>
+  searchForm.selectedDestinations.length > 0
+    ? t('shipping.selectProductInDestination')
+    : t('shipping.selectWeldingProduct'),
+)
 
 interface PivotRow {
   destination: string
@@ -479,39 +481,51 @@ const loadDestinationOptions = async () => {
   }
 }
 
+// 対象製品の選択肢を取得（destinationCds 指定時は該当納入先の製品）。古いリクエストの結果は破棄し null を返す
+let productRequestSeq = 0
+const fetchProductOptions = async (destinationCds: string[]): Promise<WeldingProduct[] | null> => {
+  const seq = ++productRequestSeq
+  productLoading.value = true
+  try {
+    const list = (await getWeldingProducts(destinationCds)) || []
+    if (seq !== productRequestSeq) return null
+    weldingProducts.value = list
+    return list
+  } catch (error) {
+    if (seq === productRequestSeq) {
+      console.error('対象製品取得エラー:', error)
+      ElMessage.error('対象製品の取得に失敗しました')
+    }
+    return null
+  } finally {
+    if (seq === productRequestSeq) productLoading.value = false
+  }
+}
+
 // 加载溶接产品列表（加载完成后默认全选対象製品，并用默认条件自动检索）
 const loadWeldingProducts = async () => {
-  try {
-    productLoading.value = true
-    const response = await getWeldingProducts()
-    // request工具已经自动提取了data字段，所以直接使用response
-    const list = (response as WeldingProduct[]) || []
-    weldingProducts.value = list
-    // 対象製品默认全选
-    searchForm.selectedProducts = list.map((p) => p.value)
-    // 用默认筛选条件（当月・全选）自动加载数据
-    if (searchForm.startDate && searchForm.endDate && searchForm.selectedProducts.length > 0) {
-      await handleSearch()
-    }
-  } catch (error) {
-    console.error('対象製品取得エラー:', error)
-    ElMessage.error('対象製品の取得に失敗しました')
-  } finally {
-    productLoading.value = false
+  const list = await fetchProductOptions([])
+  if (!list) return
+  // 対象製品默认全选
+  searchForm.selectedProducts = list.map((p) => p.value)
+  // 用默认筛选条件（当月・全选）自动加载数据
+  if (searchForm.startDate && searchForm.endDate && searchForm.selectedProducts.length > 0) {
+    await handleSearch()
   }
 }
 
-// 対象製品・納入先は排他選択
-const onProductsChange = (values: string[]) => {
-  if (values.length > 0) {
-    searchForm.selectedDestinations = []
-  }
-}
-
-const onDestinationsChange = (values: string[]) => {
-  if (values.length > 0) {
+// 納入先選択時は対象製品の選択肢を該当納入先の製品に切り替える（製品未選択＝納入先の全製品）
+let prevDestinationCount = 0
+const onDestinationsChange = async (values: string[]) => {
+  const wasDestinationMode = prevDestinationCount > 0
+  prevDestinationCount = values.length
+  if (values.length === 0 || !wasDestinationMode) {
     searchForm.selectedProducts = []
   }
+  const list = await fetchProductOptions(values)
+  if (!list) return
+  const available = new Set(list.map((p) => p.value))
+  searchForm.selectedProducts = searchForm.selectedProducts.filter((cd) => available.has(cd))
 }
 
 // 日期范围变化处理
@@ -555,7 +569,8 @@ const handleSearch = async () => {
     }
     if (searchForm.selectedProducts.length > 0) {
       params.products = searchForm.selectedProducts
-    } else {
+    }
+    if (searchForm.selectedDestinations.length > 0) {
       params.destination_cds = searchForm.selectedDestinations
     }
     const response = await getWeldingShippingData(params)
@@ -576,12 +591,17 @@ const handleSearch = async () => {
 
 // 重置处理
 const handleReset = () => {
+  const hadDestinations = searchForm.selectedDestinations.length > 0
   dateRange.value = undefined
   searchForm.startDate = ''
   searchForm.endDate = ''
   searchForm.selectedProducts = []
   searchForm.selectedDestinations = []
+  prevDestinationCount = 0
   tableData.value = null
+  if (hadDestinations) {
+    fetchProductOptions([])
+  }
 }
 
 // 导出处理

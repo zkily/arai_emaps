@@ -1612,6 +1612,7 @@ export default {
     weldingPeriod: 'Period',
     weldingProduct: 'Target Products',
     selectWeldingProduct: 'Select target products',
+    selectProductInDestination: 'All destination products if none selected',
     searchExecute: 'Search',
     weldingSchedule: 'Shipping Schedule',
     printExport: 'Print Export',

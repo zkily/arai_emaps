@@ -1610,6 +1610,7 @@ export default {
     weldingPeriod: '期间',
     weldingProduct: '对象产品',
     selectWeldingProduct: '选择对象产品',
+    selectProductInDestination: '未选择时为交货地全部产品',
     searchExecute: '检索',
     weldingSchedule: '出荷预定表',
     printExport: '打印导出',

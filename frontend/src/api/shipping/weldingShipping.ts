@@ -33,9 +33,12 @@ export interface WeldingExportParams {
   table_data: WeldingShippingData
 }
 
-/** 対象製品一覧を取得 */
-export function getWeldingProducts(): Promise<WeldingProduct[]> {
-  return request.get('/api/shipping/welding/products').then((r: unknown) => {
+/** 対象製品一覧を取得（destinationCds 指定時は該当納入先の製品） */
+export function getWeldingProducts(destinationCds?: string[]): Promise<WeldingProduct[]> {
+  const params = destinationCds && destinationCds.length > 0
+    ? { destination_cds: destinationCds.join(',') }
+    : undefined
+  return request.get('/api/shipping/welding/products', { params }).then((r: unknown) => {
     if (Array.isArray(r)) return r as WeldingProduct[]
     const o = r as { data?: unknown }
     return (Array.isArray(o?.data) ? o.data : []) as WeldingProduct[]

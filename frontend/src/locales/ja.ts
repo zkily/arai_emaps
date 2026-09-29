@@ -1611,6 +1611,7 @@ export default {
     weldingPeriod: '期間',
     weldingProduct: '対象製品',
     selectWeldingProduct: '対象製品を選択',
+    selectProductInDestination: '未選択時は納入先の全製品',
     searchExecute: '検索実行',
     weldingSchedule: '出荷予定表',
     printExport: '印刷用出力',

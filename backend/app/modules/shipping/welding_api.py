@@ -1,13 +1,13 @@
 """
 出荷管理表 API
-- GET /welding/products: 対象製品一覧（product_name に 'SD' を含み、status=active、product_type=量産品）
+- GET /welding/products: 対象製品一覧（product_name に 'SD' を含み、status=active、product_type=量産品。destination_cds 指定時は該当納入先の製品）
 - POST /welding/data: 出荷データ（shipping_items から取得、日付・納入先・製品別に明細保持）
 - POST /welding/export: 印刷用レポート HTML（出荷管理表）
 """
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -45,15 +45,27 @@ class WeldingDataRequest(BaseModel):
 
 @router.get("/products")
 async def get_welding_products(
+    destination_cds: Optional[str] = Query(None, description="納入先CD（カンマ区切り）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> List[dict]:
-    """対象製品一覧。products テーブルから product_name に 'SD' を含む、status=active、product_type=量産品 を取得。"""
-    q = select(Product).where(
-        Product.product_name.like("%SD%"),
-        Product.status == "active",
-        Product.product_type == "量産品",
-    ).order_by(Product.product_cd)
+    """
+    対象製品一覧。
+    - destination_cds 指定時: 指定納入先に属する製品（products.destination_cd、status=active）
+    - 未指定時: product_name に 'SD' を含む、status=active、product_type=量産品
+    """
+    dest_list = [d.strip() for d in (destination_cds or "").split(",") if d.strip()]
+    if dest_list:
+        q = select(Product).where(
+            Product.destination_cd.in_(dest_list),
+            Product.status == "active",
+        ).order_by(Product.product_cd)
+    else:
+        q = select(Product).where(
+            Product.product_name.like("%SD%"),
+            Product.status == "active",
+            Product.product_type == "量産品",
+        ).order_by(Product.product_cd)
     result = await db.execute(q)
     rows = result.scalars().all()
     return [
@@ -70,7 +82,7 @@ async def get_welding_shipping_data(
 ) -> dict:
     """
     出荷データ。
-    - 検証: start_date, end_date（YYYY-MM-DD）, products または destination_cds のいずれか一方（同時指定不可）
+    - 検証: start_date, end_date（YYYY-MM-DD）, products または destination_cds の少なくとも一方（同時指定時は両方で絞り込み）
     - shipping_items から shipping_date BETWEEN start_date AND end_date, status != 'キャンセル'
     - products で product_name を取得して表示用マッピング
     - メモリ上で data[date][destination][productCd] = その組み合わせの複数件 { boxes }（集計せず明細のまま）
@@ -92,11 +104,6 @@ async def get_welding_shipping_data(
     dest_cds = [
         str(d).strip() for d in (body.destination_cds or []) if d is not None and str(d).strip()
     ]
-    if product_cds and dest_cds:
-        raise HTTPException(
-            status_code=400,
-            detail="products と destination_cds は同時に指定できません",
-        )
     if not product_cds and not dest_cds:
         raise HTTPException(
             status_code=400,
