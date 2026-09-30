@@ -1,6 +1,12 @@
 <template>
-  <div class="forming-plan-list-page">
+  <div class="forming-plan-list-page flp-modern">
     <div class="plan-hd">
+      <div class="plan-hd-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="plan-hd-row">
         <h2 class="plan-hd-title">
           <span class="plan-hd-icon" aria-hidden="true">
@@ -12,6 +18,26 @@
           </span>
           成型計画一覧
         </h2>
+        <div class="plan-hd-meta">
+          <span v-if="(selectedProcessCd || '').trim()" class="plan-hd-chip">
+            <el-icon><Operation /></el-icon>
+            {{ selectedProcessLabel() }}
+          </span>
+          <span class="plan-hd-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ displayRangeText }}
+          </span>
+          <template v-if="searched">
+            <span class="plan-hd-chip">
+              <el-icon><OfficeBuilding /></el-icon>
+              設備 {{ ganttGroups.length }}
+            </span>
+            <span class="plan-hd-chip">
+              <el-icon><Tickets /></el-icon>
+              指示 {{ ganttRows.length }}件
+            </span>
+          </template>
+        </div>
         <el-button
           v-if="canSearch"
           type="warning"
@@ -141,7 +167,11 @@
                   </th>
                 </tr>
               </thead>
-              <tbody v-for="group in ganttGroups" :key="group.lineLabel">
+              <tbody
+                v-for="(group, gi) in ganttGroups"
+                :key="group.lineLabel"
+                :class="`flp-grp-tone-${gi % 6}`"
+              >
                 <tr class="gantt-group-row">
                   <td
                     class="gantt-sticky gantt-sticky-line gantt-group-cell gantt-group-line"
@@ -321,9 +351,10 @@
 
           <div v-else-if="!loading" class="schedule-table-group-list">
             <section
-              v-for="group in tableGroups"
+              v-for="(group, gi) in tableGroups"
               :key="group.lineLabel"
               class="schedule-table-wrap schedule-table-group"
+              :class="`flp-grp-tone-${gi % 6}`"
             >
               <div class="schedule-group-title">{{ group.lineLabel }}</div>
               <el-table
@@ -771,7 +802,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Goods, OfficeBuilding, Printer, Switch } from '@element-plus/icons-vue'
+import {
+  Calendar,
+  Goods,
+  OfficeBuilding,
+  Operation,
+  Printer,
+  Switch,
+  Tickets,
+} from '@element-plus/icons-vue'
 import {
   fetchLines,
   fetchSchedulingGrid,
@@ -4106,6 +4145,524 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 .list-gantt-table tbody tr:hover .gantt-sticky {
   background: #f1f7ff !important;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（成型計画一覧 / APS = ブルー→バイオレット系）
+ * ============================================================ */
+
+/* ---------- ヒーローヘッダー ---------- */
+.flp-modern .plan-hd {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 30%, #4f46e5 66%, #7c3aed 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(49, 46, 129, 0.6),
+    0 4px 12px -6px rgba(37, 99, 235, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.flp-modern .plan-hd-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.flp-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: flpOrbFloat 12s ease-in-out infinite;
+}
+.flp-modern .fx-orb.orb-a {
+  width: 260px;
+  height: 260px;
+  top: -150px;
+  right: 18%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.flp-modern .fx-orb.orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -120px;
+  left: 32%;
+  background: radial-gradient(circle, rgba(165, 243, 252, 0.4) 0%, rgba(165, 243, 252, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.flp-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
+}
+.flp-modern .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 62%
+  );
+  background-size: 250% 100%;
+  animation: flpSheen 7s ease-in-out infinite;
+}
+.flp-modern .plan-hd-row,
+.flp-modern .plan-hd-sub,
+.flp-modern .replan-progress-card {
+  position: relative;
+  z-index: 1;
+}
+.flp-modern .plan-hd-row {
+  flex-wrap: wrap;
+}
+.flp-modern .plan-hd-title {
+  font-size: 20px;
+  color: #fff;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+  gap: 12px;
+}
+.flp-modern .plan-hd-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 10px 20px -8px rgba(30, 27, 75, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -3px 0 rgba(67, 56, 202, 0.35) inset;
+  animation: flpIconFloat 5.5s ease-in-out infinite;
+}
+.flp-modern .plan-hd-icon svg {
+  width: 20px;
+  height: 20px;
+  filter: drop-shadow(0 2px 3px rgba(30, 27, 75, 0.35));
+}
+.flp-modern .plan-hd-sub {
+  margin-left: 52px;
+  color: rgba(255, 255, 255, 0.86);
+}
+.flp-modern .plan-hd-sub strong {
+  color: #fff;
+  font-weight: 700;
+}
+.flp-modern .plan-hd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.flp-modern .plan-hd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #fff;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.flp-modern .replan-progress-card {
+  margin-left: 52px;
+  background: rgba(255, 251, 235, 0.96);
+  box-shadow: 0 10px 22px -12px rgba(30, 27, 75, 0.6);
+}
+
+/* ---------- 3Dキーキャップボタン ---------- */
+.flp-modern .forming-replan-toolbar__primary,
+.flp-modern .filter-form :deep(.el-button),
+.flp-modern .table-filter-print-btn,
+.flp-modern .util-print-btn {
+  --edge: #1d4ed8;
+  --glow: rgba(37, 99, 235, 0.55);
+  box-shadow:
+    0 3px 0 var(--edge),
+    0 10px 18px -8px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+.flp-modern .forming-replan-toolbar__primary {
+  --edge: #9a3412;
+  --glow: rgba(234, 88, 12, 0.6);
+  border: none;
+  background: linear-gradient(135deg, #fbbf24 0%, #f97316 55%, #ea580c 100%);
+}
+.flp-modern .filter-form :deep(.el-button) {
+  --edge: #3730a3;
+  --glow: rgba(79, 70, 229, 0.55);
+}
+.flp-modern .util-print-btn {
+  --edge: #fcd34d;
+  --glow: rgba(217, 119, 6, 0.4);
+}
+.flp-modern .table-filter-print-btn {
+  --edge: #93c5fd;
+  --glow: rgba(37, 99, 235, 0.4);
+}
+.flp-modern .forming-replan-toolbar__primary:not(.is-disabled):hover,
+.flp-modern .filter-form :deep(.el-button:not(.is-disabled):hover),
+.flp-modern .table-filter-print-btn:not(.is-disabled):hover,
+.flp-modern .util-print-btn:not(.is-disabled):hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 5px 0 var(--edge),
+    0 14px 22px -8px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.flp-modern .forming-replan-toolbar__primary:not(.is-disabled):active,
+.flp-modern .filter-form :deep(.el-button:not(.is-disabled):active),
+.flp-modern .table-filter-print-btn:not(.is-disabled):active,
+.flp-modern .util-print-btn:not(.is-disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--edge),
+    0 4px 8px -4px var(--glow);
+}
+.flp-modern .forming-replan-toolbar__primary.is-disabled,
+.flp-modern .filter-form :deep(.el-button.is-disabled),
+.flp-modern .table-filter-print-btn.is-disabled,
+.flp-modern .util-print-btn.is-disabled {
+  box-shadow: none;
+}
+.flp-modern .gantt-print-btn:not(.is-disabled) {
+  box-shadow:
+    0 3px 0 #cbd5e1,
+    0 8px 16px -8px rgba(37, 99, 235, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+.flp-modern .gantt-print-btn:hover:not(.is-disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #bfdbfe,
+    0 12px 22px -8px rgba(37, 99, 235, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+.flp-modern .gantt-print-btn:active:not(.is-disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #bfdbfe,
+    0 3px 6px -3px rgba(37, 99, 235, 0.3);
+}
+
+/* ---------- カード：上部アクセント ---------- */
+.flp-modern .plan-card {
+  position: relative;
+  border-radius: 14px;
+  box-shadow:
+    0 16px 34px -24px rgba(49, 46, 129, 0.4),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.flp-modern .plan-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  pointer-events: none;
+}
+.flp-modern .filter-card::before {
+  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+}
+.flp-modern .result-card::before {
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 55%, #ec4899 100%);
+}
+.flp-modern .plan-sec-badge {
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  box-shadow:
+    0 2px 0 #3730a3,
+    0 6px 10px -6px rgba(79, 70, 229, 0.6);
+}
+
+/* ---------- 結果タブ：3Dピル（タブ別カラー） ---------- */
+.flp-modern .result-tabs :deep(.el-tabs__nav-wrap::after),
+.flp-modern .result-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+.flp-modern .result-tabs :deep(.el-tabs__nav-scroll) {
+  padding: 4px 2px 8px;
+}
+.flp-modern .result-tabs :deep(.el-tabs__item) {
+  --tab: #2563eb;
+  --tab-deep: #1e40af;
+  --tab-glow: rgba(37, 99, 235, 0.5);
+  height: 32px;
+  line-height: 32px;
+  margin-right: 8px;
+  padding: 0 16px !important;
+  border-radius: 10px;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow:
+    0 2px 0 #e2e8f0,
+    0 6px 12px -10px rgba(15, 23, 42, 0.35);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+.flp-modern .result-tabs :deep(#tab-table) {
+  --tab: #6366f1;
+  --tab-deep: #3730a3;
+  --tab-glow: rgba(99, 102, 241, 0.5);
+}
+.flp-modern .result-tabs :deep(#tab-utilization) {
+  --tab: #059669;
+  --tab-deep: #065f46;
+  --tab-glow: rgba(5, 150, 105, 0.5);
+}
+.flp-modern .result-tabs :deep(#tab-utilizationDaily) {
+  --tab: #d97706;
+  --tab-deep: #92400e;
+  --tab-glow: rgba(217, 119, 6, 0.5);
+}
+.flp-modern .result-tabs :deep(.el-tabs__item:not(.is-active):hover) {
+  color: var(--tab-deep);
+  border-color: var(--tab);
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 0 #e2e8f0,
+    0 10px 16px -10px var(--tab-glow);
+}
+.flp-modern .result-tabs :deep(.el-tabs__item.is-active) {
+  color: #fff;
+  border-color: var(--tab-deep);
+  background: linear-gradient(135deg, var(--tab) 0%, var(--tab-deep) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 var(--tab-deep),
+    0 10px 18px -8px var(--tab-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- ガント凡例 ---------- */
+.flp-modern .gantt-legend-bar {
+  border-color: #e0e7ff;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
+  box-shadow: 0 6px 14px -12px rgba(49, 46, 129, 0.45);
+}
+.flp-modern .gantt-legend-bar .legend-item {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px -4px rgba(15, 23, 42, 0.3);
+}
+.flp-modern .legend-dot {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 2px 3px -1px rgba(15, 23, 42, 0.35);
+}
+.flp-modern .gantt-range-note {
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #4338ca;
+  font-weight: 650;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+
+/* ---------- ガント表（日別）：ヘッダー・スクロール ---------- */
+.flp-modern .list-gantt-scroll {
+  border-color: #dbe3f4;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px -20px rgba(49, 46, 129, 0.45);
+}
+.flp-modern .list-gantt-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.flp-modern .list-gantt-scroll::-webkit-scrollbar-track {
+  background: #f5f7ff;
+}
+.flp-modern .list-gantt-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #f5f7ff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #93c5fd 0%, #a5b4fc 50%, #c4b5fd 100%);
+}
+.flp-modern .list-gantt-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #60a5fa 0%, #818cf8 50%, #a78bfa 100%);
+}
+.flp-modern .list-gantt-table thead th {
+  color: #3730a3;
+  background: linear-gradient(180deg, #f7f8ff 0%, #e8ecff 100%);
+  box-shadow: 0 2px 0 #a5b4fc;
+}
+.flp-modern .list-gantt-table thead .gantt-sticky {
+  background: #e4e9ff;
+}
+.flp-modern .list-gantt-table thead th.gantt-date-col.is-weekend {
+  background: linear-gradient(180deg, #fff7f7 0%, #ffe4e6 100%);
+}
+.flp-modern .list-gantt-table thead th.gantt-date-col.is-today {
+  background: linear-gradient(180deg, #fff8e1 0%, #fde68a 100%);
+  box-shadow: 0 3px 0 #f59e0b;
+}
+.flp-modern .list-gantt-table thead th.is-today .gantt-date-text {
+  color: #b45309;
+  font-weight: 800;
+}
+
+/* ---------- 設備グループの色分け（ガント・一覧共通） ---------- */
+.flp-modern .flp-grp-tone-0 {
+  --grp: #2563eb;
+}
+.flp-modern .flp-grp-tone-1 {
+  --grp: #7c3aed;
+}
+.flp-modern .flp-grp-tone-2 {
+  --grp: #0d9488;
+}
+.flp-modern .flp-grp-tone-3 {
+  --grp: #d97706;
+}
+.flp-modern .flp-grp-tone-4 {
+  --grp: #e11d48;
+}
+.flp-modern .flp-grp-tone-5 {
+  --grp: #0891b2;
+}
+.flp-modern .list-gantt-table tbody tr.gantt-group-row td,
+.flp-modern .list-gantt-table tbody tr.gantt-group-row .gantt-sticky {
+  background: color-mix(in srgb, var(--grp, #64748b) 12%, #ffffff) !important;
+  border-top-color: color-mix(in srgb, var(--grp, #64748b) 55%, #ffffff);
+  color: color-mix(in srgb, var(--grp, #334155) 70%, #0f172a);
+}
+.flp-modern .list-gantt-table tbody tr.gantt-group-row:hover td,
+.flp-modern .list-gantt-table tbody tr.gantt-group-row:hover .gantt-sticky {
+  background: color-mix(in srgb, var(--grp, #64748b) 20%, #ffffff) !important;
+}
+.flp-modern .list-gantt-table tbody tr.gantt-group-row td.gantt-group-line {
+  box-shadow: inset 4px 0 0 var(--grp, #64748b);
+}
+.flp-modern .list-gantt-table tbody tr.gantt-row td.gantt-sticky-line {
+  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--grp, #64748b) 35%, #ffffff);
+}
+.flp-modern .list-gantt-table tbody tr.gantt-row:hover td.gantt-sticky-line {
+  box-shadow: inset 4px 0 0 var(--grp, #64748b);
+}
+
+.flp-modern .schedule-table-group {
+  border-color: color-mix(in srgb, var(--grp, #64748b) 22%, #e2e8f0);
+  box-shadow: 0 12px 26px -22px color-mix(in srgb, var(--grp, #64748b) 70%, transparent);
+}
+.flp-modern .schedule-group-title {
+  position: relative;
+  padding-left: 18px;
+  color: color-mix(in srgb, var(--grp, #334155) 75%, #0f172a);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--grp, #64748b) 16%, #ffffff) 0%,
+    color-mix(in srgb, var(--grp, #64748b) 5%, #ffffff) 100%
+  );
+  border-bottom-color: color-mix(in srgb, var(--grp, #64748b) 25%, #e2e8f0);
+}
+.flp-modern .schedule-group-title::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 4px;
+  height: 60%;
+  border-radius: 2px;
+  transform: translateY(-50%);
+  background: var(--grp, #64748b);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--grp, #64748b) 60%, transparent);
+}
+.flp-modern .schedule-list-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #3730a3 !important;
+  background: linear-gradient(180deg, #f7f8ff 0%, #e8ecff 100%) !important;
+  border-bottom: 2px solid #a5b4fc !important;
+}
+.flp-modern .schedule-list-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 4px 0 0 var(--grp, #6366f1);
+}
+.flp-modern .status-lamp-dot--ongoing {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.1) inset,
+    0 0 0 3px rgba(16, 185, 129, 0.18);
+  animation: flpLampPulse 2.2s ease-in-out infinite;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes flpSheen {
+  0%,
+  100% {
+    background-position: 130% 0;
+  }
+  50% {
+    background-position: -30% 0;
+  }
+}
+@keyframes flpOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes flpIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-3px);
+  }
+}
+@keyframes flpLampPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.1) inset,
+      0 0 0 2px rgba(16, 185, 129, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.1) inset,
+      0 0 0 5px rgba(16, 185, 129, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flp-modern .fx-orb,
+  .flp-modern .fx-sheen,
+  .flp-modern .plan-hd-icon,
+  .flp-modern .status-lamp-dot--ongoing {
+    animation: none;
+  }
+  .flp-modern .result-tabs :deep(.el-tabs__item) {
+    transition: none;
+  }
 }
 </style>
 

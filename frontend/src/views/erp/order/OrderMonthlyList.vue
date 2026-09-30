@@ -1,7 +1,10 @@
 <template>
-  <div class="order-monthly-list">
+  <div class="order-monthly-list om-modern">
     <div class="page-toolbar">
       <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="toolbar-orb orb-a" aria-hidden="true" />
+      <div class="toolbar-orb orb-b" aria-hidden="true" />
+      <div class="toolbar-grid" aria-hidden="true" />
       <div class="toolbar-left">
         <div class="toolbar-brand">
           <div class="toolbar-icon-wrap">
@@ -9,7 +12,16 @@
           </div>
           <div class="toolbar-text">
             <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
-            <div class="toolbar-title-accent" aria-hidden="true" />
+            <div class="toolbar-meta">
+              <span class="toolbar-chip chip-period">
+                <el-icon><Calendar /></el-icon>
+                {{ filters.year ? `${filters.year}年` : '—' }}{{ filters.month ? ` ${filters.month}月` : '' }}
+              </span>
+              <span class="toolbar-chip chip-count">
+                <el-icon><Document /></el-icon>
+                {{ pagination.total.toLocaleString() }}件
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -203,7 +215,12 @@
     </div>
 
     <!-- 合計カード -->
-    <div class="summary-cards" :class="{ 'animate-in-delay-1': !pageLoading }">
+    <div
+      class="summary-cards"
+      :class="{ 'animate-in-delay-1': !pageLoading }"
+      @mousemove="handleCardTilt"
+      @mouseleave="resetCardTilt"
+    >
       <el-card class="summary-card modern-card info-card">
         <div class="card-content">
           <div class="card-icon info-icon">
@@ -351,26 +368,58 @@
     </div>
 
     <div class="table-section">
-      <el-table :data="list" v-loading="loading" stripe border size="small" class="data-table">
+      <el-table
+        v-loading="loading"
+        :data="list"
+        stripe
+        border
+        size="small"
+        class="data-table"
+        :row-class-name="monthlyRowClassName"
+      >
         <el-table-column prop="destination_name" :label="t('orderMonthly.tableDestinationName')" min-width="120" show-overflow-tooltip />
         <el-table-column prop="year" :label="t('orderMonthly.tableYear')" width="70" align="center" />
         <el-table-column prop="month" :label="t('orderMonthly.tableMonth')" width="60" align="center" />
-        <el-table-column prop="product_cd" :label="t('orderMonthly.tableProductCd')" width="100" />
+        <el-table-column prop="product_cd" :label="t('orderMonthly.tableProductCd')" width="100">
+          <template #default="{ row }">
+            <span class="cell-code">{{ row.product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="part_number" :label="t('orderMonthly.tablePartNumber')" width="110" show-overflow-tooltip />
         <el-table-column prop="product_name" :label="t('orderMonthly.tableProductName')" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="product_type" :label="t('orderMonthly.tableType')" width="90" />
-        <el-table-column prop="forecast_units" :label="t('orderMonthly.tableForecastUnits')" width="90" align="right" />
-        <el-table-column prop="forecast_total_units" :label="t('orderMonthly.tableDailyForecastTotal')" width="100" align="right" />
+        <el-table-column prop="product_type" :label="t('orderMonthly.tableType')" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.product_type" :type="getProductTypeTagType(row.product_type)" size="small" effect="light">
+              {{ row.product_type }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="forecast_units" :label="t('orderMonthly.tableForecastUnits')" width="90" align="right">
+          <template #default="{ row }">
+            <span class="cell-num">{{ fmtNum(row.forecast_units) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="forecast_total_units" :label="t('orderMonthly.tableDailyForecastTotal')" width="100" align="right">
+          <template #default="{ row }">
+            <span class="cell-num">{{ fmtNum(row.forecast_total_units) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="forecast_diff" :label="t('orderMonthly.tableForecastDiff')" width="90" align="right">
           <template #default="{ row }">
-            <span :class="{ 'cell-negative': Number(row.forecast_diff) < 0 }">{{ row.forecast_diff }}</span>
+            <span
+              class="cell-num"
+              :class="{
+                'cell-negative': Number(row.forecast_diff) < 0,
+                'cell-positive': Number(row.forecast_diff) > 0,
+              }"
+            >{{ row.forecast_diff }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="t('orderMonthly.tableActions')" width="200" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="openDailyDialog(row)">{{ t('orderMonthly.actionDailyOrder') }}</el-button>
-            <el-button size="small" type="primary" link @click="openDialog(row)">{{ t('orderMonthly.actionEdit') }}</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(row)">{{ t('orderMonthly.actionDelete') }}</el-button>
+            <el-button size="small" type="primary" link class="row-act act-daily" @click="openDailyDialog(row)">{{ t('orderMonthly.actionDailyOrder') }}</el-button>
+            <el-button size="small" type="primary" link class="row-act act-edit" @click="openDialog(row)">{{ t('orderMonthly.actionEdit') }}</el-button>
+            <el-button size="small" type="danger" link class="row-act act-delete" @click="handleDelete(row)">{{ t('orderMonthly.actionDelete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -1599,6 +1648,49 @@ function getProductTypeTagType(type: string): 'success' | 'warning' | 'info' | '
     その他: 'info',
   }
   return typeMap[type] || 'info'
+}
+
+// 行の左端カラーバー：内示差異の符号で色分け
+function monthlyRowClassName({ row }: { row: OrderMonthlyItem }): string {
+  const diff = Number(row.forecast_diff)
+  if (diff < 0) return 'row-diff-neg'
+  if (diff > 0) return 'row-diff-pos'
+  return 'row-diff-zero'
+}
+
+function fmtNum(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === '') return ''
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString() : String(v)
+}
+
+// 合計カードの 3D チルト（イベント委譲）
+let tiltCard: HTMLElement | null = null
+
+function clearTilt(el: HTMLElement): void {
+  el.style.removeProperty('--rx')
+  el.style.removeProperty('--ry')
+  el.style.removeProperty('--mx')
+  el.style.removeProperty('--my')
+}
+
+function handleCardTilt(e: MouseEvent): void {
+  const card = (e.target as HTMLElement).closest<HTMLElement>('.summary-card')
+  if (tiltCard && tiltCard !== card) clearTilt(tiltCard)
+  tiltCard = card
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width - 0.5
+  const y = (e.clientY - rect.top) / rect.height - 0.5
+  card.style.setProperty('--rx', `${(-y * 14).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${(x * 14).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${((x + 0.5) * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${((y + 0.5) * 100).toFixed(1)}%`)
+}
+
+function resetCardTilt(): void {
+  if (tiltCard) clearTilt(tiltCard)
+  tiltCard = null
 }
 
 function handleQuantityEnter(index: number) {
@@ -3071,6 +3163,532 @@ onMounted(() => {
   .pagination-container {
     flex-wrap: wrap;
     justify-content: center;
+  }
+}
+
+/* ============================================================ */
+/* 页面美化：现代 UI / 3D 动效 / 颜色区分（受注＝インディゴ系）      */
+/* ============================================================ */
+.order-monthly-list.om-modern {
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
+    linear-gradient(160deg, #f3f5ff 0%, #eef0fa 45%, #f7f3ff 100%);
+}
+
+/* ---------- ツールバー ---------- */
+.om-modern .page-toolbar {
+  isolation: isolate;
+}
+
+.om-modern .page-toolbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.14) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: omSheen 7s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.om-modern .toolbar-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  pointer-events: none;
+  z-index: 0;
+  animation: omOrbFloat 12s ease-in-out infinite;
+}
+
+.om-modern .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -150px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.5), transparent 70%);
+}
+
+.om-modern .orb-b {
+  width: 260px;
+  height: 260px;
+  bottom: -190px;
+  right: 18%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.45), transparent 70%);
+  animation-delay: -6s;
+}
+
+.om-modern .toolbar-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.om-modern .toolbar-icon-wrap {
+  box-shadow:
+    0 10px 20px -6px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 0 rgba(15, 23, 42, 0.15);
+  animation: omIconFloat 4.5s ease-in-out infinite;
+}
+
+.om-modern .toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.om-modern .toolbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+}
+
+.om-modern .toolbar-chip .el-icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* ツールバーボタン：3D キーキャップ + シーン */
+.om-modern .tb-btn {
+  --edge: rgba(15, 23, 42, 0.35);
+  --glow: rgba(15, 23, 42, 0.25);
+  box-shadow:
+    0 3px 0 var(--edge),
+    0 10px 20px -8px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.2s ease;
+}
+
+.om-modern .tb-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%) no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  transition: background-position 0.6s ease;
+  pointer-events: none;
+}
+
+.om-modern .tb-btn:hover:not(.is-disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--edge),
+    0 16px 26px -10px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.om-modern .tb-btn:hover:not(.is-disabled)::before {
+  background-position: -50% 0;
+}
+
+.om-modern .tb-btn:active:not(.is-disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--edge),
+    0 4px 8px -4px var(--glow);
+}
+
+.om-modern .tb-btn-blue { --edge: #1e3a8a; --glow: rgba(37, 99, 235, 0.6); }
+.om-modern .tb-btn-teal { --edge: #115e59; --glow: rgba(13, 148, 136, 0.6); }
+.om-modern .tb-btn-amber { --edge: #92400e; --glow: rgba(217, 119, 6, 0.6); }
+.om-modern .tb-btn-indigo { --edge: #3730a3; --glow: rgba(79, 70, 229, 0.6); }
+.om-modern .tb-btn-green { --edge: #065f46; --glow: rgba(5, 150, 105, 0.6); }
+
+/* ---------- 検索条件 ---------- */
+.om-modern .filter-bar {
+  position: relative;
+  overflow: hidden;
+  padding-left: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -16px rgba(79, 70, 229, 0.3);
+}
+
+.om-modern .filter-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #818cf8, #a855f7, #ec4899);
+}
+
+.om-modern .fi-icon {
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    0 2px 0 #4338ca,
+    0 6px 12px -4px rgba(99, 102, 241, 0.55);
+}
+
+.om-modern .filter-bar :deep(.el-input__wrapper),
+.om-modern .filter-bar :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow:
+    0 0 0 1px #dfe3f0 inset,
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.om-modern .filter-bar :deep(.el-input__wrapper:hover),
+.om-modern .filter-bar :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #a5b4fc inset,
+    0 4px 10px -4px rgba(99, 102, 241, 0.3);
+}
+
+.om-modern .filter-bar :deep(.el-input__wrapper.is-focus),
+.om-modern .filter-bar :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #6366f1 inset,
+    0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+.om-modern .fi-nav {
+  padding: 2px;
+  gap: 2px;
+  border-radius: 10px;
+  background: #eef0f8;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.om-modern .fi-nav-btn {
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.om-modern .fi-nav-btn:hover {
+  color: #6366f1;
+  background: #fff;
+  box-shadow: 0 2px 6px -2px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.om-modern .fi-now-btn,
+.om-modern .fi-now-btn:hover {
+  color: #fff;
+  opacity: 1;
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  box-shadow:
+    0 2px 0 #5b21b6,
+    0 6px 12px -4px rgba(124, 58, 237, 0.55);
+}
+
+.om-modern .fi-now-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #5b21b6;
+}
+
+/* ---------- 合計カード（3D チルト） ---------- */
+.om-modern .summary-cards {
+  perspective: 900px;
+}
+
+.om-modern .summary-card.modern-card {
+  --accent: #6366f1;
+  position: relative;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(15, 23, 42, 0.28);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+  animation: omCardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.om-modern .summary-card.modern-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));
+}
+
+.om-modern .summary-card.modern-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 0%),
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.om-modern .summary-card.modern-card:hover {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 30px -16px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.om-modern .summary-card.modern-card:hover::after {
+  opacity: 1;
+}
+
+.om-modern .card-icon {
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--accent) 70%, #000),
+    0 6px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.om-modern .summary-card:hover .card-icon {
+  transform: rotate(-8deg) scale(1.08);
+}
+
+.om-modern .summary-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.om-modern .card-decoration {
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
+}
+
+.om-modern .info-card { --accent: #3b82f6; }
+.om-modern .success-card { --accent: #10b981; }
+.om-modern .diff-card { --accent: #8b5cf6; }
+.om-modern .plating-card { --accent: #f59e0b; }
+.om-modern .external-plating-card { --accent: #ec4899; }
+.om-modern .internal-welding-card { --accent: #06b6d4; }
+.om-modern .external-welding-card { --accent: #6366f1; }
+.om-modern .internal-inspection-card { --accent: #0ea5e9; }
+.om-modern .external-inspection-card { --accent: #a855f7; }
+
+.om-modern .summary-card:nth-child(1) { animation-delay: 0.05s; }
+.om-modern .summary-card:nth-child(2) { animation-delay: 0.1s; }
+.om-modern .summary-card:nth-child(3) { animation-delay: 0.15s; }
+.om-modern .summary-card:nth-child(4) { animation-delay: 0.2s; }
+.om-modern .summary-card:nth-child(5) { animation-delay: 0.25s; }
+.om-modern .summary-card:nth-child(6) { animation-delay: 0.3s; }
+.om-modern .summary-card:nth-child(7) { animation-delay: 0.35s; }
+.om-modern .summary-card:nth-child(8) { animation-delay: 0.4s; }
+.om-modern .summary-card:nth-child(9) { animation-delay: 0.45s; }
+
+/* ---------- 一覧テーブル ---------- */
+.om-modern .table-section {
+  position: relative;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 14px 32px -18px rgba(79, 70, 229, 0.35);
+}
+
+.om-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+}
+
+.om-modern .data-table :deep(.el-table__row:hover > td) {
+  transform: none;
+}
+
+.om-modern .data-table :deep(.el-table__row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--row-accent, transparent);
+  transition: box-shadow 0.2s ease;
+}
+
+.om-modern .data-table :deep(.el-table__row:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 5px 0 0 var(--row-accent, transparent);
+}
+
+.om-modern .data-table :deep(.el-table__row.row-diff-neg) { --row-accent: #f43f5e; }
+.om-modern .data-table :deep(.el-table__row.row-diff-pos) { --row-accent: #10b981; }
+.om-modern .data-table :deep(.el-table__row.row-diff-zero) { --row-accent: #c7d2fe; }
+
+.om-modern .cell-code {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.om-modern .cell-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.om-modern .data-table .cell-positive {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.om-modern .data-table .cell-positive::before {
+  content: '▲ ';
+  font-size: 0.75em;
+}
+
+.om-modern .data-table .cell-negative::before {
+  content: '▼ ';
+  font-size: 0.75em;
+}
+
+/* タグ：ソフトカラー */
+.om-modern :deep(.el-tag) {
+  --tag-bg: #f1f5f9;
+  --tag-fg: #475569;
+  --tag-ring: #e2e8f0;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--tag-fg);
+  background: var(--tag-bg);
+  box-shadow: inset 0 0 0 1px var(--tag-ring);
+}
+
+.om-modern :deep(.el-tag--primary) { --tag-bg: #eef2ff; --tag-fg: #4338ca; --tag-ring: #c7d2fe; }
+.om-modern :deep(.el-tag--success) { --tag-bg: #ecfdf5; --tag-fg: #047857; --tag-ring: #a7f3d0; }
+.om-modern :deep(.el-tag--warning) { --tag-bg: #fffbeb; --tag-fg: #b45309; --tag-ring: #fde68a; }
+.om-modern :deep(.el-tag--danger) { --tag-bg: #fff1f2; --tag-fg: #be123c; --tag-ring: #fecdd3; }
+
+/* 行内操作：ピル型 → ホバーでグラデーション */
+.om-modern .data-table .row-act {
+  --act: #6366f1;
+  --act-to: #4f46e5;
+  padding: 2px 10px;
+  height: 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--act);
+  background: color-mix(in srgb, var(--act) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, transparent);
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.om-modern .data-table .row-act + .row-act {
+  margin-left: 4px;
+}
+
+.om-modern .data-table .row-act:hover {
+  color: #fff;
+  background: linear-gradient(135deg, var(--act), var(--act-to));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -4px var(--act-to);
+}
+
+.om-modern .data-table .row-act.act-daily { --act: #6366f1; --act-to: #4f46e5; }
+.om-modern .data-table .row-act.act-edit { --act: #3b82f6; --act-to: #1d4ed8; }
+.om-modern .data-table .row-act.act-delete { --act: #f43f5e; --act-to: #be123c; }
+
+.om-modern .pagination-container :deep(.el-pagination.is-background .el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    0 2px 0 #4338ca,
+    0 4px 10px -3px rgba(99, 102, 241, 0.55);
+}
+
+/* ---------- アニメーション ---------- */
+@keyframes omSheen {
+  0% {
+    background-position: 150% 0;
+  }
+  60%,
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes omOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 10px) scale(1.12);
+  }
+}
+
+@keyframes omIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-6deg) rotateY(14deg) translateY(-3px);
+  }
+}
+
+@keyframes omCardIn {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(-30deg) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .om-modern .page-toolbar::after,
+  .om-modern .toolbar-orb,
+  .om-modern .toolbar-icon-wrap,
+  .om-modern .summary-card.modern-card {
+    animation: none;
   }
 }
 </style>

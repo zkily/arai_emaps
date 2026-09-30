@@ -1,5 +1,5 @@
 <template>
-  <div class="capacity-page" :class="{ 'capacity-page--embed': embed }">
+  <div class="capacity-page" :class="{ 'capacity-page--embed': embed, 'lc-modern': !embed }">
     <el-card
       :shadow="embed ? 'never' : 'hover'"
       class="capacity-card"
@@ -33,6 +33,12 @@
           </div>
         </div>
         <div v-else class="card-head card-head--with-actions">
+          <div class="card-head__fx" aria-hidden="true">
+            <span class="fx-orb orb-a" />
+            <span class="fx-orb orb-b" />
+            <span class="fx-grid" />
+            <span class="fx-sheen" />
+          </div>
           <div class="card-head__main">
             <h3 class="card-head__title">
               <span class="card-head__title-inner">
@@ -43,6 +49,24 @@
             <p class="card-head__desc">
               日別の稼働時間帯を設定します。「休憩・技術使用・保全」は稼働合計・排産から除外（稼働帯との重複分のみ差引）。技術使用・保全は成型指示にも表示されます。
             </p>
+            <div class="card-head__chips">
+              <span v-if="selectedLineLabel" class="card-head__chip">
+                <el-icon><Monitor /></el-icon>
+                {{ selectedLineLabel }}
+              </span>
+              <span v-if="dateRange?.[0]" class="card-head__chip">
+                <el-icon><Calendar /></el-icon>
+                {{ dateRange[0] }} 〜 {{ dateRange[1] }}
+              </span>
+              <span v-if="daySlots.length > 0" class="card-head__chip">
+                <el-icon><Clock /></el-icon>
+                表示 {{ displayDaySlots.length }} 日
+              </span>
+              <span v-if="daySlots.length > 0" class="card-head__chip card-head__chip--strong">
+                <el-icon><Timer /></el-icon>
+                稼働合計 {{ totalProductiveHours.toFixed(1) }}h
+              </span>
+            </div>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
             <el-button
@@ -221,10 +245,13 @@
             v-for="day in displayDaySlots"
             :key="day.work_date"
             class="day-card"
-            :class="{
-              'day-card--weekend': isWeekend(day.work_date),
-              'day-card--slots-collapsed': slotsCollapsedByDate[day.work_date],
-            }"
+            :class="[
+              `day-card--h-${dayHoursTone(day)}`,
+              {
+                'day-card--weekend': isWeekend(day.work_date),
+                'day-card--slots-collapsed': slotsCollapsedByDate[day.work_date],
+              },
+            ]"
           >
             <div class="day-card__top">
             <div class="day-card__meta">
@@ -606,6 +633,27 @@ function processOptionLabel(p: ProcessItem): string {
 function lineOptionLabel(line: ProductionLine): string {
   const name = (line.line_name || '').trim()
   return name || (line.line_code || '').trim() || '—'
+}
+
+/** ヘッダーチップ用：選択中設備名 */
+const selectedLineLabel = computed(() => {
+  const ln = lines.value.find((l) => l.id === selectedLineId.value)
+  return ln ? lineOptionLabel(ln) : ''
+})
+
+/** ヘッダーチップ用：表示中日の稼働合計（h） */
+const totalProductiveHours = computed(() =>
+  displayDaySlots.value.reduce((acc, day) => acc + calcProductiveHours(day), 0),
+)
+
+/** 日カードの色分け（稼働時間帯の長さ） */
+function dayHoursTone(day: DayEdit): 'zero' | 'short' | 'mid' | 'long' | 'full' {
+  const h = calcProductiveHours(day)
+  if (h <= 0) return 'zero'
+  if (h <= 8.5) return 'short'
+  if (h <= 17) return 'mid'
+  if (h <= 22) return 'long'
+  return 'full'
 }
 
 async function loadLinesByProcess() {
@@ -1813,6 +1861,467 @@ function isWeekend(d: string): boolean {
   margin: 0;
   max-width: 420px;
   line-height: 1.45;
+}
+
+/* 页面美化：現代UI・3D動効・色分け（設備稼働設定 / APS blue→indigo→violet・単独画面のみ） */
+.lc-modern {
+  --lc-c1: #1d4ed8;
+  --lc-c2: #4f46e5;
+  --lc-c3: #7c3aed;
+  padding: 8px 10px 12px;
+}
+.lc-modern .capacity-card {
+  border: 1px solid color-mix(in srgb, var(--lc-c2) 16%, var(--el-border-color-lighter));
+  border-radius: 14px;
+  box-shadow:
+    0 14px 30px -22px rgba(55, 48, 163, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+/* ---- Hero ヘッダー ---- */
+.lc-modern .capacity-card :deep(.el-card__header) {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 16px;
+  border-bottom: none;
+  border-left: none;
+  color: #fff;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 30%, #4f46e5 64%, #7c3aed 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.lc-modern .card-head__fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.lc-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  animation: lcOrbFloat 9s ease-in-out infinite;
+}
+.lc-modern .orb-a {
+  width: 190px;
+  height: 190px;
+  top: -90px;
+  right: 16%;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(165, 180, 252, 0) 70%);
+}
+.lc-modern .orb-b {
+  width: 130px;
+  height: 130px;
+  bottom: -70px;
+  left: 34%;
+  background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
+  animation-delay: -4s;
+}
+.lc-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
+}
+.lc-modern .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
+  background-size: 250% 100%;
+  animation: lcSheen 6s ease-in-out infinite;
+}
+.lc-modern .card-head__main,
+.lc-modern .card-head__actions {
+  position: relative;
+  z-index: 1;
+}
+.lc-modern .card-head--with-actions {
+  align-items: center;
+}
+.lc-modern .card-head__title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+}
+.lc-modern .card-head__title-inner {
+  gap: 10px;
+}
+.lc-modern .card-head__title-icon {
+  width: 34px;
+  height: 34px;
+  font-size: 19px;
+  color: #fff;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 8px 16px -6px rgba(30, 27, 75, 0.55),
+    inset 0 -3px 0 rgba(30, 27, 75, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: lcIconFloat 4.5s ease-in-out infinite;
+}
+.lc-modern .card-head__desc {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.84);
+}
+.lc-modern .card-head__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lc-modern .card-head__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.lc-modern .card-head__chip--strong {
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---- 3D キーキャップボタン ---- */
+.lc-modern .lcap-btn-save.el-button--success,
+.lc-modern .toolbar__quick-month-btn,
+.lc-modern .bulk-apply-panel__actions :deep(.el-button),
+.lc-modern .slots-list__add :deep(.el-button) {
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.45);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -10px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.lc-modern .lcap-btn-save:not(.is-disabled):hover,
+.lc-modern .toolbar__quick-month-btn:not(.is-disabled):hover,
+.lc-modern .bulk-apply-panel__actions :deep(.el-button:not(.is-disabled):hover),
+.lc-modern .slots-list__add :deep(.el-button:not(.is-disabled):hover) {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -10px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.lc-modern .lcap-btn-save:not(.is-disabled):active,
+.lc-modern .toolbar__quick-month-btn:not(.is-disabled):active,
+.lc-modern .bulk-apply-panel__actions :deep(.el-button:not(.is-disabled):active),
+.lc-modern .slots-list__add :deep(.el-button:not(.is-disabled):active) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -6px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.lc-modern .lcap-btn-save.is-disabled {
+  box-shadow: none;
+}
+.lc-modern .lcap-btn-save.el-button--success {
+  --k-edge: #15803d;
+  --k-glow: rgba(22, 163, 74, 0.55);
+  border: none;
+  font-weight: 700;
+  background: linear-gradient(180deg, #4ade80, #16a34a);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.el-button--primary),
+.lc-modern .slots-list__add :deep(.el-button--primary),
+.lc-modern .lcap-btn-month-this {
+  --k-edge: #93c5fd;
+  --k-glow: rgba(37, 99, 235, 0.35);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.el-button--success),
+.lc-modern .lcap-btn-month-next {
+  --k-edge: #86efac;
+  --k-glow: rgba(22, 163, 74, 0.35);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.el-button--warning),
+.lc-modern .slots-list__add :deep(.el-button--warning) {
+  --k-edge: #fcd34d;
+  --k-glow: rgba(217, 119, 6, 0.35);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.el-button--info),
+.lc-modern .slots-list__add :deep(.el-button--info) {
+  --k-edge: #cbd5e1;
+  --k-glow: rgba(100, 116, 139, 0.3);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.el-button--danger) {
+  --k-edge: #fca5a5;
+  --k-glow: rgba(239, 68, 68, 0.35);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.lcap-preset--22h) {
+  --k-edge: #fbbf24;
+  --k-glow: rgba(217, 119, 6, 0.35);
+}
+.lc-modern .bulk-apply-panel__actions :deep(.lcap-preset--24h) {
+  --k-edge: #a5b4fc;
+  --k-glow: rgba(79, 70, 229, 0.35);
+}
+.lc-modern .slots-list__add :deep(.el-button:not(.el-button--primary):not(.el-button--warning):not(.el-button--info)) {
+  --k-edge: #e2e8f0;
+  --k-glow: rgba(100, 116, 139, 0.25);
+}
+
+/* ---- ツールバー・一括パネル ---- */
+.lc-modern .toolbar.toolbar--filter-bar,
+.lc-modern .bulk-apply-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--lc-c2) 14%, var(--el-border-color-lighter));
+  box-shadow: 0 10px 20px -18px rgba(55, 48, 163, 0.5);
+}
+.lc-modern .toolbar.toolbar--filter-bar {
+  padding-top: 11px;
+  background: linear-gradient(105deg, color-mix(in srgb, var(--lc-c2) 6%, #fff) 0%, #fff 60%);
+}
+.lc-modern .toolbar.toolbar--filter-bar::before,
+.lc-modern .bulk-apply-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+}
+.lc-modern .toolbar.toolbar--filter-bar::before {
+  background: linear-gradient(90deg, var(--lc-c1), var(--lc-c2), var(--lc-c3));
+}
+.lc-modern .bulk-apply-panel {
+  padding-top: 11px;
+  background: linear-gradient(105deg, #fffbeb 0%, #fff 60%);
+}
+.lc-modern .bulk-apply-panel::before {
+  background: linear-gradient(90deg, #f59e0b, #f97316, #ef4444);
+}
+.lc-modern .toolbar__lbl {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.lc-modern .toolbar__lbl .el-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  background: linear-gradient(135deg, var(--lc-c1), var(--lc-c3));
+  box-shadow: 0 3px 8px -3px rgba(79, 70, 229, 0.6);
+}
+.lc-modern .bulk-apply-panel__title-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13px;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  box-shadow: 0 3px 8px -3px rgba(234, 88, 12, 0.6);
+}
+.lc-modern .toolbar :deep(.el-input__wrapper),
+.lc-modern .toolbar :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+.lc-modern .toolbar :deep(.el-input__wrapper:hover),
+.lc-modern .toolbar :deep(.el-select__wrapper:hover) {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lc-c2) 45%, transparent) inset,
+    0 4px 10px -6px rgba(79, 70, 229, 0.5);
+}
+
+/* ---- 日カード：稼働時間で色分け＋浮上 ---- */
+.lc-modern .calendar-grid {
+  gap: 8px;
+  padding: 2px 2px 6px;
+}
+.lc-modern .calendar-grid-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.lc-modern .calendar-grid-scroll::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: linear-gradient(180deg, #818cf8, #6d28d9);
+}
+.lc-modern .calendar-grid-scroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--lc-c2) 6%, #fff);
+}
+.lc-modern .day-card {
+  --dc: #94a3b8;
+  position: relative;
+  overflow: hidden;
+  padding: 8px 8px 6px;
+  border-radius: 12px;
+  border-color: color-mix(in srgb, var(--dc) 26%, var(--el-border-color-lighter));
+  background: linear-gradient(170deg, color-mix(in srgb, var(--dc) 7%, #fff) 0%, #fff 45%);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--dc) 22%, #e2e8f0),
+    0 8px 16px -14px color-mix(in srgb, var(--dc) 70%, transparent);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+  animation: lcCardIn 0.35s ease-out backwards;
+}
+.lc-modern .day-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--dc), color-mix(in srgb, var(--dc) 40%, #fff));
+}
+.lc-modern .day-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--dc) 50%, var(--el-border-color-lighter));
+  box-shadow:
+    0 4px 0 color-mix(in srgb, var(--dc) 30%, #e2e8f0),
+    0 14px 24px -14px color-mix(in srgb, var(--dc) 80%, transparent);
+}
+.lc-modern .day-card--h-zero {
+  --dc: #94a3b8;
+}
+.lc-modern .day-card--h-short {
+  --dc: #0ea5e9;
+}
+.lc-modern .day-card--h-mid {
+  --dc: #2563eb;
+}
+.lc-modern .day-card--h-long {
+  --dc: #d97706;
+}
+.lc-modern .day-card--h-full {
+  --dc: #7c3aed;
+}
+.lc-modern .day-card--weekend {
+  background: linear-gradient(170deg, #fff1f2 0%, #fff 45%);
+}
+.lc-modern .day-card__date {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--el-text-color-primary);
+}
+.lc-modern .day-card__tag {
+  color: #fff;
+  border: none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--dc) 70%, #fff), var(--dc));
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--dc) 60%, #0f172a),
+    0 4px 8px -4px color-mix(in srgb, var(--dc) 70%, transparent);
+}
+.lc-modern .day-card__tag--zero {
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color);
+  box-shadow: 0 2px 0 var(--el-border-color-lighter);
+}
+
+/* ---- 時間帯行：種別の左バー ---- */
+.lc-modern .slot-row {
+  padding: 3px 4px 3px 7px;
+  box-shadow: inset 3px 0 0 #3b82f6;
+  transition: background 0.15s ease;
+}
+.lc-modern .slot-row:hover {
+  background-color: color-mix(in srgb, var(--lc-c2) 5%, transparent);
+}
+.lc-modern .slot-row--rest {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+.lc-modern .slot-row--tech {
+  box-shadow: inset 3px 0 0 #ea580c;
+}
+.lc-modern .slot-row--maintenance {
+  box-shadow: inset 3px 0 0 #64748b;
+}
+
+/* ---- 空状態 ---- */
+.lc-modern .empty {
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--lc-c2) 5%, #fff), #fff);
+}
+.lc-modern .empty__icon {
+  width: 56px;
+  height: 56px;
+  font-size: 30px;
+  color: #fff;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #818cf8, #6d28d9);
+  box-shadow:
+    0 12px 20px -10px rgba(79, 70, 229, 0.7),
+    inset 0 -3px 0 rgba(30, 27, 75, 0.25);
+  animation: lcIconFloat 4.5s ease-in-out infinite;
+}
+.lc-modern .empty--hint .empty__icon {
+  color: #fff;
+  background: linear-gradient(145deg, #fbbf24, #ea580c);
+}
+.lc-modern :deep(.el-loading-spinner .path) {
+  stroke: var(--lc-c2);
+}
+
+@keyframes lcOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-18px, 12px, 0);
+  }
+}
+@keyframes lcSheen {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+@keyframes lcIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
+  }
+}
+@keyframes lcCardIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-modern .fx-orb,
+  .lc-modern .fx-sheen,
+  .lc-modern .card-head__title-icon,
+  .lc-modern .empty__icon,
+  .lc-modern .day-card {
+    animation: none;
+  }
+  .lc-modern .day-card:hover {
+    transform: none;
+  }
 }
 </style>
 

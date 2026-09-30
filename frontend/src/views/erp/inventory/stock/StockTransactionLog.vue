@@ -1,6 +1,12 @@
 <template>
-  <div class="stock-log-page">
+  <div class="stock-log-page stl-modern">
     <header class="page-header glass">
+      <div class="header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-inner">
         <div class="header-icon-wrap glass-icon">
           <el-icon><Document /></el-icon>
@@ -8,6 +14,24 @@
         <div class="header-text">
           <h1 class="page-title">在庫取引記録</h1>
           <p class="page-subtitle">在庫受払履歴の照会・編集</p>
+        </div>
+        <div class="header-chips">
+          <span class="header-chip">
+            <el-icon><Box /></el-icon>
+            {{ filters.stock_type || '全種別' }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ headerPeriodText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Document /></el-icon>
+            {{ pagination.total.toLocaleString() }}件
+          </span>
+          <span v-if="activeFilterCount > 0" class="header-chip header-chip--accent">
+            <el-icon><Filter /></el-icon>
+            条件 {{ activeFilterCount }}
+          </span>
         </div>
       </div>
     </header>
@@ -90,7 +114,7 @@
         </el-form>
       </section>
 
-      <div class="stats-row">
+      <div class="stats-row" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
         <div class="stat-card glass stat-total">
           <div class="stat-icon-wrap"><el-icon><TrendCharts /></el-icon></div>
           <div class="stat-info">
@@ -103,6 +127,7 @@
           <div class="stat-info">
             <span class="stat-label">入庫系</span>
             <span class="stat-value">{{ statistics.inboundQuantity.toLocaleString() }}</span>
+            <span class="stat-share" :title="`入出庫比 ${inboundShare}%`"><i :style="{ width: `${inboundShare}%` }" /></span>
           </div>
         </div>
         <div class="stat-card glass stat-outbound">
@@ -110,6 +135,7 @@
           <div class="stat-info">
             <span class="stat-label">出庫系</span>
             <span class="stat-value">{{ statistics.outboundQuantity.toLocaleString() }}</span>
+            <span class="stat-share" :title="`入出庫比 ${outboundShare}%`"><i :style="{ width: `${outboundShare}%` }" /></span>
           </div>
         </div>
         <div class="stat-card glass stat-records">
@@ -284,12 +310,25 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import request from '@/utils/request'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Document, Search, TrendCharts, DataAnalysis, Histogram, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import {
+  Delete,
+  Edit,
+  Document,
+  Search,
+  TrendCharts,
+  DataAnalysis,
+  Histogram,
+  ArrowLeft,
+  ArrowRight,
+  Box,
+  Calendar,
+  Filter,
+} from '@element-plus/icons-vue'
 import type { OptionItem } from '@/types/master'
 
 const route = useRoute()
@@ -397,6 +436,58 @@ interface StockLogRow {
   created_at?: string
   source_file?: string
   remarks?: string
+}
+
+const headerPeriodText = computed(() => {
+  const [from, to] = filters.value.date_range || []
+  if (!from) return '全期間'
+  return !to || from === to ? from : `${from} 〜 ${to}`
+})
+
+const activeFilterCount = computed(() => {
+  const f = filters.value
+  return [f.target_cd, f.keyword, f.location_cd, f.transaction_type, f.process_cd, f.source_file].filter(
+    (v) => !!v
+  ).length
+})
+
+const inboundShare = computed(() => {
+  const i = Math.abs(statistics.value.inboundQuantity || 0)
+  const o = Math.abs(statistics.value.outboundQuantity || 0)
+  return i + o > 0 ? Math.round((i / (i + o)) * 100) : 0
+})
+
+const outboundShare = computed(() => {
+  const i = Math.abs(statistics.value.inboundQuantity || 0)
+  const o = Math.abs(statistics.value.outboundQuantity || 0)
+  return i + o > 0 ? 100 - inboundShare.value : 0
+})
+
+// 統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
 }
 
 const formatDate = (val: string) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-')
@@ -904,5 +995,612 @@ onMounted(async () => {
   .page-title { font-size: 0.9rem; }
   .stat-value { font-size: 0.9rem; }
   .pagination-glass :deep(.el-pagination__sizes) { display: none; }
+}
+
+/* 页面美化：現代UI・3D動効・色分け（在庫取引記録 / 在庫系 cyan→sky→indigo） */
+.stock-log-page.stl-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(8, 145, 178, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(79, 70, 229, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヘッダー ---------- */
+.stl-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(120deg, #083344 0%, #155e75 32%, #0284c7 68%, #4f46e5 100%);
+  box-shadow:
+    0 16px 32px -18px rgba(2, 132, 199, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.stl-modern .header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stl-modern .header-inner {
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+.stl-modern .header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(24px);
+  opacity: 0.6;
+  animation: stlOrbFloat 10s ease-in-out infinite;
+}
+
+.stl-modern .header-fx .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -120px;
+  right: 18%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+}
+
+.stl-modern .header-fx .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -130px;
+  left: 26%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.stl-modern .header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
+}
+
+.stl-modern .header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: stlSheen 7s ease-in-out infinite;
+}
+
+.stl-modern .header-icon-wrap {
+  width: 38px;
+  height: 38px;
+  font-size: 19px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(8, 51, 68, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: stlIconFloat 4.5s ease-in-out infinite;
+}
+
+.stl-modern .page-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+}
+
+.stl-modern .page-subtitle {
+  color: rgba(224, 242, 254, 0.88);
+}
+
+.stl-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stl-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.stl-modern .header-chip--accent {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.9) 0%, rgba(234, 88, 12, 0.9) 100%);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- 検索フィルタ ---------- */
+.stl-modern .filter-section,
+.stl-modern .table-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(186, 230, 253, 0.8);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 24px -20px rgba(2, 132, 199, 0.5);
+}
+
+.stl-modern .filter-section {
+  padding-top: 11px;
+  background: linear-gradient(110deg, rgba(236, 254, 255, 0.95) 0%, rgba(255, 255, 255, 0.94) 60%);
+}
+
+.stl-modern .filter-section::before,
+.stl-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, #155e75 0%, #0284c7 55%, #4f46e5 100%);
+}
+
+.stl-modern .table-section::before {
+  background: linear-gradient(90deg, #4f46e5 0%, #0284c7 50%, #0891b2 100%);
+}
+
+.stl-modern .filter-head-icon,
+.stl-modern .table-head-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #22d3ee 0%, #0369a1 100%);
+  box-shadow:
+    0 2px 0 #075985,
+    0 6px 10px -5px rgba(2, 132, 199, 0.6);
+}
+
+.stl-modern .table-head-icon {
+  background: linear-gradient(145deg, #818cf8 0%, #4338ca 100%);
+  box-shadow:
+    0 2px 0 #312e81,
+    0 6px 10px -5px rgba(79, 70, 229, 0.6);
+}
+
+.stl-modern .filter-head-title,
+.stl-modern .table-head-left {
+  color: #0c4a6e;
+  font-weight: 700;
+}
+
+.stl-modern .filter-head,
+.stl-modern .table-head {
+  border-bottom: 1px dashed #bae6fd;
+}
+
+.stl-modern .filter-form :deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.stl-modern .input-glass :deep(.el-input__wrapper),
+.stl-modern .select-glass :deep(.el-select__wrapper),
+.stl-modern .date-picker-glass :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  background: #fff;
+  transition: box-shadow 0.2s ease;
+}
+
+.stl-modern .input-glass :deep(.el-input__wrapper:hover),
+.stl-modern .select-glass :deep(.el-select__wrapper:hover),
+.stl-modern .date-picker-glass :deep(.el-input__wrapper:hover) {
+  box-shadow:
+    0 0 0 1px rgba(2, 132, 199, 0.45) inset,
+    0 4px 10px -6px rgba(2, 132, 199, 0.5);
+}
+
+/* 在庫種別タブ：種別ごとの色分け（テーブルタグと同系色） */
+.stl-modern .stock-type-radio {
+  gap: 6px;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button) {
+  --rb: #4f46e5;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button:nth-child(2)) {
+  --rb: #2563eb;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button:nth-child(3)) {
+  --rb: #64748b;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button:nth-child(4)) {
+  --rb: #d97706;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button:nth-child(5)) {
+  --rb: #059669;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button__inner) {
+  padding: 4px 14px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--rb) 85%, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--rb) 30%, #e2e8f0) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--rb) 6%, #fff);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--rb) 22%, #e2e8f0);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease;
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button__inner:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--rb) 30%, #e2e8f0);
+}
+
+.stl-modern .stock-type-radio :deep(.el-radio-button.is-active .el-radio-button__inner),
+.stl-modern .stock-type-radio :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  color: #fff;
+  border-color: transparent !important;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--rb) 65%, #fff) 0%, var(--rb) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--rb) 70%, #0f172a),
+    0 8px 14px -8px color-mix(in srgb, var(--rb) 80%, transparent);
+}
+
+/* ---------- 3D キーキャップボタン ---------- */
+.stl-modern .btn-glass {
+  --k-from: #38bdf8;
+  --k-to: #0369a1;
+  --k-edge: #0c4a6e;
+  --k-glow: rgba(2, 132, 199, 0.5);
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.stl-modern .btn-glass:not(:disabled):hover {
+  color: #fff;
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.stl-modern .btn-glass:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.stl-modern .btn-glass.btn-ghost,
+.stl-modern .btn-glass.btn-secondary {
+  --k-from: #ffffff;
+  --k-to: #e0f2fe;
+  --k-edge: #bae6fd;
+  --k-glow: rgba(2, 132, 199, 0.3);
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.stl-modern .btn-glass.btn-ghost:not(:disabled):hover,
+.stl-modern .btn-glass.btn-secondary:not(:disabled):hover {
+  color: #075985;
+}
+
+.stl-modern .btn-glass.btn-danger {
+  --k-from: #fb7185;
+  --k-to: #e11d48;
+  --k-edge: #9f1239;
+  --k-glow: rgba(225, 29, 72, 0.5);
+}
+
+/* ---------- 統計カード（3D チルト・色分け） ---------- */
+.stl-modern .stats-row {
+  gap: 8px;
+  perspective: 900px;
+}
+
+.stl-modern .stat-card {
+  --tc: #4f46e5;
+  position: relative;
+  overflow: hidden;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
+  backdrop-filter: none;
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 26%, #e2e8f0),
+    0 12px 20px -16px color-mix(in srgb, var(--tc) 70%, transparent);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.2s ease;
+  animation: stlRise 0.4s ease-out backwards;
+}
+
+.stl-modern .stat-card:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.stl-modern .stat-card:nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+.stl-modern .stat-card:nth-child(4) {
+  animation-delay: 0.15s;
+}
+
+.stl-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tc), color-mix(in srgb, var(--tc) 40%, #fff));
+}
+
+.stl-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.75) 0%,
+    transparent 60%
+  );
+}
+
+.stl-modern .stat-card:hover {
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--tc) 34%, #e2e8f0),
+    0 18px 28px -16px color-mix(in srgb, var(--tc) 80%, transparent);
+}
+
+.stl-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.stl-modern .stat-card.stat-total {
+  --tc: #4f46e5;
+}
+
+.stl-modern .stat-card.stat-inbound {
+  --tc: #059669;
+}
+
+.stl-modern .stat-card.stat-outbound {
+  --tc: #0284c7;
+}
+
+.stl-modern .stat-card.stat-records {
+  --tc: #e11d48;
+}
+
+.stl-modern .stat-card .stat-icon-wrap {
+  width: 38px;
+  height: 38px;
+  font-size: 19px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 65%, #fff) 0%, var(--tc) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 70%, #0f172a),
+    0 8px 14px -6px color-mix(in srgb, var(--tc) 80%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateZ(18px);
+}
+
+.stl-modern .stat-card .stat-info {
+  flex: 1;
+}
+
+.stl-modern .stat-card .stat-label {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tc) 70%, #334155);
+}
+
+.stl-modern .stat-card .stat-value {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(12px);
+}
+
+.stl-modern .stat-share {
+  display: block;
+  height: 5px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tc) 14%, #f1f5f9);
+}
+
+.stl-modern .stat-share i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 55%, #fff), var(--tc));
+  transition: width 0.5s ease;
+}
+
+/* ---------- 一覧テーブル ---------- */
+.stl-modern .table-total {
+  padding: 1px 8px;
+  color: #3730a3;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+.stl-modern .selected-badge {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
+  border-radius: 999px;
+}
+
+.stl-modern .data-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #0c4a6e;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border-bottom: 2px solid #7dd3fc;
+}
+
+.stl-modern .data-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0284c7;
+}
+
+.stl-modern .qty-cell {
+  display: inline-block;
+  min-width: 40px;
+  padding: 0 8px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #047857;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.stl-modern .qty-cell.negative {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.stl-modern .btn-inline {
+  border-radius: 6px;
+  transition:
+    transform 0.15s ease,
+    background 0.2s ease;
+}
+
+.stl-modern .btn-inline.btn-edit:hover {
+  transform: translateY(-1px);
+  background: rgba(2, 132, 199, 0.1);
+}
+
+.stl-modern .btn-inline.btn-delete:hover {
+  transform: translateY(-1px);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.stl-modern .pagination-glass :deep(.el-pager li.is-active) {
+  color: #0369a1;
+  font-weight: 800;
+}
+
+.stl-modern .data-table :deep(.el-table__body-wrapper) {
+  scrollbar-width: thin;
+  scrollbar-color: #7dd3fc transparent;
+}
+
+.stl-modern :deep(.el-dialog.edit-dialog .el-dialog__header) {
+  background: linear-gradient(120deg, #155e75 0%, #0284c7 60%, #4f46e5 100%);
+}
+
+.stl-modern :deep(.el-dialog.edit-dialog .el-dialog__title) {
+  color: #fff;
+  font-weight: 700;
+}
+
+.stl-modern :deep(.el-dialog.edit-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+@keyframes stlOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 12px) scale(1.12);
+  }
+}
+
+@keyframes stlSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes stlIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@keyframes stlRise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stl-modern .header-fx .fx-orb,
+  .stl-modern .header-fx .fx-sheen,
+  .stl-modern .header-icon-wrap,
+  .stl-modern .stat-card {
+    animation: none;
+  }
+
+  .stl-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

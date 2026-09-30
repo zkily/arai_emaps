@@ -1,10 +1,18 @@
 <template>
-  <div class="order-daily-list">
+  <div class="order-daily-list od-modern">
     <div class="page-hero">
+      <div class="hero-orb orb-a" aria-hidden="true" />
+      <div class="hero-orb orb-b" aria-hidden="true" />
+      <div class="hero-grid" aria-hidden="true" />
       <div class="page-hero-top">
         <div class="hero-title-block">
-          <h1 class="toolbar-title">日受注管理</h1>
-          <p v-if="lastFetchedText" class="hero-meta">更新: {{ lastFetchedText }}</p>
+          <div class="hero-icon-wrap">
+            <el-icon><Calendar /></el-icon>
+          </div>
+          <div class="hero-title-text">
+            <h1 class="toolbar-title">日受注管理</h1>
+            <p v-if="lastFetchedText" class="hero-meta">更新: {{ lastFetchedText }}</p>
+          </div>
         </div>
         <div class="hero-actions">
           <el-button class="tb-btn tb-btn-refresh" :loading="loading" @click="refreshAll">
@@ -69,51 +77,97 @@
       </div>
     </div>
 
-    <div class="kpi-strip">
+    <div class="kpi-strip" @mousemove="handleKpiTilt" @mouseleave="resetKpiTilt">
       <div class="kpi-card kpi-count">
-        <span class="kpi-label">件数</span>
-        <span class="kpi-value">{{ summaryStats.count }}</span>
+        <span class="kpi-icon"><el-icon><Document /></el-icon></span>
+        <div class="kpi-body">
+          <span class="kpi-label">件数</span>
+          <span class="kpi-value">{{ summaryStats.count }}</span>
+        </div>
       </div>
       <div class="kpi-card kpi-units">
-        <span class="kpi-label">確定本数</span>
-        <span class="kpi-value">{{ formatNum(summaryStats.confirmedUnits) }}</span>
+        <span class="kpi-icon"><el-icon><Check /></el-icon></span>
+        <div class="kpi-body">
+          <span class="kpi-label">確定本数</span>
+          <span class="kpi-value">{{ formatNum(summaryStats.confirmedUnits) }}</span>
+        </div>
       </div>
       <div class="kpi-card kpi-boxes">
-        <span class="kpi-label">確定箱数</span>
-        <span class="kpi-value">{{ formatNum(summaryStats.confirmedBoxes) }}</span>
+        <span class="kpi-icon"><el-icon><Box /></el-icon></span>
+        <div class="kpi-body">
+          <span class="kpi-label">確定箱数</span>
+          <span class="kpi-value">{{ formatNum(summaryStats.confirmedBoxes) }}</span>
+        </div>
       </div>
       <div class="kpi-card kpi-forecast">
-        <span class="kpi-label">内示本数</span>
-        <span class="kpi-value">{{ formatNum(summaryStats.forecastUnits) }}</span>
+        <span class="kpi-icon"><el-icon><Calendar /></el-icon></span>
+        <div class="kpi-body">
+          <span class="kpi-label">内示本数</span>
+          <span class="kpi-value">{{ formatNum(summaryStats.forecastUnits) }}</span>
+        </div>
       </div>
     </div>
 
     <div class="table-section">
       <div class="table-section-head">
-        <span class="table-section-title">受注一覧</span>
+        <span class="table-section-title">
+          <span class="table-title-icon"><el-icon><Document /></el-icon></span>
+          受注一覧
+        </span>
         <span class="table-section-hint">クリックで列ソート</span>
       </div>
       <el-table
-        :data="list"
         v-loading="loading"
+        :data="list"
         stripe
         border
         size="small"
         class="data-table"
         :max-height="tableMaxHeight"
         :default-sort="{ prop: 'date', order: 'ascending' }"
+        :row-class-name="dailyRowClassName"
       >
-        <el-table-column prop="date" label="日付" width="110" sortable />
-        <el-table-column prop="weekday" label="曜日" width="70" align="center" />
+        <el-table-column prop="date" label="日付" width="110" sortable>
+          <template #default="{ row }">
+            <span class="cell-date" :class="weekendClass(row.date)">{{ row.date }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="weekday" label="曜日" width="70" align="center">
+          <template #default="{ row }">
+            <span v-if="row.weekday" class="weekday-badge" :class="weekendClass(row.date)">{{ row.weekday }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="monthly_order_id" label="月受注ID" width="160" show-overflow-tooltip />
         <el-table-column prop="destination_cd" label="納入先CD" width="100" />
         <el-table-column prop="destination_name" label="納入先名" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="product_cd" label="製品CD" width="100" />
+        <el-table-column prop="product_cd" label="製品CD" width="100">
+          <template #default="{ row }">
+            <span class="cell-code">{{ row.product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="product_type" label="種別" width="90" />
-        <el-table-column prop="forecast_units" label="内示本数" width="90" align="right" />
-        <el-table-column prop="confirmed_boxes" label="確定箱数" width="90" align="right" />
-        <el-table-column prop="confirmed_units" label="確定本数" width="90" align="right" />
+        <el-table-column prop="product_type" label="種別" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.product_type" :type="productTypeTagType(row.product_type)" size="small" effect="light">
+              {{ row.product_type }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="forecast_units" label="内示本数" width="90" align="right">
+          <template #default="{ row }">
+            <span class="cell-num cell-forecast">{{ fmtCell(row.forecast_units) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="confirmed_boxes" label="確定箱数" width="90" align="right">
+          <template #default="{ row }">
+            <span class="cell-num">{{ fmtCell(row.confirmed_boxes) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="confirmed_units" label="確定本数" width="90" align="right">
+          <template #default="{ row }">
+            <span class="cell-num cell-strong">{{ fmtCell(row.confirmed_units) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="ステータス" width="108" align="center">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small" effect="light" class="status-tag">
@@ -500,6 +554,67 @@ function statusTagType(status: string | null | undefined): 'success' | 'warning'
   if (/出荷済|完了/.test(s)) return 'success'
   if (/出荷/.test(s)) return 'success'
   return 'info'
+}
+
+// 行の左端カラーバー：ステータス色に合わせる
+function dailyRowClassName({ row }: { row: OrderDailyItem }): string {
+  return `row-status-${statusTagType(row.status)}`
+}
+
+function productTypeTagType(type: string): 'success' | 'warning' | 'info' | 'primary' | 'danger' {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
+    量産品: 'success',
+    試作品: 'warning',
+    補給品: 'primary',
+    返却品: 'danger',
+  }
+  return typeMap[type] || 'info'
+}
+
+/** 土日の色分け（YYYY-MM-DD を UTC として曜日判定） */
+function weekendClass(date: string | null | undefined): string {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  const w = d.getUTCDay()
+  if (w === 0) return 'is-sun'
+  if (w === 6) return 'is-sat'
+  return ''
+}
+
+function fmtCell(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === '') return ''
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(v)
+}
+
+// KPI カードの 3D チルト（イベント委譲）
+let tiltKpi: HTMLElement | null = null
+
+function clearKpiTilt(el: HTMLElement): void {
+  el.style.removeProperty('--rx')
+  el.style.removeProperty('--ry')
+  el.style.removeProperty('--mx')
+  el.style.removeProperty('--my')
+}
+
+function handleKpiTilt(e: MouseEvent): void {
+  const card = (e.target as HTMLElement).closest<HTMLElement>('.kpi-card')
+  if (tiltKpi && tiltKpi !== card) clearKpiTilt(tiltKpi)
+  tiltKpi = card
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const x = (e.clientX - rect.left) / rect.width - 0.5
+  const y = (e.clientY - rect.top) / rect.height - 0.5
+  card.style.setProperty('--rx', `${(-y * 12).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${(x * 12).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${((x + 0.5) * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${((y + 0.5) * 100).toFixed(1)}%`)
+}
+
+function resetKpiTilt(): void {
+  if (tiltKpi) clearKpiTilt(tiltKpi)
+  tiltKpi = null
 }
 
 function escapeCsvCell(v: unknown): string {
@@ -1809,6 +1924,560 @@ onUnmounted(() => {
   
   .compact-form {
     font-size: 12px;
+  }
+}
+
+/* ============================================================ */
+/* 页面美化：现代 UI / 3D 动效 / 颜色区分（受注＝インディゴ系）      */
+/* ============================================================ */
+
+/* ---------- ヒーロー ---------- */
+.od-modern .page-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow:
+    0 14px 34px -14px rgba(79, 70, 229, 0.6),
+    0 2px 8px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.od-modern .page-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.13) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: odSheen 7s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.od-modern .page-hero > :not(.hero-orb):not(.hero-grid) {
+  position: relative;
+  z-index: 1;
+}
+
+.od-modern .hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  pointer-events: none;
+  z-index: 0;
+  animation: odOrbFloat 12s ease-in-out infinite;
+}
+
+.od-modern .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -150px;
+  left: 26%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.5), transparent 70%);
+}
+
+.od-modern .orb-b {
+  width: 240px;
+  height: 240px;
+  top: -120px;
+  right: -60px;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.45), transparent 70%);
+  animation-delay: -6s;
+}
+
+.od-modern .hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.od-modern .hero-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.od-modern .hero-icon-wrap {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow:
+    0 8px 18px -6px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -3px 0 rgba(15, 23, 42, 0.15);
+  animation: odIconFloat 4.5s ease-in-out infinite;
+}
+
+.od-modern .toolbar-title {
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 10px rgba(15, 23, 42, 0.3);
+}
+
+.od-modern .hero-meta {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+/* ツールバーボタン：3D キーキャップ */
+.od-modern .tb-btn {
+  --edge: rgba(15, 23, 42, 0.35);
+  --glow: rgba(15, 23, 42, 0.25);
+  border-radius: 10px;
+  box-shadow:
+    0 3px 0 var(--edge),
+    0 10px 18px -8px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.od-modern .tb-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%) no-repeat;
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  transition: background-position 0.6s ease;
+  pointer-events: none;
+}
+
+.od-modern .tb-btn:hover:not(.is-disabled) {
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--edge),
+    0 16px 24px -10px var(--glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.od-modern .tb-btn:hover:not(.is-disabled)::before {
+  background-position: -50% 0;
+}
+
+.od-modern .tb-btn:active:not(.is-disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--edge),
+    0 4px 8px -4px var(--glow);
+}
+
+.od-modern .tb-btn-refresh { --edge: #075985; --glow: rgba(14, 165, 233, 0.6); }
+.od-modern .tb-btn-export { --edge: #92400e; --glow: rgba(245, 158, 11, 0.6); }
+.od-modern .tb-btn-create { --edge: #065f46; --glow: rgba(16, 185, 129, 0.6); }
+
+.od-modern .date-quick-btns :deep(.el-button) {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.od-modern .date-quick-btns :deep(.el-button:hover) {
+  z-index: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -6px rgba(15, 23, 42, 0.5);
+}
+
+.od-modern .date-quick-btns :deep(.el-button:active) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.od-modern .filter-inline {
+  box-shadow:
+    0 8px 20px -12px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 #fff;
+}
+
+.od-modern .fi-icon {
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    0 2px 0 #4338ca,
+    0 6px 12px -4px rgba(99, 102, 241, 0.55);
+}
+
+.od-modern .filter-inline :deep(.el-input__wrapper),
+.od-modern .filter-inline :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow:
+    0 0 0 1px #dfe3f0 inset,
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.od-modern .filter-inline :deep(.el-input__wrapper:hover),
+.od-modern .filter-inline :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #a5b4fc inset,
+    0 4px 10px -4px rgba(99, 102, 241, 0.3);
+}
+
+.od-modern .filter-inline :deep(.el-input__wrapper.is-focus),
+.od-modern .filter-inline :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #6366f1 inset,
+    0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+/* ---------- KPI カード（3D チルト） ---------- */
+.od-modern .kpi-strip {
+  gap: 8px;
+  perspective: 900px;
+}
+
+.od-modern .kpi-card {
+  --accent: #6366f1;
+  position: relative;
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-left-width: 1px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(15, 23, 42, 0.3);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+  animation: odCardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.od-modern .kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, transparent));
+}
+
+.od-modern .kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 0%),
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.od-modern .kpi-card:hover {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 30px -16px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.od-modern .kpi-card:hover::after {
+  opacity: 1;
+}
+
+.od-modern .kpi-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent));
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--accent) 70%, #000),
+    0 6px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.od-modern .kpi-card:hover .kpi-icon {
+  transform: rotate(-8deg) scale(1.08);
+}
+
+.od-modern .kpi-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.od-modern .kpi-count { --accent: #64748b; background: rgba(255, 255, 255, 0.85); }
+.od-modern .kpi-units { --accent: #6366f1; background: rgba(255, 255, 255, 0.85); }
+.od-modern .kpi-boxes { --accent: #0d9488; background: rgba(255, 255, 255, 0.85); }
+.od-modern .kpi-forecast { --accent: #8b5cf6; background: rgba(255, 255, 255, 0.85); }
+
+.od-modern .kpi-card:nth-child(1) { animation-delay: 0.05s; }
+.od-modern .kpi-card:nth-child(2) { animation-delay: 0.12s; }
+.od-modern .kpi-card:nth-child(3) { animation-delay: 0.19s; }
+.od-modern .kpi-card:nth-child(4) { animation-delay: 0.26s; }
+
+/* ---------- 一覧テーブル ---------- */
+.od-modern .table-section {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 14px 32px -18px rgba(79, 70, 229, 0.35);
+}
+
+.od-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+}
+
+.od-modern .table-section-head {
+  padding-top: 10px;
+}
+
+.od-modern .table-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.od-modern .table-title-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    0 2px 0 #4338ca,
+    0 6px 12px -4px rgba(99, 102, 241, 0.55);
+  transform: perspective(200px) rotateX(8deg) rotateY(-10deg);
+}
+
+.od-modern .data-table :deep(.el-table__row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--row-accent, transparent);
+  transition: box-shadow 0.2s ease;
+}
+
+.od-modern .data-table :deep(.el-table__row:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 5px 0 0 var(--row-accent, transparent);
+}
+
+.od-modern .data-table :deep(.el-table__row.row-status-info) { --row-accent: #cbd5e1; }
+.od-modern .data-table :deep(.el-table__row.row-status-success) { --row-accent: #10b981; }
+.od-modern .data-table :deep(.el-table__row.row-status-warning) { --row-accent: #f59e0b; }
+.od-modern .data-table :deep(.el-table__row.row-status-danger) { --row-accent: #f43f5e; }
+
+.od-modern .cell-date {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.od-modern .cell-date.is-sat { color: #2563eb; }
+.od-modern .cell-date.is-sun { color: #e11d48; }
+
+.od-modern .weekday-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+}
+
+.od-modern .weekday-badge.is-sat {
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  box-shadow: 0 2px 6px -2px rgba(37, 99, 235, 0.6);
+}
+
+.od-modern .weekday-badge.is-sun {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+  box-shadow: 0 2px 6px -2px rgba(225, 29, 72, 0.6);
+}
+
+.od-modern .cell-code {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.od-modern .cell-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.od-modern .cell-forecast {
+  color: #7c3aed;
+}
+
+.od-modern .cell-strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* タグ：ソフトカラー */
+.od-modern :deep(.el-tag) {
+  --tag-bg: #f1f5f9;
+  --tag-fg: #475569;
+  --tag-ring: #e2e8f0;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--tag-fg);
+  background: var(--tag-bg);
+  box-shadow: inset 0 0 0 1px var(--tag-ring);
+}
+
+.od-modern :deep(.el-tag--primary) { --tag-bg: #eef2ff; --tag-fg: #4338ca; --tag-ring: #c7d2fe; }
+.od-modern :deep(.el-tag--success) { --tag-bg: #ecfdf5; --tag-fg: #047857; --tag-ring: #a7f3d0; }
+.od-modern :deep(.el-tag--warning) { --tag-bg: #fffbeb; --tag-fg: #b45309; --tag-ring: #fde68a; }
+.od-modern :deep(.el-tag--danger) { --tag-bg: #fff1f2; --tag-fg: #be123c; --tag-ring: #fecdd3; }
+
+/* 行内操作：ピル型 → ホバーでグラデーション */
+.od-modern .data-table :deep(.row-act-btn.el-button.is-link) {
+  --act: #6366f1;
+  --act-to: #4f46e5;
+  height: 22px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--act);
+  background: color-mix(in srgb, var(--act) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, transparent);
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.od-modern .data-table :deep(.row-act-btn.el-button.is-link + .row-act-btn) {
+  margin-left: 4px;
+}
+
+.od-modern .data-table :deep(.row-act-btn.row-act-edit.el-button.is-link) { --act: #6366f1; --act-to: #4338ca; }
+.od-modern .data-table :deep(.row-act-btn.row-act-del.el-button.is-link) { --act: #f43f5e; --act-to: #be123c; }
+
+.od-modern .data-table :deep(.row-act-btn.el-button.is-link:hover) {
+  color: #fff;
+  background: linear-gradient(135deg, var(--act), var(--act-to));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -4px var(--act-to);
+}
+
+.od-modern .page-range-text {
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #4338ca;
+  background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+}
+
+.od-modern .pagination-container :deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    0 2px 0 #4338ca,
+    0 4px 10px -3px rgba(99, 102, 241, 0.55);
+}
+
+/* ---------- アニメーション ---------- */
+@keyframes odSheen {
+  0% {
+    background-position: 150% 0;
+  }
+  60%,
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+@keyframes odOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 10px) scale(1.12);
+  }
+}
+
+@keyframes odIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-6deg) rotateY(14deg) translateY(-3px);
+  }
+}
+
+@keyframes odCardIn {
+  from {
+    opacity: 0;
+    transform: perspective(600px) rotateX(-30deg) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-modern .page-hero::after,
+  .od-modern .hero-orb,
+  .od-modern .hero-icon-wrap,
+  .od-modern .kpi-card {
+    animation: none;
   }
 }
 </style>

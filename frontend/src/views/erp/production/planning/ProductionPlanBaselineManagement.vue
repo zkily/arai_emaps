@@ -1,10 +1,14 @@
 <template>
   <div class="plan-baseline-root">
-  <div class="plan-baseline-page">
+  <div class="plan-baseline-page pb-modern" :style="{ '--pb-tab': activeTabAccent }">
     <!-- 紧凑型页面头部（ガラス＋立体） -->
     <div class="page-header">
       <div class="page-header__orb page-header__orb--a" aria-hidden="true" />
       <div class="page-header__orb page-header__orb--b" aria-hidden="true" />
+      <div class="page-header__fx" aria-hidden="true">
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="title-wrapper">
         <div class="title-icon-wrapper">
           <el-icon class="title-icon"><TrendCharts /></el-icon>
@@ -12,6 +16,27 @@
         <div class="title-content">
           <h2>生産計画ベースライン管理</h2>
           <p>基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
+          <div class="page-header__chips">
+            <span class="page-header__chip">
+              <el-icon><Calendar /></el-icon>
+              {{ compareForm.baselineMonth ? dayjs(compareForm.baselineMonth).format('YYYY年MM月') : '—' }}
+            </span>
+            <span class="page-header__chip">
+              <el-icon><Setting /></el-icon>
+              {{ compareForm.processName || '全工程' }}
+            </span>
+            <span class="page-header__chip">
+              <el-icon><DataLine /></el-icon>
+              {{ totalItemsCount }} 行
+            </span>
+            <span
+              class="page-header__chip"
+              :class="{ 'page-header__chip--alert': alertStats.total > 0 }"
+            >
+              <el-icon><WarningFilled /></el-icon>
+              アラート {{ alertStats.total }}
+            </span>
+          </div>
         </div>
         <el-tooltip content="操作説明を開く" placement="bottom" :show-after="0">
           <el-icon class="help-icon help-icon--header" @click="goHelpPage" :size="18">
@@ -223,13 +248,14 @@
         <span class="pb-zone__dot" aria-hidden="true" />
         <span>サマリー KPI</span>
       </div>
-      <div class="summary-row">
+      <div class="summary-row" @mousemove="handleCardTilt" @mouseleave="resetCardTilt">
         <div
           class="summary-card"
           v-for="(card, index) in summaryCards"
           :key="card.label"
           :class="[`summary-card--${card.tone}`, { 'is-negative': card.isNegative }]"
           :style="{ animationDelay: `${0.04 + index * 0.055}s` }"
+          data-tilt
         >
           <div class="summary-card__sheen" aria-hidden="true" />
           <div class="summary-card__glow" aria-hidden="true" />
@@ -252,13 +278,19 @@
         </div>
       </div>
 
-      <div class="period-compare-row" v-loading="periodCompareLoading">
+      <div
+        class="period-compare-row"
+        v-loading="periodCompareLoading"
+        @mousemove="handleCardTilt"
+        @mouseleave="resetCardTilt"
+      >
         <div
           v-for="(block, pIdx) in periodCompareBlocks"
           :key="block.key"
           class="period-compare-card"
           :class="`period-compare-card--${block.key}`"
           :style="{ animationDelay: `${0.18 + pIdx * 0.07}s` }"
+          data-tilt
         >
           <div class="period-compare-card__glow" aria-hidden="true" />
           <div class="period-compare-card__head">
@@ -1520,6 +1552,36 @@ const PROCESS_TAB_TONES: Record<string, string> = {
 
 function processTabTone(name: string) {
   return { accent: PROCESS_TAB_TONES[name] ?? '#64748b' }
+}
+
+/** アクティブ工程タブ連動色（一覧のアクセント・行ホバー等） */
+const activeTabAccent = computed(() => PROCESS_TAB_TONES[activeTab.value] ?? '#0d9488')
+
+/** KPI カード：マウス追従 3D チルト */
+function handleCardTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-tilt]')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('[data-tilt]').forEach((el) => {
+    if (el !== card) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetCardTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-tilt]').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
 }
 
 // 工程別にデータをグループ化
@@ -7537,6 +7599,362 @@ ${actualDiffTotalCell}
 
   .total-item-value {
     font-size: 16px;
+  }
+}
+
+/* 页面美化：現代UI・3D動効・色分け（生産計画ベースライン管理 / 生産 teal→cyan→blue・工程タブ連動色） */
+.pb-modern {
+  --pb-tab: #0d9488;
+}
+
+/* ---- Hero ヘッダー ---- */
+.pb-modern .page-header {
+  padding: 12px 16px;
+  border-radius: 14px;
+}
+.pb-modern .page-header__fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.pb-modern .page-header__fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
+}
+.pb-modern .page-header__fx .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
+  background-size: 250% 100%;
+  animation: pbSheen 6s ease-in-out infinite;
+}
+.pb-modern .title-icon-wrapper {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 0 rgba(4, 47, 46, 0.25),
+    0 8px 16px -6px rgba(4, 47, 46, 0.55);
+  animation:
+    iconPulse 2.8s ease-in-out infinite,
+    pbIconFloat 4.5s ease-in-out infinite;
+}
+.pb-modern .page-header__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.pb-modern .page-header__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.pb-modern .page-header__chip--alert {
+  background: rgba(244, 63, 94, 0.55);
+  border-color: rgba(254, 205, 211, 0.75);
+  animation: pbChipAlert 1.8s ease-in-out infinite;
+}
+
+/* ---- 3D キーキャップボタン ---- */
+.pb-modern .btn-report-modern,
+.pb-modern .btn-refresh-modern,
+.pb-modern .btn-generate-modern,
+.pb-modern .btn-delete-modern,
+.pb-modern .btn-edit-modern,
+.pb-modern .btn-search-modern,
+.pb-modern .btn-clear-modern,
+.pb-modern .btn-sync-modern,
+.pb-modern .btn-export-baseline-modern,
+.pb-modern .btn-excel-baseline-modern,
+.pb-modern .btn-print-baseline-modern {
+  --k-edge: #115e59;
+  --k-glow: rgba(13, 148, 136, 0.45);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease,
+    background 0.18s ease !important;
+}
+.pb-modern .btn-report-modern:not(.is-disabled):hover,
+.pb-modern .btn-refresh-modern:not(.is-disabled):hover,
+.pb-modern .btn-generate-modern:not(.is-disabled):hover,
+.pb-modern .btn-delete-modern:not(.is-disabled):hover,
+.pb-modern .btn-edit-modern:not(.is-disabled):hover,
+.pb-modern .btn-search-modern:not(.is-disabled):hover,
+.pb-modern .btn-clear-modern:not(.is-disabled):hover,
+.pb-modern .btn-sync-modern:not(.is-disabled):hover,
+.pb-modern .btn-export-baseline-modern:not(.is-disabled):hover,
+.pb-modern .btn-excel-baseline-modern:not(.is-disabled):hover,
+.pb-modern .btn-print-baseline-modern:not(.is-disabled):hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -10px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.pb-modern .btn-report-modern:not(.is-disabled):active,
+.pb-modern .btn-refresh-modern:not(.is-disabled):active,
+.pb-modern .btn-generate-modern:not(.is-disabled):active,
+.pb-modern .btn-delete-modern:not(.is-disabled):active,
+.pb-modern .btn-edit-modern:not(.is-disabled):active,
+.pb-modern .btn-search-modern:not(.is-disabled):active,
+.pb-modern .btn-clear-modern:not(.is-disabled):active,
+.pb-modern .btn-sync-modern:not(.is-disabled):active,
+.pb-modern .btn-export-baseline-modern:not(.is-disabled):active,
+.pb-modern .btn-excel-baseline-modern:not(.is-disabled):active,
+.pb-modern .btn-print-baseline-modern:not(.is-disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -6px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.pb-modern .btn-report-modern.is-disabled,
+.pb-modern .btn-generate-modern.is-disabled,
+.pb-modern .btn-delete-modern.is-disabled,
+.pb-modern .btn-edit-modern.is-disabled,
+.pb-modern .btn-export-baseline-modern.is-disabled,
+.pb-modern .btn-excel-baseline-modern.is-disabled,
+.pb-modern .btn-print-baseline-modern.is-disabled {
+  box-shadow: none !important;
+  transform: none;
+}
+.pb-modern .btn-report-modern {
+  --k-edge: #5eead4;
+  --k-glow: rgba(4, 47, 46, 0.45);
+}
+.pb-modern .btn-refresh-modern {
+  --k-edge: #134e4a;
+  --k-glow: rgba(4, 47, 46, 0.55);
+}
+.pb-modern .btn-generate-modern {
+  --k-edge: #15803d;
+  --k-glow: rgba(34, 197, 94, 0.45);
+}
+.pb-modern .btn-delete-modern {
+  --k-edge: #fca5a5;
+  --k-glow: rgba(239, 68, 68, 0.3);
+}
+.pb-modern .btn-edit-modern {
+  --k-edge: #fcd34d;
+  --k-glow: rgba(245, 158, 11, 0.35);
+}
+.pb-modern .btn-search-modern,
+.pb-modern .btn-export-baseline-modern {
+  --k-edge: #1e40af;
+  --k-glow: rgba(37, 99, 235, 0.45);
+}
+.pb-modern .btn-excel-baseline-modern {
+  --k-edge: #166534;
+  --k-glow: rgba(34, 197, 94, 0.45);
+}
+.pb-modern .btn-print-baseline-modern {
+  --k-edge: #93c5fd;
+  --k-glow: rgba(37, 99, 235, 0.3);
+}
+.pb-modern .btn-clear-modern {
+  --k-edge: #cbd5e1;
+  --k-glow: rgba(100, 116, 139, 0.3);
+}
+.pb-modern .btn-sync-modern {
+  --k-edge: #5eead4;
+  --k-glow: rgba(13, 148, 136, 0.35);
+}
+
+/* ---- KPI カード：マウス追従 3D チルト ---- */
+.pb-modern .summary-row,
+.pb-modern .period-compare-row {
+  perspective: 1000px;
+}
+.pb-modern .summary-card,
+.pb-modern .period-compare-card {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.28s ease,
+    border-color 0.22s ease;
+}
+.pb-modern .summary-card:hover,
+.pb-modern .period-compare-card:hover {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-4px);
+}
+.pb-modern .summary-card:active {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-1px);
+}
+.pb-modern .summary-card-inner {
+  transition: background 0.2s ease;
+}
+.pb-modern .summary-card:hover .summary-card-inner {
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.7),
+    transparent 58%
+  );
+}
+.pb-modern .period-compare-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.75),
+    transparent 58%
+  );
+}
+.pb-modern .period-compare-card:hover::after {
+  opacity: 1;
+}
+.pb-modern .summary-card__badge {
+  transition: transform 0.2s ease;
+}
+.pb-modern .summary-card:hover .summary-card__badge {
+  transform: translateY(-1px) rotate(-6deg) scale(1.08);
+}
+
+/* ---- 比較一覧：工程タブ連動色 ---- */
+.pb-modern .baseline-comparison-card {
+  position: relative;
+  border-color: color-mix(in srgb, var(--pb-tab) 32%, #e2e8f0) !important;
+  transition: border-color 0.25s ease;
+}
+.pb-modern .baseline-comparison-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(
+    90deg,
+    var(--pb-tab),
+    color-mix(in srgb, var(--pb-tab) 40%, #fff)
+  );
+  transition: background 0.25s ease;
+}
+.pb-modern .baseline-comparison-card :deep(.el-card__header) {
+  background:
+    radial-gradient(
+      ellipse 55% 80% at 0% 0%,
+      color-mix(in srgb, var(--pb-tab) 14%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(180deg, color-mix(in srgb, var(--pb-tab) 6%, #fff) 0%, #ffffff 100%);
+}
+.pb-modern .comparison-list-head__icon-wrap {
+  transition: background 0.25s ease;
+}
+.pb-modern
+  .baseline-comparison-card
+  :deep(.comparison-tabs.el-tabs--card .el-tabs__item.is-active) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 3px 0 var(--pb-tab),
+    0 10px 16px -8px color-mix(in srgb, var(--pb-tab) 70%, transparent);
+}
+.pb-modern
+  .baseline-comparison-card
+  :deep(.comparison-tabs.el-tabs--card .el-tabs__item:not(.is-active):hover) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 2px 0 rgba(148, 163, 184, 0.45);
+}
+.pb-modern :deep(.comparison-table .el-table__header th) {
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--pb-tab) 70%, #fff);
+}
+.pb-modern :deep(.comparison-table .el-table__row:hover > td:first-child) {
+  box-shadow: inset 4px 0 0 var(--pb-tab);
+}
+.pb-modern :deep(.comparison-table .date-icon) {
+  color: var(--pb-tab);
+}
+.pb-modern .tab-total-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--pb-tab) 32%, #e2e8f0);
+}
+.pb-modern .tab-total-wrapper::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--pb-tab), color-mix(in srgb, var(--pb-tab) 35%, #fff));
+}
+.pb-modern .tab-total-header__badge {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--pb-tab) 70%, #fff), var(--pb-tab));
+  color: #fff;
+}
+
+@keyframes pbSheen {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+@keyframes pbIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
+  }
+}
+@keyframes pbChipAlert {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 0 0 0 rgba(254, 205, 211, 0.55);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 0 0 4px rgba(254, 205, 211, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-modern .page-header__fx .fx-sheen,
+  .pb-modern .page-header__chip--alert,
+  .pb-modern .title-icon-wrapper {
+    animation: none !important;
+  }
+  .pb-modern .summary-card,
+  .pb-modern .summary-card:hover,
+  .pb-modern .period-compare-card,
+  .pb-modern .period-compare-card:hover {
+    transform: none;
+    transition: none;
   }
 }
 

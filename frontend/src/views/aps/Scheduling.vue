@@ -1,6 +1,12 @@
 <template>
-  <div class="scheduling-page">
+  <div class="scheduling-page sp-modern">
     <div class="plan-hd">
+      <div class="plan-hd-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <h2 class="plan-hd-title">
         <span class="plan-hd-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" focusable="false">
@@ -14,6 +20,16 @@
           <span class="plan-hd-sub">工程・ライン・期間で絞り込み、日別の計画と実績をマトリクスで確認。</span>
         </span>
       </h2>
+      <div class="plan-hd-meta">
+        <span class="plan-hd-chip">
+          <el-icon><Calendar /></el-icon>
+          {{ displayDateRangeText }}
+        </span>
+        <span class="plan-hd-chip">
+          <el-icon><Operation /></el-icon>
+          {{ lineCount }} ライン
+        </span>
+      </div>
     </div>
 
     <div class="plan-card filter-card">
@@ -78,28 +94,32 @@
       </el-form>
     </div>
 
-    <div class="stat-grid">
+    <div class="stat-grid" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
       <div class="stat-card stat-card--lines">
         <span class="stat-card__glow" aria-hidden="true" />
         <span class="stat-card__shine" aria-hidden="true" />
+        <span class="stat-icon" aria-hidden="true"><el-icon><Operation /></el-icon></span>
         <span class="stat-label">ライン数</span>
         <span class="stat-value">{{ lineCount }}</span>
       </div>
       <div class="stat-card stat-card--plan">
         <span class="stat-card__glow" aria-hidden="true" />
         <span class="stat-card__shine" aria-hidden="true" />
+        <span class="stat-icon" aria-hidden="true"><el-icon><DataLine /></el-icon></span>
         <span class="stat-label">生産計画合計</span>
         <span class="stat-value">{{ formatQty(overallPlannedOutputTotal) }}</span>
       </div>
       <div class="stat-card stat-card--efficiency">
         <span class="stat-card__glow" aria-hidden="true" />
         <span class="stat-card__shine" aria-hidden="true" />
+        <span class="stat-icon" aria-hidden="true"><el-icon><Odometer /></el-icon></span>
         <span class="stat-label">能率(本/H)平均</span>
         <span class="stat-value">{{ formatEfficiency(avgEfficiencyRate) }}</span>
       </div>
       <div class="stat-card stat-card--hours">
         <span class="stat-card__glow" aria-hidden="true" />
         <span class="stat-card__shine" aria-hidden="true" />
+        <span class="stat-icon" aria-hidden="true"><el-icon><Timer /></el-icon></span>
         <span class="stat-label">所要生産時間</span>
         <span class="stat-value">{{ formatHours(requiredProductionHours) }}</span>
       </div>
@@ -203,7 +223,12 @@
               </th>
             </tr>
           </thead>
-          <tbody v-for="section in matrixSections" :key="section.key" class="sc-line-section">
+          <tbody
+            v-for="(section, sectionIdx) in matrixSections"
+            :key="section.key"
+            class="sc-line-section"
+            :class="`sc-sec-tone-${sectionIdx % 6}`"
+          >
             <tr
               v-for="row in section.rows"
               :key="row.key"
@@ -312,6 +337,7 @@
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
+import { Calendar, DataLine, Odometer, Operation, Timer } from '@element-plus/icons-vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
@@ -896,6 +922,35 @@ function formatEfficiency(v?: number | null) {
 function formatHours(v?: number | null) {
   if (v == null || !Number.isFinite(v)) return '-'
   return `${v.toFixed(1)}H`
+}
+
+/** 統計カード：マウス追従の3D傾き */
+let tiltedStatCard: HTMLElement | null = null
+function clearStatTilt(card: HTMLElement | null) {
+  if (!card) return
+  card.style.removeProperty('--rx')
+  card.style.removeProperty('--ry')
+  card.style.removeProperty('--mx')
+  card.style.removeProperty('--my')
+}
+function handleStatTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card') ?? null
+  if (card !== tiltedStatCard) {
+    clearStatTilt(tiltedStatCard)
+    tiltedStatCard = card
+  }
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 10).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+function resetStatTilt() {
+  clearStatTilt(tiltedStatCard)
+  tiltedStatCard = null
 }
 
 function formatMatrixDate(iso: string) {
@@ -2713,6 +2768,558 @@ watch(
 
 .matrix-table td.sc-cell-has-attrib {
   cursor: help;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（APS = ブルー→バイオレット系）
+ * ============================================================ */
+
+/* ---------- ヒーローヘッダー ---------- */
+.sp-modern .plan-hd {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 30%, #4f46e5 66%, #7c3aed 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(49, 46, 129, 0.6),
+    0 4px 12px -6px rgba(37, 99, 235, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.sp-modern .plan-hd-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.sp-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: spOrbFloat 12s ease-in-out infinite;
+}
+.sp-modern .fx-orb.orb-a {
+  width: 260px;
+  height: 260px;
+  top: -140px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.sp-modern .fx-orb.orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -120px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(216, 180, 254, 0.45) 0%, rgba(216, 180, 254, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.sp-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+}
+.sp-modern .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 62%
+  );
+  background-size: 250% 100%;
+  animation: spSheen 7s ease-in-out infinite;
+}
+.sp-modern .plan-hd-title,
+.sp-modern .plan-hd-meta {
+  position: relative;
+  z-index: 1;
+}
+.sp-modern .plan-hd-title {
+  gap: 12px;
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+  perspective: 600px;
+}
+.sp-modern .plan-hd-text-wrap {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.sp-modern .plan-hd-title-text {
+  letter-spacing: 0.05em;
+}
+.sp-modern .plan-hd-sub {
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: none;
+}
+.sp-modern .plan-hd-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 10px 20px -8px rgba(30, 27, 75, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -3px 0 rgba(67, 56, 202, 0.35) inset;
+  transform-style: preserve-3d;
+  animation: spIconFloat 5.5s ease-in-out infinite;
+}
+.sp-modern .plan-hd-icon svg {
+  width: 21px;
+  height: 21px;
+  filter: drop-shadow(0 2px 3px rgba(30, 27, 75, 0.35));
+}
+.sp-modern .plan-hd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sp-modern .plan-hd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- 絞り込みカード ---------- */
+.sp-modern .filter-card {
+  position: relative;
+  overflow: hidden;
+  padding-left: 16px;
+  border-radius: 14px;
+}
+.sp-modern .filter-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+}
+.sp-modern .compact-form :deep(.el-form-item:nth-child(1) .el-form-item__label) {
+  color: #1d4ed8;
+}
+.sp-modern .compact-form :deep(.el-form-item:nth-child(2) .el-form-item__label) {
+  color: #0e7490;
+}
+.sp-modern .compact-form :deep(.el-form-item:nth-child(3) .el-form-item__label) {
+  color: #6d28d9;
+}
+.sp-modern .compact-form :deep(.el-form-item:nth-child(4) .el-form-item__label) {
+  color: #047857;
+}
+.sp-modern .compact-form :deep(.el-input__wrapper),
+.sp-modern .compact-form :deep(.el-select__wrapper) {
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+.sp-modern .compact-form :deep(.el-input__wrapper:hover),
+.sp-modern .compact-form :deep(.el-select__wrapper:hover) {
+  transform: translateY(-1px);
+}
+
+/* ---------- 統計カード（3D傾き） ---------- */
+.sp-modern .stat-card {
+  padding-right: 58px;
+  transform-style: preserve-3d;
+  animation: spCardIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.sp-modern .stat-card:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.sp-modern .stat-card:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.sp-modern .stat-card:nth-child(4) {
+  animation-delay: 0.18s;
+}
+.sp-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.sp-modern .stat-card:hover {
+  transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+.sp-modern .stat-card:hover::after {
+  opacity: 1;
+}
+.sp-modern .stat-card--lines {
+  --icon-from: #60a5fa;
+  --icon-edge: #1e40af;
+}
+.sp-modern .stat-card--plan {
+  --icon-from: #34d399;
+  --icon-edge: #065f46;
+}
+.sp-modern .stat-card--efficiency {
+  --icon-from: #fbbf24;
+  --icon-edge: #92400e;
+}
+.sp-modern .stat-card--hours {
+  --icon-from: #a78bfa;
+  --icon-edge: #5b21b6;
+}
+.sp-modern .stat-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  margin-top: -18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--icon-from) 0%, var(--stat-accent) 100%);
+  box-shadow:
+    0 3px 0 var(--icon-edge),
+    0 10px 18px -8px var(--stat-accent),
+    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  animation: spIconFloat 5s ease-in-out infinite;
+}
+.sp-modern .stat-card:nth-child(2) .stat-icon {
+  animation-delay: -1.2s;
+}
+.sp-modern .stat-card:nth-child(3) .stat-icon {
+  animation-delay: -2.4s;
+}
+.sp-modern .stat-card:nth-child(4) .stat-icon {
+  animation-delay: -3.6s;
+}
+
+/* ---------- マトリクスカード ---------- */
+.sp-modern .result-card {
+  position: relative;
+  border-radius: 14px;
+  border-color: rgba(199, 210, 254, 0.8);
+  box-shadow:
+    0 22px 44px -28px rgba(49, 46, 129, 0.4),
+    0 4px 12px -8px rgba(15, 23, 42, 0.12);
+}
+.sp-modern .result-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, #3b82f6 0%, #6366f1 50%, #a855f7 100%);
+}
+.sp-modern .result-title-feature {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  box-shadow:
+    0 2px 0 #3730a3,
+    0 8px 14px -8px rgba(79, 70, 229, 0.6);
+}
+.sp-modern .result-title-main {
+  background: linear-gradient(90deg, #1e3a8a 0%, #5b21b6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sp-modern .sc-matrix-legend {
+  padding: 2px 10px;
+  border: 1px solid #e0e7ff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
+  box-shadow: 0 4px 10px -8px rgba(49, 46, 129, 0.4);
+}
+.sp-modern .sc-legend-swatch {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 2px 4px -1px rgba(15, 23, 42, 0.25);
+}
+.sp-modern .sc-range-hint {
+  color: #4338ca;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.sp-modern .result-note--chip {
+  color: #3730a3;
+  font-weight: 700;
+  background: #fff;
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 10px -8px rgba(49, 46, 129, 0.45);
+}
+.sp-modern .print-btn.el-button {
+  color: #fff !important;
+  border-color: #4338ca !important;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 55%, #7c3aed 100%) !important;
+  box-shadow:
+    0 3px 0 #3730a3,
+    0 10px 18px -8px rgba(79, 70, 229, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.3) inset;
+}
+.sp-modern .print-btn.el-button::before {
+  display: none;
+}
+.sp-modern .print-btn.el-button::after {
+  width: 100%;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 70%
+  );
+  transform: translateX(-110%);
+  transition: transform 0.6s ease;
+}
+.sp-modern .print-btn__icon {
+  filter: drop-shadow(0 1px 1px rgba(30, 27, 75, 0.4));
+}
+.sp-modern .print-btn.el-button:hover {
+  color: #fff !important;
+  border-color: #4f46e5 !important;
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 55%, #8b5cf6 100%) !important;
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #3730a3,
+    0 14px 22px -8px rgba(79, 70, 229, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.3) inset;
+}
+.sp-modern .print-btn.el-button:hover::after {
+  transform: translateX(110%);
+}
+.sp-modern .print-btn.el-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #3730a3,
+    0 4px 8px -4px rgba(79, 70, 229, 0.6);
+}
+
+/* ---------- マトリクス表 ---------- */
+.sp-modern .matrix-table-wrapper {
+  border-color: #dbe3f4;
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 24px -20px rgba(49, 46, 129, 0.45);
+}
+.sp-modern .matrix-table-wrapper::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.sp-modern .matrix-table-wrapper::-webkit-scrollbar-track {
+  background: #f5f7ff;
+}
+.sp-modern .matrix-table-wrapper::-webkit-scrollbar-thumb {
+  border: 2px solid #f5f7ff;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #93c5fd 0%, #a5b4fc 50%, #c4b5fd 100%);
+}
+.sp-modern .matrix-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #60a5fa 0%, #818cf8 50%, #a78bfa 100%);
+}
+.sp-modern .matrix-table thead th {
+  color: #3730a3;
+  background: linear-gradient(180deg, #f7f8ff 0%, #e8ecff 100%);
+  box-shadow: 0 2px 0 #a5b4fc;
+}
+.sp-modern .matrix-table thead th.is-weekend {
+  background: linear-gradient(180deg, #fff7f7 0%, #ffe4e6 100%);
+}
+.sp-modern .matrix-table thead th.is-today {
+  background: linear-gradient(180deg, #fff8e1 0%, #fde68a 100%);
+  box-shadow:
+    0 2px 0 #a5b4fc,
+    0 -3px 0 #f59e0b inset;
+}
+.sp-modern .matrix-table thead th.is-today .date-text {
+  color: #b45309;
+  font-weight: 800;
+}
+.sp-modern .matrix-table thead th.sc-total-col {
+  box-shadow:
+    0 2px 0 #a5b4fc,
+    4px 0 6px -4px rgba(49, 46, 129, 0.25);
+}
+.sp-modern .matrix-table tbody td.sc-total-col {
+  box-shadow: 4px 0 6px -4px rgba(49, 46, 129, 0.2);
+}
+
+/* ライン別の色分け（6色ローテーション） */
+.sp-modern .sc-sec-tone-0 {
+  --sec: #2563eb;
+  --sec-deep: #1e3a8a;
+  --sec-soft: #eff6ff;
+}
+.sp-modern .sc-sec-tone-1 {
+  --sec: #7c3aed;
+  --sec-deep: #4c1d95;
+  --sec-soft: #f5f3ff;
+}
+.sp-modern .sc-sec-tone-2 {
+  --sec: #0d9488;
+  --sec-deep: #134e4a;
+  --sec-soft: #f0fdfa;
+}
+.sp-modern .sc-sec-tone-3 {
+  --sec: #d97706;
+  --sec-deep: #78350f;
+  --sec-soft: #fffbeb;
+}
+.sp-modern .sc-sec-tone-4 {
+  --sec: #e11d48;
+  --sec-deep: #881337;
+  --sec-soft: #fff1f2;
+}
+.sp-modern .sc-sec-tone-5 {
+  --sec: #0891b2;
+  --sec-deep: #164e63;
+  --sec-soft: #ecfeff;
+}
+.sp-modern .sc-line-section > tr > td.sc-line-col {
+  box-shadow: inset 4px 0 0 var(--sec);
+}
+.sp-modern .sc-group-header-row {
+  border-top-color: var(--sec);
+}
+.sp-modern .sc-group-header-row > td.sc-sticky-col {
+  background: var(--sec-soft);
+  color: var(--sec-deep);
+}
+.sp-modern .sc-group-header-row .sc-line-code {
+  color: var(--sec-deep);
+}
+.sp-modern .sc-group-header-row > td.sc-sticky-col.sc-total-col {
+  box-shadow: 4px 0 6px -4px rgba(49, 46, 129, 0.2);
+}
+.sp-modern .sc-item-row:hover {
+  background: #eef2ff;
+}
+.sp-modern .sc-item-row:hover > td.sc-sticky-col {
+  background: #f5f7ff;
+}
+.sp-modern .sc-item-row:hover > td.sc-item-col {
+  color: var(--sec-deep);
+}
+.sp-modern .sc-flag {
+  display: inline-block;
+  margin-top: 1px;
+  padding: 0 5px;
+  border-radius: 999px;
+  line-height: 14px;
+  color: #b91c1c;
+  background: #fee2e2;
+  box-shadow: 0 0 0 1px #fecaca inset;
+}
+.sp-modern .sc-total-footer-row td {
+  color: #312e81;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  box-shadow: 0 -2px 0 #818cf8;
+}
+.sp-modern .sc-total-footer-row td.sc-total-col {
+  box-shadow:
+    0 -2px 0 #818cf8,
+    4px 0 6px -4px rgba(49, 46, 129, 0.25);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes spSheen {
+  0%,
+  100% {
+    background-position: 130% 0;
+  }
+  50% {
+    background-position: -30% 0;
+  }
+}
+@keyframes spOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes spIconFloat {
+  0%,
+  100% {
+    transform: rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: rotateX(10deg) rotateY(-14deg) translateY(-3px);
+  }
+}
+@keyframes spCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-modern .fx-orb,
+  .sp-modern .fx-sheen,
+  .sp-modern .plan-hd-icon,
+  .sp-modern .stat-card,
+  .sp-modern .stat-icon {
+    animation: none;
+  }
+  .sp-modern .stat-card:hover {
+    transform: none;
+  }
 }
 </style>
 

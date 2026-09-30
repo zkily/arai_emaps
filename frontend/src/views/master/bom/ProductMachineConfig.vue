@@ -1,6 +1,7 @@
 <template>
-  <div class="product-machine-config-container fade-in">
+  <div class="product-machine-config-container fade-in pmc-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -11,10 +12,22 @@
           </h1>
           <p class="subtitle">製品ごとの機器設定を管理します</p>
         </div>
-        <div class="header-stats">
-          <div class="stat-card">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="stat-card stat-total">
             <div class="stat-number">{{ configList?.length || 0 }}</div>
             <div class="stat-label">登録数</div>
+          </div>
+          <div class="stat-card stat-shown">
+            <div class="stat-number">{{ filteredList.length }}</div>
+            <div class="stat-label">表示中</div>
+          </div>
+          <div class="stat-card stat-weld">
+            <div class="stat-number">{{ weldingConfiguredCount }}</div>
+            <div class="stat-label">溶接設定</div>
+          </div>
+          <div class="stat-card stat-out">
+            <div class="stat-number">{{ outsourcedCount }}</div>
+            <div class="stat-label">外注設定</div>
           </div>
         </div>
       </div>
@@ -93,32 +106,72 @@
             width="100"
             align="center"
             fixed="left"
-          />
+          >
+            <template #default="{ row }">
+              <span class="code-chip">{{ row.product_cd }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="product_name" label="製品名" min-width="130" sortable />
-          <el-table-column prop="cutting_machine" label="切断機" width="120" align="center" />
+          <el-table-column prop="cutting_machine" label="切断機" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.cutting_machine" class="mc-chip mc--cut">{{ row.cutting_machine }}</span>
+            </template>
+          </el-table-column>
           <el-table-column
             prop="chamfering_machine"
             label="面取機"
             width="120"
             align="center"
-          />
-          <el-table-column prop="sw_machine" label="sw機" width="120" align="center" />
-          <el-table-column prop="molding_machine" label="成型機" width="120" align="center" />
-          <el-table-column prop="plating_machine" label="メッキ治具" width="120" align="center" />
-          <el-table-column prop="welding_machine" label="溶接機" width="120" align="center" />
-          <el-table-column prop="inspector_machine" label="検査員" width="120" align="center" />
+          >
+            <template #default="{ row }">
+              <span v-if="row.chamfering_machine" class="mc-chip mc--chamfer">{{ row.chamfering_machine }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sw_machine" label="sw機" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.sw_machine" class="mc-chip mc--sw">{{ row.sw_machine }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="molding_machine" label="成型機" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.molding_machine" class="mc-chip mc--mold">{{ row.molding_machine }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="plating_machine" label="メッキ治具" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.plating_machine" class="mc-chip mc--plating">{{ row.plating_machine }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="welding_machine" label="溶接機" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.welding_machine" class="mc-chip mc--weld">{{ row.welding_machine }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="inspector_machine" label="検査員" width="120" align="center">
+            <template #default="{ row }">
+              <span v-if="row.inspector_machine" class="mc-chip mc--insp">{{ row.inspector_machine }}</span>
+            </template>
+          </el-table-column>
           <el-table-column
             prop="outsourced_plating_machine"
             label="外注メッキ先"
             width="140"
             align="center"
-          />
+          >
+            <template #default="{ row }">
+              <span v-if="row.outsourced_plating_machine" class="mc-chip mc--out">{{ row.outsourced_plating_machine }}</span>
+            </template>
+          </el-table-column>
           <el-table-column
             prop="outsourced_welding_machine"
             label="外注溶接先"
             width="140"
             align="center"
-          />
+          >
+            <template #default="{ row }">
+              <span v-if="row.outsourced_welding_machine" class="mc-chip mc--out">{{ row.outsourced_welding_machine }}</span>
+            </template>
+          </el-table-column>
           <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="140" align="center">
             <template #default="{ row }">
               <div class="action-buttons-table">
@@ -472,6 +525,43 @@ const filteredList = computed(() => {
 
   return result
 })
+
+const weldingConfiguredCount = computed(
+  () => (configList.value || []).filter((item) => !!item.welding_machine).length,
+)
+const outsourcedCount = computed(
+  () =>
+    (configList.value || []).filter(
+      (item) => !!item.outsourced_plating_machine || !!item.outsourced_welding_machine,
+    ).length,
+)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 // 产品选择变化处理
 const handleProductChange = (value: string) => {
@@ -1130,6 +1220,409 @@ onMounted(async () => {
 
   .filters-content {
     flex-direction: column;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（製品加工設備設定 / teal→aqua→mint）
+ * ============================================================ */
+.pmc-modern {
+  --hx-1: #042f2e;
+  --hx-2: #115e59;
+  --hx-3: #0d9488;
+  --hx-4: #2dd4bf;
+  --hx-deep: #134e4a;
+  --hx-soft: #f0fdfa;
+  --hx-line: rgba(13, 148, 136, 0.18);
+  background:
+    radial-gradient(1100px 360px at 10% -10%, rgba(45, 212, 191, 0.12), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 60%),
+    linear-gradient(160deg, #f3fbf9 0%, #eefaf7 40%, #f8fafc 100%);
+}
+
+.pmc-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(17, 94, 89, 0.6),
+    0 6px 14px -6px rgba(45, 212, 191, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.pmc-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.pmc-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.pmc-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: pmcOrbFloat 11s ease-in-out infinite;
+}
+
+.pmc-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 26%;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.7), transparent 70%);
+}
+
+.pmc-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 14%;
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.55), transparent 70%);
+  animation-delay: -5s;
+}
+
+.pmc-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.pmc-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: pmcSheen 7s ease-in-out infinite;
+}
+
+.pmc-modern .main-title {
+  gap: 10px;
+  text-shadow: 0 2px 10px rgba(4, 47, 46, 0.35);
+}
+
+.pmc-modern .title-icon {
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(4, 47, 46, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: pmcIconFloat 6s ease-in-out infinite;
+}
+
+.pmc-modern .title-icon :deep(svg) {
+  animation: pmcIconGear 8s linear infinite;
+}
+
+.pmc-modern .header-stats {
+  perspective: 650px;
+  flex-wrap: wrap;
+}
+
+.pmc-modern .stat-card {
+  --sc: #99f6e4;
+  position: relative;
+  overflow: hidden;
+  min-width: 70px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 3px 0 rgba(4, 47, 46, 0.4),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.pmc-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.pmc-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.pmc-modern .stat-card:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    0 5px 0 rgba(4, 47, 46, 0.45),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.pmc-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.pmc-modern .stat-total { --sc: #fde68a; }
+.pmc-modern .stat-shown { --sc: #99f6e4; }
+.pmc-modern .stat-weld { --sc: #fca5a5; }
+.pmc-modern .stat-out { --sc: #c4b5fd; }
+
+.pmc-modern .stat-number {
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(4, 47, 46, 0.35);
+}
+
+.pmc-modern .action-section,
+.pmc-modern .table-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(17, 94, 89, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.pmc-modern .action-section::before,
+.pmc-modern .table-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4), #7dd3fc);
+}
+
+.pmc-modern .action-section {
+  padding-top: 11px;
+}
+
+.pmc-modern .table-card {
+  padding-top: 3px;
+}
+
+.pmc-modern .filter-icon,
+.pmc-modern .summary-icon {
+  color: var(--hx-3);
+}
+
+.pmc-modern .filter-inline-summary {
+  padding: 2px 10px;
+  border-left: none;
+  border-radius: 999px;
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+}
+
+.pmc-modern .keyword-input :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--hx-3);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.14);
+}
+
+.pmc-modern .clear-btn {
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  box-shadow: 0 2px 0 rgba(13, 148, 136, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pmc-modern .clear-btn:hover {
+  transform: translateY(-1px);
+  color: var(--hx-deep);
+  background: #ccfbf1;
+  box-shadow: 0 3px 0 rgba(13, 148, 136, 0.26);
+}
+
+.pmc-modern .sync-btn,
+.pmc-modern .add-btn {
+  border: none;
+  font-weight: 700;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.pmc-modern .sync-btn {
+  --k-edge: #1e40af;
+  --k-glow: rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+.pmc-modern .add-btn {
+  --k-edge: #115e59;
+  --k-glow: rgba(13, 148, 136, 0.5);
+  background: linear-gradient(135deg, #2dd4bf, #0d9488);
+}
+
+.pmc-modern .sync-btn:hover {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+.pmc-modern .add-btn:hover {
+  background: linear-gradient(135deg, #2dd4bf, #0d9488);
+}
+
+.pmc-modern .sync-btn:hover,
+.pmc-modern .add-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pmc-modern .sync-btn:active,
+.pmc-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.pmc-modern .table-section :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #134e4a, #115e59) !important;
+  color: #fff !important;
+  border-bottom: 2px solid var(--hx-4) !important;
+}
+
+.pmc-modern .table-section :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background-color: #f0fdfa !important;
+}
+
+.pmc-modern .table-section :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.pmc-modern .code-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-family: 'Consolas', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--hx-deep);
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.3), 0 2px 0 rgba(13, 148, 136, 0.2);
+  transition: transform 0.15s ease;
+}
+
+.pmc-modern .table-section :deep(tr:hover) .code-chip {
+  transform: translateY(-1px);
+}
+
+.pmc-modern .mc-chip {
+  --mc: #64748b;
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  color: var(--mc);
+  background: color-mix(in srgb, var(--mc) 9%, #fff);
+  border: 1px solid color-mix(in srgb, var(--mc) 32%, #fff);
+}
+
+.pmc-modern .mc--cut { --mc: #2563eb; }
+.pmc-modern .mc--chamfer { --mc: #0891b2; }
+.pmc-modern .mc--sw { --mc: #7c3aed; }
+.pmc-modern .mc--mold { --mc: #059669; }
+.pmc-modern .mc--plating { --mc: #ca8a04; }
+.pmc-modern .mc--weld { --mc: #dc2626; }
+.pmc-modern .mc--insp { --mc: #db2777; }
+.pmc-modern .mc--out { --mc: #475569; }
+
+.pmc-modern .action-buttons-table .el-button--primary:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.pmc-modern .action-buttons-table .el-button--danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+@keyframes pmcOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes pmcSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes pmcIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(12deg) rotateY(-14deg);
+  }
+}
+
+@keyframes pmcIconGear {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pmc-modern .fx-orb,
+  .pmc-modern .fx-sheen,
+  .pmc-modern .title-icon,
+  .pmc-modern .title-icon :deep(svg) {
+    animation: none;
+  }
+
+  .pmc-modern .stat-card {
+    transform: none;
   }
 }
 </style>

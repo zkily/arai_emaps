@@ -1,6 +1,7 @@
 <template>
-  <div class="bom-editor">
+  <div class="bom-editor pbe-modern">
     <header class="pbe-hero">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="pbe-hero__accent" aria-hidden="true" />
       <div class="pbe-hero__inner">
         <div class="pbe-hero__brand">
@@ -14,7 +15,25 @@
             </p>
           </div>
         </div>
-        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" @click="openCreateDialog">
+        <div class="pbe-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="stat-card stat-headers">
+            <span class="stat-num">{{ headerTotal }}</span>
+            <span class="stat-lbl">BOMヘッダ</span>
+          </div>
+          <div class="stat-card stat-route">
+            <span class="stat-num">{{ mainRouteSteps.length }}</span>
+            <span class="stat-lbl">工程</span>
+          </div>
+          <div class="stat-card stat-mat">
+            <span class="stat-num">{{ materialRows.length }}</span>
+            <span class="stat-lbl">材料</span>
+          </div>
+          <div class="stat-card stat-part">
+            <span class="stat-num">{{ partRows.length }}</span>
+            <span class="stat-lbl">部品</span>
+          </div>
+        </div>
+        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" class="pbe-btn-new" @click="openCreateDialog">
           新規BOM
         </el-button>
       </div>
@@ -67,6 +86,7 @@
             size="small"
             :icon="Search"
             :disabled="!selectedHeaderId"
+            class="pbe-btn-reload"
             @click="reloadTreeAndFilter"
           >
             再取得
@@ -99,13 +119,21 @@
             class="pbe-table pbe-route-table"
             style="width: 100%"
           >
-            <el-table-column prop="step_no" label="順" width="44" align="center" />
+            <el-table-column prop="step_no" label="順" width="44" align="center">
+              <template #default="{ row }">
+                <span class="pbe-step">{{ row.step_no }}</span>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="process_cd"
               label="工程CD"
               min-width="92"
               show-overflow-tooltip
-            />
+            >
+              <template #default="{ row }">
+                <span class="pbe-code pbe-code--process">{{ row.process_cd }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="工程名" min-width="108" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ row.process_name || '—' }}
@@ -117,7 +145,7 @@
 
       <div class="pbe-main-split__right">
         <div v-if="selectedHeaderId" class="pbe-mats-parts-stack">
-          <el-card class="panel-card pbe-panel" shadow="never">
+          <el-card class="panel-card pbe-panel pbe-panel--mat" shadow="never">
             <template #header>
               <div class="pbe-panel-cap">
                 <span class="pbe-panel-cap__dot" />
@@ -146,7 +174,11 @@
                 width="120"
                 align="center"
                 header-align="center"
-              />
+              >
+                <template #default="{ row }">
+                  <span class="pbe-code pbe-code--mat">{{ row.component_material_cd }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 label="材料名"
                 min-width="140"
@@ -193,7 +225,7 @@
               />
             </el-table>
           </el-card>
-          <el-card class="panel-card pbe-panel" shadow="never">
+          <el-card class="panel-card pbe-panel pbe-panel--part" shadow="never">
             <template #header>
               <div class="pbe-panel-cap">
                 <span class="pbe-panel-cap__dot pbe-panel-cap__dot--violet" />
@@ -229,7 +261,11 @@
                 width="120"
                 align="center"
                 header-align="center"
-              />
+              >
+                <template #default="{ row }">
+                  <span class="pbe-code pbe-code--part">{{ row.component_product_cd }}</span>
+                </template>
+              </el-table-column>
               <el-table-column
                 label="製品名"
                 min-width="140"
@@ -570,10 +606,10 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="small" :icon="Search" @click="loadHeaders">
+          <el-button type="primary" size="small" :icon="Search" class="pbe-btn-search" @click="loadHeaders">
             検索
           </el-button>
-          <el-button size="small" @click="resetSearch">クリア</el-button>
+          <el-button size="small" class="pbe-btn-clear" @click="resetSearch">クリア</el-button>
         </el-form-item>
       </el-form>
       <el-table
@@ -586,7 +622,11 @@
         @current-change="onGlobalHeaderSelect"
         style="width: 100%"
       >
-        <el-table-column prop="parent_product_cd" label="親製品CD" width="140" />
+        <el-table-column prop="parent_product_cd" label="親製品CD" width="140">
+          <template #default="{ row }">
+            <span class="pbe-code pbe-code--parent">{{ row.parent_product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="parent_product_name"
           label="製品名"
@@ -600,7 +640,11 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="revision" label="版番" width="70" />
+        <el-table-column prop="revision" label="版番" width="70">
+          <template #default="{ row }">
+            <span class="pbe-rev">{{ row.revision }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状態" width="80">
           <template #default="{ row }">
             <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
@@ -1608,6 +1652,33 @@ const currentPage = ref(1)
 const pageSize = 20
 const headerTotal = ref(0)
 const headers = ref<BomHeader[]>([])
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 const loadingHeaders = ref(false)
 
 const dialogVisible = ref(false)
@@ -3028,6 +3099,569 @@ onMounted(() => {
   .pbe-filt-header,
   .pbe-search-cd {
     width: 100%;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（製品BOM表 / midnight→steel blue）
+ * ============================================================ */
+.pbe-modern {
+  --hx-1: #0b1224;
+  --hx-2: #1e3a5f;
+  --hx-3: #1d4ed8;
+  --hx-4: #60a5fa;
+  --hx-deep: #1e3a8a;
+  --hx-soft: #eff6ff;
+  --hx-line: rgba(29, 78, 216, 0.16);
+  --pc: #2563eb;
+  --pc-deep: #1e3a8a;
+  background:
+    radial-gradient(1100px 360px at 8% -10%, rgba(59, 130, 246, 0.1), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 60%),
+    linear-gradient(180deg, #f6f9fd 0%, #eef3f9 100%);
+}
+
+.pbe-modern .pbe-hero {
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(30, 58, 138, 0.65),
+    0 6px 14px -6px rgba(96, 165, 250, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.pbe-modern .pbe-hero__accent,
+.pbe-modern .pbe-hero__inner {
+  position: relative;
+  z-index: 1;
+}
+
+.pbe-modern .pbe-hero__accent {
+  background: linear-gradient(90deg, #38bdf8, #a78bfa, #fbbf24, #38bdf8);
+  background-size: 200% 100%;
+  animation: pbeAccentFlow 5s linear infinite;
+}
+
+.pbe-modern .pbe-hero__inner {
+  gap: 12px;
+  padding: 12px 16px;
+  background: transparent;
+}
+
+.pbe-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.pbe-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: pbeOrbFloat 11s ease-in-out infinite;
+}
+
+.pbe-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 28%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.65), transparent 70%);
+}
+
+.pbe-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 16%;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.5), transparent 70%);
+  animation-delay: -5s;
+}
+
+.pbe-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.pbe-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: pbeSheen 7s ease-in-out infinite;
+}
+
+.pbe-modern .pbe-hero__brand {
+  flex: 1;
+  min-width: 240px;
+}
+
+.pbe-modern .pbe-hero__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(11, 18, 36, 0.55),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: pbeIconStack 6s ease-in-out infinite;
+}
+
+.pbe-modern .pbe-hero__title {
+  font-size: 18px;
+  text-shadow: 0 2px 10px rgba(11, 18, 36, 0.4);
+}
+
+.pbe-modern .pbe-hero__stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  perspective: 650px;
+}
+
+.pbe-modern .stat-card {
+  --sc: #bfdbfe;
+  position: relative;
+  overflow: hidden;
+  min-width: 62px;
+  padding: 6px 12px 5px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 3px 0 rgba(11, 18, 36, 0.45),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.pbe-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.pbe-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.pbe-modern .stat-card:hover {
+  box-shadow:
+    0 5px 0 rgba(11, 18, 36, 0.5),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.pbe-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.pbe-modern .stat-headers { --sc: #cbd5e1; }
+.pbe-modern .stat-route { --sc: #7dd3fc; }
+.pbe-modern .stat-mat { --sc: #fcd34d; }
+.pbe-modern .stat-part { --sc: #c4b5fd; }
+
+.pbe-modern .stat-num {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(11, 18, 36, 0.4);
+}
+
+.pbe-modern .stat-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.04em;
+}
+
+.pbe-modern .pbe-btn-new {
+  --k-edge: #0c4a6e;
+  --k-glow: rgba(14, 165, 233, 0.5);
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.pbe-modern .pbe-btn-new:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pbe-modern .pbe-btn-new:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.pbe-modern .pbe-toolbar-card,
+.pbe-modern .pbe-panel,
+.pbe-modern .pbe-tree-card,
+.pbe-modern .pbe-search-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--pc) 20%, #fff);
+  box-shadow:
+    0 12px 26px -18px color-mix(in srgb, var(--pc-deep) 60%, transparent),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.pbe-modern .pbe-toolbar-card::before,
+.pbe-modern .pbe-panel::before,
+.pbe-modern .pbe-tree-card::before,
+.pbe-modern .pbe-search-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--pc-deep), var(--pc), color-mix(in srgb, var(--pc) 40%, #fff));
+}
+
+.pbe-modern .pbe-route-panel {
+  --pc: #0284c7;
+  --pc-deep: #075985;
+}
+
+.pbe-modern .pbe-panel--mat {
+  --pc: #d97706;
+  --pc-deep: #92400e;
+}
+
+.pbe-modern .pbe-panel--part {
+  --pc: #7c3aed;
+  --pc-deep: #5b21b6;
+}
+
+.pbe-modern .pbe-panel--placeholder,
+.pbe-modern .pbe-search-card {
+  --pc: #475569;
+  --pc-deep: #1e293b;
+}
+
+.pbe-modern .pbe-tree-card {
+  --pc: #059669;
+  --pc-deep: #065f46;
+}
+
+.pbe-modern .pbe-toolbar-card :deep(.el-card__body) {
+  padding-top: 11px;
+}
+
+.pbe-modern .pbe-filter-form :deep(.el-form-item__label) {
+  font-weight: 700;
+  color: var(--hx-deep);
+}
+
+.pbe-modern .pbe-filter-form :deep(.el-select__wrapper),
+.pbe-modern .pbe-search-form :deep(.el-input__wrapper),
+.pbe-modern .pbe-search-form :deep(.el-select__wrapper) {
+  border-radius: 9px;
+}
+
+.pbe-modern .pbe-filter-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--hx-3) inset, 0 0 0 3px rgba(29, 78, 216, 0.14);
+}
+
+.pbe-modern .pbe-btn-reload,
+.pbe-modern .pbe-btn-search {
+  --k-edge: #1e3a8a;
+  --k-glow: rgba(37, 99, 235, 0.45);
+  border: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 8px 16px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.pbe-modern .pbe-btn-reload:not(.is-disabled):hover,
+.pbe-modern .pbe-btn-search:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 12px 20px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.pbe-modern .pbe-btn-reload:not(.is-disabled):active,
+.pbe-modern .pbe-btn-search:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.pbe-modern .pbe-btn-reload.is-disabled {
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.pbe-modern .pbe-btn-clear {
+  color: #1e293b;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 0 #cbd5e1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pbe-modern .pbe-btn-clear:hover {
+  transform: translateY(-1px);
+  color: #0f172a;
+  background: #e2e8f0;
+  box-shadow: 0 3px 0 #94a3b8;
+}
+
+.pbe-modern .pbe-panel :deep(.el-card__header),
+.pbe-modern .pbe-tree-card :deep(.el-card__header),
+.pbe-modern .pbe-search-card :deep(.el-card__header) {
+  padding-top: 10px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 9%, #fff), #fff);
+}
+
+.pbe-modern .pbe-panel-cap {
+  color: var(--pc-deep);
+  font-weight: 800;
+}
+
+.pbe-modern .pbe-panel-cap__dot {
+  width: 8px;
+  height: 8px;
+  background: var(--pc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc) 20%, transparent);
+  animation: pbeDotPulse 2.2s ease-in-out infinite;
+}
+
+.pbe-modern .pbe-panel-cap__meta {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--pc), var(--pc-deep));
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--pc-deep) 70%, #000);
+}
+
+.pbe-modern .pbe-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, var(--pc-deep), color-mix(in srgb, var(--pc) 80%, var(--pc-deep))) !important;
+  color: #fff !important;
+  border-bottom: 2px solid color-mix(in srgb, var(--pc) 45%, #fff) !important;
+}
+
+.pbe-modern .pbe-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: color-mix(in srgb, var(--pc) 7%, #fff) !important;
+}
+
+.pbe-modern .pbe-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--pc);
+}
+
+.pbe-modern .pbe-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  box-shadow: 0 2px 0 #075985;
+}
+
+.pbe-modern .pbe-code {
+  --cc: #1d4ed8;
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 9%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc) 32%, #fff), 0 2px 0 color-mix(in srgb, var(--cc) 25%, #fff);
+  transition: transform 0.15s ease;
+}
+
+.pbe-modern .pbe-code--process { --cc: #0369a1; }
+.pbe-modern .pbe-code--mat { --cc: #b45309; }
+.pbe-modern .pbe-code--part { --cc: #6d28d9; }
+.pbe-modern .pbe-code--parent { --cc: #1d4ed8; }
+
+.pbe-modern .pbe-table :deep(tr:hover) .pbe-code {
+  transform: translateY(-1px);
+}
+
+.pbe-modern .pbe-rev {
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
+.pbe-modern .pbe-tree-view-toggle :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner),
+.pbe-modern .pbe-tree-view-toggle :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  color: #fff;
+  border-color: #059669;
+  background: linear-gradient(135deg, #10b981, #047857);
+  box-shadow: 0 2px 0 #065f46;
+}
+
+.pbe-modern .pbe-tree-filter-input :deep(.el-input__wrapper) {
+  border-radius: 9px;
+}
+
+.pbe-modern .bom-viz-block-list,
+.pbe-modern .bom-flat-list {
+  perspective: 900px;
+}
+
+.pbe-modern .bom-viz-card {
+  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pbe-modern .bom-viz-card:hover {
+  transform: translateY(-2px) rotateX(4deg);
+  box-shadow:
+    0 4px 0 rgba(15, 23, 42, 0.08),
+    0 14px 22px -12px rgba(15, 23, 42, 0.35);
+}
+
+.pbe-modern .bom-viz-card--assy:hover {
+  box-shadow:
+    0 4px 0 rgba(22, 163, 74, 0.3),
+    0 14px 22px -12px rgba(6, 95, 70, 0.4);
+}
+
+.pbe-modern .bom-viz-card--leaf:hover {
+  box-shadow:
+    0 4px 0 rgba(14, 165, 233, 0.3),
+    0 14px 22px -12px rgba(7, 89, 133, 0.4);
+}
+
+.pbe-modern .bom-viz-card__qty {
+  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.06);
+}
+
+.pbe-modern .pbe-pagination :deep(.el-pager li.is-active) {
+  border-radius: 6px;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 2px 0 #1e3a8a;
+}
+
+@keyframes pbeOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes pbeSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes pbeAccentFlow {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pbeIconStack {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(16deg) rotateY(-12deg) translateY(-1px);
+  }
+}
+
+@keyframes pbeDotPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pbe-modern .fx-orb,
+  .pbe-modern .fx-sheen,
+  .pbe-modern .pbe-hero__accent,
+  .pbe-modern .pbe-hero__icon,
+  .pbe-modern .pbe-panel-cap__dot {
+    animation: none;
+  }
+
+  .pbe-modern .stat-card,
+  .pbe-modern .bom-viz-card:hover {
+    transform: none;
   }
 }
 </style>

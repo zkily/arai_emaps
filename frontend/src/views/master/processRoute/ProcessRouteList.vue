@@ -1,8 +1,14 @@
 <template>
   <transition name="fade-slide" mode="out-in">
-    <div class="route-master-container" v-if="true">
+    <div class="route-master-container rtm-modern" v-if="true">
       <!-- Compact Header -->
       <div class="page-header">
+        <div class="page-header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="header-content">
           <div class="title-section">
             <div class="title-row">
@@ -14,6 +20,20 @@
               </div>
             </div>
             <p class="subtitle">{{ t('master.processRoute.subtitle') }}</p>
+          </div>
+          <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+            <div class="stat-card stat-card--active">
+              <div class="stat-card-number">{{ activeRouteCount }}</div>
+              <div class="stat-card-label">{{ t('master.common.active') }}</div>
+            </div>
+            <div class="stat-card stat-card--inactive">
+              <div class="stat-card-number">{{ routeList.length - activeRouteCount }}</div>
+              <div class="stat-card-label">{{ t('master.common.inactive') }}</div>
+            </div>
+            <div class="stat-card stat-card--default">
+              <div class="stat-card-number">{{ defaultRouteCount }}</div>
+              <div class="stat-card-label">{{ t('master.processRoute.default') }}</div>
+            </div>
           </div>
           <el-button v-if="canCreate" type="primary" icon="Plus" @click="openAddDialog" class="add-btn">
             <span class="btn-icon">➕</span> {{ t('master.processRoute.addRoute') }}
@@ -118,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -152,6 +172,36 @@ const pagination = ref({
 const showDialog = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editData = ref<RouteItem | null>(null)
+
+const activeRouteCount = computed(() => routeList.value.filter((r) => r.is_active !== false).length)
+const defaultRouteCount = computed(() => routeList.value.filter((r) => r.is_default).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const fetchList = async () => {
   loading.value = true
@@ -511,5 +561,499 @@ onMounted(fetchList)
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（工程ルートマスタ / purple→fuchsia）
+ * ============================================================ */
+.route-master-container.rtm-modern {
+  --hx-1: #2e1065;
+  --hx-2: #6b21a8;
+  --hx-3: #9333ea;
+  --hx-4: #c026d3;
+  --hx-deep: #581c87;
+  --hx-accent: #9333ea;
+  --hx-soft: #faf5ff;
+  --hx-soft2: #f3e8ff;
+  --hx-line: #e9d5ff;
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(147, 51, 234, 0.08), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(192, 38, 211, 0.07), transparent 60%),
+    #f8fafc;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.rtm-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 34%, var(--hx-3) 70%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(107, 33, 168, 0.7),
+    0 4px 12px -6px rgba(192, 38, 211, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.rtm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rtm-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.rtm-modern .title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.rtm-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: rtmOrbFloat 11s ease-in-out infinite;
+}
+
+.rtm-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #f0abfc 0%, transparent 70%);
+}
+
+.rtm-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #c4b5fd 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.rtm-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.rtm-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: rtmSheen 7s ease-in-out infinite;
+}
+
+.rtm-modern .title-row {
+  gap: 12px;
+}
+
+.rtm-modern .title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 4px 0 rgba(46, 16, 101, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: rtmIconFloat 5s ease-in-out infinite;
+}
+
+.rtm-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.4);
+}
+
+.rtm-modern .stat-badge {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.rtm-modern .subtitle {
+  color: rgba(250, 245, 255, 0.88);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.rtm-modern .header-stats {
+  display: flex;
+  gap: 8px;
+  perspective: 700px;
+}
+
+.rtm-modern .stat-card {
+  --sc: #86efac;
+  position: relative;
+  overflow: hidden;
+  min-width: 78px;
+  padding: 6px 14px;
+  color: #fff;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.rtm-modern .stat-card--inactive {
+  --sc: #cbd5e1;
+  background: rgba(46, 16, 101, 0.26);
+}
+
+.rtm-modern .stat-card--default {
+  --sc: #fde68a;
+}
+
+.rtm-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.rtm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.3) 0%,
+    transparent 60%
+  );
+}
+
+.rtm-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.rtm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.rtm-modern .stat-card-number {
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.rtm-modern .stat-card-label {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+/* 追加ボタン：3Dキーキャップ */
+.rtm-modern .add-btn,
+.rtm-modern .add-btn:hover {
+  --k-edge: #701a75;
+  --k-glow: rgba(192, 38, 211, 0.55);
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: linear-gradient(135deg, #f0abfc 0%, #d946ef 45%, #a21caf 100%);
+}
+
+.rtm-modern .add-btn {
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.rtm-modern .add-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.rtm-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- 検索バー ---------- */
+.rtm-modern .search-section,
+.rtm-modern .table-section,
+.rtm-modern .footer-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 14px 28px -22px rgba(107, 33, 168, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.rtm-modern .search-section::before,
+.rtm-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--hx-2) 0%, var(--hx-3) 55%, var(--hx-4) 100%);
+}
+
+.rtm-modern .search-section {
+  padding-top: 12px;
+  background: linear-gradient(110deg, var(--hx-soft) 0%, #ffffff 60%);
+}
+
+.rtm-modern .search-input-wrapper {
+  border-radius: 10px;
+  background: #fff;
+  border-color: var(--hx-line);
+}
+
+.rtm-modern .search-input-wrapper:focus-within {
+  border-color: var(--hx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hx-accent) 16%, transparent);
+}
+
+.rtm-modern .search-btn,
+.rtm-modern .search-btn:hover {
+  --k-edge: #3b0764;
+  --k-glow: rgba(147, 51, 234, 0.5);
+  background: linear-gradient(135deg, #c084fc 0%, #9333ea 55%, #7e22ce 100%);
+}
+
+.rtm-modern .search-btn {
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.rtm-modern .search-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.rtm-modern .search-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- テーブル ---------- */
+.rtm-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: var(--hx-deep) !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, var(--hx-soft) 0%, var(--hx-soft2) 100%) !important;
+  border-bottom: 2px solid #d8b4fe !important;
+}
+
+.rtm-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.rtm-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-accent);
+}
+
+.rtm-modern .code-cell {
+  display: inline-block;
+  color: var(--hx-deep);
+  font-weight: 700;
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft2) 100%);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 1px var(--hx-line),
+    0 2px 0 var(--hx-line);
+  transition: transform 0.15s ease;
+}
+
+.rtm-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.rtm-modern .default-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: #fefce8;
+  box-shadow:
+    inset 0 0 0 1px #fde68a,
+    0 2px 0 #fde68a;
+}
+
+.rtm-modern .action-btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.rtm-modern .action-btn.el-button--primary {
+  box-shadow: 0 2px 0 #bfdbfe;
+}
+
+.rtm-modern .action-btn.el-button--warning {
+  box-shadow: 0 2px 0 #fde68a;
+}
+
+.rtm-modern .action-btn.el-button--danger {
+  box-shadow: 0 2px 0 #fecaca;
+}
+
+.rtm-modern .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.rtm-modern .action-btn.el-button--primary:hover {
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.6);
+}
+
+.rtm-modern .action-btn.el-button--warning:hover {
+  box-shadow:
+    0 3px 0 #92400e,
+    0 8px 14px -8px rgba(217, 119, 6, 0.6);
+}
+
+.rtm-modern .action-btn.el-button--danger:hover {
+  box-shadow:
+    0 3px 0 #991b1b,
+    0 8px 14px -8px rgba(220, 38, 38, 0.6);
+}
+
+.rtm-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ---------- フッター ---------- */
+.rtm-modern .footer-section {
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
+}
+
+.rtm-modern .result-info {
+  padding: 2px 10px;
+  color: var(--hx-deep);
+  font-weight: 700;
+  border-radius: 999px;
+  background: var(--hx-soft2);
+  box-shadow: inset 0 0 0 1px var(--hx-line);
+}
+
+.rtm-modern .compact-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #c084fc 0%, #9333ea 55%, #7e22ce 100%);
+  box-shadow:
+    0 2px 0 #3b0764,
+    0 6px 12px -6px rgba(147, 51, 234, 0.7);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes rtmOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes rtmSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes rtmIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (max-width: 1024px) {
+  .rtm-modern .header-stats {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rtm-modern .page-header-fx .fx-orb,
+  .rtm-modern .page-header-fx .fx-sheen,
+  .rtm-modern .title-icon {
+    animation: none;
+  }
+
+  .rtm-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

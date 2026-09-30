@@ -1,6 +1,7 @@
 <template>
-  <div class="pul-page">
+  <div class="pul-page pum-modern">
     <header class="pul-hero">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="pul-hero-inner">
         <div class="pul-title-row">
           <span class="pul-title-icon"><el-icon :size="20"><Tickets /></el-icon></span>
@@ -15,9 +16,23 @@
             </div>
           </div>
         </div>
-        <div class="pul-stat">
-          <span class="pul-stat-num">{{ pagination.total }}</span>
-          <span class="pul-stat-lbl">登録件数</span>
+        <div class="pul-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="pul-stat pul-stat--total">
+            <span class="pul-stat-num">{{ pagination.total }}</span>
+            <span class="pul-stat-lbl">登録件数</span>
+          </div>
+          <div class="pul-stat pul-stat--shown">
+            <span class="pul-stat-num">{{ list.length }}</span>
+            <span class="pul-stat-lbl">表示中</span>
+          </div>
+          <div class="pul-stat pul-stat--out">
+            <span class="pul-stat-num">{{ outsourceRowCount }}</span>
+            <span class="pul-stat-lbl">外注（表示中）</span>
+          </div>
+          <div class="pul-stat pul-stat--end">
+            <span class="pul-stat-num">{{ discontinuedRowCount }}</span>
+            <span class="pul-stat-lbl">終息（表示中）</span>
+          </div>
         </div>
       </div>
     </header>
@@ -149,7 +164,11 @@
         :height="tableHeight"
         @sort-change="handleSortChange"
       >
-        <el-table-column prop="product_cd" label="製品CD" width="72" :fixed="tableFixed" show-overflow-tooltip />
+        <el-table-column prop="product_cd" label="製品CD" width="72" :fixed="tableFixed" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="pum-code">{{ row.product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="master_product_name"
           label="製品名（マスタ）"
@@ -164,7 +183,8 @@
         </el-table-column>
         <el-table-column label="入数" width="56" align="center">
           <template #default="{ row }">
-            <span class="pul-readonly-val">{{ row.unit_qty ?? '—' }}</span>
+            <span v-if="row.unit_qty != null" class="pum-qty">{{ row.unit_qty }}</span>
+            <span v-else class="pul-readonly-val">—</span>
           </template>
         </el-table-column>
         <el-table-column label="区分" width="96" align="center">
@@ -241,17 +261,20 @@
         </el-table-column>
         <el-table-column label="背番1" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="pul-readonly-val">{{ row.back_no_1 || '—' }}</span>
+            <span v-if="row.back_no_1" class="pum-back pum-back--1">{{ row.back_no_1 }}</span>
+            <span v-else class="pul-readonly-val">—</span>
           </template>
         </el-table-column>
         <el-table-column label="背番2" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="pul-readonly-val">{{ row.back_no_2 || '—' }}</span>
+            <span v-if="row.back_no_2" class="pum-back pum-back--2">{{ row.back_no_2 }}</span>
+            <span v-else class="pul-readonly-val">—</span>
           </template>
         </el-table-column>
         <el-table-column label="背番3" width="72" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="pul-readonly-val">{{ row.back_no_3 || '—' }}</span>
+            <span v-if="row.back_no_3" class="pum-back pum-back--3">{{ row.back_no_3 }}</span>
+            <span v-else class="pul-readonly-val">—</span>
           </template>
         </el-table-column>
         <el-table-column label="バーコード" width="88" show-overflow-tooltip>
@@ -740,6 +763,38 @@ const printPerPage = computed(() => (printTarget.value?.is_inoac_layout ? 16 : 2
 
 const filters = reactive({ keyword: '', product_cd: '', destination_name: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
+
+const outsourceRowCount = computed(
+  () => list.value.filter((r) => normalizeSupplyType(r.supply_type) === '外注').length,
+)
+const discontinuedRowCount = computed(() => list.value.filter((r) => !!r.is_discontinued).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pul-stat')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.pul-stat').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.pul-stat').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 const sortConfig = reactive({ prop: 'master_product_name', order: 'asc' as 'asc' | 'desc' })
 
 const masterInfo = reactive({ product_name: '' })
@@ -2159,6 +2214,497 @@ onBeforeUnmount(() => {
   .pul-filter-field--search {
     flex: 1 1 100%;
     max-width: none;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（製品用ラベル設定 / オーシャン：深海→シアン→アクア）
+ * ============================================================ */
+.pum-modern {
+  --hx-1: #082f49;
+  --hx-2: #075985;
+  --hx-3: #0891b2;
+  --hx-4: #22d3ee;
+  --hx-deep: #075985;
+  --hx-soft: #ecfeff;
+  --hx-line: rgba(8, 145, 178, 0.18);
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(14, 165, 233, 0.13), transparent 55%),
+    radial-gradient(ellipse 55% 42% at 96% 2%, rgba(34, 211, 238, 0.1), transparent 50%),
+    linear-gradient(165deg, #f1f5f9 0%, #ecfeff 38%, #f8fafc 100%);
+}
+
+.pum-modern .pul-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 14px 32px -12px rgba(7, 89, 133, 0.6),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.pum-modern .pul-hero > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.pum-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pum-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: pumOrbFloat 11s ease-in-out infinite;
+}
+
+.pum-modern .orb-a {
+  width: 180px;
+  height: 180px;
+  top: -70px;
+  right: 20%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+}
+
+.pum-modern .orb-b {
+  width: 150px;
+  height: 150px;
+  bottom: -70px;
+  left: 28%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.pum-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
+}
+
+.pum-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: pumSheen 7s ease-in-out infinite;
+}
+
+@keyframes pumOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes pumSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.pum-modern .pul-title-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 4px 0 rgba(8, 47, 73, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: pumTicketFlip 4.2s ease-in-out infinite;
+}
+
+@keyframes pumTicketFlip {
+  0%,
+  70%,
+  100% {
+    transform: perspective(200px) rotateY(0deg) translateY(0);
+  }
+  80% {
+    transform: perspective(200px) rotateY(180deg) translateY(-2px);
+  }
+  90% {
+    transform: perspective(200px) rotateY(360deg) translateY(0);
+  }
+}
+
+.pum-modern .pul-title {
+  text-shadow: 0 2px 8px rgba(8, 47, 73, 0.4);
+}
+
+.pum-modern .pul-subtitle {
+  color: rgba(236, 254, 255, 0.88);
+}
+
+.pum-modern .pul-hero-badge {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 2px 0 rgba(8, 47, 73, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.15s ease;
+}
+
+.pum-modern .pul-hero-badge:hover {
+  transform: translateY(-1px);
+}
+
+.pum-modern .pul-hero-badge--inoac {
+  background: linear-gradient(160deg, rgba(251, 191, 36, 0.36), rgba(251, 191, 36, 0.14));
+}
+
+/* 統計カード */
+.pum-modern .pul-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  perspective: 650px;
+}
+
+.pum-modern .pul-stat,
+.pum-modern .pul-stat:hover {
+  position: relative;
+  overflow: hidden;
+  min-width: 86px;
+  padding: 10px 14px 9px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 4px 0 rgba(8, 47, 73, 0.45),
+    0 12px 22px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease;
+}
+
+.pum-modern .pul-stat:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+}
+
+.pum-modern .pul-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+  box-shadow: 0 0 10px var(--sc);
+}
+
+.pum-modern .pul-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.pum-modern .pul-stat:hover::after {
+  opacity: 1;
+}
+
+.pum-modern .pul-stat-num {
+  display: block;
+  transform: translateZ(14px);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(8, 47, 73, 0.45);
+}
+
+.pum-modern .pul-stat-lbl {
+  color: rgba(236, 254, 255, 0.85);
+  letter-spacing: 0.04em;
+}
+
+.pum-modern .pul-stat--total {
+  --sc: #67e8f9;
+}
+
+.pum-modern .pul-stat--shown {
+  --sc: #7dd3fc;
+}
+
+.pum-modern .pul-stat--out {
+  --sc: #d8b4fe;
+}
+
+.pum-modern .pul-stat--end {
+  --sc: #cbd5e1;
+}
+
+/* ツールバー・テーブルカード */
+.pum-modern .pul-toolbar-card,
+.pum-modern .pul-table-wrap {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px -14px rgba(7, 89, 133, 0.4),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.pum-modern .pul-toolbar-card::before,
+.pum-modern .pul-table-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4));
+}
+
+.pum-modern .pul-toolbar {
+  padding-top: 15px;
+}
+
+.pum-modern .pul-result-bar {
+  padding-top: 11px;
+  background: linear-gradient(180deg, #ecfeff 0%, #f8feff 100%);
+  border-bottom-color: var(--hx-line);
+}
+
+.pum-modern .pul-field-label {
+  color: var(--hx-deep);
+}
+
+.pum-modern .pul-search :deep(.el-input__wrapper),
+.pum-modern .pul-filter :deep(.el-select__wrapper) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(8, 145, 178, 0.16);
+}
+
+.pum-modern .pul-search :deep(.el-input__wrapper:hover),
+.pum-modern .pul-search :deep(.el-input__wrapper.is-focus),
+.pum-modern .pul-filter :deep(.el-select__wrapper.is-hovering),
+.pum-modern .pul-filter :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 12px -2px rgba(8, 145, 178, 0.22),
+    0 0 0 1px rgba(8, 145, 178, 0.45);
+}
+
+/* 立体ボタン（キーキャップ） */
+.pum-modern .pul-btn:not(:disabled):hover {
+  filter: brightness(1.07) saturate(1.05);
+}
+
+.pum-modern .pul-btn:not(:disabled):active {
+  transform: translateY(2px);
+}
+
+.pum-modern .pul-btn--refresh:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 0 #cbd5e1 !important;
+}
+
+.pum-modern .pul-btn--print {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 3px 0 #047857,
+    0 8px 16px -6px rgba(5, 150, 105, 0.5) !important;
+}
+
+.pum-modern .pul-btn--print:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 0 #047857 !important;
+}
+
+.pum-modern .pul-btn--outsource:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 1px 0 #7e22ce !important;
+}
+
+.pum-modern .pul-btn--sync:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 1px 0 #0369a1 !important;
+}
+
+.pum-modern .pul-btn--create {
+  background: linear-gradient(180deg, #22d3ee 0%, #06b6d4 40%, #0891b2 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 4px 0 #0e7490,
+    0 8px 18px -4px rgba(8, 145, 178, 0.5) !important;
+}
+
+.pum-modern .pul-btn--create:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 1px 0 #0e7490 !important;
+}
+
+/* テーブル */
+.pum-modern .pul-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%) !important;
+  color: var(--hx-deep) !important;
+  border-bottom: 2px solid rgba(8, 145, 178, 0.3) !important;
+  font-weight: 700;
+}
+
+.pum-modern .pul-table :deep(.el-table__row:hover > td) {
+  background: #ecfeff !important;
+}
+
+.pum-modern .pul-table :deep(.el-table__row:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.pum-modern .pum-code,
+.pum-modern .pum-qty,
+.pum-modern .pum-back {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.15s ease;
+}
+
+.pum-modern .pum-code {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  color: var(--hx-deep);
+  background: color-mix(in srgb, #0891b2 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(8, 145, 178, 0.28),
+    0 2px 0 rgba(8, 145, 178, 0.2);
+}
+
+.pum-modern .pum-qty {
+  min-width: 32px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-weight: 800;
+  color: #1e40af;
+  background: color-mix(in srgb, #3b82f6 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(59, 130, 246, 0.26),
+    0 2px 0 rgba(59, 130, 246, 0.18);
+}
+
+.pum-modern .pum-back {
+  padding: 0 7px;
+  border-radius: 5px;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 11%, #fff);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--cc) 30%, transparent),
+    0 2px 0 color-mix(in srgb, var(--cc) 22%, transparent);
+}
+
+.pum-modern .pum-back--1 {
+  --cc: #0e7490;
+}
+
+.pum-modern .pum-back--2 {
+  --cc: #4338ca;
+}
+
+.pum-modern .pum-back--3 {
+  --cc: #0f766e;
+}
+
+.pum-modern .pul-table :deep(.el-table__row:hover) .pum-code,
+.pum-modern .pul-table :deep(.el-table__row:hover) .pum-qty,
+.pum-modern .pul-table :deep(.el-table__row:hover) .pum-back {
+  transform: translateY(-1px);
+}
+
+.pum-modern .pul-readonly-val--mono {
+  color: #0f172a;
+  letter-spacing: 0.04em;
+}
+
+.pum-modern .pul-paper-chip {
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.12),
+    0 2px 0 rgba(15, 23, 42, 0.1);
+}
+
+.pum-modern .pul-color-dot {
+  box-shadow:
+    0 2px 0 rgba(15, 23, 42, 0.18),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.pum-modern .pul-result-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--hx-2), var(--hx-3));
+  box-shadow: 0 2px 0 var(--hx-1);
+}
+
+/* ダイアログ */
+.pum-modern .pul-dialog :deep(.el-dialog__header),
+.pum-modern .pul-print-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 45%, var(--hx-3) 100%);
+}
+
+.pum-modern .pul-dialog :deep(.el-dialog__body) {
+  background: linear-gradient(180deg, #f8fafc 0%, #ecfeff 100%);
+}
+
+.pum-modern .pul-edit-section--accent {
+  background: linear-gradient(180deg, #fff 0%, #ecfeff 100%);
+  border-color: #a5f3fc;
+  box-shadow: 0 2px 8px rgba(8, 145, 178, 0.1);
+}
+
+.pum-modern .pul-edit-section-title,
+.pum-modern .pul-edit-form :deep(.el-form-item__label) {
+  color: var(--hx-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pum-modern .fx-orb,
+  .pum-modern .fx-sheen,
+  .pum-modern .pul-title-icon {
+    animation: none;
+  }
+
+  .pum-modern .pul-stat,
+  .pum-modern .pul-stat:hover {
+    transform: none;
   }
 }
 </style>

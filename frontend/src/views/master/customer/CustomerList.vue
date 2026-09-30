@@ -1,8 +1,14 @@
 <template>
-  <div class="customer-master-container">
+  <div class="customer-master-container cst-modern">
     <div class="page-shell">
       <!-- 紧凑页头：标题 + 统计 + 新增 -->
       <header class="page-header">
+        <div class="page-header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="header-left">
           <div class="title-icon-wrap">
             <el-icon><User /></el-icon>
@@ -11,7 +17,7 @@
             <h1 class="main-title">{{ t('master.customer.title') }}</h1>
             <p class="subtitle">顧客情報の登録・編集・管理</p>
           </div>
-          <div class="stat-pills">
+          <div class="stat-pills" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <span class="stat-pill">
               <strong>{{ customerList.length }}</strong>
               <em>{{ t('master.common.items') }}</em>
@@ -19,6 +25,10 @@
             <span class="stat-pill stat-pill--active">
               <strong>{{ activeCount }}</strong>
               <em>{{ t('master.common.active') }}</em>
+            </span>
+            <span class="stat-pill stat-pill--inactive">
+              <strong>{{ customerList.length - activeCount }}</strong>
+              <em>{{ t('master.common.inactive') }}</em>
             </span>
           </div>
         </div>
@@ -296,6 +306,33 @@ const clearFilters = () => {
 }
 
 const activeCount = computed(() => customerList.value.filter((row) => row.status === 1).length)
+
+// ヘッダー統計ピルの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-pill')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-pill').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-pill').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function getCustomerTypeTagType(
   type: string | undefined,
@@ -711,6 +748,361 @@ onMounted(fetchList)
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（顧客マスタ / sky）
+ * ============================================================ */
+.customer-master-container.cst-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(14, 165, 233, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(56, 189, 248, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.cst-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #082f49 0%, #0369a1 36%, #0ea5e9 72%, #38bdf8 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(3, 105, 161, 0.7),
+    0 4px 12px -6px rgba(14, 165, 233, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.cst-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cst-modern .header-left,
+.cst-modern .page-header > .add-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.cst-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: cstOrbFloat 11s ease-in-out infinite;
+}
+
+.cst-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
+}
+
+.cst-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #bae6fd 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.cst-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.cst-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: cstSheen 7s ease-in-out infinite;
+}
+
+.cst-modern .title-icon-wrap {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(8, 47, 73, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: cstIconFloat 5s ease-in-out infinite;
+}
+
+.cst-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(8, 47, 73, 0.4);
+}
+
+.cst-modern .subtitle {
+  color: rgba(224, 242, 254, 0.9);
+}
+
+/* 統計ピル：3Dチルト＋グレア */
+.cst-modern .stat-pills {
+  perspective: 600px;
+}
+
+.cst-modern .stat-pill {
+  position: relative;
+  overflow: hidden;
+  padding: 4px 12px;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 3px 0 rgba(8, 47, 73, 0.45),
+    0 10px 18px -10px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.cst-modern .stat-pill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 65%
+  );
+}
+
+.cst-modern .stat-pill:hover::after {
+  opacity: 1;
+}
+
+.cst-modern .stat-pill strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.cst-modern .stat-pill--inactive {
+  background: rgba(8, 47, 73, 0.3);
+  border-color: rgba(203, 213, 225, 0.4);
+}
+
+/* 追加ボタン：3Dキーキャップ */
+.cst-modern .add-btn {
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%) !important;
+  box-shadow:
+    0 3px 0 #064e3b,
+    0 10px 18px -8px rgba(16, 185, 129, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.cst-modern .add-btn:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%) !important;
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #064e3b,
+    0 14px 22px -8px rgba(16, 185, 129, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.cst-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #064e3b,
+    0 4px 8px -4px rgba(16, 185, 129, 0.5);
+}
+
+/* ---------- ツールバー ---------- */
+.cst-modern .toolbar-card,
+.cst-modern .table-section,
+.cst-modern .footer-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: #bae6fd;
+  box-shadow:
+    0 14px 28px -22px rgba(3, 105, 161, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.cst-modern .toolbar-card::before,
+.cst-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0369a1 0%, #0ea5e9 55%, #38bdf8 100%);
+}
+
+.cst-modern .toolbar-card {
+  padding-top: 10px;
+  background: linear-gradient(110deg, #f0f9ff 0%, #ffffff 60%);
+}
+
+.cst-modern .toolbar-row :deep(.el-input__wrapper.is-focus),
+.cst-modern .toolbar-row :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #0ea5e9 inset,
+    0 0 0 3px rgba(14, 165, 233, 0.16);
+}
+
+.cst-modern .clear-btn {
+  font-weight: 600;
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.cst-modern .clear-btn:hover {
+  color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: inset 0 0 0 1px #bae6fd;
+}
+
+/* ---------- テーブル ---------- */
+.cst-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #075985 !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border-bottom: 2px solid #7dd3fc !important;
+}
+
+.cst-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.cst-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0ea5e9;
+}
+
+.cst-modern .code-cell {
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #075985;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
+  box-shadow:
+    inset 0 0 0 1px #bae6fd,
+    0 2px 0 #bae6fd;
+  transition: transform 0.15s ease;
+}
+
+.cst-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.cst-modern .action-btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cst-modern .action-btn.el-button--primary {
+  box-shadow: 0 2px 0 #bfdbfe;
+}
+
+.cst-modern .action-btn.el-button--danger {
+  box-shadow: 0 2px 0 #fecaca;
+}
+
+.cst-modern .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.cst-modern .action-btn.el-button--primary:hover {
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.6);
+}
+
+.cst-modern .action-btn.el-button--danger:hover {
+  box-shadow:
+    0 3px 0 #991b1b,
+    0 8px 14px -8px rgba(220, 38, 38, 0.6);
+}
+
+.cst-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ---------- フッター ---------- */
+.cst-modern .footer-bar {
+  color: #075985;
+  font-weight: 600;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes cstOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes cstSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes cstIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cst-modern .page-header-fx .fx-orb,
+  .cst-modern .page-header-fx .fx-sheen,
+  .cst-modern .title-icon-wrap {
+    animation: none;
+  }
+
+  .cst-modern .stat-pill {
+    transform: none;
+    transition: none;
   }
 }
 </style>

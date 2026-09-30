@@ -1,13 +1,39 @@
 <template>
-  <div class="cap-matrix-page">
+  <div class="cap-matrix-page cm-modern">
     <div class="plan-hd no-print">
-      <h2 class="plan-hd-title">
-        <span class="plan-hd-title-inner">
-          <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
-          設備稼働時間表
+      <div class="plan-hd-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
+      <div class="plan-hd-text">
+        <h2 class="plan-hd-title">
+          <span class="plan-hd-title-inner">
+            <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
+            設備稼働時間表
+          </span>
+        </h2>
+        <p class="plan-hd-sub">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
+      </div>
+      <div class="plan-hd-meta">
+        <span class="plan-hd-chip">
+          <el-icon><Operation /></el-icon>
+          {{ selectedProcessLabel }}
         </span>
-      </h2>
-      <p class="plan-hd-sub">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
+        <span class="plan-hd-chip">
+          <el-icon><Calendar /></el-icon>
+          {{ dateRange?.[0] || '—' }} 〜 {{ dateRange?.[1] || '—' }}
+        </span>
+        <span class="plan-hd-chip">
+          <el-icon><Monitor /></el-icon>
+          設備 {{ matrixRows.length }}
+        </span>
+        <span class="plan-hd-chip plan-hd-chip--strong">
+          <el-icon><Timer /></el-icon>
+          合計 {{ Math.round(grandTotalHours).toLocaleString('ja-JP') }}h
+        </span>
+      </div>
     </div>
 
     <div class="plan-card filter-card filter-card--panel no-print">
@@ -134,7 +160,16 @@
           <el-icon class="matrix-empty__icon"><Document /></el-icon>
         </template>
       </el-empty>
-      <div v-else class="matrix-wrap">
+      <div v-if="matrixRows.length > 0" class="matrix-legend no-print">
+        <span class="lg-item"><i class="lg-sw lg-sw--empty" />平日0h</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--weekend" />土日</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--mid" />20〜22h</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--high" />23h超</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--tech" />技術使用</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--maint" />保全</span>
+        <span class="lg-item"><i class="lg-sw lg-sw--mixed" />技術・保全</span>
+      </div>
+      <div v-if="loading || matrixRows.length > 0" class="matrix-wrap">
         <table class="matrix-table">
           <thead>
             <tr>
@@ -143,7 +178,7 @@
                 v-for="d in dateColumns"
                 :key="d"
                 class="date-col"
-                :class="{ 'is-weekend': isWeekend(d) }"
+                :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
               >
                 <div class="date-hd">{{ formatDate(d) }}</div>
                 <div class="wd-hd">{{ getWeekday(d) }}</div>
@@ -174,7 +209,16 @@
 import dayjs from 'dayjs'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Grid, Operation, Monitor, Calendar, Refresh, Printer, Document } from '@element-plus/icons-vue'
+import {
+  Grid,
+  Operation,
+  Monitor,
+  Calendar,
+  Refresh,
+  Printer,
+  Document,
+  Timer,
+} from '@element-plus/icons-vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
@@ -260,6 +304,21 @@ const printRangeText = computed(() => {
 })
 
 const printNowText = computed(() => dayjs().format('YYYY-MM-DD HH:mm'))
+
+const selectedProcessLabel = computed(() => {
+  const cd = (selectedProcessCd.value || '').trim()
+  if (!cd) return '全工程'
+  const p = processOptions.value.find((x) => (x.process_cd || '').trim() === cd)
+  return p ? processOptionLabel(p) : cd
+})
+
+const grandTotalHours = computed(() =>
+  matrixRows.value.reduce((acc, r) => acc + Number(r.totalHours || 0), 0),
+)
+
+function isToday(d: string) {
+  return dayjs(d).isSame(dayjs(), 'day')
+}
 
 function isWeekend(d: string) {
   const wd = dayjs(d).day()
@@ -855,6 +914,484 @@ onMounted(async () => {
   }
   .matrix-table thead {
     display: table-header-group;
+  }
+}
+
+/* 页面美化：現代UI・3D動効・色分け（設備稼働時間表 / APS blue→indigo→violet） */
+@media screen {
+  .cm-modern {
+    --cm-c1: #1d4ed8;
+    --cm-c2: #4f46e5;
+    --cm-c3: #7c3aed;
+    --cm-edge: #3730a3;
+    padding: 8px 10px 12px;
+    background:
+      radial-gradient(circle at 4% -10%, rgba(79, 70, 229, 0.1), transparent 36%),
+      radial-gradient(circle at 100% -16%, rgba(124, 58, 237, 0.09), transparent 32%),
+      var(--el-bg-color-page);
+  }
+
+  /* ---- Hero ヘッダー ---- */
+  .cm-modern .plan-hd {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 10px;
+    padding: 12px 16px;
+    border-radius: 14px;
+    color: #fff;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 30%, #4f46e5 64%, #7c3aed 100%);
+    box-shadow:
+      0 14px 30px -16px rgba(55, 48, 163, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    animation: cmRise 0.45s ease-out backwards;
+  }
+  .cm-modern .plan-hd-fx {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .cm-modern .fx-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+    animation: cmOrbFloat 9s ease-in-out infinite;
+  }
+  .cm-modern .orb-a {
+    width: 180px;
+    height: 180px;
+    top: -80px;
+    right: 12%;
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.32), rgba(165, 180, 252, 0) 70%);
+  }
+  .cm-modern .orb-b {
+    width: 130px;
+    height: 130px;
+    bottom: -70px;
+    left: 30%;
+    background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
+    animation-delay: -4s;
+  }
+  .cm-modern .fx-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
+  }
+  .cm-modern .fx-sheen {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.16) 48%,
+      transparent 62%
+    );
+    background-size: 250% 100%;
+    animation: cmSheen 6s ease-in-out infinite;
+  }
+  .cm-modern .plan-hd-text,
+  .cm-modern .plan-hd-meta {
+    position: relative;
+    z-index: 1;
+  }
+  .cm-modern .plan-hd-title {
+    font-size: 17px;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+  }
+  .cm-modern .plan-hd-title-inner {
+    gap: 10px;
+  }
+  .cm-modern .plan-hd-title-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 19px;
+    color: #fff;
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    box-shadow:
+      0 8px 16px -6px rgba(30, 27, 75, 0.55),
+      inset 0 -3px 0 rgba(30, 27, 75, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    animation: cmIconFloat 4.5s ease-in-out infinite;
+  }
+  .cm-modern .plan-hd-sub {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.82);
+  }
+  .cm-modern .plan-hd-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .cm-modern .plan-hd-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(6px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  .cm-modern .plan-hd-chip--strong {
+    background: rgba(255, 255, 255, 0.26);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* ---- カード ---- */
+  .cm-modern .plan-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--cm-c2) 14%, var(--el-border-color-lighter));
+    border-radius: 12px;
+    box-shadow:
+      0 10px 24px -18px rgba(55, 48, 163, 0.45),
+      0 1px 2px rgba(15, 23, 42, 0.05);
+  }
+  .cm-modern .plan-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    z-index: 1;
+  }
+  .cm-modern .filter-card--panel {
+    border-left: 1px solid color-mix(in srgb, var(--cm-c2) 14%, var(--el-border-color-lighter));
+    padding: 12px 12px 10px;
+    background: linear-gradient(
+      105deg,
+      color-mix(in srgb, var(--cm-c2) 6%, #fff) 0%,
+      var(--el-bg-color) 55%
+    );
+    animation: cmRise 0.45s ease-out 0.06s backwards;
+  }
+  .cm-modern .filter-card--panel::before {
+    background: linear-gradient(90deg, var(--cm-c1), var(--cm-c2), var(--cm-c3));
+  }
+  .cm-modern .result-card--panel {
+    border-left: 1px solid color-mix(in srgb, var(--cm-c2) 14%, var(--el-border-color-lighter));
+    padding: 10px 10px 8px;
+    animation: cmRise 0.45s ease-out 0.12s backwards;
+  }
+  .cm-modern .result-card--panel::before {
+    background: linear-gradient(90deg, #059669, #0ea5e9, var(--cm-c2));
+  }
+  .cm-modern .filter-form__lbl .el-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    background: linear-gradient(135deg, var(--cm-c1), var(--cm-c3));
+    box-shadow: 0 3px 8px -3px rgba(79, 70, 229, 0.6);
+  }
+  .cm-modern .filter-form__lbl {
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+  .cm-modern .filter-form :deep(.el-input__wrapper),
+  .cm-modern .filter-form :deep(.el-select__wrapper) {
+    border-radius: 8px;
+    transition: box-shadow 0.2s ease;
+  }
+  .cm-modern .filter-form :deep(.el-input__wrapper:hover),
+  .cm-modern .filter-form :deep(.el-select__wrapper:hover) {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--cm-c2) 45%, transparent) inset,
+      0 4px 10px -6px rgba(79, 70, 229, 0.5);
+  }
+
+  /* ---- 3D キーキャップボタン ---- */
+  .cm-modern .filter-form :deep(.el-button) {
+    --k-edge: #3730a3;
+    --k-glow: rgba(79, 70, 229, 0.5);
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease;
+    box-shadow:
+      0 3px 0 var(--k-edge),
+      0 10px 18px -8px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):hover) {
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow:
+      0 5px 0 var(--k-edge),
+      0 14px 22px -10px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):active) {
+    transform: translateY(2px);
+    box-shadow:
+      0 1px 0 var(--k-edge),
+      0 4px 8px -6px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .cm-modern .filter-form :deep(.el-button.is-disabled) {
+    box-shadow: none;
+    transform: none;
+  }
+  .cm-modern .filter-form :deep(.capmx-btn-month-this) {
+    --k-edge: #1e40af;
+    --k-glow: rgba(37, 99, 235, 0.45);
+    color: #fff;
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+  }
+  .cm-modern .filter-form :deep(.capmx-btn-month-next) {
+    --k-edge: #047857;
+    --k-glow: rgba(5, 150, 105, 0.45);
+    color: #fff;
+    background: linear-gradient(180deg, #34d399, #059669);
+  }
+  .cm-modern .filter-form :deep(.capmx-btn-refresh) {
+    --k-edge: #3730a3;
+    --k-glow: rgba(79, 70, 229, 0.55);
+    color: #fff;
+    background: linear-gradient(180deg, #818cf8, #4f46e5 55%, #6d28d9);
+  }
+  .cm-modern .filter-form :deep(.capmx-btn-print) {
+    --k-edge: #b45309;
+    --k-glow: rgba(217, 119, 6, 0.45);
+    color: #fff;
+    background: linear-gradient(180deg, #fbbf24, #f59e0b 55%, #ea580c);
+  }
+  .cm-modern .filter-form :deep(.capmx-btn-print.is-disabled) {
+    color: #fff;
+    opacity: 0.55;
+  }
+
+  /* ---- 凡例 ---- */
+  .cm-modern .matrix-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 8px;
+  }
+  .cm-modern .lg-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 9px 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--el-text-color-regular);
+    background: var(--el-fill-color-blank);
+    border: 1px solid var(--el-border-color-lighter);
+    box-shadow: 0 2px 0 var(--el-border-color-lighter);
+  }
+  .cm-modern .lg-sw {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+  }
+  .cm-modern .lg-sw--empty {
+    background: #e5e7eb;
+  }
+  .cm-modern .lg-sw--weekend {
+    background: #fff5f5;
+    border-color: #fca5a5;
+  }
+  .cm-modern .lg-sw--mid {
+    background: #fff7d6;
+  }
+  .cm-modern .lg-sw--high {
+    background: #f4c98a;
+  }
+  .cm-modern .lg-sw--tech {
+    background: #fff4e5;
+    box-shadow: inset 0 0 0 2px #f5a623aa;
+  }
+  .cm-modern .lg-sw--maint {
+    background: #eef2ff;
+    box-shadow: inset 0 0 0 2px #64748baa;
+  }
+  .cm-modern .lg-sw--mixed {
+    background: #ffedd5;
+    box-shadow: inset 0 0 0 2px #ea580caa;
+  }
+
+  /* ---- マトリクス表 ---- */
+  .cm-modern .matrix-wrap {
+    max-height: calc(100vh - 262px);
+    border-radius: 10px;
+    border-color: color-mix(in srgb, var(--cm-c2) 16%, var(--el-border-color-lighter));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 8px 18px -14px rgba(55, 48, 163, 0.4);
+  }
+  .cm-modern .matrix-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .cm-modern .matrix-wrap::-webkit-scrollbar-thumb {
+    border-radius: 8px;
+    background: linear-gradient(180deg, #818cf8, #6d28d9);
+  }
+  .cm-modern .matrix-wrap::-webkit-scrollbar-track {
+    background: color-mix(in srgb, var(--cm-c2) 6%, #fff);
+  }
+  .cm-modern .matrix-table thead th {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: linear-gradient(180deg, #4f46e5 0%, #3730a3 100%);
+    box-shadow: inset 0 -2px 0 rgba(30, 27, 75, 0.35);
+  }
+  .cm-modern .matrix-table thead th.sticky-col {
+    background: linear-gradient(180deg, #1d4ed8 0%, #312e81 100%);
+  }
+  .cm-modern .matrix-table thead .wd-hd {
+    color: rgba(255, 255, 255, 0.78);
+  }
+  .cm-modern .matrix-table thead th.date-col.is-weekend {
+    background: linear-gradient(180deg, #f43f5e 0%, #be123c 100%);
+  }
+  .cm-modern .matrix-table thead th.date-col.is-weekend .date-hd,
+  .cm-modern .matrix-table thead th.date-col.is-weekend .wd-hd {
+    color: #fff;
+  }
+  .cm-modern .matrix-table thead th.date-col.is-today {
+    background: linear-gradient(180deg, #06b6d4 0%, #0e7490 100%);
+    box-shadow:
+      inset 0 -3px 0 #fde047,
+      0 0 0 1px rgba(253, 224, 71, 0.6);
+  }
+  .cm-modern .matrix-table tbody td.sticky-col {
+    color: var(--el-text-color-primary);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--cm-c2) 7%, #fff), #fff);
+    box-shadow: 1px 0 0 var(--el-border-color-light);
+    transition: box-shadow 0.15s ease;
+  }
+  .cm-modern .matrix-table tbody tr:hover td.sticky-col {
+    color: var(--cm-c2);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--cm-c2) 14%, #fff), #fff);
+    box-shadow:
+      inset 3px 0 0 var(--cm-c2),
+      1px 0 0 var(--el-border-color-light);
+  }
+  .cm-modern .matrix-table tbody tr:hover td.cell {
+    filter: brightness(0.96) saturate(1.1);
+  }
+  .cm-modern .matrix-table td.cell {
+    transition: filter 0.15s ease;
+  }
+  .cm-modern .matrix-table tbody tr {
+    animation: cmRowIn 0.35s ease-out backwards;
+  }
+  .cm-modern .matrix-table tbody tr:nth-child(2) {
+    animation-delay: 0.03s;
+  }
+  .cm-modern .matrix-table tbody tr:nth-child(3) {
+    animation-delay: 0.06s;
+  }
+  .cm-modern .matrix-table tbody tr:nth-child(4) {
+    animation-delay: 0.09s;
+  }
+  .cm-modern .matrix-table tbody tr:nth-child(n + 5) {
+    animation-delay: 0.12s;
+  }
+  .cm-modern .matrix-empty__icon {
+    width: 72px;
+    height: 72px;
+    font-size: 40px;
+    color: #fff;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #818cf8, #6d28d9);
+    box-shadow:
+      0 14px 24px -12px rgba(79, 70, 229, 0.7),
+      inset 0 -4px 0 rgba(30, 27, 75, 0.25);
+    animation: cmIconFloat 4.5s ease-in-out infinite;
+  }
+  .cm-modern :deep(.el-loading-spinner .path) {
+    stroke: var(--cm-c2);
+  }
+
+  @keyframes cmRise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 10px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes cmRowIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes cmOrbFloat {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(-18px, 12px, 0);
+    }
+  }
+  @keyframes cmSheen {
+    0% {
+      background-position: 130% 0;
+    }
+    100% {
+      background-position: -30% 0;
+    }
+  }
+  @keyframes cmIconFloat {
+    0%,
+    100% {
+      transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+    }
+    50% {
+      transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
+    }
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .cm-modern .plan-hd,
+  .cm-modern .plan-card,
+  .cm-modern .fx-orb,
+  .cm-modern .fx-sheen,
+  .cm-modern .plan-hd-title-icon,
+  .cm-modern .matrix-empty__icon,
+  .cm-modern .matrix-table tbody tr {
+    animation: none;
+  }
+  .cm-modern .filter-form :deep(.el-button) {
+    transition: none;
   }
 }
 </style>

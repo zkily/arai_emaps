@@ -13,7 +13,8 @@
   >
     <!-- カスタムヘッダー -->
     <template #header>
-      <div class="dialog-header">
+      <div class="dialog-header dbe-hero">
+        <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
         <div class="header-content">
           <div class="title-section">
             <div class="title-icon">
@@ -33,8 +34,8 @@
           </div>
           <!-- 情報カードエリア -->
           <div class="info-section">
-            <div class="stats-cards">
-              <div class="stat-card">
+            <div class="stats-cards" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+              <div class="stat-card stat-card--total">
                 <div class="stat-icon total">
                   <el-icon>
                     <List />
@@ -46,7 +47,7 @@
                 </div>
               </div>
 
-              <div class="stat-card">
+              <div class="stat-card stat-card--changed">
                 <div class="stat-icon changed">
                   <el-icon>
                     <Edit />
@@ -55,6 +56,30 @@
                 <div class="stat-content">
                   <span class="stat-number">{{ changedRows.size }}</span>
                   <span class="stat-label">{{ t('orderDailyBatchEdit.statChanged') }}</span>
+                </div>
+              </div>
+
+              <div class="stat-card stat-card--confirmed">
+                <div class="stat-icon confirmed">
+                  <el-icon>
+                    <Check />
+                  </el-icon>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-number">{{ confirmedUnitsTotal.toLocaleString() }}</span>
+                  <span class="stat-label">{{ t('orderDailyBatchEdit.colConfirmedUnits') }}</span>
+                </div>
+              </div>
+
+              <div class="stat-card stat-card--forecast">
+                <div class="stat-icon forecast">
+                  <el-icon>
+                    <Refresh />
+                  </el-icon>
+                </div>
+                <div class="stat-content">
+                  <span class="stat-number">{{ forecastUnitsTotal.toLocaleString() }}</span>
+                  <span class="stat-label">{{ t('orderDailyBatchEdit.colForecastUnits') }}</span>
                 </div>
               </div>
             </div>
@@ -94,7 +119,7 @@
     </template>
 
     <!-- Table（幅を保持しつつ小画面で横スクロール） -->
-    <div class="table-responsive">
+    <div class="table-responsive dbe-table">
     <el-table
       v-loading="loading"
       :data="orderDailyList"
@@ -257,7 +282,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchDailyOrdersByMonthlyOrderId, batchUpdateDailyOrders } from '@/api/order/order'
 import { ElMessage } from 'element-plus'
@@ -437,6 +462,40 @@ const emit = defineEmits<{
 
 const orderDailyList = ref<OrderDaily[]>([])
 const changedRows = ref<Set<number>>(new Set())
+
+const confirmedUnitsTotal = computed(() =>
+  orderDailyList.value.reduce((sum, r) => sum + (Number(r.confirmed_units) || 0), 0),
+)
+const forecastUnitsTotal = computed(() =>
+  orderDailyList.value.reduce((sum, r) => sum + (Number(r.forecast_units) || 0), 0),
+)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 const loading = ref(false)
 const saving = ref(false)
 
@@ -1666,6 +1725,387 @@ const handlePrint = () => {
   .stat-card {
     flex: 1;
     min-width: 0;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（日別受注編集・月受注単位 / ミッドナイト→コバルト→スカイ）
+ * ============================================================ */
+.dbe-hero {
+  --hx-1: #0b1437;
+  --hx-2: #1e3a8a;
+  --hx-3: #2563eb;
+  --hx-4: #38bdf8;
+  padding: 10px 14px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  backdrop-filter: none;
+  border-bottom: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 10px 24px -12px rgba(30, 58, 138, 0.6);
+}
+
+.dbe-hero::before {
+  display: none;
+}
+
+.dbe-hero .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.dbe-hero .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.5;
+  animation: dbeOrbFloat 11s ease-in-out infinite;
+}
+
+.dbe-hero .orb-a {
+  width: 160px;
+  height: 160px;
+  top: -80px;
+  right: 30%;
+  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
+}
+
+.dbe-hero .orb-b {
+  width: 130px;
+  height: 130px;
+  bottom: -80px;
+  left: 22%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.dbe-hero .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 120% at 60% 40%, #000 20%, transparent 75%);
+}
+
+.dbe-hero .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 26%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: dbeSheen 7s ease-in-out infinite;
+}
+
+@keyframes dbeOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes dbeSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.dbe-hero .title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 3px 0 rgba(11, 20, 55, 0.5),
+    0 8px 14px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.dbe-hero .title-icon .el-icon {
+  animation: dbePenWrite 2.8s ease-in-out infinite;
+}
+
+@keyframes dbePenWrite {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  30% {
+    transform: translate(1px, -1px) rotate(-8deg);
+  }
+  60% {
+    transform: translate(-1px, 1px) rotate(5deg);
+  }
+}
+
+.dbe-hero .dialog-title {
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(11, 20, 55, 0.45);
+}
+
+.dbe-hero .save-summary-header {
+  background: linear-gradient(160deg, rgba(251, 191, 36, 0.4), rgba(251, 191, 36, 0.18));
+  border-color: rgba(253, 230, 138, 0.55);
+  box-shadow:
+    0 2px 0 rgba(120, 53, 15, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  animation: dbeBlink 2.2s ease-in-out infinite;
+}
+
+@keyframes dbeBlink {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 0 rgba(120, 53, 15, 0.35),
+      0 0 0 0 rgba(251, 191, 36, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 2px 0 rgba(120, 53, 15, 0.35),
+      0 0 0 5px rgba(251, 191, 36, 0);
+  }
+}
+
+/* 統計カード */
+.dbe-hero .stats-cards {
+  gap: 8px;
+  perspective: 600px;
+}
+
+.dbe-hero .stat-card,
+.dbe-hero .stat-card:hover {
+  position: relative;
+  overflow: hidden;
+  padding: 5px 10px 4px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 3px 0 rgba(11, 20, 55, 0.45),
+    0 10px 18px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease;
+}
+
+.dbe-hero .stat-card:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+}
+
+.dbe-hero .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--sc);
+  box-shadow: 0 0 8px var(--sc);
+}
+
+.dbe-hero .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.dbe-hero .stat-card:hover::after {
+  opacity: 1;
+}
+
+.dbe-hero .stat-icon {
+  background: color-mix(in srgb, var(--sc) 35%, transparent);
+  border-color: color-mix(in srgb, var(--sc) 60%, transparent);
+  box-shadow: 0 2px 0 rgba(11, 20, 55, 0.35);
+}
+
+.dbe-hero .stat-number {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(12px);
+  text-shadow: 0 2px 6px rgba(11, 20, 55, 0.45);
+}
+
+.dbe-hero .stat-card--total {
+  --sc: #93c5fd;
+}
+
+.dbe-hero .stat-card--changed {
+  --sc: #fcd34d;
+}
+
+.dbe-hero .stat-card--confirmed {
+  --sc: #6ee7b7;
+}
+
+.dbe-hero .stat-card--forecast {
+  --sc: #5eead4;
+}
+
+/* ヘッダーボタン（キーキャップ） */
+.dbe-hero .de-btn {
+  --k-edge: rgba(11, 20, 55, 0.55);
+  --k-glow: rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease,
+    background 0.2s ease;
+}
+
+.dbe-hero .de-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dbe-hero .de-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dbe-hero .de-btn:disabled {
+  box-shadow: none;
+}
+
+.dbe-hero .de-btn-print:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.dbe-hero .de-btn-forecast {
+  --k-edge: #0f766e;
+  --k-glow: rgba(20, 184, 166, 0.55);
+  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 45%, #0d9488 100%);
+}
+
+.dbe-hero .de-btn-forecast:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 45%, #0d9488 100%);
+}
+
+.dbe-hero .de-btn-save {
+  --k-edge: #047857;
+  --k-glow: rgba(16, 185, 129, 0.55);
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+}
+
+.dbe-hero .de-btn-save:hover:not(:disabled) {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+}
+
+.dbe-hero .de-btn-close:hover {
+  --k-edge: #991b1b;
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 45%, #dc2626 100%);
+}
+
+/* テーブル */
+.dbe-table .daily-edit-table {
+  border-radius: 12px;
+  border-color: rgba(37, 99, 235, 0.18);
+  box-shadow:
+    0 10px 24px -14px rgba(30, 58, 138, 0.45),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.dbe-table :deep(.el-table__header th.el-table__cell) {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e3a8a !important;
+  border-bottom: 2px solid rgba(37, 99, 235, 0.28) !important;
+  font-weight: 700 !important;
+}
+
+.dbe-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background: #f0f7ff !important;
+}
+
+.dbe-table :deep(.el-table__row:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.dbe-table :deep(.el-table__row.edited-row > td.el-table__cell) {
+  background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%) !important;
+}
+
+.dbe-table :deep(.el-table__row.edited-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.dbe-table .cell-ship-date,
+.dbe-table .cell-delivery-date {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, currentColor 24%, transparent),
+    0 2px 0 color-mix(in srgb, currentColor 18%, transparent);
+  transition: transform 0.15s ease;
+}
+
+.dbe-table :deep(.el-table__row:hover) .cell-ship-date,
+.dbe-table :deep(.el-table__row:hover) .cell-delivery-date {
+  transform: translateY(-1px);
+}
+
+.dbe-table :deep(.el-input__wrapper:hover) {
+  border-color: #3b82f6;
+}
+
+.dbe-table :deep(.el-input__wrapper.is-focus) {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.16),
+    0 4px 10px -4px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.dbe-table :deep(.el-table__footer td.el-table__cell) {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e3a8a;
+  border-top: 2px solid rgba(37, 99, 235, 0.3) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dbe-hero .fx-orb,
+  .dbe-hero .fx-sheen,
+  .dbe-hero .title-icon .el-icon,
+  .dbe-hero .save-summary-header {
+    animation: none;
+  }
+
+  .dbe-hero .stat-card,
+  .dbe-hero .stat-card:hover {
+    transform: none;
   }
 }
 </style>

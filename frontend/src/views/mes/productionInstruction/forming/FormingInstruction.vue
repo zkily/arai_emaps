@@ -1,7 +1,13 @@
 <template>
-  <div class="molding-instruction-container" :class="{ 'is-compact': compact }">
+  <div class="molding-instruction-container mi-modern" :class="{ 'is-compact': compact }">
     <!-- コンパクトヘッダー -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="header-info">
           <div class="title-wrapper">
@@ -9,9 +15,19 @@
             <h1 class="page-title">成型指示書発行管理</h1>
           </div>
           <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+          <div class="header-chips">
+            <span v-if="planSelectedDate" class="header-chip">
+              <el-icon><Calendar /></el-icon>
+              生産日 {{ planSelectedDate }}
+            </span>
+            <span class="header-chip">
+              <el-icon><List /></el-icon>
+              計画 {{ planData.length }}件
+            </span>
+          </div>
         </div>
         <div class="page-header-actions">
-          <div class="header-stats">
+          <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="header-stat-item">
               <div class="stat-icon total-icon">
                 <el-icon><TrendCharts /></el-icon>
@@ -791,6 +807,8 @@ import {
   Printer,
   Memo,
   Delete,
+  Calendar,
+  List,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { getProductList } from '@/api/master/productMaster'
@@ -908,6 +926,35 @@ const planStats = ref<PlanHeaderStats>({
   totalQuantity: 0,
   machineCount: 0,
 })
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.header-stat-item')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.header-stat-item').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement)
+    .querySelectorAll<HTMLElement>('.header-stat-item')
+    .forEach((el) => {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    })
+}
 
 // 計画ページネーション
 const planPagination = reactive({
@@ -9221,5 +9268,493 @@ onUnmounted(() => {
 
 .work-time-form-dialog__footer {
   padding: 6px 0 2px;
+}
+
+/* 页面美化：現代UI・3D動効・色分け（成型指示書発行管理 / MES 成型：sky→blue→indigo） */
+.molding-instruction-container.mi-modern .page-header {
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(125deg, #0c4a6e 0%, #0369a1 32%, #2563eb 68%, #4f46e5 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(3, 105, 161, 0.65),
+    0 6px 14px -8px rgba(15, 23, 42, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.molding-instruction-container.mi-modern.is-compact .page-header {
+  padding: 10px 14px;
+}
+
+.molding-instruction-container.mi-modern .page-header::before {
+  display: none;
+}
+
+.mi-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.mi-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(26px);
+  opacity: 0.55;
+  animation: miOrbFloat 9s ease-in-out infinite;
+}
+
+.mi-modern .page-header-fx .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  right: 12%;
+  background: radial-gradient(circle, #38bdf8 0%, transparent 70%);
+}
+
+.mi-modern .page-header-fx .orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -100px;
+  left: 18%;
+  background: radial-gradient(circle, #a78bfa 0%, transparent 70%);
+  animation-delay: -4.5s;
+}
+
+.mi-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 35%, #000 70%, transparent 100%);
+}
+
+.mi-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.16) 50%,
+    transparent 100%
+  );
+  animation: miSheen 7s ease-in-out infinite;
+}
+
+@keyframes miOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 12px) scale(1.12);
+  }
+}
+
+@keyframes miSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes miIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+.mi-modern .title-wrapper {
+  gap: 12px;
+}
+
+.molding-instruction-container.mi-modern .title-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 19px;
+  color: #fff;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(12, 74, 110, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: miIconFloat 4.5s ease-in-out infinite;
+}
+
+.molding-instruction-container.mi-modern .page-title {
+  background: none;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+  letter-spacing: 0.4px;
+}
+
+.molding-instruction-container.mi-modern .page-subtitle {
+  color: rgba(224, 242, 254, 0.88);
+}
+
+.mi-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.mi-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mi-modern .header-stats {
+  gap: 8px;
+  perspective: 700px;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 12px;
+  min-width: 132px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item:hover::after {
+  opacity: 1;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .stat-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  border-radius: 8px;
+  transform: translateZ(18px);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .total-icon {
+  background: linear-gradient(145deg, #38bdf8 0%, #0284c7 100%);
+  box-shadow:
+    0 3px 0 #075985,
+    0 8px 14px -6px rgba(14, 165, 233, 0.7);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .machine-icon {
+  background: linear-gradient(145deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow:
+    0 3px 0 #4c1d95,
+    0 8px 14px -6px rgba(139, 92, 246, 0.7);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .stat-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .stat-label {
+  font-size: 10px;
+  color: rgba(224, 242, 254, 0.85);
+}
+
+.molding-instruction-container.mi-modern .action-btn.refresh-btn {
+  height: 34px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  color: #0c4a6e;
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 3px 0 #7dd3fc,
+    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.molding-instruction-container.mi-modern .action-btn.refresh-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #7dd3fc,
+    0 14px 22px -8px rgba(2, 6, 23, 0.6);
+}
+
+.molding-instruction-container.mi-modern .action-btn.refresh-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #7dd3fc,
+    0 4px 8px -4px rgba(2, 6, 23, 0.5);
+}
+
+/* セクションカード：アクセントバー */
+.mi-modern .plan-section .section-card,
+.mi-modern .plan-qty-chart-section .section-card {
+  position: relative;
+  border-radius: 14px;
+}
+
+.mi-modern .plan-section .section-card::before,
+.mi-modern .plan-qty-chart-section .section-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(90deg, #0ea5e9 0%, #2563eb 55%, #6366f1 100%);
+}
+
+.mi-modern .plan-qty-chart-section .section-card::before {
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 55%, #ec4899 100%);
+}
+
+.mi-modern .plan-section .search-bar {
+  background: linear-gradient(135deg, rgba(240, 249, 255, 0.95) 0%, rgba(238, 242, 255, 0.9) 100%);
+  border-bottom: 1px dashed rgba(125, 211, 252, 0.6);
+  border-radius: 10px 10px 0 0;
+}
+
+.mi-modern .plan-section .filter-label {
+  color: #075985;
+  padding: 0 10px;
+  height: 26px;
+  line-height: 26px;
+  align-self: center;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #e0f2fe 0%, #bae6fd 100%);
+  box-shadow:
+    0 2px 0 #7dd3fc,
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* 検索バーボタン：3Dキーキャップ（色分け） */
+.mi-modern .plan-section .search-controls .date-btn,
+.mi-modern .plan-section .search-controls .print-btn,
+.mi-modern .plan-qty-chart-section .month-btn {
+  --k-from: #60a5fa;
+  --k-to: #2563eb;
+  --k-edge: #1d4ed8;
+  --k-glow: rgba(37, 99, 235, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.mi-modern .plan-section .search-controls .date-btn:hover,
+.mi-modern .plan-section .search-controls .print-btn:hover,
+.mi-modern .plan-qty-chart-section .month-btn:hover {
+  color: #fff;
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.mi-modern .plan-section .search-controls .date-btn:active,
+.mi-modern .plan-section .search-controls .print-btn:active,
+.mi-modern .plan-qty-chart-section .month-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mi-modern .plan-section .search-controls .date-btn.prev,
+.mi-modern .plan-qty-chart-section .month-btn.prev {
+  --k-from: #fb7185;
+  --k-to: #dc2626;
+  --k-edge: #991b1b;
+  --k-glow: rgba(220, 38, 38, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .date-btn.next,
+.mi-modern .plan-qty-chart-section .month-btn.next {
+  --k-from: #34d399;
+  --k-to: #059669;
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .print-btn.el-button--success {
+  --k-from: #4ade80;
+  --k-to: #16a34a;
+  --k-edge: #166534;
+  --k-glow: rgba(22, 163, 74, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .print-btn.el-button--primary {
+  --k-from: #818cf8;
+  --k-to: #4f46e5;
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .print-btn.el-button--info {
+  --k-from: #94a3b8;
+  --k-to: #475569;
+  --k-edge: #1e293b;
+  --k-glow: rgba(71, 85, 105, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .print-btn.el-button--warning {
+  --k-from: #fbbf24;
+  --k-to: #ea580c;
+  --k-edge: #9a3412;
+  --k-glow: rgba(234, 88, 12, 0.5);
+}
+
+.mi-modern .plan-section .search-controls .print-btn.is-loading {
+  filter: saturate(0.8);
+}
+
+.mi-modern .plan-section .forming-notes-toolbar-btn {
+  box-shadow:
+    0 3px 0 #cbd5e1,
+    0 8px 14px -8px rgba(15, 23, 42, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.mi-modern .plan-section .forming-notes-toolbar-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #cbd5e1,
+    0 12px 18px -8px rgba(15, 23, 42, 0.4);
+}
+
+/* 計画テーブル：ヘッダー sky グラデーション（行背景は維持） */
+.mi-modern .plan-section .compact-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  color: #075985;
+  font-weight: 700;
+  border-bottom: 2px solid #7dd3fc;
+}
+
+.mi-modern .plan-section .compact-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0ea5e9;
+}
+
+.mi-modern .plan-section .compact-table :deep(.el-table__body-wrapper) {
+  scrollbar-width: thin;
+  scrollbar-color: #7dd3fc transparent;
+}
+
+/* 日別チャートカード：ヘッダー */
+.mi-modern .plan-qty-chart-section .card-header {
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.95) 0%, rgba(245, 243, 255, 0.9) 100%);
+}
+
+.mi-modern .plan-qty-chart-section .card-header::after {
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 55%, #ec4899 100%);
+}
+
+.mi-modern .plan-qty-chart-title-row {
+  font-size: 17px;
+  color: #312e81;
+}
+
+.mi-modern .plan-qty-chart-title-row > .el-icon {
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #818cf8 0%, #6d28d9 100%);
+  box-shadow:
+    0 3px 0 #4c1d95,
+    0 8px 14px -6px rgba(109, 40, 217, 0.6);
+  animation: miIconFloat 5s ease-in-out infinite;
+}
+
+.mi-modern .plan-qty-chart-sub {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #5b21b6;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mi-modern .page-header-fx .fx-orb,
+  .mi-modern .page-header-fx .fx-sheen,
+  .molding-instruction-container.mi-modern .title-icon,
+  .mi-modern .plan-qty-chart-title-row > .el-icon {
+    animation: none;
+  }
+
+  .molding-instruction-container.mi-modern .header-stat-item {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

@@ -1,6 +1,12 @@
 <template>
-  <div class="material-requirements">
+  <div class="material-requirements mr-modern">
     <header class="page-head">
+      <div class="page-head-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="page-head-main">
         <div class="page-icon" aria-hidden="true">
           <el-icon :size="18"><Box /></el-icon>
@@ -8,6 +14,16 @@
         <div class="page-head-text">
           <h1 class="page-title">{{ t('productionRequirements.materialTitle') }}</h1>
         </div>
+      </div>
+      <div class="page-head-chips">
+        <span class="page-head-chip">
+          <el-icon><Calendar /></el-icon>
+          {{ headerPeriodText }}
+        </span>
+        <span v-if="summary" class="page-head-chip">
+          <el-icon><Collection /></el-icon>
+          {{ summary.total_material_kinds }}種
+        </span>
       </div>
     </header>
 
@@ -68,16 +84,35 @@
         </div>
       </div>
 
-      <div v-if="summary" class="stat-chips">
-        <span class="chip chip--range">{{ summary.date_start }} — {{ summary.date_end }}</span>
-        <span class="chip chip--kinds">
-          {{ t('productionRequirements.summaryKinds') }}
-          <em>{{ summary.total_material_kinds }}</em>
-        </span>
-        <span class="chip chip--pieces">
-          {{ t('productionRequirements.summaryTotalPieces') }}
-          <em>{{ (summary.total_piece_count ?? 0).toLocaleString() }}</em>
-        </span>
+      <div v-if="summary" class="kpi-strip" @mousemove="handleKpiTilt" @mouseleave="resetKpiTilt">
+        <div class="kpi-card kpi-card--range">
+          <div class="kpi-card__icon"><el-icon><Calendar /></el-icon></div>
+          <div class="kpi-card__body">
+            <span class="kpi-card__label">{{ t('productionRequirements.periodLabel') }}</span>
+            <span class="kpi-card__value kpi-card__value--mono">{{ summary.date_start }} — {{ summary.date_end }}</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-card--kinds">
+          <div class="kpi-card__icon"><el-icon><Collection /></el-icon></div>
+          <div class="kpi-card__body">
+            <span class="kpi-card__label">{{ t('productionRequirements.summaryKinds') }}</span>
+            <span class="kpi-card__value">{{ summary.total_material_kinds }}</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-card--pieces">
+          <div class="kpi-card__icon"><el-icon><Histogram /></el-icon></div>
+          <div class="kpi-card__body">
+            <span class="kpi-card__label">{{ t('productionRequirements.summaryTotalPieces') }}</span>
+            <span class="kpi-card__value">{{ (summary.total_piece_count ?? 0).toLocaleString() }}</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-card--days">
+          <div class="kpi-card__icon"><el-icon><Timer /></el-icon></div>
+          <div class="kpi-card__body">
+            <span class="kpi-card__label">日数</span>
+            <span class="kpi-card__value">{{ periodDays }}</span>
+          </div>
+        </div>
       </div>
 
       <section class="panel">
@@ -102,7 +137,10 @@
             <el-table-column prop="standard_specification" :label="t('productionRequirements.colSpec')" width="112" show-overflow-tooltip sortable />
             <el-table-column prop="piece_count" :label="t('productionRequirements.colPieceCount')" width="88" align="right">
               <template #default="{ row }">
-                {{ (row.piece_count ?? 0).toLocaleString() }}
+                <div class="piece-cell">
+                  <span class="piece-cell__bar" :style="{ width: `${piecePct(row.piece_count)}%` }" />
+                  <span class="piece-cell__num">{{ (row.piece_count ?? 0).toLocaleString() }}</span>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -176,7 +214,7 @@
                 <span class="day-head" :title="d">{{ shortDateLabel(d) }}</span>
               </template>
               <template #default="{ row }">
-                <span>{{ formatQtyCell(row, d) }}</span>
+                <span class="qty-heat" :class="`qty-heat--${heatLevelCell(row, d)}`">{{ formatQtyCell(row, d) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -197,8 +235,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Box, Calendar, DArrowLeft, DArrowRight, Printer } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import {
+  Box,
+  Calendar,
+  DArrowLeft,
+  DArrowRight,
+  Printer,
+  Collection,
+  Histogram,
+  Timer,
+} from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
@@ -228,6 +275,81 @@ const summary = ref<MaterialRequirementsSummaryMeta | null>(null)
 const hasSearched = ref(false)
 const dailyDates = ref<string[]>([])
 const matrixRows = ref<MaterialRequirementsDailyMatrixRow[]>([])
+
+const headerPeriodText = computed(() => {
+  const r = dateRange.value
+  if (!r || !r[0]) return '—'
+  return r[0] === r[1] ? r[0] : `${r[0]} 〜 ${r[1]}`
+})
+
+const periodDays = computed(() => {
+  const s = summary.value
+  if (!s?.date_start || !s?.date_end) return 0
+  return dayjs(s.date_end).diff(dayjs(s.date_start), 'day') + 1
+})
+
+const maxPieceCount = computed(() =>
+  items.value.reduce((m, r) => Math.max(m, Number(r.piece_count) || 0), 0)
+)
+
+function piecePct(n: number | null | undefined): number {
+  const max = maxPieceCount.value
+  const v = Number(n) || 0
+  return max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0
+}
+
+const matrixMax = computed(() => {
+  let m = 0
+  for (const row of matrixRows.value) {
+    for (const v of Object.values(row.by_date ?? {})) {
+      const n = Number(v) || 0
+      if (n > m) m = n
+    }
+  }
+  return m
+})
+
+/** 日別セルのヒートレベル（0=空・1〜4=期間内最大値に対する比率） */
+function heatLevel(v: number): 0 | 1 | 2 | 3 | 4 {
+  const max = matrixMax.value
+  if (!v || max <= 0) return 0
+  const r = v / max
+  if (r >= 0.75) return 4
+  if (r >= 0.5) return 3
+  if (r >= 0.25) return 2
+  return 1
+}
+
+function heatLevelCell(row: { by_date?: Record<string, number | null | undefined> }, d: string) {
+  return heatLevel(Number(row.by_date?.[d]) || 0)
+}
+
+// KPI カードの3Dチルト（マウス追従）
+function handleKpiTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.kpi-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetKpiTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function initDefaultRange() {
   const start = dayjs().startOf('month').format('YYYY-MM-DD')
@@ -1000,4 +1122,610 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
+/* 页面美化：現代UI・3D動効・色分け（材料需要量 / 生産需要量 blue→indigo→teal） */
+.material-requirements.mr-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(79, 70, 229, 0.09), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(13, 148, 136, 0.09), transparent 60%),
+    #f1f4f9;
+}
+
+/* ---------- Hero ヘッダー ---------- */
+.mr-modern .page-head {
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(120deg, #0f172a 0%, #1e3a8a 30%, #4f46e5 66%, #0d9488 100%);
+  box-shadow:
+    0 16px 32px -18px rgba(79, 70, 229, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.mr-modern .page-head-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mr-modern .page-head-main,
+.mr-modern .page-head-chips {
+  position: relative;
+  z-index: 1;
+}
+
+.mr-modern .page-head-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(24px);
+  opacity: 0.6;
+  animation: mrOrbFloat 10s ease-in-out infinite;
+}
+
+.mr-modern .page-head-fx .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -120px;
+  right: 20%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+}
+
+.mr-modern .page-head-fx .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -130px;
+  left: 24%;
+  background: radial-gradient(circle, #5eead4 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.mr-modern .page-head-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
+}
+
+.mr-modern .page-head-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: mrSheen 7s ease-in-out infinite;
+}
+
+.mr-modern .page-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(15, 23, 42, 0.5),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: mrIconFloat 4.5s ease-in-out infinite;
+}
+
+.mr-modern .page-title {
+  background: none;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+}
+
+.mr-modern .page-head-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mr-modern .page-head-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- シェルカード・操作帯 ---------- */
+.mr-modern .shell-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: rgba(199, 210, 254, 0.8);
+  box-shadow:
+    0 16px 32px -24px rgba(67, 56, 202, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.mr-modern .shell-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(90deg, #1e3a8a 0%, #4f46e5 50%, #0d9488 100%);
+}
+
+.mr-modern .control-strip {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed #c7d2fe;
+  background: linear-gradient(110deg, rgba(238, 242, 255, 0.9) 0%, rgba(255, 255, 255, 0.9) 60%, rgba(240, 253, 250, 0.8) 100%);
+}
+
+.mr-modern .ctl-label {
+  padding: 1px 10px;
+  font-weight: 700;
+  color: #3730a3;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+  box-shadow:
+    0 2px 0 #c7d2fe,
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.mr-modern .ctl-picker-wrap :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+.mr-modern .ctl-picker-wrap :deep(.el-input__wrapper:hover) {
+  box-shadow:
+    0 0 0 1px rgba(79, 70, 229, 0.45) inset,
+    0 4px 10px -6px rgba(79, 70, 229, 0.5);
+}
+
+/* ---------- 3D キーキャップボタン（色分け） ---------- */
+.mr-modern .month-quick {
+  gap: 6px;
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+}
+
+.mr-modern .month-quick__btn,
+.mr-modern .btn-run {
+  --k-from: #818cf8;
+  --k-to: #4f46e5;
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px;
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.mr-modern .month-quick__btn:hover:not(:disabled),
+.mr-modern .btn-run:hover:not(.is-disabled) {
+  color: #fff;
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.mr-modern .month-quick__btn:active:not(:disabled),
+.mr-modern .btn-run:active:not(.is-disabled) {
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mr-modern .month-quick__btn:disabled {
+  box-shadow: none;
+}
+
+.mr-modern .month-quick__btn--first {
+  --k-from: #ffffff;
+  --k-to: #e0e7ff;
+  --k-edge: #a5b4fc;
+  --k-glow: rgba(79, 70, 229, 0.3);
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.mr-modern .month-quick__btn--first:hover:not(:disabled) {
+  color: #312e81;
+}
+
+.mr-modern .month-quick__btn--last {
+  --k-from: #2dd4bf;
+  --k-to: #0d9488;
+  --k-edge: #115e59;
+  --k-glow: rgba(13, 148, 136, 0.5);
+}
+
+.mr-modern .month-quick__btn--mid .month-quick__icon,
+.mr-modern .month-quick__btn--last .month-quick__icon,
+.mr-modern .month-quick__btn--mid:hover:not(:disabled) .month-quick__icon,
+.mr-modern .month-quick__btn--last:hover:not(:disabled) .month-quick__icon {
+  color: #fff;
+}
+
+.mr-modern .btn-run {
+  --k-from: #3b82f6;
+  --k-to: #1d4ed8;
+  --k-edge: #1e3a8a;
+  --k-glow: rgba(37, 99, 235, 0.5);
+  padding: 0 16px;
+  font-weight: 700;
+}
+
+.mr-modern .btn-print {
+  background: linear-gradient(145deg, #a78bfa 0%, #6d28d9 100%) !important;
+  box-shadow:
+    0 3px 0 #4c1d95,
+    0 10px 18px -8px rgba(109, 40, 217, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.mr-modern .btn-print:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #4c1d95,
+    0 14px 22px -8px rgba(109, 40, 217, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36) !important;
+}
+
+.mr-modern .btn-print:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #4c1d95,
+    0 4px 8px -4px rgba(109, 40, 217, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+/* ---------- KPI カード（3D チルト・色分け） ---------- */
+.mr-modern .kpi-strip {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+  perspective: 900px;
+}
+
+.mr-modern .kpi-card {
+  --tc: #4f46e5;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 26%, #e2e8f0),
+    0 12px 20px -16px color-mix(in srgb, var(--tc) 70%, transparent);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.2s ease;
+  animation: mrRise 0.4s ease-out backwards;
+}
+
+.mr-modern .kpi-card:nth-child(2) {
+  animation-delay: 0.05s;
+}
+
+.mr-modern .kpi-card:nth-child(3) {
+  animation-delay: 0.1s;
+}
+
+.mr-modern .kpi-card:nth-child(4) {
+  animation-delay: 0.15s;
+}
+
+.mr-modern .kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tc), color-mix(in srgb, var(--tc) 40%, #fff));
+}
+
+.mr-modern .kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.75) 0%,
+    transparent 60%
+  );
+}
+
+.mr-modern .kpi-card:hover {
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--tc) 34%, #e2e8f0),
+    0 18px 28px -16px color-mix(in srgb, var(--tc) 80%, transparent);
+}
+
+.mr-modern .kpi-card:hover::after {
+  opacity: 1;
+}
+
+.mr-modern .kpi-card--range {
+  --tc: #2563eb;
+}
+
+.mr-modern .kpi-card--kinds {
+  --tc: #7c3aed;
+}
+
+.mr-modern .kpi-card--pieces {
+  --tc: #059669;
+}
+
+.mr-modern .kpi-card--days {
+  --tc: #d97706;
+}
+
+.mr-modern .kpi-card__icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 19px;
+  color: #fff;
+  border-radius: 11px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 65%, #fff) 0%, var(--tc) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 70%, #0f172a),
+    0 8px 14px -6px color-mix(in srgb, var(--tc) 80%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateZ(18px);
+}
+
+.mr-modern .kpi-card__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mr-modern .kpi-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tc) 70%, #334155);
+}
+
+.mr-modern .kpi-card__value {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(12px);
+}
+
+.mr-modern .kpi-card__value--mono {
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---------- パネル・テーブル ---------- */
+.mr-modern .panel-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #86efac 0%, #16a34a 100%);
+  box-shadow:
+    0 2px 0 #14532d,
+    0 6px 10px -5px rgba(22, 163, 74, 0.6);
+}
+
+.mr-modern .panel-mark--accent {
+  background: linear-gradient(145deg, #5eead4 0%, #4f46e5 100%);
+  box-shadow:
+    0 2px 0 #312e81,
+    0 6px 10px -5px rgba(79, 70, 229, 0.6);
+}
+
+.mr-modern .panel-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1e1b4b;
+}
+
+.mr-modern .table-frame {
+  border-radius: 10px;
+  border-color: #dcfce7;
+  box-shadow: 0 10px 20px -18px rgba(22, 163, 74, 0.5);
+}
+
+.mr-modern .panel--matrix {
+  border-radius: 12px;
+  box-shadow:
+    0 12px 24px -20px rgba(79, 70, 229, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.mr-modern .table-frame--matrix {
+  border-color: #c7d2fe;
+}
+
+.mr-modern .tbl :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #4f46e5;
+}
+
+.mr-modern .tbl-summary :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.mr-modern .piece-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 20px;
+}
+
+.mr-modern .piece-cell__bar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(134, 239, 172, 0.35) 0%, rgba(22, 163, 74, 0.35) 100%);
+  transform: translateY(-50%);
+  transition: width 0.5s ease;
+}
+
+.mr-modern .piece-cell__num {
+  position: relative;
+  font-weight: 700;
+  color: #14532d;
+  font-variant-numeric: tabular-nums;
+}
+
+.mr-modern .qty-heat {
+  display: inline-block;
+  min-width: 100%;
+  padding: 0 3px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  border-radius: 5px;
+}
+
+.mr-modern .qty-heat--1 {
+  color: #115e59;
+  background: rgba(204, 251, 241, 0.6);
+}
+
+.mr-modern .qty-heat--2 {
+  color: #115e59;
+  font-weight: 600;
+  background: rgba(153, 246, 228, 0.7);
+}
+
+.mr-modern .qty-heat--3 {
+  color: #fff;
+  font-weight: 700;
+  background: rgba(20, 184, 166, 0.85);
+}
+
+.mr-modern .qty-heat--4 {
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(145deg, #4f46e5 0%, #0d9488 100%);
+  box-shadow: 0 2px 6px -2px rgba(79, 70, 229, 0.6);
+}
+
+.mr-modern .omit-alert {
+  border-radius: 10px;
+}
+
+@keyframes mrOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 12px) scale(1.12);
+  }
+}
+
+@keyframes mrSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes mrIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@keyframes mrRise {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .mr-modern .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mr-modern .page-head-fx .fx-orb,
+  .mr-modern .page-head-fx .fx-sheen,
+  .mr-modern .page-icon,
+  .mr-modern .kpi-card {
+    animation: none;
+  }
+
+  .mr-modern .kpi-card {
+    transform: none;
+    transition: none;
+  }
+}
 </style>

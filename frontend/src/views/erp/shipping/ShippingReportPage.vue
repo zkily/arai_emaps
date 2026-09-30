@@ -1,13 +1,33 @@
 <template>
-  <div class="shipping-report-page">
+  <div class="shipping-report-page sr-modern">
     <div class="report-card glass-card">
       <!-- 页面标题：玻璃头部 -->
       <div class="card-header glass-header">
+        <div class="header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="header-left">
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
           <h1 class="header-title">{{ t('shipping.reportTitle') }}</h1>
+        </div>
+        <div class="header-chips">
+          <span class="header-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ headerPeriodText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Location /></el-icon>
+            {{ headerDestinationText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Files /></el-icon>
+            {{ overviewData?.length || 0 }}件
+          </span>
         </div>
       </div>
 
@@ -60,7 +80,12 @@
       </div>
 
       <!-- 统计：玻璃卡片 + 颜色区分 -->
-      <div v-if="!loading && overviewData && overviewData.length > 0" class="stats-section">
+      <div
+        v-if="!loading && overviewData && overviewData.length > 0"
+        class="stats-section"
+        @mousemove="handleStatTilt"
+        @mouseleave="resetStatTilt"
+      >
         <div class="stat-card glass-card stat-destinations">
           <div class="stat-icon"><el-icon><Location /></el-icon></div>
           <div class="stat-content">
@@ -287,6 +312,49 @@ const totalBoxes = computed(() => {
   if (!Array.isArray(overviewData.value)) return 0
   return overviewData.value.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0)
 })
+
+const headerPeriodText = computed(() => {
+  const [from, to] = filters.dateRange || []
+  if (!from) return '—'
+  return !to || from === to ? from : `${from} 〜 ${to}`
+})
+
+const headerDestinationText = computed(() => {
+  if (filters.selectedGroup >= 0) {
+    const g = destinationGroups.value?.[filters.selectedGroup]
+    const name = g?.groupName || g?.group_name
+    if (name) return name
+  }
+  const n = filters.destinationCds.length
+  return n > 0 ? `納入先 ${n}件` : '全納入先'
+})
+
+// 統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const hasGroups = computed(() => {
   if (!Array.isArray(destinationGroups.value)) return false
@@ -1514,5 +1582,553 @@ async function recordPrintFailure(errorMessage: string) {
 
 .report-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+}
+
+/* 页面美化：現代UI・3D動効・色分け（出荷報告書 / 出荷系 navy→blue→sky） */
+.shipping-report-page.sr-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(14, 165, 233, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(37, 99, 235, 0.09), transparent 60%),
+    #f1f5fb;
+}
+
+.sr-modern .report-card.glass-card {
+  border-radius: 16px;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  box-shadow:
+    0 18px 40px -26px rgba(30, 64, 175, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+/* ---------- ヘッダー ---------- */
+.sr-modern .card-header.glass-header {
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: none;
+  background: linear-gradient(120deg, #0f172a 0%, #1e3a8a 34%, #2563eb 70%, #0ea5e9 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.sr-modern .header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sr-modern .header-left,
+.sr-modern .header-chips {
+  position: relative;
+  z-index: 1;
+}
+
+.sr-modern .header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(24px);
+  opacity: 0.6;
+  animation: srOrbFloat 10s ease-in-out infinite;
+}
+
+.sr-modern .header-fx .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -120px;
+  right: 18%;
+  background: radial-gradient(circle, #38bdf8 0%, transparent 70%);
+}
+
+.sr-modern .header-fx .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -130px;
+  left: 22%;
+  background: radial-gradient(circle, #818cf8 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.sr-modern .header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
+}
+
+.sr-modern .header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: srSheen 7s ease-in-out infinite;
+}
+
+.sr-modern .header-icon-container {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(15, 23, 42, 0.45),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: srIconFloat 4.5s ease-in-out infinite;
+}
+
+.sr-modern .header-icon {
+  font-size: 19px;
+}
+
+.sr-modern .header-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+}
+
+.sr-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sr-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- 絞り込み ---------- */
+.sr-modern .filter-section.glass-card {
+  position: relative;
+  overflow: hidden;
+  padding-top: 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  background: linear-gradient(110deg, rgba(239, 246, 255, 0.95) 0%, rgba(255, 255, 255, 0.92) 60%);
+  box-shadow: 0 10px 22px -18px rgba(30, 64, 175, 0.5);
+}
+
+.sr-modern .filter-section.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
+}
+
+.sr-modern .filter-label {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 1px 10px;
+  font-weight: 700;
+  color: #1e40af;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow:
+    0 2px 0 #bfdbfe,
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.sr-modern .filter-section :deep(.el-input__wrapper),
+.sr-modern .filter-section :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+.sr-modern .filter-section :deep(.el-input__wrapper:hover),
+.sr-modern .filter-section :deep(.el-select__wrapper:hover) {
+  box-shadow:
+    0 0 0 1px rgba(37, 99, 235, 0.45) inset,
+    0 4px 10px -6px rgba(37, 99, 235, 0.5);
+}
+
+/* ---------- 3D キーキャップボタン（色分け） ---------- */
+.sr-modern .btn-glass {
+  --k-from: #60a5fa;
+  --k-to: #2563eb;
+  --k-edge: #1e40af;
+  --k-glow: rgba(37, 99, 235, 0.5);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.sr-modern .btn-glass:not(:disabled):hover {
+  color: #fff;
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.sr-modern .btn-glass:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.sr-modern .nav-btn.prev-btn,
+.sr-modern .nav-btn.next-btn {
+  --k-from: #ffffff;
+  --k-to: #e0e7ff;
+  --k-edge: #a5b4fc;
+  --k-glow: rgba(79, 70, 229, 0.3);
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.sr-modern .nav-btn.prev-btn:hover,
+.sr-modern .nav-btn.next-btn:hover {
+  color: #312e81;
+}
+
+.sr-modern .nav-btn.today-btn {
+  --k-from: #38bdf8;
+  --k-to: #0284c7;
+  --k-edge: #075985;
+  --k-glow: rgba(2, 132, 199, 0.5);
+}
+
+.sr-modern .btn-glass.btn-info {
+  --k-from: #94a3b8;
+  --k-to: #475569;
+  --k-edge: #1e293b;
+  --k-glow: rgba(71, 85, 105, 0.5);
+}
+
+.sr-modern .btn-glass.btn-success {
+  --k-from: #34d399;
+  --k-to: #059669;
+  --k-edge: #065f46;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+
+.sr-modern .btn-glass.btn-success:disabled {
+  color: #94a3b8;
+  background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+  box-shadow: none;
+}
+
+/* グループ選択：ピルチップ */
+.sr-modern .group-selection {
+  border-top: 1px dashed #bfdbfe;
+}
+
+.sr-modern .group-selection .el-radio {
+  margin-right: 0;
+  border-radius: 999px;
+  border-color: #dbeafe;
+  background: #fff;
+  box-shadow: 0 2px 0 #e2e8f0;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease;
+}
+
+.sr-modern .group-selection .el-radio:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 3px 0 #bfdbfe;
+}
+
+.sr-modern .group-selection .el-radio.is-checked {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.6);
+}
+
+.sr-modern .group-selection .el-radio.is-checked :deep(.el-radio__label) {
+  color: #fff;
+}
+
+.sr-modern .group-selection .el-radio.is-checked :deep(.el-radio__inner) {
+  border-color: #fff;
+  background: #fff;
+}
+
+.sr-modern .group-selection .el-radio.is-checked :deep(.el-radio__inner::after) {
+  background: #2563eb;
+}
+
+/* ---------- 統計カード（3D チルト・色分け） ---------- */
+.sr-modern .stats-section {
+  perspective: 900px;
+}
+
+.sr-modern .stats-section .stat-card {
+  animation-fill-mode: backwards;
+}
+
+.sr-modern .stat-card.glass-card {
+  --tc: #2563eb;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
+  border-left: none;
+  border-radius: 12px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 26%, #e2e8f0),
+    0 12px 20px -16px color-mix(in srgb, var(--tc) 70%, transparent);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.2s ease;
+}
+
+.sr-modern .stat-card.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--tc), color-mix(in srgb, var(--tc) 40%, #fff));
+}
+
+.sr-modern .stat-card.glass-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.75) 0%,
+    transparent 60%
+  );
+}
+
+.sr-modern .stat-card.glass-card:hover {
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--tc) 34%, #e2e8f0),
+    0 18px 28px -16px color-mix(in srgb, var(--tc) 80%, transparent);
+}
+
+.sr-modern .stat-card.glass-card:hover::after {
+  opacity: 1;
+}
+
+.sr-modern .stat-card.stat-destinations {
+  --tc: #2563eb;
+}
+
+.sr-modern .stat-card.stat-dates {
+  --tc: #7c3aed;
+}
+
+.sr-modern .stat-card.stat-products {
+  --tc: #059669;
+}
+
+.sr-modern .stat-card.stat-boxes {
+  --tc: #d97706;
+}
+
+.sr-modern .stat-card .stat-icon {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 19px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 65%, #fff) 0%, var(--tc) 100%);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 70%, #0f172a),
+    0 8px 14px -6px color-mix(in srgb, var(--tc) 80%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateZ(18px);
+}
+
+.sr-modern .stat-card .stat-icon .el-icon {
+  color: #fff;
+}
+
+.sr-modern .stat-card .stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(12px);
+}
+
+.sr-modern .stat-card .stat-label {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tc) 70%, #334155);
+}
+
+/* ---------- 一覧テーブル ---------- */
+.sr-modern .table-section.glass-card {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 26px -20px rgba(30, 64, 175, 0.5);
+}
+
+.sr-modern .table-section.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, #0ea5e9 0%, #2563eb 55%, #4f46e5 100%);
+}
+
+.sr-modern .table-container :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #1e3a8a;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f0f7ff 0%, #dbeafe 100%) !important;
+  border-bottom: 2px solid #93c5fd;
+}
+
+.sr-modern .table-container :deep(.el-table__body tr:not(.group-header-row):hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.sr-modern .group-header-row :deep(td) {
+  background: linear-gradient(90deg, #dbeafe 0%, #eff6ff 60%, #ffffff 100%) !important;
+  border-bottom: 1px solid #bfdbfe;
+}
+
+.sr-modern .group-header-cell {
+  padding: 6px 10px;
+  color: #1e3a8a;
+}
+
+.sr-modern .group-header-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #60a5fa 0%, #1d4ed8 100%);
+  box-shadow:
+    0 2px 0 #1e3a8a,
+    0 6px 10px -5px rgba(37, 99, 235, 0.6);
+}
+
+.sr-modern .shipping-no-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #1d4ed8;
+}
+
+.sr-modern .quantity-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 1px 10px;
+  font-variant-numeric: tabular-nums;
+  color: #92400e;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+.sr-modern .table-container :deep(.el-table__footer-wrapper td.el-table__cell) {
+  color: #fff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 70%, #0ea5e9 100%) !important;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sr-modern .table-container :deep(.el-table__body-wrapper) {
+  scrollbar-width: thin;
+  scrollbar-color: #93c5fd transparent;
+}
+
+.sr-modern .empty-state :deep(.el-empty__image) {
+  animation: srIconFloat 4.5s ease-in-out infinite;
+}
+
+@keyframes srOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 12px) scale(1.12);
+  }
+}
+
+@keyframes srSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes srIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-modern .header-fx .fx-orb,
+  .sr-modern .header-fx .fx-sheen,
+  .sr-modern .header-icon-container,
+  .sr-modern .empty-state :deep(.el-empty__image) {
+    animation: none;
+  }
+
+  .sr-modern .stat-card.glass-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

@@ -1,6 +1,7 @@
 <template>
-  <div class="ppup-page">
+  <div class="ppup-page ppu-modern">
     <header class="ppup-hero">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="ppup-hero__glow" aria-hidden="true" />
       <div class="ppup-hero__inner">
         <div class="ppup-hero__brand">
@@ -10,6 +11,24 @@
           <div class="ppup-hero__text">
             <h1 class="ppup-hero__title">{{ t('bomHome.productUnitPriceTitle') }}</h1>
             <p class="ppup-hero__sub">{{ t('bomHome.productUnitPriceDesc') }}</p>
+          </div>
+        </div>
+        <div class="ppup-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="stat-card stat-product">
+            <span class="stat-num">{{ productOptions.length }}</span>
+            <span class="stat-lbl">製品</span>
+          </div>
+          <div class="stat-card stat-process">
+            <span class="stat-num">{{ routeSteps.length }}</span>
+            <span class="stat-lbl">工程</span>
+          </div>
+          <div class="stat-card stat-bom">
+            <span class="stat-num">{{ bomComponentRows.length }}</span>
+            <span class="stat-lbl">部品・材料</span>
+          </div>
+          <div class="stat-card stat-cum">
+            <span class="stat-num">{{ selectedProductCd ? formatPriceYen(finalCumulative) : '—' }}</span>
+            <span class="stat-lbl">最終累計単価</span>
           </div>
         </div>
       </div>
@@ -91,13 +110,21 @@
             size="small"
             max-height="calc(100vh - 280px)"
           >
-            <el-table-column prop="step_no" label="順" width="44" align="center" />
+            <el-table-column prop="step_no" label="順" width="44" align="center">
+              <template #default="{ row }">
+                <span class="ppu-step">{{ row.step_no }}</span>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="process_cd"
               label="工程CD"
               min-width="88"
               show-overflow-tooltip
-            />
+            >
+              <template #default="{ row }">
+                <span class="ppu-code ppu-code--process">{{ row.process_cd }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="工程名" min-width="100" show-overflow-tooltip>
               <template #default="{ row }">{{ row.process_name || '—' }}</template>
             </el-table-column>
@@ -156,7 +183,11 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="code" label="CD" min-width="96" show-overflow-tooltip />
+            <el-table-column prop="code" label="CD" min-width="96" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span :class="['ppu-code', row.kind === 'material' ? 'ppu-code--material' : 'ppu-code--part']">{{ row.code }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="name" label="名称" min-width="120" show-overflow-tooltip />
             <el-table-column label="所要量" width="100" align="right">
               <template #default="{ row }">
@@ -243,13 +274,14 @@
                 size="small"
                 type="primary"
                 plain
+                class="ppu-btn-save"
                 :loading="savingSnapshot"
                 :disabled="!selectedProductCd || !routeCd"
                 @click="onSaveCurrentSnapshot"
               >
                 現在を保存
               </el-button>
-              <el-button size="small" type="warning" plain @click="openRecalcDialog">
+              <el-button size="small" type="warning" plain class="ppu-btn-recalc" @click="openRecalcDialog">
                 全部一緒に更新
               </el-button>
             </div>
@@ -824,6 +856,38 @@ const cumulativeStageRows = computed((): CumulativeStageRow[] => {
   }
   return rows
 })
+
+const finalCumulative = computed(() => {
+  const rows = cumulativeStageRows.value
+  return rows.length ? rows[rows.length - 1].cumulative : 0
+})
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 async function loadProductOptions() {
   productsLoading.value = true
@@ -1856,6 +1920,505 @@ onBeforeUnmount(() => {
 @media (max-width: 1100px) {
   .ppup-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（工程別標準原価 / emerald→gold）
+ * ============================================================ */
+.ppu-modern {
+  --hx-1: #022c22;
+  --hx-2: #065f46;
+  --hx-3: #059669;
+  --hx-4: #d4a017;
+  --hx-deep: #064e3b;
+  --hx-soft: #ecfdf5;
+  --hx-line: rgba(5, 150, 105, 0.16);
+  background:
+    radial-gradient(1100px 360px at 10% -10%, rgba(16, 185, 129, 0.1), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(212, 160, 23, 0.09), transparent 60%),
+    linear-gradient(165deg, #f4faf7 0%, #eff8f3 45%, #f8fafc 100%);
+}
+
+.ppu-modern .ppup-hero {
+  margin-bottom: 8px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(6, 95, 70, 0.6),
+    0 6px 14px -6px rgba(212, 160, 23, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.ppu-modern .ppup-hero__glow {
+  z-index: 0;
+  background: radial-gradient(ellipse 120% 100% at 20% -40%, rgba(110, 231, 183, 0.35), transparent 55%);
+}
+
+.ppu-modern .ppup-hero__inner,
+.ppu-modern .ppup-hero__accent {
+  position: relative;
+  z-index: 1;
+}
+
+.ppu-modern .ppup-hero__inner {
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: transparent;
+}
+
+.ppu-modern .ppup-hero__accent {
+  height: 3px;
+  background: linear-gradient(90deg, #fde68a, #34d399, #fde68a);
+  background-size: 200% 100%;
+  animation: ppuAccentFlow 4s linear infinite;
+}
+
+.ppu-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ppu-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: ppuOrbFloat 11s ease-in-out infinite;
+}
+
+.ppu-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.6), transparent 70%);
+}
+
+.ppu-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(253, 224, 71, 0.6), transparent 70%);
+  animation-delay: -5s;
+}
+
+.ppu-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.ppu-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: ppuSheen 7s ease-in-out infinite;
+}
+
+.ppu-modern .ppup-hero__brand {
+  flex: 1;
+  min-width: 240px;
+  gap: 10px;
+}
+
+.ppu-modern .ppup-hero__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #fef3c7;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(2, 44, 34, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: ppuIconCoin 5s ease-in-out infinite;
+}
+
+.ppu-modern .ppup-hero__title {
+  font-size: 18px;
+  text-shadow: 0 2px 10px rgba(2, 44, 34, 0.4);
+}
+
+.ppu-modern .ppup-hero__sub {
+  color: rgba(236, 253, 245, 0.88);
+}
+
+.ppu-modern .ppup-hero__stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  perspective: 650px;
+}
+
+.ppu-modern .stat-card {
+  --sc: #a7f3d0;
+  position: relative;
+  overflow: hidden;
+  min-width: 66px;
+  padding: 6px 12px 5px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 3px 0 rgba(2, 44, 34, 0.45),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.ppu-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.ppu-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.ppu-modern .stat-card:hover {
+  box-shadow:
+    0 5px 0 rgba(2, 44, 34, 0.5),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.ppu-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.ppu-modern .stat-product { --sc: #a7f3d0; }
+.ppu-modern .stat-process { --sc: #a5b4fc; }
+.ppu-modern .stat-bom { --sc: #fcd34d; }
+.ppu-modern .stat-cum { --sc: #67e8f9; }
+
+.ppu-modern .stat-num {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(2, 44, 34, 0.4);
+}
+
+.ppu-modern .stat-cum .stat-num {
+  color: #fef3c7;
+}
+
+.ppu-modern .stat-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.04em;
+}
+
+.ppu-modern .ppup-toolbar-card,
+.ppu-modern .ppup-data-card {
+  position: relative;
+  border-radius: 14px;
+}
+
+.ppu-modern .ppup-toolbar-card {
+  overflow: hidden;
+  border-color: var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(6, 95, 70, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.ppu-modern .ppup-toolbar-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), #34d399, var(--hx-4));
+}
+
+.ppu-modern .ppup-toolbar-card :deep(.el-card__body) {
+  padding-top: 10px;
+}
+
+.ppu-modern .ppup-form-item--product :deep(.el-form-item__label) {
+  color: var(--hx-deep);
+}
+
+.ppu-modern .ppup-toolbar-card :deep(.el-select__wrapper) {
+  border-radius: 9px;
+}
+
+.ppu-modern .ppup-toolbar-card :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--hx-3) inset, 0 0 0 3px rgba(5, 150, 105, 0.14);
+}
+
+.ppu-modern .ppup-chip--route {
+  box-shadow: 0 2px 0 #075985;
+}
+
+.ppu-modern .ppup-chip--bom {
+  box-shadow: 0 2px 0 rgba(234, 88, 12, 0.3);
+}
+
+.ppu-modern .ppup-take-badge {
+  color: var(--hx-deep);
+  background: linear-gradient(180deg, #ecfdf5, #d1fae5);
+  border-color: rgba(5, 150, 105, 0.3);
+  box-shadow: 0 2px 0 rgba(5, 150, 105, 0.25);
+}
+
+.ppu-modern .ppup-data-card {
+  --dc: #6366f1;
+  --dc-deep: #3730a3;
+  border-color: color-mix(in srgb, var(--dc) 24%, #fff);
+  box-shadow:
+    0 12px 26px -18px color-mix(in srgb, var(--dc-deep) 60%, transparent),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ppu-modern .ppup-data-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--dc-deep), var(--dc), color-mix(in srgb, var(--dc) 45%, #fff));
+}
+
+.ppu-modern .ppup-data-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 18px 30px -18px color-mix(in srgb, var(--dc-deep) 70%, transparent),
+    0 2px 6px rgba(15, 23, 42, 0.05);
+}
+
+.ppu-modern .ppup-data-card--process {
+  --dc: #6366f1;
+  --dc-deep: #3730a3;
+}
+
+.ppu-modern .ppup-data-card--bom {
+  --dc: #f59e0b;
+  --dc-deep: #b45309;
+}
+
+.ppu-modern .ppup-data-card--cumulative {
+  --dc: #06b6d4;
+  --dc-deep: #0e7490;
+}
+
+.ppu-modern .ppup-data-card :deep(.el-card__header) {
+  padding-top: 9px;
+}
+
+.ppu-modern .ppup-data-cap__dot {
+  animation: ppuDotPulse 2.2s ease-in-out infinite;
+}
+
+.ppu-modern .ppup-data-cap__pill {
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--dc) 30%, #fff);
+}
+
+.ppu-modern .ppup-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #fff !important;
+  border-bottom: 2px solid color-mix(in srgb, var(--dc) 55%, #fff) !important;
+}
+
+.ppu-modern .ppup-table--process :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #3730a3, #4f46e5) !important;
+}
+
+.ppu-modern .ppup-table--bom :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #92400e, #b45309) !important;
+}
+
+.ppu-modern .ppup-table--cumulative :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #155e75, #0e7490) !important;
+}
+
+.ppu-modern .ppup-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--dc);
+}
+
+.ppu-modern .ppu-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #4f46e5);
+  box-shadow: 0 2px 0 #3730a3;
+}
+
+.ppu-modern .ppu-code {
+  --cc: #4f46e5;
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 9%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc) 32%, #fff), 0 2px 0 color-mix(in srgb, var(--cc) 25%, #fff);
+  transition: transform 0.15s ease;
+}
+
+.ppu-modern .ppu-code--process { --cc: #4f46e5; }
+.ppu-modern .ppu-code--material { --cc: #b45309; }
+.ppu-modern .ppu-code--part { --cc: #2563eb; }
+
+.ppu-modern .ppup-table :deep(tr:hover) .ppu-code {
+  transform: translateY(-1px);
+}
+
+.ppu-modern .ppup-fee-input :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.28) inset, 0 2px 0 rgba(99, 102, 241, 0.18);
+}
+
+.ppu-modern .ppup-fee-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #6366f1 inset, 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.ppu-modern .ppup-line-amt {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.ppu-modern .ppup-cum-strong {
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #06b6d4, #0e7490);
+  box-shadow: 0 2px 0 #155e75;
+}
+
+.ppu-modern .ppu-btn-save,
+.ppu-modern .ppu-btn-recalc {
+  font-weight: 700;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ppu-modern .ppu-btn-save:not(.is-disabled) {
+  box-shadow: 0 2px 0 rgba(37, 99, 235, 0.35);
+}
+
+.ppu-modern .ppu-btn-recalc {
+  box-shadow: 0 2px 0 rgba(217, 119, 6, 0.4);
+}
+
+.ppu-modern .ppu-btn-save:not(.is-disabled):hover,
+.ppu-modern .ppu-btn-recalc:hover {
+  transform: translateY(-2px);
+}
+
+.ppu-modern .ppu-btn-save:not(.is-disabled):active,
+.ppu-modern .ppu-btn-recalc:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+@keyframes ppuOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes ppuSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes ppuAccentFlow {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes ppuIconCoin {
+  0%,
+  100% {
+    transform: perspective(300px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateY(180deg);
+  }
+}
+
+@keyframes ppuDotPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppu-modern .fx-orb,
+  .ppu-modern .fx-sheen,
+  .ppu-modern .ppup-hero__accent,
+  .ppu-modern .ppup-hero__icon,
+  .ppu-modern .ppup-data-cap__dot {
+    animation: none;
+  }
+
+  .ppu-modern .stat-card,
+  .ppu-modern .ppup-data-card:hover {
+    transform: none;
   }
 }
 </style>

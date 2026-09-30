@@ -1,8 +1,14 @@
 <template>
-  <div class="daily-report-page">
+  <div class="daily-report-page dr-modern">
     <el-card class="daily-report-card" shadow="hover" :body-style="{ padding: '10px 12px 12px' }">
       <template #header>
         <div class="daily-report-head">
+          <div class="daily-report-head__fx" aria-hidden="true">
+            <span class="fx-orb orb-a" />
+            <span class="fx-orb orb-b" />
+            <span class="fx-grid" />
+            <span class="fx-sheen" />
+          </div>
           <div class="daily-report-head__main">
             <h3 class="daily-report-head__title">
               <span class="daily-report-head__title-inner">
@@ -11,6 +17,20 @@
               </span>
             </h3>
             <p class="daily-report-head__desc">日付×設備ごとの排産計画をカレンダー形式で一覧表示します。</p>
+            <div class="daily-report-head__chips">
+              <span class="daily-report-head__chip">
+                <el-icon><Operation /></el-icon>
+                {{ selectedProcessLabel }}
+              </span>
+              <span class="daily-report-head__chip">
+                <el-icon><Monitor /></el-icon>
+                {{ linePrintLabel }}
+              </span>
+              <span class="daily-report-head__chip">
+                <el-icon><Calendar /></el-icon>
+                {{ printPeriodTitle || '—' }}
+              </span>
+            </div>
           </div>
         </div>
       </template>
@@ -100,6 +120,36 @@
         </el-form>
       </div>
 
+      <div
+        v-if="groupedData.length > 0"
+        class="dr-kpi-strip no-print"
+        @mousemove="handleKpiTilt"
+        @mouseleave="resetKpiTilt"
+      >
+        <div class="dr-kpi dr-kpi--hours">
+          <span class="dr-kpi__icon"><el-icon><Timer /></el-icon></span>
+          <span class="dr-kpi__label">稼働時間</span>
+          <span class="dr-kpi__value">{{ summaryAvailHoursText }}</span>
+        </div>
+        <div class="dr-kpi dr-kpi--plan">
+          <span class="dr-kpi__icon"><el-icon><Tickets /></el-icon></span>
+          <span class="dr-kpi__label">計画数</span>
+          <span class="dr-kpi__value">{{ summaryPlannedTotal.toLocaleString('ja-JP') }}</span>
+        </div>
+        <div class="dr-kpi dr-kpi--actual">
+          <span class="dr-kpi__icon"><el-icon><CircleCheck /></el-icon></span>
+          <span class="dr-kpi__label">実績数</span>
+          <span class="dr-kpi__value">{{ summaryActualTotal.toLocaleString('ja-JP') }}</span>
+        </div>
+        <div class="dr-kpi dr-kpi--rate" :class="`dr-kpi--rate-${progressTone(summaryAchievementPct)}`">
+          <span class="dr-kpi__icon"><el-icon><TrendCharts /></el-icon></span>
+          <span class="dr-kpi__label">達成率</span>
+          <span class="dr-kpi__value">
+            {{ summaryAchievementPct == null ? '—' : `${summaryAchievementPct.toFixed(1)}%` }}
+          </span>
+        </div>
+      </div>
+
       <div v-loading="loading" class="report-body">
         <div v-if="calendarViews.length === 0" class="empty">
           <el-icon class="empty__icon"><Calendar /></el-icon>
@@ -147,12 +197,24 @@
                         'calendar-day--today': cell.isToday,
                         'calendar-day--weekend':
                           !cell.pad && cell.dateStr && isWeekendDate(cell.dateStr),
+                        'calendar-day--has-plan': !!cell.group?.lines?.length,
                       }"
                     >
                       <template v-if="!cell.pad && cell.dateStr">
                         <div class="calendar-day__hd">
                           <span class="calendar-day__num">{{ cell.dayNum }}</span>
                           <span class="calendar-day__wd">{{ getWeekday(cell.dateStr) }}</span>
+                        </div>
+                        <div
+                          v-if="dayAchievementPct(cell.group) != null"
+                          class="day-prog"
+                          :class="`day-prog--${progressTone(dayAchievementPct(cell.group))}`"
+                          :title="`達成率 ${dayAchievementPct(cell.group)!.toFixed(1)}%`"
+                        >
+                          <span class="day-prog__track">
+                            <i :style="{ width: `${Math.min(100, dayAchievementPct(cell.group)!)}%` }" />
+                          </span>
+                          <span class="day-prog__pct">{{ Math.round(dayAchievementPct(cell.group)!) }}%</span>
                         </div>
                         <div v-if="cell.group?.lines?.length" class="calendar-day__scroll">
                           <div
@@ -200,7 +262,18 @@
 import dayjs from 'dayjs'
 import { computed, nextTick, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Calendar, Operation, Monitor, Refresh, Printer } from '@element-plus/icons-vue'
+import {
+  Document,
+  Calendar,
+  Operation,
+  Monitor,
+  Refresh,
+  Printer,
+  Timer,
+  Tickets,
+  CircleCheck,
+  TrendCharts,
+} from '@element-plus/icons-vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
@@ -421,6 +494,67 @@ const summaryAvailHoursText = computed(() => {
   const v = summaryAvailHoursTotal.value
   return Number.isFinite(v) ? `${v.toFixed(1)} h` : '—'
 })
+
+/** ヘッダーチップ用：選択中工程名 */
+const selectedProcessLabel = computed(() => {
+  const cd = (selectedProcessCd.value ?? '').trim()
+  if (!cd) return '全工程'
+  const p = processOptions.value.find((x) => (x.process_cd || '').trim() === cd)
+  return p ? processOptionLabel(p) : cd
+})
+
+/** 期間全体の達成率（実績÷計画、計画 0 は null） */
+const summaryAchievementPct = computed(() => {
+  const plan = summaryPlannedTotal.value
+  return plan > 0 ? (summaryActualTotal.value / plan) * 100 : null
+})
+
+/** 日別の達成率（実績÷計画、計画 0 は null） */
+function dayAchievementPct(group: DateGroup | null): number | null {
+  if (!group?.lines?.length) return null
+  let plan = 0
+  let actual = 0
+  for (const lb of group.lines) {
+    for (const r of lb.rows) {
+      plan += Number(r.planned_qty ?? 0)
+      actual += Number(r.actual_qty ?? 0)
+    }
+  }
+  return plan > 0 ? (actual / plan) * 100 : null
+}
+
+function progressTone(pct: number | null): 'none' | 'low' | 'mid' | 'ok' {
+  if (pct == null) return 'none'
+  if (pct >= 100) return 'ok'
+  if (pct >= 50) return 'mid'
+  return 'low'
+}
+
+function handleKpiTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.dr-kpi')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.dr-kpi').forEach((el) => {
+    if (el !== card) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetKpiTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.dr-kpi').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function applyThisMonthRange() {
   dateRange.value = [
@@ -962,6 +1096,592 @@ async function printReport() {
 
 .report-table :deep(.el-table__inner-wrapper::before) {
   display: none;
+}
+
+/* 页面美化：現代UI・3D動効・色分け（日別設備計画表 / APS blue→indigo→violet・画面表示のみ） */
+.dr-modern .dr-kpi-strip,
+.dr-modern .day-prog {
+  display: none;
+}
+
+@media screen {
+  .dr-modern {
+    --dr-c1: #1d4ed8;
+    --dr-c2: #4f46e5;
+    --dr-c3: #7c3aed;
+    padding: 8px 10px 12px;
+    background:
+      radial-gradient(circle at 4% -10%, rgba(79, 70, 229, 0.1), transparent 36%),
+      radial-gradient(circle at 100% -16%, rgba(124, 58, 237, 0.09), transparent 32%),
+      var(--el-bg-color-page);
+  }
+  .dr-modern .daily-report-card {
+    border: 1px solid color-mix(in srgb, var(--dr-c2) 16%, var(--el-border-color-lighter));
+    border-radius: 14px;
+    box-shadow:
+      0 14px 30px -22px rgba(55, 48, 163, 0.5),
+      0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+
+  /* ---- Hero ヘッダー ---- */
+  .dr-modern .daily-report-card :deep(.el-card__header) {
+    position: relative;
+    overflow: hidden;
+    padding: 12px 16px;
+    border-bottom: none;
+    border-left: none;
+    color: #fff;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 30%, #4f46e5 64%, #7c3aed 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+  .dr-modern .daily-report-head__fx {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .dr-modern .fx-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+    animation: drOrbFloat 9s ease-in-out infinite;
+  }
+  .dr-modern .orb-a {
+    width: 190px;
+    height: 190px;
+    top: -90px;
+    right: 14%;
+    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(165, 180, 252, 0) 70%);
+  }
+  .dr-modern .orb-b {
+    width: 130px;
+    height: 130px;
+    bottom: -70px;
+    left: 36%;
+    background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
+    animation-delay: -4s;
+  }
+  .dr-modern .fx-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
+  }
+  .dr-modern .fx-sheen {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
+    background-size: 250% 100%;
+    animation: drSheen 6s ease-in-out infinite;
+  }
+  .dr-modern .daily-report-head__main {
+    position: relative;
+    z-index: 1;
+  }
+  .dr-modern .daily-report-head__title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+  }
+  .dr-modern .daily-report-head__title-inner {
+    gap: 10px;
+  }
+  .dr-modern .daily-report-head__title-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 19px;
+    color: #fff;
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    box-shadow:
+      0 8px 16px -6px rgba(30, 27, 75, 0.55),
+      inset 0 -3px 0 rgba(30, 27, 75, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    animation: drIconFloat 4.5s ease-in-out infinite;
+  }
+  .dr-modern .daily-report-head__desc {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.84);
+  }
+  .dr-modern .daily-report-head__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .dr-modern .daily-report-head__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(6px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  /* ---- ツールバー ---- */
+  .dr-modern .toolbar--panel {
+    position: relative;
+    overflow: hidden;
+    padding-top: 11px;
+    border-radius: 12px;
+    border-color: color-mix(in srgb, var(--dr-c2) 14%, var(--el-border-color-lighter));
+    background: linear-gradient(105deg, color-mix(in srgb, var(--dr-c2) 6%, #fff) 0%, #fff 60%);
+    box-shadow: 0 10px 20px -18px rgba(55, 48, 163, 0.5);
+  }
+  .dr-modern .toolbar--panel::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--dr-c1), var(--dr-c2), var(--dr-c3));
+  }
+  .dr-modern .toolbar__lbl {
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+  .dr-modern .toolbar__lbl .el-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+    background: linear-gradient(135deg, var(--dr-c1), var(--dr-c3));
+    box-shadow: 0 3px 8px -3px rgba(79, 70, 229, 0.6);
+  }
+  .dr-modern .toolbar__form :deep(.el-input__wrapper),
+  .dr-modern .toolbar__form :deep(.el-select__wrapper) {
+    border-radius: 8px;
+    transition: box-shadow 0.2s ease;
+  }
+  .dr-modern .toolbar__form :deep(.el-input__wrapper:hover),
+  .dr-modern .toolbar__form :deep(.el-select__wrapper:hover) {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--dr-c2) 45%, transparent) inset,
+      0 4px 10px -6px rgba(79, 70, 229, 0.5);
+  }
+
+  /* ---- 3D キーキャップボタン ---- */
+  .dr-modern .dr-btn-month,
+  .dr-modern .dr-btn-fetch.el-button--primary,
+  .dr-modern .dr-btn-print {
+    --k-edge: #3730a3;
+    --k-glow: rgba(79, 70, 229, 0.5);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #fff;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease;
+    box-shadow:
+      0 3px 0 var(--k-edge),
+      0 10px 18px -8px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .dr-modern .dr-btn-month:not(.is-disabled):hover,
+  .dr-modern .dr-btn-fetch.el-button--primary:not(.is-disabled):hover,
+  .dr-modern .dr-btn-print:not(.is-disabled):hover {
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow:
+      0 5px 0 var(--k-edge),
+      0 14px 22px -10px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .dr-modern .dr-btn-month:not(.is-disabled):active,
+  .dr-modern .dr-btn-fetch.el-button--primary:not(.is-disabled):active,
+  .dr-modern .dr-btn-print:not(.is-disabled):active {
+    transform: translateY(2px);
+    box-shadow:
+      0 1px 0 var(--k-edge),
+      0 4px 8px -6px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .dr-modern .dr-btn-fetch.el-button--primary.is-disabled {
+    box-shadow: none;
+    opacity: 0.55;
+  }
+  .dr-modern .dr-btn-month {
+    --k-edge: #1e40af;
+    --k-glow: rgba(37, 99, 235, 0.45);
+    background: linear-gradient(180deg, #60a5fa, #2563eb);
+  }
+  .dr-modern .dr-btn-fetch.el-button--primary {
+    background: linear-gradient(180deg, #818cf8, #4f46e5 55%, #6d28d9);
+  }
+  .dr-modern .dr-btn-print {
+    --k-edge: #b45309;
+    --k-glow: rgba(217, 119, 6, 0.45);
+    background: linear-gradient(180deg, #fbbf24, #f59e0b 55%, #ea580c);
+  }
+
+  /* ---- KPI ストリップ（3D チルト） ---- */
+  .dr-modern .dr-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 12px;
+    perspective: 900px;
+  }
+  .dr-modern .dr-kpi {
+    --kc: #4f46e5;
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--kc) 24%, #e2e8f0);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--kc) 10%, #fff), #fff 70%);
+    box-shadow:
+      0 3px 0 color-mix(in srgb, var(--kc) 28%, #e2e8f0),
+      0 12px 20px -16px color-mix(in srgb, var(--kc) 70%, transparent);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transform-style: preserve-3d;
+    transition:
+      transform 0.18s ease-out,
+      box-shadow 0.2s ease;
+    animation: drRise 0.4s ease-out backwards;
+  }
+  .dr-modern .dr-kpi:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+  .dr-modern .dr-kpi:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .dr-modern .dr-kpi:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+  .dr-modern .dr-kpi::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--kc), color-mix(in srgb, var(--kc) 40%, #fff));
+  }
+  .dr-modern .dr-kpi::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    background: radial-gradient(
+      circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 255, 255, 0.75),
+      transparent 60%
+    );
+  }
+  .dr-modern .dr-kpi:hover {
+    box-shadow:
+      0 5px 0 color-mix(in srgb, var(--kc) 36%, #e2e8f0),
+      0 18px 28px -16px color-mix(in srgb, var(--kc) 80%, transparent);
+  }
+  .dr-modern .dr-kpi:hover::after {
+    opacity: 1;
+  }
+  .dr-modern .dr-kpi__icon {
+    grid-row: 1 / span 2;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 18px;
+    color: #fff;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--kc) 70%, #fff), var(--kc));
+    box-shadow:
+      0 8px 14px -6px color-mix(in srgb, var(--kc) 80%, transparent),
+      inset 0 -3px 0 rgba(15, 23, 42, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateZ(18px);
+  }
+  .dr-modern .dr-kpi__label {
+    font-size: 11px;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--kc) 70%, #334155);
+  }
+  .dr-modern .dr-kpi__value {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    transform: translateZ(12px);
+  }
+  .dr-modern .dr-kpi--hours {
+    --kc: #0ea5e9;
+  }
+  .dr-modern .dr-kpi--plan {
+    --kc: #4f46e5;
+  }
+  .dr-modern .dr-kpi--actual {
+    --kc: #059669;
+  }
+  .dr-modern .dr-kpi--rate-none {
+    --kc: #94a3b8;
+  }
+  .dr-modern .dr-kpi--rate-low {
+    --kc: #e11d48;
+  }
+  .dr-modern .dr-kpi--rate-mid {
+    --kc: #d97706;
+  }
+  .dr-modern .dr-kpi--rate-ok {
+    --kc: #10b981;
+  }
+
+  /* ---- カレンダー ---- */
+  .dr-modern .calendar-hint {
+    border-radius: 10px;
+    border-color: color-mix(in srgb, var(--dr-c2) 25%, #e2e8f0);
+    background: color-mix(in srgb, var(--dr-c2) 5%, #fff);
+    color: #4338ca;
+  }
+  .dr-modern .calendar-month__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 14px 4px 10px;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--dr-c1), var(--dr-c2) 55%, var(--dr-c3));
+    box-shadow:
+      0 3px 0 #312e81,
+      0 10px 18px -10px rgba(79, 70, 229, 0.6);
+  }
+  .dr-modern .calendar-month__title::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fde047;
+    box-shadow: 0 0 0 3px rgba(253, 224, 71, 0.3);
+  }
+  .dr-modern .calendar-weekday-cell {
+    border-radius: 8px;
+    color: #4338ca;
+    font-weight: 700;
+    background: linear-gradient(180deg, #eef2ff, #e0e7ff);
+    box-shadow: inset 0 -2px 0 #c7d2fe;
+  }
+  .dr-modern .calendar-weekday-cell--weekend {
+    color: #be123c;
+    background: linear-gradient(180deg, #fff1f2, #ffe4e6);
+    box-shadow: inset 0 -2px 0 #fecdd3;
+  }
+  .dr-modern .calendar-day {
+    position: relative;
+    border-radius: 10px;
+    border-color: color-mix(in srgb, var(--dr-c2) 12%, var(--el-border-color-lighter));
+    box-shadow: 0 2px 0 rgba(226, 232, 240, 0.9);
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+  .dr-modern .calendar-day:not(.calendar-day--pad):not(.calendar-day--out-range):hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--dr-c2) 35%, #e2e8f0);
+    box-shadow:
+      0 4px 0 color-mix(in srgb, var(--dr-c2) 18%, #e2e8f0),
+      0 14px 24px -16px rgba(79, 70, 229, 0.55);
+  }
+  .dr-modern .calendar-day--has-plan::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3px;
+    z-index: 1;
+    background: linear-gradient(90deg, var(--dr-c1), var(--dr-c2), var(--dr-c3));
+  }
+  .dr-modern .calendar-day--has-plan .calendar-day__hd {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--dr-c2) 8%, #fff), #fff);
+  }
+  .dr-modern .calendar-day--weekend.calendar-day--has-plan::before {
+    background: linear-gradient(90deg, #f43f5e, #fb7185);
+  }
+  .dr-modern .calendar-day--today {
+    border-color: #f59e0b;
+    box-shadow:
+      0 0 0 2px rgba(245, 158, 11, 0.35),
+      0 10px 20px -14px rgba(217, 119, 6, 0.6);
+  }
+  .dr-modern .calendar-day--today .calendar-day__num {
+    min-width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, #fbbf24, #f97316);
+    box-shadow: 0 2px 0 #c2410c;
+  }
+
+  /* ---- 日別達成率バー ---- */
+  .dr-modern .day-prog {
+    --pc: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 0;
+  }
+  .dr-modern .day-prog__track {
+    flex: 1;
+    height: 5px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--pc) 14%, #f1f5f9);
+  }
+  .dr-modern .day-prog__track i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 55%, #fff), var(--pc));
+    transition: width 0.5s ease;
+  }
+  .dr-modern .day-prog__pct {
+    font-size: 10px;
+    font-weight: 800;
+    color: color-mix(in srgb, var(--pc) 80%, #0f172a);
+    font-variant-numeric: tabular-nums;
+  }
+  .dr-modern .day-prog--low {
+    --pc: #e11d48;
+  }
+  .dr-modern .day-prog--mid {
+    --pc: #d97706;
+  }
+  .dr-modern .day-prog--ok {
+    --pc: #10b981;
+  }
+
+  /* ---- 設備ブロック・明細表 ---- */
+  .dr-modern .line-block {
+    border-radius: 10px;
+    border-color: color-mix(in srgb, var(--dr-c2) 14%, var(--el-border-color-lighter));
+    box-shadow:
+      inset 3px 0 0 var(--dr-c2),
+      0 6px 12px -10px rgba(79, 70, 229, 0.45);
+  }
+  .dr-modern .report-table :deep(.el-table__header-wrapper th) {
+    color: #3730a3;
+    background: linear-gradient(180deg, #f5f7ff 0%, #e0e7ff 100%) !important;
+    border-bottom: 2px solid #a5b4fc;
+  }
+  .dr-modern .report-table :deep(.el-table__body tr:hover > td) {
+    background: #eef2ff !important;
+  }
+  .dr-modern .calendar-day__scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .dr-modern .calendar-day__scroll::-webkit-scrollbar-thumb {
+    border-radius: 6px;
+    background: linear-gradient(180deg, #a5b4fc, #7c3aed);
+  }
+
+  /* ---- 空状態 ---- */
+  .dr-modern .empty {
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--dr-c2) 5%, #fff), #fff);
+  }
+  .dr-modern .empty__icon {
+    width: 64px;
+    height: 64px;
+    font-size: 34px;
+    color: #fff;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #818cf8, #6d28d9);
+    box-shadow:
+      0 14px 24px -12px rgba(79, 70, 229, 0.7),
+      inset 0 -4px 0 rgba(30, 27, 75, 0.25);
+    animation: drIconFloat 4.5s ease-in-out infinite;
+  }
+  .dr-modern :deep(.el-loading-spinner .path) {
+    stroke: var(--dr-c2);
+  }
+
+  @keyframes drOrbFloat {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(-18px, 12px, 0);
+    }
+  }
+  @keyframes drSheen {
+    0% {
+      background-position: 130% 0;
+    }
+    100% {
+      background-position: -30% 0;
+    }
+  }
+  @keyframes drIconFloat {
+    0%,
+    100% {
+      transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+    }
+    50% {
+      transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
+    }
+  }
+  @keyframes drRise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .dr-modern .dr-kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .dr-modern .fx-orb,
+  .dr-modern .fx-sheen,
+  .dr-modern .daily-report-head__title-icon,
+  .dr-modern .empty__icon,
+  .dr-modern .dr-kpi {
+    animation: none;
+  }
+  .dr-modern .dr-kpi,
+  .dr-modern .calendar-day:not(.calendar-day--pad):hover {
+    transform: none;
+  }
 }
 </style>
 

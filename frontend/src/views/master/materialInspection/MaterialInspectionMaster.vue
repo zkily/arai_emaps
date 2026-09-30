@@ -1,7 +1,13 @@
 <template>
-  <div class="inspection-master-container">
+  <div class="inspection-master-container imm-modern">
     <!-- 页面头部 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -12,7 +18,7 @@
           </h1>
           <p class="subtitle">仕入先材料の検品基準を登録・管理します</p>
         </div>
-        <div class="header-stats">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card">
             <div class="stat-number">{{ totalCount }}</div>
             <div class="stat-label">総件数</div>
@@ -20,6 +26,12 @@
           <div class="stat-card">
             <div class="stat-number">{{ filteredCount || 0 }}</div>
             <div class="stat-label">表示件数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">
+              {{ pagination.page }}<small class="stat-sub">/{{ totalPages }}</small>
+            </div>
+            <div class="stat-label">ページ</div>
           </div>
         </div>
       </div>
@@ -223,6 +235,37 @@ const formRules: FormRules = {
 const formRef = ref<FormInstance>()
 
 const filteredCount = computed(() => tableData.value?.length || 0)
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil((totalCount.value || 0) / (pagination.value.pageSize || 1))),
+)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -711,6 +754,470 @@ onMounted(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（材料検品マスタ / amber→orange）
+ * ============================================================ */
+.inspection-master-container.imm-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(234, 88, 12, 0.08), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(245, 158, 11, 0.08), transparent 60%),
+    #f8fafc;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.imm-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #431407 0%, #9a3412 34%, #ea580c 70%, #f59e0b 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(154, 52, 18, 0.7),
+    0 4px 12px -6px rgba(234, 88, 12, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.imm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.imm-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.imm-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: immOrbFloat 11s ease-in-out infinite;
+}
+
+.imm-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
+}
+
+.imm-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.imm-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.imm-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
+  animation: immSheen 7s ease-in-out infinite;
+}
+
+.imm-modern .main-title {
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(67, 20, 7, 0.4);
+}
+
+.imm-modern .title-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(67, 20, 7, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: immIconFloat 5s ease-in-out infinite;
+}
+
+.imm-modern .subtitle {
+  color: rgba(255, 237, 213, 0.92);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.imm-modern .header-stats {
+  perspective: 700px;
+}
+
+.imm-modern .stat-card {
+  --sc: rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+  min-width: 82px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+.imm-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.imm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+}
+
+.imm-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.imm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.imm-modern .stat-card:nth-child(2) {
+  --sc: #fde68a;
+}
+
+.imm-modern .stat-card:nth-child(3) {
+  --sc: #fecaca;
+  background: rgba(67, 20, 7, 0.22);
+}
+
+.imm-modern .stat-number {
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.imm-modern .stat-sub {
+  margin-left: 1px;
+  font-size: 0.7em;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.imm-modern .stat-label {
+  font-weight: 600;
+}
+
+/* ---------- ツールバー ---------- */
+.imm-modern .toolbar-section,
+.imm-modern .table-card,
+.imm-modern .pagination-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: rgba(254, 215, 170, 0.9);
+  box-shadow:
+    0 14px 28px -22px rgba(154, 52, 18, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.imm-modern .toolbar-section::before,
+.imm-modern .table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #9a3412 0%, #ea580c 55%, #f59e0b 100%);
+}
+
+.imm-modern .table-card::before {
+  background: linear-gradient(90deg, #fb923c 0%, #f59e0b 50%, #facc15 100%);
+}
+
+.imm-modern .toolbar-section {
+  padding-top: 12px;
+  background: linear-gradient(110deg, #fff7ed 0%, #ffffff 60%);
+}
+
+.imm-modern .toolbar-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  color: #fff;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #fb923c 0%, #c2410c 100%);
+  box-shadow:
+    0 3px 0 #7c2d12,
+    0 8px 12px -6px rgba(234, 88, 12, 0.6);
+  animation: immIconFloat 6s ease-in-out infinite;
+}
+
+.imm-modern .toolbar-title {
+  color: #7c2d12;
+  font-weight: 700;
+}
+
+.imm-modern .toolbar-count {
+  padding: 2px 10px;
+  border-left: none;
+  border-radius: 999px;
+  color: #9a3412;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #ffedd5;
+  box-shadow: inset 0 0 0 1px #fed7aa;
+}
+
+/* 新規追加：3Dキーキャップ */
+.imm-modern .add-btn {
+  background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
+  box-shadow:
+    0 3px 0 #7c2d12,
+    0 10px 18px -8px rgba(234, 88, 12, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.imm-modern .add-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #7c2d12,
+    0 14px 22px -8px rgba(234, 88, 12, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.imm-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #7c2d12,
+    0 4px 8px -4px rgba(234, 88, 12, 0.5);
+}
+
+/* ---------- テーブル ---------- */
+.imm-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #7c2d12 !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+  border-bottom: 2px solid #fdba74 !important;
+}
+
+.imm-modern .modern-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background: #fff7ed !important;
+}
+
+.imm-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.imm-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #ea580c;
+}
+
+.imm-modern .code-cell {
+  color: #9a3412;
+  background: linear-gradient(180deg, #fffaf5 0%, #ffedd5 100%);
+  box-shadow:
+    inset 0 0 0 1px #fed7aa,
+    0 2px 0 #fed7aa;
+  transition: transform 0.15s ease;
+}
+
+.imm-modern .code-icon {
+  color: #ea580c;
+}
+
+.imm-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.imm-modern .standard-cell {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.imm-modern .datetime-cell {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.imm-modern .action-buttons :deep(.el-button.is-link) {
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.imm-modern .action-buttons :deep(.el-button--primary.is-link:hover) {
+  transform: translateY(-1px);
+  background: #eff6ff;
+}
+
+.imm-modern .action-buttons :deep(.el-button--danger.is-link:hover) {
+  transform: translateY(-1px);
+  background: #fef2f2;
+}
+
+/* ---------- ページネーション ---------- */
+.imm-modern .pagination-section {
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.imm-modern .pagination-section :deep(.el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #c2410c 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 #7c2d12,
+    0 6px 12px -6px rgba(234, 88, 12, 0.7);
+}
+
+.imm-modern .pagination-section :deep(.el-pager li:not(.is-active):hover) {
+  color: #ea580c;
+}
+
+/* ---------- ダイアログ ---------- */
+.imm-modern :deep(.form-dialog .el-dialog__header),
+.imm-modern :deep(.detail-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 14px 18px;
+  border-bottom: none;
+  background: linear-gradient(120deg, #9a3412 0%, #ea580c 60%, #f59e0b 100%);
+}
+
+.imm-modern :deep(.form-dialog .el-dialog__title),
+.imm-modern :deep(.detail-dialog .el-dialog__title) {
+  color: #fff;
+  font-weight: 700;
+}
+
+.imm-modern :deep(.form-dialog .el-dialog__headerbtn .el-dialog__close),
+.imm-modern :deep(.detail-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.imm-modern .detail-row {
+  border-left-color: #ea580c;
+  background: linear-gradient(110deg, #fff7ed 0%, #ffffff 80%);
+  box-shadow: 0 6px 14px -12px rgba(154, 52, 18, 0.5);
+}
+
+.imm-modern .detail-row label {
+  color: #9a3412;
+}
+
+.imm-modern .detail-code {
+  color: #9a3412 !important;
+}
+
+.imm-modern .submit-btn {
+  background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
+  box-shadow:
+    0 3px 0 #7c2d12,
+    0 8px 14px -8px rgba(234, 88, 12, 0.55);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.imm-modern .submit-btn:hover {
+  transform: translateY(-1px);
+}
+
+.imm-modern .submit-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #7c2d12;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes immOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes immSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes immIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imm-modern .page-header-fx .fx-orb,
+  .imm-modern .page-header-fx .fx-sheen,
+  .imm-modern .title-icon,
+  .imm-modern .toolbar-icon {
+    animation: none;
+  }
+
+  .imm-modern .stat-card {
+    transform: none;
+    transition: none;
   }
 }
 </style>

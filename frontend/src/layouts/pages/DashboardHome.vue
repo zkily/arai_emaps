@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-home">
+  <div class="dashboard-home db-modern">
     <el-alert
       v-if="showMenuAccessWarning"
       type="warning"
@@ -14,6 +14,11 @@
     <div class="welcome-banner">
       <div class="welcome-banner__mesh" aria-hidden="true" />
       <div class="welcome-banner__shine" aria-hidden="true" />
+      <div class="welcome-banner__fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="welcome-banner__row">
         <div class="welcome-content">
           <div class="welcome-avatar-wrap">
@@ -34,6 +39,10 @@
             <div class="welcome-chips">
               <span class="welcome-chip welcome-chip--role">{{ roleDisplay }}</span>
               <span v-if="departmentName" class="welcome-chip welcome-chip--dept">{{ departmentName }}</span>
+              <span class="welcome-chip welcome-chip--date">
+                <el-icon><Calendar /></el-icon>
+                {{ todayText }}
+              </span>
             </div>
           </div>
         </div>
@@ -45,11 +54,12 @@
     </div>
 
     <!-- Stats Grid - More Compact -->
-    <div class="stats-grid">
-      <div 
-        v-for="stat in statsCards" 
-        :key="stat.key" 
+    <div class="stats-grid" @mousemove="handleCardTilt" @mouseleave="resetCardTilt">
+      <div
+        v-for="stat in statsCards"
+        :key="stat.key"
         class="stat-card"
+        :class="`stat-card--${stat.key}`"
       >
         <div class="stat-icon" :style="{ background: stat.gradient }">
           <el-icon :size="16"><component :is="stat.icon" /></el-icon>
@@ -110,13 +120,13 @@
           </div>
           <span>{{ t('dashboard.quickAccess') }}</span>
         </div>
-        <div class="quick-grid">
+        <div class="quick-grid" @mousemove="handleCardTilt" @mouseleave="resetCardTilt">
         <router-link
-          v-for="item in visibleQuickAccessItems"
+          v-for="(item, idx) in visibleQuickAccessItems"
           :key="item.path"
           :to="item.path"
           class="quick-card"
-          :style="{ '--quick-accent': item.bg }"
+          :style="{ '--quick-accent': item.bg, '--i': idx }"
         >
           <div class="quick-icon" :style="{ background: item.bg }">
             <el-icon :size="16"><component :is="item.icon" /></el-icon>
@@ -173,6 +183,37 @@ const avatarGradient = computed(() => avatarGradientFor(displayName.value))
 const roleDisplay = computed(() => displayUserRoleName(userStore.user, t))
 const departmentName = computed(() => userStore.user?.department_name?.trim() || '')
 const welcomeSuffix = computed(() => t('dashboard.welcomeSuffix'))
+const todayText = dayjs().format('YYYY/MM/DD')
+
+/** 統計・クイックカード：マウス追従の3D傾き */
+let tiltedCard: HTMLElement | null = null
+function clearCardTilt(card: HTMLElement | null) {
+  if (!card) return
+  card.style.removeProperty('--rx')
+  card.style.removeProperty('--ry')
+  card.style.removeProperty('--mx')
+  card.style.removeProperty('--my')
+}
+function handleCardTilt(e: MouseEvent) {
+  const card =
+    (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card, .quick-card') ?? null
+  if (card !== tiltedCard) {
+    clearCardTilt(tiltedCard)
+    tiltedCard = card
+  }
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+function resetCardTilt() {
+  clearCardTilt(tiltedCard)
+  tiltedCard = null
+}
 
 const showMenuAccessWarning = computed(() => {
   const user = userStore.user
@@ -1124,6 +1165,399 @@ onMounted(() => {
 
   .quick-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（ホーム = インディゴ→バイオレット系）
+ * ============================================================ */
+
+/* ---------- ウェルカムバナー ---------- */
+.db-modern .welcome-banner {
+  padding: 16px 18px;
+  box-shadow:
+    0 4px 8px -2px rgba(79, 70, 229, 0.16),
+    0 24px 44px -16px rgba(79, 70, 229, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+.db-modern .welcome-banner__fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.db-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: dbOrbFloat 12s ease-in-out infinite;
+}
+.db-modern .fx-orb.orb-a {
+  width: 260px;
+  height: 260px;
+  top: -150px;
+  left: 36%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.db-modern .fx-orb.orb-b {
+  width: 220px;
+  height: 220px;
+  bottom: -140px;
+  right: 6%;
+  background: radial-gradient(circle, rgba(103, 232, 249, 0.35) 0%, rgba(103, 232, 249, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.db-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 22% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 22% 50%, #000 0%, transparent 70%);
+}
+.db-modern .welcome-avatar-wrap {
+  perspective: 600px;
+}
+.db-modern .welcome-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 15px;
+  box-shadow:
+    0 10px 22px -6px rgba(15, 23, 42, 0.45),
+    inset 0 2px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -4px 0 rgba(15, 23, 42, 0.18);
+  transform-style: preserve-3d;
+  animation: dbIconTilt 5.5s ease-in-out infinite;
+}
+.db-modern .welcome-chip {
+  font-size: 10px;
+  padding: 3px 9px;
+}
+.db-modern .welcome-chip--date {
+  gap: 4px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.db-modern .welcome-tagline {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 16px -10px rgba(15, 23, 42, 0.5);
+}
+
+/* ---------- 統計カード（3D傾き・色分け） ---------- */
+.db-modern .stats-grid {
+  gap: 10px;
+}
+.db-modern .stat-card--sales {
+  --stat-accent: #6366f1;
+  --stat-accent-2: #a855f7;
+  --stat-edge: #4338ca;
+  --stat-deep: #3730a3;
+  --stat-soft: rgba(99, 102, 241, 0.16);
+}
+.db-modern .stat-card--orders {
+  --stat-accent: #f43f5e;
+  --stat-accent-2: #fb7185;
+  --stat-edge: #be123c;
+  --stat-deep: #9f1239;
+  --stat-soft: rgba(244, 63, 94, 0.14);
+}
+.db-modern .stat-card--inventory {
+  --stat-accent: #06b6d4;
+  --stat-accent-2: #22d3ee;
+  --stat-edge: #0e7490;
+  --stat-deep: #155e75;
+  --stat-soft: rgba(6, 182, 212, 0.16);
+}
+.db-modern .stat-card--products {
+  --stat-accent: #10b981;
+  --stat-accent-2: #34d399;
+  --stat-edge: #047857;
+  --stat-deep: #065f46;
+  --stat-soft: rgba(16, 185, 129, 0.16);
+}
+.db-modern .stat-card {
+  position: relative;
+  overflow: hidden;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 100% 0%, var(--stat-soft) 0%, transparent 55%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.66) 100%);
+  box-shadow:
+    0 10px 24px -14px var(--stat-accent),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transform-style: preserve-3d;
+  animation: dbCardIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.db-modern .stat-card:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.db-modern .stat-card:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.db-modern .stat-card:nth-child(4) {
+  animation-delay: 0.18s;
+}
+.db-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--stat-accent-2), var(--stat-accent));
+}
+.db-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.db-modern .stat-card:hover {
+  transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
+  box-shadow:
+    0 18px 32px -14px var(--stat-accent),
+    0 4px 10px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.22s ease;
+}
+.db-modern .stat-card:hover::after {
+  opacity: 1;
+}
+.db-modern .stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--stat-accent-2), var(--stat-accent)) !important;
+  box-shadow:
+    0 3px 0 var(--stat-edge),
+    0 10px 18px -8px var(--stat-accent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  animation: dbIconTilt 5s ease-in-out infinite;
+}
+.db-modern .stat-icon :deep(.el-icon) {
+  font-size: 19px !important;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.3));
+}
+.db-modern .stat-card:nth-child(2) .stat-icon {
+  animation-delay: -1.2s;
+}
+.db-modern .stat-card:nth-child(3) .stat-icon {
+  animation-delay: -2.4s;
+}
+.db-modern .stat-card:nth-child(4) .stat-icon {
+  animation-delay: -3.6s;
+}
+.db-modern .stat-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--stat-deep);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 8px var(--stat-soft);
+}
+.db-modern .stat-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ---------- ガラスカード（チャート・クイック） ---------- */
+.db-modern .glass-card {
+  border-radius: 16px;
+  box-shadow:
+    0 18px 38px -24px rgba(79, 70, 229, 0.45),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: box-shadow 0.25s ease;
+}
+.db-modern .glass-card:hover {
+  box-shadow:
+    0 24px 44px -24px rgba(79, 70, 229, 0.55),
+    0 4px 10px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.db-modern .glass-card__accent {
+  height: 3px;
+}
+.db-modern .chart-card-header__icon,
+.db-modern .section-header__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: none;
+  color: #fff;
+  box-shadow:
+    0 3px 0 #4338ca,
+    0 8px 14px -6px rgba(79, 70, 229, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.db-modern .chart-card-header__icon {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #8b5cf6 100%);
+}
+.db-modern .section-header__icon {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #06b6d4 100%);
+  box-shadow:
+    0 3px 0 #3730a3,
+    0 8px 14px -6px rgba(6, 182, 212, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.db-modern .chart-main-title,
+.db-modern .section-header--in-card {
+  color: #1e1b4b;
+}
+.db-modern .chart-unit {
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: #4338ca;
+  font-weight: 700;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+.db-modern .chart-legend {
+  gap: 8px;
+}
+.db-modern .chart-legend-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 10px -8px rgba(15, 23, 42, 0.35);
+}
+
+/* ---------- クイックアクセス（3D傾き） ---------- */
+.db-modern .quick-grid {
+  gap: 8px;
+  padding: 2px 12px 4px;
+}
+.db-modern .quick-card {
+  min-height: 86px;
+  border-radius: 14px;
+  box-shadow:
+    0 8px 18px -12px rgba(15, 23, 42, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transform-style: preserve-3d;
+  animation: dbCardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 0.04s);
+}
+.db-modern .quick-card::before {
+  height: 3px;
+}
+.db-modern .quick-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.db-modern .quick-card:hover {
+  transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
+  box-shadow:
+    0 18px 28px -14px rgba(79, 70, 229, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.2s ease;
+}
+.db-modern .quick-card:hover::after {
+  opacity: 1;
+}
+.db-modern .quick-card:active {
+  transform: perspective(700px) translateY(0) scale(0.98);
+}
+.db-modern .quick-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  box-shadow:
+    0 3px 0 rgba(15, 23, 42, 0.28),
+    0 8px 14px -6px rgba(15, 23, 42, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease;
+}
+.db-modern .quick-card:hover .quick-icon {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow:
+    0 5px 0 rgba(15, 23, 42, 0.28),
+    0 12px 18px -6px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.db-modern .quick-title {
+  font-size: 10.5px;
+}
+.db-modern .quick-card:hover .quick-arrow {
+  color: #4f46e5;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes dbOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes dbIconTilt {
+  0%,
+  100% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: rotateX(10deg) rotateY(-14deg);
+  }
+}
+@keyframes dbCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-modern .fx-orb,
+  .db-modern .welcome-avatar,
+  .db-modern .stat-card,
+  .db-modern .stat-icon,
+  .db-modern .quick-card {
+    animation: none;
+  }
+  .db-modern .stat-card:hover,
+  .db-modern .quick-card:hover {
+    transform: none;
   }
 }
 </style>

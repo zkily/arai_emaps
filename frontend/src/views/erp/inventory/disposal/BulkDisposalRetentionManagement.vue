@@ -1,5 +1,5 @@
 <template>
-  <div class="bdr-page">
+  <div class="bdr-page bdr-modern">
     <div class="page-ambient" aria-hidden="true">
       <div class="orb orb-a" />
       <div class="orb orb-b" />
@@ -8,6 +8,12 @@
 
     <div class="bdr-inner">
       <header class="toolbar toolbar-elevated animate-in" style="--delay: 0ms">
+        <div class="toolbar-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="toolbar-brand">
           <div class="brand-icon">
             <el-icon :size="20"><WarningFilled /></el-icon>
@@ -15,6 +21,20 @@
           <div class="brand-copy">
             <h1 class="toolbar-title">大量廃棄・保留品管理</h1>
             <p class="toolbar-sub">記録登録 · 処理追跡 · 未処理通知 · 在庫消滅</p>
+            <div class="toolbar-chips">
+              <span class="toolbar-chip">
+                <el-icon><Calendar /></el-icon>
+                {{ filters.date_range ? `${filters.date_range[0]} ～ ${filters.date_range[1]}` : '発生日 全期間' }}
+              </span>
+              <span v-if="filters.report_category" class="toolbar-chip">
+                <el-icon><Document /></el-icon>
+                {{ filters.report_category }}
+              </span>
+              <span v-if="selectedRows.length" class="toolbar-chip">
+                <el-icon><CircleCheckFilled /></el-icon>
+                選択 {{ selectedRows.length }}件
+              </span>
+            </div>
           </div>
         </div>
 
@@ -36,7 +56,12 @@
         </div>
       </header>
 
-      <section class="kpi-grid animate-in" style="--delay: 40ms">
+      <section
+        class="kpi-grid animate-in"
+        style="--delay: 40ms"
+        @mousemove="handleKpiTilt"
+        @mouseleave="resetKpiTilt"
+      >
         <article class="kpi-card kpi-card--total">
           <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
@@ -55,7 +80,7 @@
           <div class="kpi-card__value">{{ pendingTotal.toLocaleString() }}</div>
           <p class="kpi-card__hint">全体の未処理件数</p>
         </article>
-        <article class="kpi-card kpi-card--overdue">
+        <article class="kpi-card kpi-card--overdue" :class="{ 'is-alert': overdueTotal > 0 }">
           <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
             <div class="kpi-icon"><el-icon :size="18"><Timer /></el-icon></div>
@@ -840,6 +865,33 @@ function processKey(proc: string) {
     その他: 'other',
   }
   return map[proc] || 'other'
+}
+
+// KPIカードの3Dチルト（マウス追従）
+function handleKpiTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.kpi-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
+    if (el !== card) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetKpiTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
 }
 
 function tableRowClassName({ row }: { row: BulkDisposalRetentionRecord }) {
@@ -2116,6 +2168,425 @@ onMounted(async () => {
   .block-body--3col,
   .block-body--status {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（大量廃棄・保留品 / amber→orange→rose 警告系）
+ * ============================================================ */
+
+/* ---------- ヒーローヘッダー ---------- */
+.bdr-modern .toolbar-elevated {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, #b45309 0%, #ea580c 32%, #e11d48 70%, #be185d 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(190, 18, 60, 0.6),
+    0 4px 12px -6px rgba(234, 88, 12, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.16) inset;
+}
+.bdr-modern .toolbar-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.bdr-modern .toolbar-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: bdrOrbFloat 12s ease-in-out infinite;
+}
+.bdr-modern .toolbar-fx .orb-a {
+  width: 260px;
+  height: 260px;
+  top: -150px;
+  right: 26%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.bdr-modern .toolbar-fx .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -120px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(254, 240, 138, 0.4) 0%, rgba(254, 240, 138, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.bdr-modern .toolbar-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+.bdr-modern .toolbar-fx .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 62%
+  );
+  background-size: 250% 100%;
+  animation: bdrSheen 7s ease-in-out infinite;
+}
+.bdr-modern .toolbar-brand,
+.bdr-modern .toolbar-actions {
+  position: relative;
+  z-index: 1;
+}
+.bdr-modern .brand-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 10px 20px -8px rgba(76, 5, 25, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -3px 0 rgba(159, 18, 57, 0.35) inset;
+  animation: bdrIconFloat 5.5s ease-in-out infinite;
+}
+.bdr-modern .toolbar-title {
+  font-size: 1.2rem;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 6px rgba(76, 5, 25, 0.3);
+}
+.bdr-modern .toolbar-sub {
+  color: rgba(255, 255, 255, 0.86);
+}
+.bdr-modern .toolbar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.bdr-modern .toolbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #fff;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 6px 14px -8px rgba(76, 5, 25, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- 操作ボタン：3Dキーキャップ ---------- */
+.bdr-modern .action-btn {
+  --k-edge: #cbd5e1;
+  --k-glow: rgba(15, 23, 42, 0.25);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.bdr-modern .action-btn--primary {
+  --k-edge: #1e3a8a;
+  --k-glow: rgba(37, 99, 235, 0.55);
+}
+.bdr-modern .action-btn--notify {
+  --k-edge: #f59e0b;
+  --k-glow: rgba(146, 64, 14, 0.45);
+}
+.bdr-modern .action-btn--print {
+  --k-edge: #a78bfa;
+  --k-glow: rgba(76, 29, 149, 0.45);
+}
+.bdr-modern .action-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.bdr-modern .action-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+.bdr-modern .action-btn:disabled {
+  box-shadow: none;
+}
+.bdr-modern .action-badge {
+  animation: bdrBadgePulse 2s ease-in-out infinite;
+}
+
+/* ---------- KPIカード：3Dチルト＋色分け ---------- */
+.bdr-modern .kpi-grid {
+  perspective: 900px;
+}
+.bdr-modern .kpi-card {
+  --kpi: #2563eb;
+  --kpi-edge: #1e40af;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+.bdr-modern .kpi-card--pending {
+  --kpi: #d97706;
+  --kpi-edge: #92400e;
+}
+.bdr-modern .kpi-card--overdue {
+  --kpi: #e11d48;
+  --kpi-edge: #9f1239;
+}
+.bdr-modern .kpi-card--done {
+  --kpi: #059669;
+  --kpi-edge: #065f46;
+}
+.bdr-modern .kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--kpi) 55%, #ffffff), var(--kpi));
+  pointer-events: none;
+}
+.bdr-modern .kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    color-mix(in srgb, var(--kpi) 16%, transparent) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.bdr-modern .kpi-card:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 20px 34px -18px color-mix(in srgb, var(--kpi) 55%, transparent),
+    0 4px 10px rgba(15, 23, 42, 0.06);
+}
+.bdr-modern .kpi-card:hover::after {
+  opacity: 1;
+}
+.bdr-modern .kpi-card__glow {
+  animation: bdrOrbFloat 10s ease-in-out infinite;
+}
+.bdr-modern .kpi-icon {
+  transform: translateZ(20px);
+  box-shadow:
+    0 3px 0 var(--kpi-edge),
+    0 8px 14px -6px color-mix(in srgb, var(--kpi) 70%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.bdr-modern .kpi-card__value {
+  color: color-mix(in srgb, var(--kpi) 45%, #0f172a);
+  transform: translateZ(14px);
+}
+.bdr-modern .kpi-card--overdue.is-alert {
+  animation: bdrAlertRing 2.4s ease-in-out infinite;
+}
+.bdr-modern .kpi-card--overdue.is-alert .kpi-card__value {
+  color: #e11d48;
+}
+
+/* ---------- パネル ---------- */
+.bdr-modern .panel-accent {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+}
+.bdr-modern .panel-accent--blue {
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+}
+
+/* 区分チップ：3Dキーキャップ（区分別カラー） */
+.bdr-modern .chip {
+  --chip-edge: #475569;
+  box-shadow: 0 2px 0 #e2e8f0;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.bdr-modern .chip--cat-disposal,
+.bdr-modern .chip--overdue {
+  --chip-edge: #991b1b;
+}
+.bdr-modern .chip--cat-defect {
+  --chip-edge: #4c1d95;
+}
+.bdr-modern .chip--cat-hold {
+  --chip-edge: #92400e;
+}
+.bdr-modern .chip--cat-vanish {
+  --chip-edge: #155e75;
+}
+.bdr-modern .chip--cat-other {
+  --chip-edge: #334155;
+}
+.bdr-modern .chip--status-pending {
+  --chip-edge: #9a3412;
+}
+.bdr-modern .chip--status-done {
+  --chip-edge: #065f46;
+}
+.bdr-modern .chip:not(.chip--active):hover {
+  transform: translateY(-2px);
+  color: var(--chip-edge);
+  border-color: color-mix(in srgb, var(--chip-edge) 35%, #ffffff);
+  box-shadow:
+    0 4px 0 #e2e8f0,
+    0 8px 14px -8px color-mix(in srgb, var(--chip-edge) 60%, transparent);
+}
+.bdr-modern .chip--active {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 var(--chip-edge),
+    0 8px 14px -6px color-mix(in srgb, var(--chip-edge) 60%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.bdr-modern .chip:active {
+  transform: translateY(1px);
+}
+
+/* ---------- 記録一覧テーブル ---------- */
+.bdr-modern .table-wrap {
+  box-shadow: 0 12px 26px -22px rgba(190, 18, 60, 0.45);
+}
+.bdr-modern .bdr-table :deep(th.el-table__cell) {
+  color: #9a3412;
+  background: linear-gradient(180deg, #fffaf5 0%, #fdeee4 100%) !important;
+  border-bottom: 2px solid #fdba74;
+}
+.bdr-modern .bdr-table :deep(.row-overdue td.el-table__cell:first-child) {
+  box-shadow: inset 4px 0 0 #ef4444;
+}
+.bdr-modern .bdr-table :deep(.row-pending td.el-table__cell:first-child) {
+  box-shadow: inset 4px 0 0 #f59e0b;
+}
+.bdr-modern .bdr-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+.bdr-modern .pill {
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+}
+.bdr-modern .cell-deadline--overdue {
+  animation: bdrBlink 1.6s ease-in-out infinite;
+}
+.bdr-modern .act-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.bdr-modern .act-edit:hover {
+  background: #eff6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 #bfdbfe;
+}
+.bdr-modern .act-del:hover {
+  background: #fff1f2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 #fecdd3;
+}
+.bdr-modern .pagination-bar :deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: linear-gradient(135deg, #f97316 0%, #e11d48 100%);
+  box-shadow:
+    0 2px 0 #9f1239,
+    0 6px 12px -6px rgba(225, 29, 72, 0.7);
+  transform: translateY(-1px);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes bdrOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes bdrSheen {
+  0%,
+  100% {
+    background-position: 130% 0;
+  }
+  50% {
+    background-position: -30% 0;
+  }
+}
+@keyframes bdrIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+@keyframes bdrBadgePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
+  }
+}
+@keyframes bdrAlertRing {
+  0%,
+  100% {
+    border-color: rgba(226, 232, 240, 0.98);
+  }
+  50% {
+    border-color: rgba(244, 63, 94, 0.55);
+  }
+}
+@keyframes bdrBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bdr-modern .toolbar-fx .fx-orb,
+  .bdr-modern .toolbar-fx .fx-sheen,
+  .bdr-modern .brand-icon,
+  .bdr-modern .action-badge,
+  .bdr-modern .kpi-card__glow,
+  .bdr-modern .kpi-card--overdue.is-alert,
+  .bdr-modern .cell-deadline--overdue {
+    animation: none;
+  }
+  .bdr-modern .kpi-card {
+    transform: none;
+    transition: none;
   }
 }
 </style>

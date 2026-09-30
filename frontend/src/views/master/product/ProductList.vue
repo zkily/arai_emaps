@@ -1,7 +1,13 @@
 <template>
-  <div class="product-master-container">
+  <div class="product-master-container prm-modern">
     <!-- 页面头部 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -12,7 +18,7 @@
           </h1>
           <p class="subtitle">{{ t('master.product.subtitle') }}</p>
         </div>
-        <div class="header-stats">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card">
             <div class="stat-number">{{ allProducts?.length || 0 }}</div>
             <div class="stat-label">{{ t('master.product.totalProducts') }}</div>
@@ -265,7 +271,11 @@
         :default-sort="{ prop: 'product_name', order: 'ascending' }"
         :scrollbar-always-on="true"
       >
-      <el-table-column fixed prop="product_cd" label="製品CD" min-width="85" />
+      <el-table-column fixed prop="product_cd" label="製品CD" min-width="85">
+        <template #default="{ row }">
+          <span class="code-chip">{{ row.product_cd }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="product_name" label="製品名称" min-width="155" />
       <el-table-column
         prop="part_number"
@@ -831,6 +841,33 @@ const columnOptions = {
 }
 
 // 各製品種別件数统计
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
+
 const productTypeStats = computed(() => {
   const stats: Record<string, number> = {
     量産品: 0,
@@ -2634,5 +2671,487 @@ onMounted(async () => {
 .product-type-checkbox-group :deep(.el-checkbox.is-checked) {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.08) 100%);
   border-color: #667eea;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（製品マスタ / sky→blue→indigo）
+ * ============================================================ */
+.product-master-container.prm-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(2, 132, 199, 0.09), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(67, 56, 202, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.prm-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #0c4a6e 0%, #0369a1 30%, #2563eb 66%, #4338ca 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(3, 105, 161, 0.65),
+    0 4px 12px -6px rgba(37, 99, 235, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.prm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.prm-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.prm-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: prmOrbFloat 11s ease-in-out infinite;
+}
+
+.prm-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 32%;
+  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
+}
+
+.prm-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 24%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.prm-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.prm-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: prmSheen 7s ease-in-out infinite;
+}
+
+.prm-modern .main-title {
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(8, 47, 73, 0.35);
+}
+
+.prm-modern .title-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(8, 47, 73, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: prmIconFloat 5s ease-in-out infinite;
+}
+
+.prm-modern .subtitle {
+  color: rgba(224, 242, 254, 0.88);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.prm-modern .header-stats {
+  perspective: 700px;
+}
+
+.prm-modern .stat-card {
+  --sc: rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+  min-width: 82px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+.prm-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.prm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+}
+
+.prm-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.prm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.prm-modern .stat-card:nth-child(2) {
+  --sc: #34d399;
+}
+
+.prm-modern .stat-card:nth-child(3) {
+  --sc: #fbbf24;
+}
+
+.prm-modern .stat-card:nth-child(4) {
+  --sc: #22d3ee;
+}
+
+.prm-modern .stat-card:nth-child(5) {
+  --sc: #c4b5fd;
+}
+
+.prm-modern .stat-number {
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.prm-modern .stat-label {
+  font-weight: 600;
+}
+
+/* ---------- 検索・フィルター ---------- */
+.prm-modern .action-section,
+.prm-modern .table-section {
+  position: relative;
+  border-radius: 14px;
+  border-color: rgba(186, 230, 253, 0.8);
+  box-shadow:
+    0 14px 28px -22px rgba(3, 105, 161, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.prm-modern .action-section::before,
+.prm-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0369a1 0%, #2563eb 55%, #4338ca 100%);
+}
+
+.prm-modern .table-section::before {
+  background: linear-gradient(90deg, #38bdf8 0%, #2563eb 50%, #6366f1 100%);
+}
+
+.prm-modern .filter-header {
+  padding-top: 10px;
+  background: linear-gradient(110deg, rgba(240, 249, 255, 0.95) 0%, rgba(255, 255, 255, 0.95) 60%);
+  border-bottom: 1px dashed #bae6fd;
+}
+
+.prm-modern .filter-title {
+  color: #0c4a6e;
+  font-weight: 700;
+}
+
+.prm-modern .filter-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #38bdf8 0%, #1d4ed8 100%);
+  box-shadow:
+    0 2px 0 #1e3a8a,
+    0 6px 10px -5px rgba(37, 99, 235, 0.6);
+  animation: prmIconFloat 6s ease-in-out infinite;
+}
+
+.prm-modern .summary-icon {
+  color: #0284c7;
+}
+
+.prm-modern .filter-item {
+  transition:
+    transform 0.15s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.prm-modern .filter-item:hover,
+.prm-modern .filter-item:focus-within {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px -10px rgba(3, 105, 161, 0.45);
+}
+
+/* 操作ボタン：3Dキーキャップ（色分け） */
+.prm-modern .export-btn,
+.prm-modern .export-csv-btn,
+.prm-modern .column-selector-btn,
+.prm-modern .add-product-btn,
+.prm-modern .qr-code-btn,
+.prm-modern .cutting-print-btn,
+.prm-modern .scrap-length-calc-btn {
+  --k-edge: #1e3a8a;
+  --k-glow: rgba(37, 99, 235, 0.5);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.prm-modern .export-btn:not(:disabled):hover,
+.prm-modern .export-csv-btn:not(:disabled):hover,
+.prm-modern .column-selector-btn:not(:disabled):hover,
+.prm-modern .add-product-btn:not(:disabled):hover,
+.prm-modern .qr-code-btn:not(:disabled):hover,
+.prm-modern .cutting-print-btn:not(:disabled):hover,
+.prm-modern .scrap-length-calc-btn:not(:disabled):hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.prm-modern .export-btn:not(:disabled):active,
+.prm-modern .export-csv-btn:not(:disabled):active,
+.prm-modern .column-selector-btn:not(:disabled):active,
+.prm-modern .add-product-btn:not(:disabled):active,
+.prm-modern .qr-code-btn:not(:disabled):active,
+.prm-modern .cutting-print-btn:not(:disabled):active,
+.prm-modern .scrap-length-calc-btn:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.prm-modern .export-csv-btn:disabled,
+.prm-modern .cutting-print-btn:disabled {
+  box-shadow: none;
+}
+
+.prm-modern .export-btn {
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+
+.prm-modern .export-csv-btn {
+  --k-edge: #155e75;
+  --k-glow: rgba(8, 145, 178, 0.5);
+}
+
+.prm-modern .column-selector-btn {
+  --k-edge: #5b21b6;
+  --k-glow: rgba(124, 58, 237, 0.5);
+}
+
+.prm-modern .add-product-btn {
+  --k-edge: #312e81;
+  --k-glow: rgba(67, 56, 202, 0.55);
+  background: linear-gradient(135deg, #3b82f6 0%, #4338ca 100%);
+}
+
+.prm-modern .qr-code-btn {
+  --k-edge: #b45309;
+  --k-glow: rgba(217, 119, 6, 0.5);
+}
+
+.prm-modern .cutting-print-btn {
+  --k-edge: #c2410c;
+  --k-glow: rgba(234, 88, 12, 0.5);
+}
+
+.prm-modern .scrap-length-calc-btn {
+  --k-edge: #075985;
+  --k-glow: rgba(2, 132, 199, 0.5);
+}
+
+/* ---------- テーブル ---------- */
+.prm-modern .product-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #0c4a6e !important;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border-bottom: 2px solid #7dd3fc !important;
+}
+
+.prm-modern .product-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.prm-modern .product-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.prm-modern .code-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1e40af;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f8fbff 0%, #e0ecff 100%);
+  box-shadow:
+    inset 0 0 0 1px #bfdbfe,
+    0 2px 0 #bfdbfe;
+  transition: transform 0.15s ease;
+}
+
+.prm-modern .product-table :deep(.el-table__body tr:hover) .code-chip {
+  transform: translateY(-1px);
+}
+
+.prm-modern .product-table :deep(.el-button--primary) {
+  box-shadow: 0 2px 0 #1e40af;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.prm-modern .product-table :deep(.el-button--danger) {
+  box-shadow: 0 2px 0 #991b1b;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.prm-modern .product-table :deep(.el-button--primary:hover),
+.prm-modern .product-table :deep(.el-button--danger:hover) {
+  transform: translateY(-1px);
+}
+
+.prm-modern .product-table :deep(.el-button--primary:hover) {
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.7);
+}
+
+.prm-modern .product-table :deep(.el-button--danger:hover) {
+  box-shadow:
+    0 3px 0 #991b1b,
+    0 8px 14px -8px rgba(220, 38, 38, 0.7);
+}
+
+.prm-modern .product-table :deep(.el-button--primary:active),
+.prm-modern .product-table :deep(.el-button--danger:active) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.prm-modern .product-table :deep(.el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #7dd3fc 0%, #a5b4fc 100%);
+  opacity: 0.85;
+}
+
+.prm-modern .pagination-wrap {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+}
+
+.prm-modern .pagination :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 55%, #4338ca 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 #1e3a8a,
+    0 6px 12px -6px rgba(37, 99, 235, 0.7);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes prmOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes prmSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes prmIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prm-modern .page-header-fx .fx-orb,
+  .prm-modern .page-header-fx .fx-sheen,
+  .prm-modern .title-icon,
+  .prm-modern .filter-icon {
+    animation: none;
+  }
+
+  .prm-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

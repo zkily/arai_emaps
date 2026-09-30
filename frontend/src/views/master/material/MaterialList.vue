@@ -1,8 +1,14 @@
 <!-- MaterialList.vue -->
 <template>
-  <div class="material-master-container">
+  <div class="material-master-container mtm-modern">
     <!-- 页面头部 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -13,7 +19,7 @@
           </h1>
           <p class="subtitle">{{ t('master.material.subtitle') }}</p>
         </div>
-        <div class="header-stats">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card">
             <div class="stat-number">{{ materialList.length }}</div>
             <div class="stat-label">{{ t('master.material.totalMaterials') }}</div>
@@ -25,6 +31,10 @@
           <div class="stat-card">
             <div class="stat-number">{{ lowStockCount }}</div>
             <div class="stat-label">{{ t('master.material.lowStock') }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">{{ filteredList.length }}</div>
+            <div class="stat-label">表示中</div>
           </div>
         </div>
       </div>
@@ -606,6 +616,9 @@
 
     <div class="result-section">
       <div class="result-info">表示件数: {{ filteredList.length }} / {{ materialList.length }}</div>
+      <div class="result-bar" aria-hidden="true">
+        <span :style="{ width: `${resultPct}%` }" />
+      </div>
     </div>
 
     <MaterialEditDialog v-model:visible="formVisible" :data-id="editId" @refresh="fetchList" />
@@ -1327,6 +1340,39 @@ const activeCount = computed(() => materialList.value.filter((row) => row.status
 
 // 無効件数統計
 const lowStockCount = computed(() => materialList.value.filter((row) => row.status === 0).length)
+
+// 表示件数の割合（結果バー用）
+const resultPct = computed(() => {
+  const total = materialList.value.length
+  return total > 0 ? Math.round((filteredList.value.length / total) * 100) : 0
+})
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const hasActiveFilters = computed(
   () =>
@@ -2493,5 +2539,575 @@ onMounted(fetchList)
   font-weight: 500;
   color: #495057;
   white-space: nowrap;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（材料マスタ / emerald→teal→cyan）
+ * ============================================================ */
+.material-master-container.mtm-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(13, 148, 136, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(8, 145, 178, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.mtm-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #064e3b 0%, #047857 32%, #0d9488 66%, #0891b2 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(4, 120, 87, 0.65),
+    0 4px 12px -6px rgba(13, 148, 136, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.mtm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mtm-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.mtm-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: mtmOrbFloat 11s ease-in-out infinite;
+}
+
+.mtm-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #6ee7b7 0%, transparent 70%);
+}
+
+.mtm-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.mtm-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.mtm-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: mtmSheen 7s ease-in-out infinite;
+}
+
+.mtm-modern .main-title {
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 44, 34, 0.35);
+}
+
+.mtm-modern .title-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(2, 44, 34, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: mtmIconFloat 5s ease-in-out infinite;
+}
+
+.mtm-modern .subtitle {
+  color: rgba(209, 250, 229, 0.9);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.mtm-modern .header-stats {
+  perspective: 700px;
+}
+
+.mtm-modern .stat-card {
+  --sc: rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+  min-width: 82px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+.mtm-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.mtm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+}
+
+.mtm-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.mtm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.mtm-modern .stat-card:nth-child(2) {
+  --sc: #86efac;
+}
+
+.mtm-modern .stat-card:nth-child(3) {
+  --sc: #fca5a5;
+}
+
+.mtm-modern .stat-card:nth-child(4) {
+  --sc: #67e8f9;
+  background: rgba(8, 145, 178, 0.28);
+}
+
+.mtm-modern .stat-number {
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.mtm-modern .stat-label {
+  font-weight: 600;
+}
+
+/* ---------- 検索・フィルター ---------- */
+.mtm-modern .action-section,
+.mtm-modern .table-card {
+  position: relative;
+  border-radius: 14px;
+  border-color: rgba(153, 246, 228, 0.85);
+  box-shadow:
+    0 14px 28px -22px rgba(4, 120, 87, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.mtm-modern .action-section::before,
+.mtm-modern .table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #047857 0%, #0d9488 55%, #0891b2 100%);
+}
+
+.mtm-modern .table-card::before {
+  background: linear-gradient(90deg, #34d399 0%, #14b8a6 50%, #22d3ee 100%);
+}
+
+.mtm-modern .filter-header {
+  padding-top: 10px;
+  background: linear-gradient(110deg, rgba(236, 253, 245, 0.95) 0%, rgba(255, 255, 255, 0.95) 60%);
+  border-bottom: 1px dashed #99f6e4;
+}
+
+.mtm-modern .filter-title {
+  color: #064e3b;
+  font-weight: 700;
+}
+
+.mtm-modern .filter-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(145deg, #34d399 0%, #0f766e 100%);
+  box-shadow:
+    0 2px 0 #134e4a,
+    0 6px 10px -5px rgba(13, 148, 136, 0.6);
+  animation: mtmIconFloat 6s ease-in-out infinite;
+}
+
+.mtm-modern .filter-label .el-icon,
+.mtm-modern .summary-icon {
+  color: #0d9488;
+}
+
+.mtm-modern .filter-item {
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  border-left: 3px solid var(--fi, #14b8a6);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  transition:
+    transform 0.15s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.mtm-modern .filter-item:nth-child(2) {
+  --fi: #22c55e;
+}
+
+.mtm-modern .filter-item:nth-child(3) {
+  --fi: #0891b2;
+}
+
+.mtm-modern .filter-item:nth-child(4) {
+  --fi: #f59e0b;
+}
+
+.mtm-modern .filter-item:nth-child(5) {
+  --fi: #8b5cf6;
+}
+
+.mtm-modern .filter-item:nth-child(6) {
+  --fi: #64748b;
+}
+
+.mtm-modern .filter-item:hover,
+.mtm-modern .filter-item:focus-within {
+  transform: translateY(-1px);
+  border-color: #ccfbf1;
+  box-shadow: 0 8px 16px -10px rgba(13, 148, 136, 0.45);
+}
+
+.mtm-modern .filter-input:hover {
+  transform: none;
+}
+
+.mtm-modern .filter-summary {
+  background: linear-gradient(110deg, #f0fdfa 0%, #ffffff 70%);
+  border-top: 1px dashed #99f6e4;
+}
+
+/* テキストボタン：ソフトピル（色分け） */
+.mtm-modern .clear-btn,
+.mtm-modern .column-settings-btn,
+.mtm-modern .print-btn {
+  --tb: #64748b;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  color: var(--tb);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tb) 8%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tb) 22%, #fff);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.mtm-modern .column-settings-btn {
+  --tb: #7c3aed;
+}
+
+.mtm-modern .print-btn {
+  --tb: #ea580c;
+}
+
+.mtm-modern .clear-btn:hover,
+.mtm-modern .column-settings-btn:hover,
+.mtm-modern .print-btn:hover {
+  color: var(--tb);
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--tb) 14%, #fff);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tb) 40%, #fff),
+    0 6px 12px -8px var(--tb);
+}
+
+/* 操作ボタン：3Dキーキャップ（色分け） */
+.mtm-modern .qr-code-btn,
+.mtm-modern .export-csv-btn,
+.mtm-modern .calc-price-btn,
+.mtm-modern .add-material-btn {
+  --k-edge: #134e4a;
+  --k-glow: rgba(13, 148, 136, 0.5);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.mtm-modern .qr-code-btn:not(:disabled):hover,
+.mtm-modern .export-csv-btn:not(:disabled):hover,
+.mtm-modern .calc-price-btn:not(:disabled):hover,
+.mtm-modern .add-material-btn:not(:disabled):hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.mtm-modern .qr-code-btn:not(:disabled):active,
+.mtm-modern .export-csv-btn:not(:disabled):active,
+.mtm-modern .calc-price-btn:not(:disabled):active,
+.mtm-modern .add-material-btn:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mtm-modern .export-csv-btn:disabled,
+.mtm-modern .calc-price-btn:disabled {
+  box-shadow: none;
+}
+
+.mtm-modern .qr-code-btn {
+  --k-edge: #b45309;
+  --k-glow: rgba(217, 119, 6, 0.5);
+}
+
+.mtm-modern .export-csv-btn {
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+
+.mtm-modern .calc-price-btn {
+  --k-edge: #075985;
+  --k-glow: rgba(2, 132, 199, 0.5);
+}
+
+.mtm-modern .add-material-btn {
+  --k-edge: #134e4a;
+  --k-glow: rgba(13, 148, 136, 0.55);
+  background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+}
+
+/* ---------- テーブル ---------- */
+.mtm-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #064e3b;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+  border-bottom: 2px solid #5eead4 !important;
+}
+
+.mtm-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.mtm-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0d9488;
+}
+
+.mtm-modern .material-cd {
+  display: inline-block;
+  padding: 1px 8px;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f766e;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f7fffd 0%, #d5f7ef 100%);
+  box-shadow:
+    inset 0 0 0 1px #99f6e4,
+    0 2px 0 #99f6e4;
+  transition: transform 0.15s ease;
+}
+
+.mtm-modern .modern-table :deep(.el-table__body tr:hover) .material-cd {
+  transform: translateY(-1px);
+}
+
+.mtm-modern .dimension-item {
+  display: inline-block;
+  margin: 1px 0;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: #334155;
+  background: #f1f5f9;
+  font-variant-numeric: tabular-nums;
+}
+
+.mtm-modern .price-item {
+  display: inline-block;
+  margin: 1px 0;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: #047857;
+  font-weight: 600;
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 1px #a7f3d0;
+  font-variant-numeric: tabular-nums;
+}
+
+.mtm-modern .stock-item {
+  font-variant-numeric: tabular-nums;
+}
+
+.mtm-modern .stock-item.low-stock {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 5px;
+  color: #b91c1c;
+  background: #fef2f2;
+  box-shadow: inset 0 0 0 1px #fecaca;
+}
+
+.mtm-modern .modern-table :deep(.el-switch) {
+  --el-switch-on-color: #0d9488;
+}
+
+.mtm-modern .action-buttons-table :deep(.el-button.is-link) {
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.mtm-modern .action-buttons-table :deep(.el-button--primary.is-link:hover) {
+  transform: translateY(-1px);
+  background: #eff6ff;
+}
+
+.mtm-modern .action-buttons-table :deep(.el-button--danger.is-link:hover) {
+  transform: translateY(-1px);
+  background: #fef2f2;
+}
+
+.mtm-modern .modern-table :deep(.el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #5eead4 0%, #67e8f9 100%);
+  opacity: 0.85;
+}
+
+/* ---------- 結果バー ---------- */
+.mtm-modern .result-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 12px;
+  border-color: rgba(153, 246, 228, 0.85);
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdfa 100%);
+}
+
+.mtm-modern .result-info {
+  color: #0f766e;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mtm-modern .result-bar {
+  width: 160px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.mtm-modern .result-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399 0%, #14b8a6 50%, #06b6d4 100%);
+  transition: width 0.4s ease;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes mtmOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes mtmSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes mtmIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mtm-modern .page-header-fx .fx-orb,
+  .mtm-modern .page-header-fx .fx-sheen,
+  .mtm-modern .title-icon,
+  .mtm-modern .filter-icon {
+    animation: none;
+  }
+
+  .mtm-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

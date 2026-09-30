@@ -1,7 +1,8 @@
 <template>
-  <div class="ee-container">
+  <div class="ee-container eef-modern">
     <!-- 页面头部 -->
     <div class="ee-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="ee-header-left">
         <div class="ee-title-row">
           <span class="ee-title-icon"><el-icon :size="20"><Tools /></el-icon></span>
@@ -9,12 +10,13 @@
         </div>
         <p class="ee-subtitle">設備ごとの加工製品別能率設定・管理</p>
       </div>
-      <div class="ee-stats">
-        <div class="ee-stat" v-for="s in [
+      <div class="ee-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <div class="ee-stat" v-for="(s, i) in [
           { n: tabCountsAll, l: '設定数' },
           { n: machineDistinctCount, l: '設備数' },
-          { n: productDistinctCount, l: '製品数' }
-        ]" :key="s.l">
+          { n: productDistinctCount, l: '製品数' },
+          { n: efficiencyList.length, l: '表示中' }
+        ]" :key="s.l" :class="`ee-stat--${i}`">
           <span class="ee-stat-num">{{ s.n }}</span>
           <span class="ee-stat-lbl">{{ s.l }}</span>
         </div>
@@ -77,9 +79,17 @@
             height="calc(100vh - 260px)"
           >
             <el-table-column type="index" label="#" width="48" align="center" :index="tableIndexMethod" />
-            <el-table-column prop="machine_cd" label="設備CD" width="90" align="center" sortable />
+            <el-table-column prop="machine_cd" label="設備CD" width="90" align="center" sortable>
+              <template #default="{ row }">
+                <span class="ee-code ee-code--machine">{{ row.machine_cd }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="machines_name" label="設備名" min-width="120" sortable show-overflow-tooltip />
-            <el-table-column prop="product_cd" label="製品CD" width="90" align="center" sortable />
+            <el-table-column prop="product_cd" label="製品CD" width="90" align="center" sortable>
+              <template #default="{ row }">
+                <span class="ee-code ee-code--product">{{ row.product_cd }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="product_name" label="製品名" min-width="130" sortable show-overflow-tooltip />
             <el-table-column prop="efficiency_rate" label="能率" width="80" align="center">
               <template #default="{ row }">
@@ -91,7 +101,7 @@
             </el-table-column>
             <el-table-column prop="step_time" label="段取" width="65" align="center">
               <template #default="{ row }">
-                <span v-if="row.step_time != null">{{ row.step_time }}<small class="ee-min">分</small></span>
+                <span v-if="row.step_time != null" class="ee-step">{{ row.step_time }}<small class="ee-min">分</small></span>
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状態" width="85" align="center">
@@ -375,6 +385,33 @@ const handlePageSizeChange = () => {
 }
 
 const getRowClassName = () => 'ee-row'
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.ee-stat')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.ee-stat').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.ee-stat').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const handleStatusChange = async (row: EquipmentEfficiency, value: number | string | boolean) => {
   if (!guardMasterOperation(canEdit)) return
@@ -1333,6 +1370,430 @@ onMounted(async () => {
   .ee-form-row {
     flex-direction: column;
     gap: 0;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（設備能率管理 / olive→lime→gold）
+ * ============================================================ */
+.eef-modern {
+  --hx-1: #1a2e05;
+  --hx-2: #3f6212;
+  --hx-3: #65a30d;
+  --hx-4: #eab308;
+  --hx-deep: #365314;
+  --hx-soft: #f7fee7;
+  --hx-line: rgba(101, 163, 13, 0.18);
+  background:
+    radial-gradient(1100px 360px at 10% -10%, rgba(163, 230, 53, 0.13), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(234, 179, 8, 0.08), transparent 60%),
+    linear-gradient(160deg, #f9fcf2 0%, #f7fee7 40%, #f8fafc 100%);
+}
+
+.eef-modern .ee-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(63, 98, 18, 0.6),
+    0 6px 14px -6px rgba(234, 179, 8, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.eef-modern .ee-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.eef-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.eef-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: eefOrbFloat 11s ease-in-out infinite;
+}
+
+.eef-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 26%;
+  background: radial-gradient(circle, rgba(190, 242, 100, 0.65), transparent 70%);
+}
+
+.eef-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 14%;
+  background: radial-gradient(circle, rgba(253, 224, 71, 0.6), transparent 70%);
+  animation-delay: -5s;
+}
+
+.eef-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.eef-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: eefSheen 7s ease-in-out infinite;
+}
+
+.eef-modern .ee-title-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(26, 46, 5, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: eefIconRev 5s ease-in-out infinite;
+}
+
+.eef-modern .ee-title {
+  font-weight: 800;
+  text-shadow: 0 2px 10px rgba(26, 46, 5, 0.35);
+}
+
+.eef-modern .ee-subtitle {
+  margin-left: 48px;
+}
+
+.eef-modern .ee-stats {
+  perspective: 650px;
+  flex-wrap: wrap;
+}
+
+.eef-modern .ee-stat {
+  --sc: #d9f99d;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 3px 0 rgba(26, 46, 5, 0.4),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.eef-modern .ee-stat,
+.eef-modern .ee-stat:hover {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+}
+
+.eef-modern .ee-stat::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.eef-modern .ee-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.eef-modern .ee-stat:hover {
+  box-shadow:
+    0 5px 0 rgba(26, 46, 5, 0.45),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.eef-modern .ee-stat:hover::after {
+  opacity: 1;
+}
+
+.eef-modern .ee-stat--0 { --sc: #fde68a; }
+.eef-modern .ee-stat--1 { --sc: #bef264; }
+.eef-modern .ee-stat--2 { --sc: #7dd3fc; }
+.eef-modern .ee-stat--3 { --sc: #fdba74; }
+
+.eef-modern .ee-stat-num {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(26, 46, 5, 0.35);
+}
+
+.eef-modern .ee-toolbar,
+.eef-modern .ee-table-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(63, 98, 18, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.eef-modern .ee-toolbar::before,
+.eef-modern .ee-table-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), #a3e635, var(--hx-4));
+}
+
+.eef-modern .ee-toolbar {
+  padding-top: 11px;
+}
+
+.eef-modern .ee-table-wrap {
+  padding-top: 3px;
+}
+
+.eef-modern .ee-search :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--hx-3);
+  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.14);
+}
+
+.eef-modern .ee-btn-clear {
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border-color: rgba(101, 163, 13, 0.25);
+  box-shadow: 0 2px 0 rgba(101, 163, 13, 0.22);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.eef-modern .ee-btn-clear:hover {
+  transform: translateY(-1px);
+  color: var(--hx-deep);
+  background: #ecfccb;
+  box-shadow: 0 3px 0 rgba(101, 163, 13, 0.28);
+}
+
+.eef-modern .ee-btn-print {
+  box-shadow: 0 2px 0 rgba(22, 163, 74, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.eef-modern .ee-btn-print:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 rgba(22, 163, 74, 0.38);
+}
+
+.eef-modern .ee-btn-add {
+  --k-edge: #3f6212;
+  --k-glow: rgba(101, 163, 13, 0.5);
+  font-weight: 700;
+  background: linear-gradient(135deg, #84cc16, #4d7c0f);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.eef-modern .ee-btn-add:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #84cc16, #4d7c0f);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.eef-modern .ee-btn-add:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.eef-modern .ee-tabs :deep(.el-tabs__header) {
+  background: linear-gradient(180deg, #fbfdf6, #f7fee7);
+}
+
+.eef-modern .ee-tabs :deep(.el-tabs__item) {
+  --tc: var(--hx-3);
+  position: relative;
+  margin: 4px 2px 0;
+  height: 32px;
+  line-height: 32px;
+  border-radius: 9px 9px 0 0;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.eef-modern .ee-tabs :deep(#tab-all) { --tc: #4d7c0f; }
+.eef-modern .ee-tabs :deep(#tab-cutting) { --tc: #2563eb; }
+.eef-modern .ee-tabs :deep(#tab-chamfering) { --tc: #0891b2; }
+.eef-modern .ee-tabs :deep(#tab-forming) { --tc: #059669; }
+.eef-modern .ee-tabs :deep(#tab-welding) { --tc: #dc2626; }
+.eef-modern .ee-tabs :deep(#tab-plating) { --tc: #ca8a04; }
+.eef-modern .ee-tabs :deep(#tab-inspection) { --tc: #db2777; }
+.eef-modern .ee-tabs :deep(#tab-other) { --tc: #64748b; }
+
+.eef-modern .ee-tabs :deep(.el-tabs__item:hover) {
+  color: var(--tc);
+  transform: translateY(-1px);
+}
+
+.eef-modern .ee-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--tc);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--tc) 10%, #fff);
+  box-shadow: inset 0 2px 0 var(--tc);
+}
+
+.eef-modern .ee-tabs :deep(.el-tabs__active-bar) {
+  height: 3px;
+  background: linear-gradient(90deg, var(--hx-3), var(--hx-4));
+}
+
+.eef-modern .ee-table-wrap :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #365314, #3f6212) !important;
+  color: #fff !important;
+  border-bottom: 2px solid var(--hx-4) !important;
+}
+
+.eef-modern .ee-table-wrap :deep(.el-table__body tr:hover > td) {
+  background: #f7fee7 !important;
+}
+
+.eef-modern .ee-table-wrap :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.eef-modern .ee-code {
+  --cc: #4d7c0f;
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 9%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc) 32%, #fff), 0 2px 0 color-mix(in srgb, var(--cc) 25%, #fff);
+  transition: transform 0.15s ease;
+}
+
+.eef-modern .ee-code--machine { --cc: #4d7c0f; }
+.eef-modern .ee-code--product { --cc: #0369a1; }
+
+.eef-modern .ee-table-wrap :deep(tr:hover) .ee-code {
+  transform: translateY(-1px);
+}
+
+.eef-modern .ee-eff-cell {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fefce8, #ecfccb);
+  border: 1px solid #d9f99d;
+  box-shadow: 0 1px 0 #bef264;
+}
+
+.eef-modern .ee-eff-val {
+  color: var(--hx-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.eef-modern .ee-eff-unit {
+  color: #a16207;
+}
+
+.eef-modern .ee-step {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.eef-modern .ee-result-bar b {
+  color: var(--hx-3);
+}
+
+.eef-modern .ee-proc-tag {
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+.eef-modern .ee-result-bar :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4)) !important;
+  color: #fff;
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+@keyframes eefOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes eefSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes eefIconRev {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateZ(0deg);
+  }
+  40% {
+    transform: perspective(300px) rotateX(10deg) rotateZ(-14deg);
+  }
+  60% {
+    transform: perspective(300px) rotateX(10deg) rotateZ(10deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eef-modern .fx-orb,
+  .eef-modern .fx-sheen,
+  .eef-modern .ee-title-icon {
+    animation: none;
+  }
+
+  .eef-modern .ee-stat,
+  .eef-modern .ee-stat:hover {
+    transform: none;
   }
 }
 </style>

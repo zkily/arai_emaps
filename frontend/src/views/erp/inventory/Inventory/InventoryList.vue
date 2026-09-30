@@ -1,5 +1,5 @@
 <template>
-  <div class="inventory-list-page">
+  <div class="inventory-list-page il-modern">
     <div class="page-bg">
       <div class="bg-gradient"></div>
       <div class="bg-orb bg-orb-1"></div>
@@ -8,13 +8,32 @@
     </div>
 
     <div class="page-header glass animate-in">
+      <div class="header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-left">
         <div class="header-icon">
           <el-icon size="24"><List /></el-icon>
         </div>
         <div class="header-text">
           <h1 class="header-title">仕掛品・製品在庫照会</h1>
-          <span class="header-meta">{{ totalCount }} 件</span>
+          <div class="header-chips">
+            <span class="header-chip">
+              <el-icon><Calendar /></el-icon>
+              {{ headerDateRangeText }}
+            </span>
+            <span class="header-chip">
+              <el-icon><Goods /></el-icon>
+              {{ selectedProductName }}
+            </span>
+            <span class="header-chip header-chip--strong">
+              <el-icon><Tickets /></el-icon>
+              {{ totalCount }} 件
+            </span>
+          </div>
         </div>
       </div>
       <div class="header-actions">
@@ -27,15 +46,22 @@
       </div>
     </div>
 
-    <div class="stat-cards glass animate-in" style="--delay: 0.05s">
+    <div
+      class="stat-cards glass animate-in"
+      style="--delay: 0.05s"
+      @mousemove="handleStatTilt"
+      @mouseleave="resetStatTilt"
+    >
       <div
         v-for="(item, i) in statCards"
         :key="item.key"
         class="stat-card"
+        :class="`stat-tone-${i}`"
         :style="{ '--i': i }"
       >
         <span class="stat-label">{{ item.label }}</span>
         <span class="stat-value" :class="item.sum < 0 ? 'num-negative' : ''">{{ formatNum(item.sum) }}</span>
+        <span class="stat-bar"><i :style="{ width: statBarWidth(item.sum) }" /></span>
       </div>
     </div>
 
@@ -228,7 +254,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { List, Download, Refresh, Loading } from '@element-plus/icons-vue'
+import { List, Download, Refresh, Loading, Calendar, Goods, Tickets } from '@element-plus/icons-vue'
 import {
   getProductionSummarysList,
   getProductionSummarysProducts,
@@ -294,6 +320,55 @@ const statCards = computed(() => {
     return { key, label, sum }
   })
 })
+
+const statMaxAbs = computed(() =>
+  statCards.value.reduce((m, c) => Math.max(m, Math.abs(c.sum)), 0),
+)
+
+function statBarWidth(sum: number): string {
+  const max = statMaxAbs.value
+  if (!max) return '0%'
+  return `${Math.max(2, Math.round((Math.abs(sum) / max) * 100))}%`
+}
+
+const headerDateRangeText = computed(() => {
+  const r = dateRange.value
+  if (!r || !r[0]) return '—'
+  return r[0] === r[1] ? r[0] : `${r[0]} 〜 ${r[1]}`
+})
+
+const selectedProductName = computed(() => {
+  const cd = filters.productCd
+  if (!cd) return '全製品'
+  const p = productOptions.value.find((x) => x.product_cd === cd)
+  return p?.product_name || cd
+})
+
+function handleStatTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== card) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 16).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 16).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -1116,4 +1191,560 @@ onMounted(() => {
 .progress-fill { height: 100%; background: #409eff; border-radius: 4px; transition: width 0.3s ease; }
 .progress-fill--success { background: #67c23a; }
 .progress-percent { font-size: 12px; color: #64748b; }
+
+/* 页面美化：現代UI・3D動効・色分け（仕掛品・製品在庫照会 / 在庫 teal→cyan→blue） */
+.il-modern {
+  --il-c1: #0f766e;
+  --il-c2: #0891b2;
+  --il-c3: #2563eb;
+  --il-edge: #115e59;
+}
+.il-modern .bg-gradient {
+  background:
+    radial-gradient(circle at 6% -8%, rgba(13, 148, 136, 0.12), transparent 38%),
+    radial-gradient(circle at 100% -12%, rgba(37, 99, 235, 0.1), transparent 34%),
+    var(--el-bg-color-page, #f4f7fb);
+}
+.il-modern .bg-orb {
+  opacity: 0.1;
+}
+
+/* ---- Hero ヘッダー ---- */
+.il-modern .page-header {
+  overflow: hidden;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(135deg, #115e59 0%, #0d9488 30%, #0891b2 64%, #2563eb 100%);
+  box-shadow:
+    0 16px 32px -18px rgba(8, 145, 178, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.il-modern .page-header:hover {
+  transform: none;
+  box-shadow:
+    0 16px 32px -18px rgba(8, 145, 178, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.il-modern .header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.il-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  animation: ilOrbFloat 9s ease-in-out infinite;
+}
+.il-modern .orb-a {
+  width: 200px;
+  height: 200px;
+  top: -90px;
+  right: 18%;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(153, 246, 228, 0) 70%);
+}
+.il-modern .orb-b {
+  width: 140px;
+  height: 140px;
+  bottom: -76px;
+  left: 34%;
+  background: radial-gradient(circle at 40% 40%, rgba(165, 243, 252, 0.4), rgba(165, 243, 252, 0) 70%);
+  animation-delay: -4s;
+}
+.il-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
+}
+.il-modern .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
+  background-size: 250% 100%;
+  animation: ilSheen 6s ease-in-out infinite;
+}
+.il-modern .header-left,
+.il-modern .header-actions {
+  position: relative;
+  z-index: 1;
+}
+.il-modern .header-icon {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 10px 18px -8px rgba(4, 47, 46, 0.6),
+    inset 0 -3px 0 rgba(4, 47, 46, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: ilIconFloat 4.5s ease-in-out infinite;
+}
+.il-modern .header-title {
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(4, 47, 46, 0.35);
+}
+.il-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.il-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.il-modern .header-chip--strong {
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ---- 3D キーキャップ（ヘッダー・ダイアログ） ---- */
+.il-modern .btn-glass,
+.il-modern .btn-primary-glass,
+.il-modern .dlg-btn {
+  border: none !important;
+  border-radius: 10px !important;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease !important;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.il-modern .btn-glass:not(.is-disabled):hover,
+.il-modern .btn-primary-glass:not(.is-disabled):hover,
+.il-modern .dlg-btn:not(.is-disabled):hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -10px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.il-modern .btn-glass:not(.is-disabled):active,
+.il-modern .btn-primary-glass:not(.is-disabled):active,
+.il-modern .dlg-btn:not(.is-disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -6px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+.il-modern .btn-glass {
+  --k-edge: #5eead4;
+  --k-glow: rgba(4, 47, 46, 0.45);
+  color: #0f766e !important;
+  background: linear-gradient(180deg, #ffffff, #ccfbf1) !important;
+}
+.il-modern .btn-glass:hover {
+  background: linear-gradient(180deg, #ffffff, #ccfbf1) !important;
+}
+.il-modern .btn-primary-glass {
+  --k-edge: #c2410c;
+  --k-glow: rgba(234, 88, 12, 0.5);
+  color: #fff !important;
+  background: linear-gradient(180deg, #fbbf24, #f97316) !important;
+}
+.il-modern .dlg-btn--ghost {
+  --k-edge: #cbd5e1;
+  --k-glow: rgba(100, 116, 139, 0.3);
+}
+.il-modern .dlg-btn--accent.el-button--primary {
+  --k-edge: #115e59;
+  --k-glow: rgba(13, 148, 136, 0.5);
+  background: linear-gradient(180deg, #2dd4bf, #0d9488 55%, #0891b2) !important;
+}
+
+/* ---- 集計カード（工程別色分け・3D チルト） ---- */
+.il-modern .stat-cards,
+.il-modern .toolbar,
+.il-modern .table-wrap {
+  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--el-bg-color, #fff);
+  border: 1px solid color-mix(in srgb, var(--il-c2) 14%, #e2e8f0);
+  box-shadow:
+    0 12px 26px -20px rgba(8, 145, 178, 0.55),
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.il-modern .stat-cards::before,
+.il-modern .toolbar::before,
+.il-modern .table-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--il-c1), var(--il-c2), var(--il-c3));
+}
+.il-modern .stat-cards {
+  perspective: 900px;
+  gap: 8px;
+}
+.il-modern .stat-card {
+  --sc: #0d9488;
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 88px;
+  min-width: 88px;
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 10%, #fff), #fff 70%);
+  border: 1px solid color-mix(in srgb, var(--sc) 24%, #e2e8f0);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--sc) 30%, #e2e8f0),
+    0 10px 18px -14px color-mix(in srgb, var(--sc) 70%, transparent);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.2s ease;
+}
+.il-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--sc), color-mix(in srgb, var(--sc) 45%, #fff));
+}
+.il-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.75),
+    transparent 60%
+  );
+}
+.il-modern .stat-card:hover {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 16%, #fff), #fff 70%);
+  border-color: color-mix(in srgb, var(--sc) 45%, #e2e8f0);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(6px);
+  box-shadow:
+    0 5px 0 color-mix(in srgb, var(--sc) 40%, #e2e8f0),
+    0 16px 26px -14px color-mix(in srgb, var(--sc) 80%, transparent);
+}
+.il-modern .stat-card:hover::after {
+  opacity: 1;
+}
+.il-modern .stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: color-mix(in srgb, var(--sc) 75%, #1e293b);
+  font-weight: 700;
+  transform: translateZ(14px);
+}
+.il-modern .stat-label::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 20%, transparent);
+}
+.il-modern .stat-value {
+  color: #0f172a;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(20px);
+}
+.il-modern .stat-card .stat-value.num-negative {
+  color: #dc2626;
+  text-shadow: none;
+}
+.il-modern .stat-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--sc) 12%, #f1f5f9);
+}
+.il-modern .stat-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sc) 55%, #fff), var(--sc));
+  transition: width 0.5s ease;
+}
+.il-modern .stat-tone-0 { --sc: #6366f1; }
+.il-modern .stat-tone-1 { --sc: #8b5cf6; }
+.il-modern .stat-tone-2 { --sc: #0ea5e9; }
+.il-modern .stat-tone-3 { --sc: #d97706; }
+.il-modern .stat-tone-4 { --sc: #ef4444; }
+.il-modern .stat-tone-5 { --sc: #10b981; }
+.il-modern .stat-tone-6 { --sc: #0d9488; }
+.il-modern .stat-tone-7 { --sc: #14b8a6; }
+.il-modern .stat-tone-8 { --sc: #ca8a04; }
+.il-modern .stat-tone-9 { --sc: #f97316; }
+.il-modern .stat-tone-10 { --sc: #ec4899; }
+.il-modern .stat-tone-11 { --sc: #64748b; }
+.il-modern .stat-tone-12 { --sc: #65a30d; }
+
+/* ---- ツールバー ---- */
+.il-modern .toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--il-c1), var(--il-c2));
+  box-shadow: 0 2px 0 var(--il-edge);
+}
+.il-modern .toolbar :deep(.el-date-editor),
+.il-modern .toolbar :deep(.el-select) {
+  --el-fill-color-blank: #fff;
+  --el-border-color: #cbd5e1;
+  --el-text-color-regular: #1e293b;
+}
+.il-modern .toolbar :deep(.el-input__wrapper),
+.il-modern .toolbar :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background: #fff;
+  border: none;
+  box-shadow: 0 0 0 1px #d5dee8 inset;
+}
+.il-modern .toolbar :deep(.el-input__wrapper:hover),
+.il-modern .toolbar :deep(.el-input__wrapper.is-focus),
+.il-modern .toolbar :deep(.el-select__wrapper:hover),
+.il-modern .toolbar :deep(.el-select__wrapper.is-focused) {
+  background: #fff;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--il-c2) 60%, transparent) inset,
+    0 4px 10px -6px rgba(8, 145, 178, 0.55);
+}
+.il-modern .toolbar :deep(.el-range-input) {
+  color: #1e293b;
+  background: transparent;
+}
+.il-modern .date-quick-btn {
+  border: none !important;
+  color: #0f766e !important;
+  background: linear-gradient(180deg, #ffffff, #f0fdfa) !important;
+  box-shadow:
+    0 3px 0 #99f6e4,
+    0 8px 14px -10px rgba(13, 148, 136, 0.6),
+    inset 0 0 0 1px #ccfbf1 !important;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease !important;
+}
+.il-modern .date-quick-btn:hover {
+  transform: translateY(-2px);
+  color: #0f766e !important;
+  background: linear-gradient(180deg, #ffffff, #ccfbf1) !important;
+  box-shadow:
+    0 5px 0 #5eead4,
+    0 12px 18px -10px rgba(13, 148, 136, 0.6),
+    inset 0 0 0 1px #99f6e4 !important;
+}
+.il-modern .date-quick-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #5eead4,
+    inset 0 0 0 1px #99f6e4 !important;
+}
+.il-modern .date-quick-btn--active,
+.il-modern .date-quick-btn--active:hover {
+  color: #fff !important;
+  background: linear-gradient(180deg, #2dd4bf, #0d9488 60%, #0891b2) !important;
+  box-shadow:
+    0 3px 0 var(--il-edge),
+    0 10px 18px -8px rgba(13, 148, 136, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+/* ---- テーブル ---- */
+.il-modern .table-wrap:hover {
+  box-shadow:
+    0 16px 30px -20px rgba(8, 145, 178, 0.6),
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.il-modern .data-table {
+  border: 1px solid color-mix(in srgb, var(--il-c2) 16%, #e2e8f0);
+  border-radius: 10px;
+}
+.il-modern .data-table :deep(.el-table__header th) {
+  color: #fff !important;
+  background: linear-gradient(180deg, #0d9488 0%, #0f766e 100%) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.il-modern .data-table :deep(.el-table__header th .cell) {
+  color: #fff;
+}
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(n + 5)) {
+  background: linear-gradient(180deg, #0891b2 0%, #0e7490 100%) !important;
+  box-shadow: inset 0 -3px 0 var(--hd-tone, transparent);
+}
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(5)) { --hd-tone: #a5b4fc; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(6)) { --hd-tone: #c4b5fd; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(7)) { --hd-tone: #7dd3fc; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(8)) { --hd-tone: #fcd34d; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(9)) { --hd-tone: #fca5a5; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(10)) { --hd-tone: #6ee7b7; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(11)) { --hd-tone: #5eead4; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(12)) { --hd-tone: #99f6e4; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(13)) { --hd-tone: #fde047; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(14)) { --hd-tone: #fdba74; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(15)) { --hd-tone: #f9a8d4; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(16)) { --hd-tone: #cbd5e1; }
+.il-modern .data-table :deep(.el-table__header th.el-table__cell:nth-child(17)) { --hd-tone: #bef264; }
+.il-modern .data-table :deep(.el-table__body tr:hover > td) {
+  background: #f0fdfa !important;
+}
+.il-modern .data-table :deep(.el-table__body tr:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 var(--il-c1);
+}
+.il-modern .data-table :deep(.el-table__body td:first-child .cell) {
+  font-weight: 600;
+  color: var(--il-c1);
+  font-variant-numeric: tabular-nums;
+}
+.il-modern .data-table :deep(.el-table__footer td) {
+  color: var(--il-edge) !important;
+  background: linear-gradient(180deg, #f0fdfa, #ccfbf1) !important;
+  border-top: 2px solid #5eead4 !important;
+  font-variant-numeric: tabular-nums;
+}
+.il-modern .data-table :deep(.el-table__body-wrapper .el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #2dd4bf, #0891b2);
+  opacity: 0.7;
+}
+.il-modern .data-table .num-positive {
+  font-variant-numeric: tabular-nums;
+}
+.il-modern .data-table .num-negative {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: #b91c1c;
+  background: #fee2e2;
+  box-shadow: inset 0 -1px 0 #fca5a5;
+  font-variant-numeric: tabular-nums;
+}
+.il-modern :deep(.el-loading-spinner .path) {
+  stroke: var(--il-c2);
+}
+
+/* ---- 在庫更新ダイアログ ---- */
+.il-modern .progress-icon {
+  color: var(--il-c2);
+  animation: ilSpin 1s linear infinite;
+}
+.il-modern .progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+.il-modern .progress-fill {
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.22) 0 8px,
+      transparent 8px 16px
+    ),
+    linear-gradient(90deg, #14b8a6, #0891b2, #2563eb);
+  background-size:
+    22px 22px,
+    100% 100%;
+  animation: ilStripe 0.8s linear infinite;
+}
+.il-modern .progress-fill--success {
+  background: linear-gradient(90deg, #10b981, #059669);
+  animation: none;
+}
+
+@keyframes ilOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-18px, 12px, 0);
+  }
+}
+@keyframes ilSheen {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+@keyframes ilIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
+  }
+}
+@keyframes ilStripe {
+  from {
+    background-position:
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      22px 0,
+      0 0;
+  }
+}
+@keyframes ilSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .il-modern .fx-orb,
+  .il-modern .fx-sheen,
+  .il-modern .header-icon,
+  .il-modern .progress-fill,
+  .il-modern .progress-icon,
+  .il-modern .bg-orb {
+    animation: none;
+  }
+  .il-modern .stat-card,
+  .il-modern .stat-card:hover {
+    transform: none;
+    transition: none;
+  }
+}
 </style>

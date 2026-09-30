@@ -1,6 +1,7 @@
 <template>
-  <div class="user-list">
+  <div class="user-list usr-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="header-left">
         <div class="header-icon-sm">
           <el-icon :size="18"><User /></el-icon>
@@ -10,8 +11,8 @@
           <p class="subtitle">{{ t('systemUser.user.subtitle') }}</p>
         </div>
       </div>
-      <div class="header-chips">
-        <span class="h-chip">
+      <div class="header-chips" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <span class="h-chip total">
           <strong>{{ pagination.total }}</strong>
           <em>{{ t('systemUser.user.totalUsers') }}</em>
         </span>
@@ -22,6 +23,10 @@
         <span class="h-chip warn">
           <strong>{{ lockedUserCount }}</strong>
           <em>{{ t('systemUser.user.locked') }}</em>
+        </span>
+        <span class="h-chip tfa">
+          <strong>{{ twoFactorUserCount }}</strong>
+          <em>{{ t('systemUser.user.twoFA') }}</em>
         </span>
       </div>
     </div>
@@ -472,6 +477,34 @@ const { canCreate, canEdit, canExport } = useOperationPermission(OPERATION_MODUL
 // Computed stats for header
 const activeUserCount = computed(() => userList.value.filter((u) => u.status === 'active').length)
 const lockedUserCount = computed(() => userList.value.filter((u) => u.status === 'locked').length)
+const twoFactorUserCount = computed(() => userList.value.filter((u) => !!u.two_factor).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.h-chip')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.h-chip').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.h-chip').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const avatarColors = ['#6366f1', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444']
 const getAvatarColor = (name: string) => avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length]
@@ -1864,6 +1897,488 @@ onMounted(() => {
   .table-footer {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（ユーザー管理 / オーロラ：深藍→ロイヤル→バイオレット→ピンク）
+ * ============================================================ */
+.usr-modern {
+  --hx-1: #0c1445;
+  --hx-2: #1d4ed8;
+  --hx-3: #7c3aed;
+  --hx-4: #ec4899;
+  --hx-deep: #3730a3;
+  --hx-soft: #eef2ff;
+  --hx-line: rgba(99, 102, 241, 0.18);
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(29, 78, 216, 0.1), transparent 55%),
+    radial-gradient(ellipse 55% 42% at 96% 2%, rgba(236, 72, 153, 0.08), transparent 50%),
+    linear-gradient(165deg, #f1f5f9 0%, #eef2ff 40%, #f8fafc 100%);
+}
+
+.usr-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 36%, var(--hx-3) 70%, var(--hx-4) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 14px 32px -12px rgba(55, 48, 163, 0.6),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.usr-modern .page-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.usr-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.usr-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: usrOrbFloat 11s ease-in-out infinite;
+}
+
+.usr-modern .orb-a {
+  width: 180px;
+  height: 180px;
+  top: -70px;
+  right: 24%;
+  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
+}
+
+.usr-modern .orb-b {
+  width: 150px;
+  height: 150px;
+  bottom: -70px;
+  left: 30%;
+  background: radial-gradient(circle, #f9a8d4 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.usr-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
+}
+
+.usr-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: usrSheen 7s ease-in-out infinite;
+}
+
+@keyframes usrOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes usrSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.usr-modern .header-icon-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 4px 0 rgba(12, 20, 69, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: usrIconBob 3.4s ease-in-out infinite;
+}
+
+@keyframes usrIconBob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.04);
+  }
+}
+
+.usr-modern .header-text h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(12, 20, 69, 0.4);
+}
+
+/* 統計カード */
+.usr-modern .header-chips {
+  gap: 10px;
+  perspective: 650px;
+}
+
+.usr-modern .h-chip {
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 76px;
+  padding: 8px 12px 7px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 4px 0 rgba(12, 20, 69, 0.45),
+    0 12px 22px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease;
+}
+
+.usr-modern .h-chip:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+}
+
+.usr-modern .h-chip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+  box-shadow: 0 0 10px var(--sc);
+}
+
+.usr-modern .h-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.usr-modern .h-chip:hover::after {
+  opacity: 1;
+}
+
+.usr-modern .h-chip strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(12, 20, 69, 0.45);
+}
+
+.usr-modern .h-chip em {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.usr-modern .h-chip.total {
+  --sc: #93c5fd;
+}
+
+.usr-modern .h-chip.ok {
+  --sc: #86efac;
+}
+
+.usr-modern .h-chip.warn {
+  --sc: #fcd34d;
+}
+
+.usr-modern .h-chip.tfa {
+  --sc: #f9a8d4;
+}
+
+/* ツールバー・テーブルカード */
+.usr-modern .toolbar-card,
+.usr-modern .table-card {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px -14px rgba(55, 48, 163, 0.38),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.usr-modern .toolbar-card::before,
+.usr-modern .table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4));
+}
+
+.usr-modern .toolbar-card {
+  padding: 13px 12px 10px;
+  margin-bottom: 10px;
+}
+
+.usr-modern .table-card {
+  padding-top: 3px;
+}
+
+.usr-modern .filter-field :deep(.el-input__wrapper),
+.usr-modern .filter-field :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+.usr-modern .filter-field :deep(.el-input__wrapper.is-focus),
+.usr-modern .filter-field :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.55) inset,
+    0 4px 12px -4px rgba(99, 102, 241, 0.35);
+}
+
+/* 立体ボタン（キーキャップ） */
+.usr-modern .toolbar-actions .el-button {
+  --k-edge: #cbd5e1;
+  --k-glow: rgba(100, 116, 139, 0.3);
+  border-radius: 8px;
+  font-weight: 700;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.usr-modern .toolbar-actions .el-button:not(.is-disabled):hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.usr-modern .toolbar-actions .el-button:not(.is-disabled):active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.usr-modern .toolbar-actions .el-button.is-disabled {
+  box-shadow: none;
+}
+
+.usr-modern .btn-add,
+.usr-modern .btn-add:not(.is-disabled):hover {
+  --k-edge: #4338ca;
+  --k-glow: rgba(99, 102, 241, 0.55);
+  color: #fff;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 45%, #7c3aed 100%);
+}
+
+.usr-modern .btn-print,
+.usr-modern .btn-print:not(.is-disabled):hover {
+  --k-edge: #cbd5e1;
+  color: #334155;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%);
+  border-color: #e2e8f0;
+}
+
+.usr-modern .btn-qr,
+.usr-modern .btn-qr:not(.is-disabled):hover {
+  --k-edge: #b45309;
+  --k-glow: rgba(217, 119, 6, 0.5);
+  color: #fff;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+}
+
+/* テーブル */
+.usr-modern .user-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  color: var(--hx-deep) !important;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.28) !important;
+  font-weight: 700;
+}
+
+.usr-modern .user-table :deep(.el-table__row:hover > td) {
+  background: #f5f7ff !important;
+}
+
+.usr-modern .user-table :deep(.el-table__row:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.usr-modern .user-table :deep(.row-locked > td:first-child) {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.usr-modern .id-badge {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  color: var(--hx-deep);
+  background: color-mix(in srgb, #6366f1 10%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(99, 102, 241, 0.24),
+    0 2px 0 rgba(99, 102, 241, 0.18);
+}
+
+.usr-modern .avatar-mini {
+  box-shadow:
+    0 3px 0 rgba(15, 23, 42, 0.22),
+    0 6px 12px -4px rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.usr-modern .user-table :deep(.el-table__row:hover) .avatar-mini {
+  transform: translateY(-2px) rotate(-4deg);
+}
+
+.usr-modern .dept-badge,
+.usr-modern .role-pill,
+.usr-modern .status-pill,
+.usr-modern .tfa-pill {
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.06),
+    0 2px 0 rgba(15, 23, 42, 0.08);
+  transition: transform 0.15s ease;
+}
+
+.usr-modern .user-table :deep(.el-table__row:hover) .role-pill,
+.usr-modern .user-table :deep(.el-table__row:hover) .status-pill,
+.usr-modern .user-table :deep(.el-table__row:hover) .dept-badge {
+  transform: translateY(-1px);
+}
+
+.usr-modern .role-pill--admin {
+  box-shadow:
+    inset 0 0 0 1px rgba(185, 28, 28, 0.22),
+    0 2px 0 rgba(185, 28, 28, 0.18);
+}
+
+.usr-modern .role-pill--manager {
+  box-shadow:
+    inset 0 0 0 1px rgba(21, 128, 61, 0.22),
+    0 2px 0 rgba(21, 128, 61, 0.18);
+}
+
+.usr-modern .role-pill--worker {
+  box-shadow:
+    inset 0 0 0 1px rgba(180, 83, 9, 0.22),
+    0 2px 0 rgba(180, 83, 9, 0.18);
+}
+
+.usr-modern .status-pill.active .status-dot {
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: usrPulse 2s ease-out infinite;
+}
+
+@keyframes usrPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 5px rgba(22, 163, 74, 0);
+  }
+}
+
+.usr-modern .table-footer {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  border-top-color: var(--hx-line);
+}
+
+.usr-modern .table-footer :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--hx-2), var(--hx-3));
+  box-shadow: 0 2px 0 var(--hx-1);
+}
+
+/* ユーザーフォームダイアログ */
+.usr-modern .ufd-header {
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 40%, var(--hx-3) 78%, var(--hx-4) 100%);
+}
+
+.usr-modern .ufd-header-icon {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    0 4px 0 rgba(12, 20, 69, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.usr-modern .ufd-btn-submit {
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 45%, #7c3aed 100%);
+  box-shadow:
+    0 3px 0 #4338ca,
+    0 10px 18px -8px rgba(99, 102, 241, 0.55);
+}
+
+.usr-modern .ufd-btn-submit:hover {
+  box-shadow:
+    0 5px 0 #4338ca,
+    0 14px 22px -8px rgba(99, 102, 241, 0.55);
+}
+
+.usr-modern .ufd-btn-submit:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #4338ca;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .usr-modern .fx-orb,
+  .usr-modern .fx-sheen,
+  .usr-modern .header-icon-sm,
+  .usr-modern .status-pill.active .status-dot {
+    animation: none;
+  }
+
+  .usr-modern .h-chip {
+    transform: none;
   }
 }
 </style>

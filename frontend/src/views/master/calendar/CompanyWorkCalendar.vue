@@ -1,17 +1,32 @@
 <template>
-  <div class="cwc">
+  <div class="cwc cwc-modern">
     <header class="cwc-hero">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="cwc-hero__left">
         <div class="cwc-hero__icon"><el-icon :size="20"><Calendar /></el-icon></div>
         <div class="cwc-hero__text">
           <div class="cwc-hero__eyebrow">マスタ · カレンダー</div>
           <h1 class="cwc-hero__title">会社稼働カレンダー</h1>
         </div>
+        <span class="cwc-chip cwc-chip--muted cwc-hero__month">{{ monthLabel }}</span>
       </div>
-      <div class="cwc-hero__stats">
-        <span class="cwc-chip cwc-chip--primary">稼働 <strong>{{ summary.scheduled }}</strong>/{{ summary.total }}</span>
-        <span class="cwc-chip">登録 <strong>{{ items.length }}</strong></span>
-        <span class="cwc-chip cwc-chip--muted">{{ monthLabel }}</span>
+      <div class="cwc-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <div class="stat-card stat-work">
+          <span class="stat-num">{{ summary.scheduled }}<small>/{{ summary.total }}</small></span>
+          <span class="stat-lbl">稼働日</span>
+        </div>
+        <div class="stat-card stat-off">
+          <span class="stat-num">{{ offDayCount }}</span>
+          <span class="stat-lbl">非稼働</span>
+        </div>
+        <div class="stat-card stat-reg">
+          <span class="stat-num">{{ items.length }}</span>
+          <span class="stat-lbl">登録</span>
+        </div>
+        <div class="stat-card stat-rate">
+          <span class="stat-num">{{ workRate }}<small>%</small></span>
+          <span class="stat-lbl">稼働率</span>
+        </div>
       </div>
       <el-button :icon="Refresh" :loading="loading" size="small" round class="cwc-hero__refresh" @click="loadMonth">更新</el-button>
     </header>
@@ -35,7 +50,7 @@
         <el-option v-for="t in dayTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
       <el-input v-model="newName" placeholder="名称" size="small" class="cwc-name" clearable />
-      <el-button v-if="canCreate" type="primary" size="small" :loading="saving" :disabled="!newDates.length" @click="addEntries">追加</el-button>
+      <el-button v-if="canCreate" type="primary" size="small" class="cwc-add-btn" :loading="saving" :disabled="!newDates.length" @click="addEntries">追加</el-button>
     </div>
 
     <div v-loading="loading" class="cwc-main">
@@ -76,7 +91,7 @@
           </el-table-column>
           <el-table-column label="区分" width="84" align="center">
             <template #default="{ row }">
-              <el-tag :type="tagType(row.day_type)" size="small" effect="plain">{{ row.day_type_label || row.day_type }}</el-tag>
+              <el-tag :type="tagType(row.day_type)" size="small" effect="plain" :class="['cwc-type-tag', `cwc-type--${row.day_type}`]">{{ row.day_type_label || row.day_type }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="稼働" width="52" align="center">
@@ -159,6 +174,43 @@ const legendItems = computed(() =>
       ],
 )
 
+const offDayCount = computed(() => Math.max(0, summary.value.total - summary.value.scheduled))
+const workRate = computed(() =>
+  summary.value.total ? Math.round((summary.value.scheduled / summary.value.total) * 100) : 0,
+)
+
+const todayStr = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})()
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
+
 const monthLabel = computed(() => {
   const [y, m] = (monthValue.value || '').split('-')
   if (!y || !m) return '—'
@@ -235,6 +287,7 @@ function cellClass(cell: CalCell): string[] {
   else cls.push('is-off')
   if (cell.entry?.day_type) cls.push(`has-type-${cell.entry.day_type}`)
   if (cell.isWeekend && !cell.entry) cls.push('is-default-weekend')
+  if (cell.date === todayStr) cls.push('is-today')
   return cls
 }
 
@@ -637,5 +690,553 @@ onMounted(async () => {
 
 .cwc-foot__sep {
   opacity: 0.5;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（会社稼働カレンダー / navy→royal→teal）
+ * ============================================================ */
+.cwc-modern {
+  --hx-1: #0b1a3a;
+  --hx-2: #1e3a8a;
+  --hx-3: #2563eb;
+  --hx-4: #0d9488;
+  --hx-deep: #1e3a8a;
+  --hx-soft: #eff6ff;
+  --hx-line: rgba(37, 99, 235, 0.16);
+  gap: 8px;
+  padding: 8px 10px 12px;
+  background:
+    radial-gradient(1100px 340px at 8% -10%, rgba(37, 99, 235, 0.08), transparent 60%),
+    radial-gradient(900px 300px at 100% 0%, rgba(13, 148, 136, 0.07), transparent 60%);
+}
+
+.cwc-modern .cwc-hero {
+  position: relative;
+  overflow: hidden;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(30, 58, 138, 0.6),
+    0 6px 14px -6px rgba(13, 148, 136, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.cwc-modern .cwc-hero > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.cwc-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.cwc-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: cwcOrbFloat 11s ease-in-out infinite;
+}
+
+.cwc-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 26%;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.7), transparent 70%);
+}
+
+.cwc-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 14%;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.55), transparent 70%);
+  animation-delay: -5s;
+}
+
+.cwc-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.cwc-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: cwcSheen 7s ease-in-out infinite;
+}
+
+.cwc-modern .cwc-hero__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(11, 26, 58, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: cwcIconFlip 6s ease-in-out infinite;
+}
+
+.cwc-modern .cwc-hero__eyebrow {
+  font-size: 10px;
+  color: #bfdbfe;
+}
+
+.cwc-modern .cwc-hero__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(11, 26, 58, 0.35);
+}
+
+.cwc-modern .cwc-hero__month {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 0 rgba(11, 26, 58, 0.35);
+}
+
+.cwc-modern .cwc-hero__stats {
+  gap: 8px;
+  perspective: 650px;
+}
+
+.cwc-modern .stat-card {
+  --sc: #bfdbfe;
+  position: relative;
+  overflow: hidden;
+  min-width: 70px;
+  padding: 6px 12px 5px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 3px 0 rgba(11, 26, 58, 0.4),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.cwc-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.cwc-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.cwc-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.cwc-modern .stat-card:hover {
+  box-shadow:
+    0 5px 0 rgba(11, 26, 58, 0.45),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.cwc-modern .stat-work { --sc: #86efac; }
+.cwc-modern .stat-off { --sc: #fca5a5; }
+.cwc-modern .stat-reg { --sc: #c4b5fd; }
+.cwc-modern .stat-rate { --sc: #5eead4; }
+
+.cwc-modern .stat-num {
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(11, 26, 58, 0.35);
+}
+
+.cwc-modern .stat-num small {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.8;
+  margin-left: 1px;
+}
+
+.cwc-modern .stat-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.04em;
+}
+
+.cwc-modern .cwc-hero__refresh {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 3px 0 rgba(11, 26, 58, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cwc-modern .cwc-hero__refresh:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 rgba(11, 26, 58, 0.45);
+}
+
+.cwc-modern .cwc-hero__refresh:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(11, 26, 58, 0.45);
+}
+
+.cwc-modern .cwc-legend {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--hx-line);
+  box-shadow: 0 4px 12px -8px rgba(30, 58, 138, 0.3);
+  font-size: 11px;
+}
+
+.cwc-modern .cwc-legend__item {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #334155;
+}
+
+.cwc-modern .cwc-legend__dot {
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+  animation: cwcDotPulse 2.6s ease-in-out infinite;
+}
+
+.cwc-modern .cwc-legend__hint {
+  font-size: 10px;
+}
+
+.cwc-modern .cwc-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(30, 58, 138, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+  padding-top: 11px;
+}
+
+.cwc-modern .cwc-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4), #5eead4);
+}
+
+.cwc-modern .cwc-toolbar :deep(.el-input__wrapper),
+.cwc-modern .cwc-toolbar :deep(.el-select__wrapper) {
+  border-radius: 9px;
+}
+
+.cwc-modern .cwc-field__label {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+.cwc-modern .cwc-add-btn {
+  --k-edge: #115e59;
+  --k-glow: rgba(13, 148, 136, 0.5);
+  border: none;
+  border-radius: 9px;
+  font-weight: 700;
+  padding: 0 16px;
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.cwc-modern .cwc-add-btn:hover:not(.is-disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #2563eb, #0d9488);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.cwc-modern .cwc-add-btn:active:not(.is-disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.cwc-modern .cwc-add-btn.is-disabled {
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.cwc-modern .cwc-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--hx-deep);
+}
+
+.cwc-modern .cwc-panel__title::before {
+  content: '';
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--hx-3), var(--hx-4));
+}
+
+.cwc-modern .cwc-panel__badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+.cwc-modern .cwc-cal__wd {
+  font-size: 10px;
+  border-radius: 6px;
+  background: #f1f5f9;
+}
+
+.cwc-modern .cwc-cal__wd.is-sun {
+  background: #fef2f2;
+}
+
+.cwc-modern .cwc-cal__wd.is-sat {
+  background: #eff6ff;
+}
+
+.cwc-modern .cwc-cal__grid {
+  gap: 3px;
+  perspective: 800px;
+}
+
+.cwc-modern .cwc-cal__cell:not(.is-empty) {
+  --edge: #e2e8f0;
+  position: relative;
+  border-radius: 7px;
+  box-shadow:
+    inset 0 0 0 2px var(--ring, transparent),
+    0 2px 0 var(--edge);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cwc-modern .cwc-cal__cell:not(.is-empty):hover {
+  z-index: 2;
+  transform: translateY(-3px) rotateX(10deg) scale(1.07);
+  box-shadow:
+    inset 0 0 0 2px var(--ring, transparent),
+    0 4px 0 var(--edge),
+    0 12px 18px -8px rgba(15, 23, 42, 0.35);
+}
+
+.cwc-modern .cwc-cal__cell.is-work {
+  --edge: #86efac;
+  background: linear-gradient(160deg, #f0fdf4, #dcfce7);
+}
+
+.cwc-modern .cwc-cal__cell.is-off {
+  --edge: #fca5a5;
+  background: linear-gradient(160deg, #fef2f2, #fee2e2);
+}
+
+.cwc-modern .cwc-cal__cell.is-default-weekend {
+  --edge: #cbd5e1;
+  background: linear-gradient(160deg, #f8fafc, #f1f5f9);
+}
+
+.cwc-modern .cwc-cal__cell.has-type-national_holiday { --ring: #ef4444; }
+.cwc-modern .cwc-cal__cell.has-type-company_holiday { --ring: #64748b; }
+.cwc-modern .cwc-cal__cell.has-type-paid_leave { --ring: #8b5cf6; }
+.cwc-modern .cwc-cal__cell.has-type-extra_workday {
+  --ring: #f97316;
+  background: linear-gradient(160deg, #fff7ed, #ffedd5);
+}
+
+.cwc-modern .cwc-cal__cell.is-today::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9px;
+  border: 2px solid var(--hx-3);
+  pointer-events: none;
+  animation: cwcTodayPulse 2s ease-in-out infinite;
+}
+
+.cwc-modern .cwc-cal__cell.is-today .cwc-cal__num {
+  color: #fff;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
+}
+
+.cwc-modern .cwc-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #1e3a8a, #1d4ed8) !important;
+  color: #fff !important;
+  border-bottom: 2px solid #14b8a6 !important;
+}
+
+.cwc-modern .cwc-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.cwc-modern .cwc-type-tag {
+  --tt: #64748b;
+  --el-tag-text-color: var(--tt);
+  --el-tag-bg-color: color-mix(in srgb, var(--tt) 9%, #fff);
+  --el-tag-border-color: color-mix(in srgb, var(--tt) 35%, #fff);
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.cwc-modern .cwc-type--national_holiday { --tt: #dc2626; }
+.cwc-modern .cwc-type--company_holiday { --tt: #475569; }
+.cwc-modern .cwc-type--paid_leave { --tt: #7c3aed; }
+.cwc-modern .cwc-type--extra_workday { --tt: #ea580c; }
+
+.cwc-modern .cwc-sched.is-on {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 2px 0 #15803d;
+}
+
+.cwc-modern .cwc-foot {
+  border-top-color: var(--hx-line);
+}
+
+.cwc-modern .cwc-foot__item {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--hx-soft);
+  color: var(--hx-deep);
+}
+
+@keyframes cwcOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes cwcSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes cwcIconFlip {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(18deg) rotateY(-12deg);
+  }
+}
+
+@keyframes cwcTodayPulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0);
+  }
+}
+
+@keyframes cwcDotPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cwc-modern .fx-orb,
+  .cwc-modern .fx-sheen,
+  .cwc-modern .cwc-hero__icon,
+  .cwc-modern .cwc-legend__dot,
+  .cwc-modern .cwc-cal__cell.is-today::after {
+    animation: none;
+  }
+
+  .cwc-modern .stat-card,
+  .cwc-modern .cwc-cal__cell:not(.is-empty):hover {
+    transform: none;
+  }
 }
 </style>

@@ -1,7 +1,12 @@
 <template>
-  <div class="part-master-container">
+  <div class="part-master-container pm-modern">
     <!-- 与 ProductList / MaterialInspection 同构的页面头部 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <div class="title-icon">
@@ -12,7 +17,7 @@
             <p class="subtitle">{{ t('master.part.subtitle') }}</p>
           </div>
         </div>
-        <div class="header-stats">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card stat-card--total">
             <div class="stat-icon"><el-icon><Collection /></el-icon></div>
             <div class="stat-body">
@@ -568,6 +573,33 @@ const hasActiveFilters = computed(() => {
   const st = filters.value.status
   return Boolean(kw) || st === 0 || st === 1
 })
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== card) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!card) return
+  const rect = card.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  card.style.setProperty('--rx', `${((0.5 - py) * 16).toFixed(2)}deg`)
+  card.style.setProperty('--ry', `${((px - 0.5) * 16).toFixed(2)}deg`)
+  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function handleClearFilter(key: 'keyword' | 'status') {
   if (key === 'keyword') filters.value.keyword = ''
@@ -1924,6 +1956,348 @@ onMounted(fetchList)
 
   .stat-number {
     font-size: 1.1rem;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（部品マスタ / indigo→violet）
+ * ============================================================ */
+
+/* ---------- ヒーローヘッダー ---------- */
+.pm-modern .page-header {
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #3730a3 0%, #4f46e5 32%, #7c3aed 70%, #a855f7 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(76, 29, 149, 0.65),
+    0 4px 12px -6px rgba(79, 70, 229, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.pm-modern .page-header:hover {
+  transform: none;
+}
+.pm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.pm-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: pmOrbFloat 12s ease-in-out infinite;
+}
+.pm-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.pm-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 26%;
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.38) 0%, rgba(125, 211, 252, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.pm-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+.pm-modern .title-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  font-size: 21px;
+  box-shadow:
+    0 10px 20px -8px rgba(30, 27, 75, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -3px 0 rgba(67, 56, 202, 0.4) inset;
+  animation: pmIconFloat 5.5s ease-in-out infinite;
+}
+.pm-modern .page-header:hover .title-icon {
+  transform: none;
+}
+.pm-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+}
+
+/* 統計カード：3Dチルト＋グレア */
+.pm-modern .header-stats {
+  perspective: 700px;
+}
+.pm-modern .stat-card {
+  position: relative;
+  overflow: hidden;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  box-shadow:
+    0 10px 22px -12px rgba(30, 27, 75, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+.pm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.pm-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(30, 27, 75, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.pm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+.pm-modern .stat-icon {
+  transform: translateZ(18px);
+}
+.pm-modern .stat-card--total .stat-icon {
+  box-shadow:
+    0 3px 0 #075985,
+    0 8px 14px -6px rgba(14, 165, 233, 0.7);
+}
+.pm-modern .stat-card--page .stat-icon {
+  box-shadow:
+    0 3px 0 #065f46,
+    0 8px 14px -6px rgba(16, 185, 129, 0.7);
+}
+.pm-modern .stat-number {
+  text-shadow: 0 1px 6px rgba(30, 27, 75, 0.3);
+}
+
+/* ---------- 検索・フィルター ---------- */
+.pm-modern .action-section {
+  position: relative;
+}
+.pm-modern .action-section::before,
+.pm-modern .table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  z-index: 3;
+  border-radius: 0 0 3px 3px;
+  pointer-events: none;
+}
+.pm-modern .action-section::before {
+  background: linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #8b5cf6 100%);
+}
+.pm-modern .filter-icon {
+  color: #fff;
+  background: linear-gradient(145deg, #818cf8 0%, #4f46e5 100%);
+  box-shadow:
+    0 2px 0 #3730a3,
+    0 6px 10px -6px rgba(79, 70, 229, 0.7);
+  animation: pmIconFloat 6s ease-in-out infinite;
+}
+
+/* 操作ボタン：3Dキーキャップ（色分け） */
+.pm-modern .search-btn,
+.pm-modern .export-csv-btn,
+.pm-modern .qr-code-btn,
+.pm-modern .add-product-btn {
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.5);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+.pm-modern .export-csv-btn {
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+.pm-modern .qr-code-btn {
+  --k-edge: #b45309;
+  --k-glow: rgba(217, 119, 6, 0.5);
+}
+.pm-modern .add-product-btn {
+  --k-edge: #5b21b6;
+  --k-glow: rgba(124, 58, 237, 0.5);
+}
+.pm-modern .search-btn:hover,
+.pm-modern .export-csv-btn:hover:not(:disabled),
+.pm-modern .qr-code-btn:hover:not(:disabled),
+.pm-modern .add-product-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pm-modern .search-btn:active,
+.pm-modern .export-csv-btn:active:not(:disabled),
+.pm-modern .qr-code-btn:active:not(:disabled),
+.pm-modern .add-product-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+.pm-modern .export-csv-btn:disabled,
+.pm-modern .qr-code-btn:disabled {
+  box-shadow: none;
+}
+
+/* ---------- テーブル ---------- */
+.pm-modern .table-card {
+  position: relative;
+  border-radius: 16px;
+  box-shadow:
+    0 18px 36px -26px rgba(79, 70, 229, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.05);
+}
+.pm-modern .table-card::before {
+  background: linear-gradient(90deg, #818cf8 0%, #6366f1 45%, #8b5cf6 75%, #ec4899 100%);
+}
+.pm-modern .part-table :deep(th.el-table__cell) {
+  color: #3730a3;
+  background: linear-gradient(180deg, #f7f8ff 0%, #e8ecff 100%) !important;
+  border-bottom: 2px solid #a5b4fc !important;
+  font-weight: 700;
+}
+.pm-modern .part-table :deep(th.jpy-col) {
+  color: #4f46e5;
+  background: linear-gradient(180deg, #eef2ff 0%, #dfe4ff 100%) !important;
+}
+.pm-modern .part-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.pm-modern .part-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+.pm-modern .code-chip {
+  box-shadow:
+    0 2px 0 #c7d2fe,
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: transform 0.15s ease;
+}
+.pm-modern .part-table :deep(.el-table__body tr:hover) .code-chip {
+  transform: translateY(-1px);
+}
+.pm-modern .kind-badge--T {
+  box-shadow:
+    inset 0 0 0 1px #bae6fd,
+    0 2px 0 #7dd3fc;
+}
+.pm-modern .kind-badge--N {
+  box-shadow:
+    inset 0 0 0 1px #ddd6fe,
+    0 2px 0 #c4b5fd;
+}
+.pm-modern .kind-badge--F {
+  box-shadow:
+    inset 0 0 0 1px #fde68a,
+    0 2px 0 #fcd34d;
+}
+.pm-modern .status-pill.is-active .status-dot {
+  animation: pmDotPulse 2.2s ease-in-out infinite;
+}
+.pm-modern .part-table :deep(.el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #a5b4fc 0%, #c4b5fd 100%);
+  opacity: 0.8;
+}
+
+/* 行操作：キーキャップ */
+.pm-modern .row-btn--edit {
+  box-shadow: 0 2px 0 #c7d2fe;
+}
+.pm-modern .row-btn--edit:hover {
+  box-shadow:
+    0 3px 0 #3730a3,
+    0 8px 14px -8px rgba(79, 70, 229, 0.7);
+}
+.pm-modern .row-btn--delete {
+  box-shadow: 0 2px 0 #fecdd3;
+}
+.pm-modern .row-btn--delete:hover {
+  box-shadow:
+    0 3px 0 #9f1239,
+    0 8px 14px -8px rgba(225, 29, 72, 0.7);
+}
+.pm-modern .row-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ページネーション */
+.pm-modern .table-footer {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
+}
+.pm-modern .pagination :deep(.el-pager li.is-active) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 #3730a3,
+    0 6px 12px -6px rgba(99, 102, 241, 0.7);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes pmOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes pmIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+@keyframes pmDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-modern .page-header-fx .fx-orb,
+  .pm-modern .title-icon,
+  .pm-modern .filter-icon,
+  .pm-modern .status-pill.is-active .status-dot {
+    animation: none;
+  }
+  .pm-modern .stat-card {
+    transform: none;
+    transition: none;
   }
 }
 </style>

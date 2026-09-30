@@ -11,17 +11,31 @@
     :show-close="false"
   >
     <template #header>
-      <div class="dm-header">
+      <div class="dm-header dmm-hero">
+        <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
         <div class="dm-header-inner">
           <div class="dm-title-wrap">
             <div class="dm-title-icon">
               <el-icon><Calendar /></el-icon>
             </div>
             <h2 class="dm-title">{{ t('orderDailyManage.title') }}</h2>
-            <span class="dm-count-badge">{{ t('orderDailyManage.countBadge', { n: dailyOrdersList.length }) }}</span>
             <span v-if="dailyChangedRows.size > 0" class="dm-changed-badge">
               <el-icon><Edit /></el-icon>
               {{ t('orderDailyManage.changedBadge', { n: dailyChangedRows.size }) }}
+            </span>
+          </div>
+          <div class="dmm-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+            <span class="dmm-stat dmm-stat--count">
+              <strong>{{ dailyOrdersList.length }}</strong>
+              <em>{{ t('orderDailyBatchEdit.statTotal') }}</em>
+            </span>
+            <span class="dmm-stat dmm-stat--boxes">
+              <strong>{{ confirmedBoxesTotal.toLocaleString() }}</strong>
+              <em>{{ t('orderDailyManage.colConfirmedBoxes') }}</em>
+            </span>
+            <span class="dmm-stat dmm-stat--units">
+              <strong>{{ confirmedUnitsTotal.toLocaleString() }}</strong>
+              <em>{{ t('orderDailyManage.colConfirmedUnits') }}</em>
             </span>
           </div>
           <div class="dm-header-actions">
@@ -43,7 +57,7 @@
     </template>
 
     <!-- 筛选 - 紧凑玻璃条 -->
-    <div class="dm-filter">
+    <div class="dm-filter dmm-filter">
       <div class="dm-filter-inner">
         <div class="dm-filter-group">
           <span class="dm-filter-label">{{ t('orderDailyManage.filterDate') }}</span>
@@ -84,10 +98,10 @@
           <span class="dm-filter-label">{{ t('orderDailyManage.shortcut') }}</span>
           <div class="dm-shortcut-btns">
             <el-button
-              v-for="label in shortcutLabels"
+              v-for="(label, i) in shortcutLabels"
               :key="label"
               size="small"
-              :class="['dm-shortcut-btn', { 'is-active': shortcutDestinationCd(label) === destinationCd }]"
+              :class="['dm-shortcut-btn', `dmm-sc--${i}`, { 'is-active': shortcutDestinationCd(label) === destinationCd }]"
               @click="applyShortcut(label)"
             >
               {{ label }}
@@ -97,7 +111,7 @@
       </div>
     </div>
 
-    <div class="dm-table-wrap">
+    <div class="dm-table-wrap dmm-table">
       <el-table
         v-loading="loading"
         :data="dailyOrdersList"
@@ -170,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchOrderDailyList } from '@/api/erp/orderDaily'
 import { batchUpdateDailyOrders } from '@/api/order/order'
@@ -208,6 +222,40 @@ const dailyChangedRows = ref<Set<number>>(new Set())
 const destinationOptions = ref<{ cd: string; name: string }[]>([])
 const loading = ref(false)
 const saving = ref(false)
+
+const confirmedBoxesTotal = computed(() =>
+  dailyOrdersList.value.reduce((sum, r) => sum + (Number(r.confirmed_boxes) || 0), 0),
+)
+const confirmedUnitsTotal = computed(() =>
+  dailyOrdersList.value.reduce((sum, r) => sum + (Number(r.confirmed_units) || 0), 0),
+)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.dmm-stat')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.dmm-stat').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.dmm-stat').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const confirmedBoxesInputs = ref<(HTMLInputElement | undefined)[]>([])
 const confirmedUnitsInputs = ref<(HTMLInputElement | undefined)[]>([])
@@ -790,6 +838,489 @@ onMounted(() => {
   }
   .daily-manage-table {
     min-width: 780px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（日別受注編集・日付×納入先 / インディゴ→シアン→ティール）
+ * ============================================================ */
+.dmm-hero {
+  --hx-1: #1e1b4b;
+  --hx-2: #4338ca;
+  --hx-3: #0891b2;
+  --hx-4: #2dd4bf;
+  padding: 9px 14px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  backdrop-filter: none;
+  border-bottom: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16) inset,
+    0 10px 24px -12px rgba(67, 56, 202, 0.6);
+}
+
+.dmm-hero::before {
+  display: none;
+}
+
+.dmm-hero .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.dmm-hero .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.5;
+  animation: dmmOrbFloat 11s ease-in-out infinite;
+}
+
+.dmm-hero .orb-a {
+  width: 160px;
+  height: 160px;
+  top: -80px;
+  right: 30%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+}
+
+.dmm-hero .orb-b {
+  width: 130px;
+  height: 130px;
+  bottom: -80px;
+  left: 20%;
+  background: radial-gradient(circle, #c4b5fd 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.dmm-hero .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 120% at 60% 40%, #000 20%, transparent 75%);
+}
+
+.dmm-hero .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 26%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: dmmSheen 7s ease-in-out infinite;
+}
+
+@keyframes dmmOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes dmmSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.dmm-hero .dm-title-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 3px 0 rgba(30, 27, 75, 0.5),
+    0 8px 14px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: dmmFlip 4.6s ease-in-out infinite;
+}
+
+@keyframes dmmFlip {
+  0%,
+  72%,
+  100% {
+    transform: perspective(200px) rotateX(0deg);
+  }
+  82% {
+    transform: perspective(200px) rotateX(-180deg);
+  }
+  92% {
+    transform: perspective(200px) rotateX(-360deg);
+  }
+}
+
+.dmm-hero .dm-title {
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(30, 27, 75, 0.45);
+}
+
+.dmm-hero .dm-changed-badge {
+  background: linear-gradient(160deg, rgba(251, 191, 36, 0.42), rgba(251, 191, 36, 0.18));
+  border-color: rgba(253, 230, 138, 0.55);
+  box-shadow:
+    0 2px 0 rgba(120, 53, 15, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* 統計カード */
+.dmm-stats {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  perspective: 600px;
+}
+
+.dmm-stat {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 10px 4px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 3px 0 rgba(30, 27, 75, 0.45),
+    0 10px 18px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease;
+}
+
+.dmm-stat:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+}
+
+.dmm-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--sc);
+  box-shadow: 0 0 8px var(--sc);
+}
+
+.dmm-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.dmm-stat:hover::after {
+  opacity: 1;
+}
+
+.dmm-stat strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(12px);
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.45);
+}
+
+.dmm-stat em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.88;
+  white-space: nowrap;
+}
+
+.dmm-stat--count {
+  --sc: #a5b4fc;
+}
+
+.dmm-stat--boxes {
+  --sc: #67e8f9;
+}
+
+.dmm-stat--units {
+  --sc: #6ee7b7;
+}
+
+/* ヘッダーボタン（キーキャップ） */
+.dmm-hero .dm-btn {
+  --k-edge: rgba(30, 27, 75, 0.55);
+  --k-glow: rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease,
+    background 0.2s ease;
+}
+
+.dmm-hero .dm-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dmm-hero .dm-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dmm-hero .dm-btn:disabled {
+  box-shadow: none;
+}
+
+.dmm-hero .dm-btn-save {
+  --k-edge: #047857;
+  --k-glow: rgba(16, 185, 129, 0.55);
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+}
+
+.dmm-hero .dm-btn-save:hover:not(:disabled) {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+}
+
+.dmm-hero .dm-btn-close:hover {
+  --k-edge: #991b1b;
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 45%, #dc2626 100%);
+}
+
+/* フィルターバー */
+.dmm-filter {
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+  border-bottom: 1px solid rgba(67, 56, 202, 0.12);
+}
+
+.dmm-filter .dm-filter-label {
+  color: #3730a3;
+  font-weight: 700;
+}
+
+.dmm-filter .dm-nav-btn,
+.dmm-filter .dm-nav-today,
+.dmm-filter .dm-shortcut-btn {
+  --k-edge: #cbd5e1;
+  box-shadow:
+    0 2px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.dmm-filter .dm-nav-btn:hover,
+.dmm-filter .dm-nav-today:hover,
+.dmm-filter .dm-shortcut-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.dmm-filter .dm-nav-btn:active,
+.dmm-filter .dm-nav-today:active,
+.dmm-filter .dm-shortcut-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.dmm-filter .dm-nav-today {
+  --k-edge: #3730a3;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%) !important;
+  box-shadow:
+    0 2px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dmm-filter .dm-shortcut-btn {
+  --sc: #4f46e5;
+  color: color-mix(in srgb, var(--sc) 80%, #0f172a);
+  border-color: color-mix(in srgb, var(--sc) 30%, #fff);
+  --k-edge: color-mix(in srgb, var(--sc) 30%, #fff);
+}
+
+.dmm-filter .dm-shortcut-btn:hover {
+  color: color-mix(in srgb, var(--sc) 90%, #0f172a);
+  background: color-mix(in srgb, var(--sc) 8%, #fff);
+  border-color: color-mix(in srgb, var(--sc) 45%, #fff);
+}
+
+.dmm-filter .dm-shortcut-btn.is-active {
+  --k-edge: color-mix(in srgb, var(--sc) 70%, #000);
+  color: #fff;
+  font-weight: 700;
+  border-color: transparent;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sc) 75%, #fff), var(--sc));
+  box-shadow:
+    0 2px 0 var(--k-edge),
+    0 6px 12px -6px var(--sc),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dmm-filter .dmm-sc--0 {
+  --sc: #2563eb;
+}
+
+.dmm-filter .dmm-sc--1 {
+  --sc: #0891b2;
+}
+
+.dmm-filter .dmm-sc--2 {
+  --sc: #059669;
+}
+
+.dmm-filter .dmm-sc--3 {
+  --sc: #d97706;
+}
+
+.dmm-filter .dmm-sc--4 {
+  --sc: #c026d3;
+}
+
+/* テーブル */
+.dmm-table .daily-manage-table {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 10px 24px -14px rgba(67, 56, 202, 0.45),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.dmm-table :deep(.el-table__header th.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  color: #3730a3 !important;
+  border-bottom: 2px solid rgba(67, 56, 202, 0.25) !important;
+  font-weight: 700 !important;
+}
+
+.dmm-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background: #f0fdfa !important;
+}
+
+.dmm-table :deep(.el-table__row:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0891b2;
+}
+
+.dmm-table :deep(.el-table__row.edited-row > td.el-table__cell) {
+  background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%) !important;
+}
+
+.dmm-table :deep(.el-table__row.edited-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.dmm-table .cell-date,
+.dmm-table .cell-delivery-date {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.15s ease;
+}
+
+.dmm-table .cell-date {
+  color: #3730a3;
+  background: color-mix(in srgb, #4f46e5 10%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(79, 70, 229, 0.22),
+    0 2px 0 rgba(79, 70, 229, 0.16);
+}
+
+.dmm-table .cell-delivery-date {
+  color: #0f766e;
+  background: color-mix(in srgb, #14b8a6 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(20, 184, 166, 0.26),
+    0 2px 0 rgba(20, 184, 166, 0.18);
+}
+
+.dmm-table :deep(.el-table__row:hover) .cell-date,
+.dmm-table :deep(.el-table__row:hover) .cell-delivery-date {
+  transform: translateY(-1px);
+}
+
+.dmm-table .weekday-saturday,
+.dmm-table .weekday-sunday {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.dmm-table .weekday-saturday {
+  background: color-mix(in srgb, #0066cc 12%, #fff);
+  box-shadow: inset 0 0 0 1px rgba(0, 102, 204, 0.25);
+}
+
+.dmm-table .weekday-sunday {
+  background: color-mix(in srgb, #cc0000 10%, #fff);
+  box-shadow: inset 0 0 0 1px rgba(204, 0, 0, 0.22);
+}
+
+.dmm-table :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0891b2 inset,
+    0 4px 10px -4px rgba(8, 145, 178, 0.4);
+}
+
+.dmm-table :deep(.el-table__footer td.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  color: #3730a3;
+  font-weight: 700;
+  border-top: 2px solid rgba(67, 56, 202, 0.25) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmm-hero .fx-orb,
+  .dmm-hero .fx-sheen,
+  .dmm-hero .dm-title-icon {
+    animation: none;
+  }
+
+  .dmm-stat {
+    transform: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .dmm-stats {
+    margin-left: 0;
+    flex-wrap: wrap;
   }
 }
 </style>

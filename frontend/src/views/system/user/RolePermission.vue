@@ -1,6 +1,7 @@
 <template>
-  <div class="role-permission">
+  <div class="role-permission rop-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="header-left">
         <div class="header-icon-sm">
           <el-icon :size="18"><Key /></el-icon>
@@ -10,14 +11,22 @@
           <p class="subtitle">{{ t('systemUser.role.subtitle') }}</p>
         </div>
       </div>
-      <div class="header-chips">
-        <span class="h-chip">
+      <div class="header-chips" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <span class="h-chip roles">
           <strong>{{ roleList.length }}</strong>
           <em>{{ t('systemUser.role.roleCount') }}</em>
         </span>
         <span class="h-chip accent">
           <strong>{{ totalUserCount }}</strong>
           <em>{{ t('systemUser.role.totalUsers') }}</em>
+        </span>
+        <span class="h-chip system">
+          <strong>{{ systemRoleCount }}</strong>
+          <em>{{ t('systemUser.role.systemRole') }}</em>
+        </span>
+        <span class="h-chip super">
+          <strong>{{ superAdminRoleCount }}</strong>
+          <em>{{ t('systemUser.role.superAdminBadge') }}</em>
         </span>
       </div>
     </div>
@@ -395,6 +404,35 @@ const scopeOptions = computed(() => [
 
 // Computed
 const totalUserCount = computed(() => roleList.value.reduce((sum, r) => sum + (r.user_count || 0), 0))
+const systemRoleCount = computed(() => roleList.value.filter((r) => r.is_system).length)
+const superAdminRoleCount = computed(() => roleList.value.filter((r) => r.is_super_admin).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.h-chip')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.h-chip').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.h-chip').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 // Role colors
 const roleColors = ['#667eea', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4']
@@ -1599,6 +1637,599 @@ onMounted(async () => {
   .op-row {
     grid-template-columns: minmax(80px, 1.2fr) repeat(5, minmax(36px, 1fr));
     font-size: 10px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（権限・ロール管理 / ボールト：黒曜→ストーン→ダークゴールド→ゴールド）
+ * ============================================================ */
+.rop-modern {
+  --hx-1: #0c0a09;
+  --hx-2: #292524;
+  --hx-3: #a16207;
+  --hx-4: #facc15;
+  --hx-deep: #854d0e;
+  --hx-soft: #fefce8;
+  --hx-line: rgba(161, 98, 7, 0.2);
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(161, 98, 7, 0.08), transparent 55%),
+    radial-gradient(ellipse 55% 42% at 96% 2%, rgba(250, 204, 21, 0.08), transparent 50%),
+    linear-gradient(165deg, #f5f5f4 0%, #fefce8 40%, #f8fafc 100%);
+}
+
+.rop-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 74%, var(--hx-4) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 14px 32px -12px rgba(120, 53, 15, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.rop-modern .page-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.rop-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rop-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.5;
+  animation: ropOrbFloat 11s ease-in-out infinite;
+}
+
+.rop-modern .orb-a {
+  width: 180px;
+  height: 180px;
+  top: -70px;
+  right: 24%;
+  background: radial-gradient(circle, #fde047 0%, transparent 70%);
+}
+
+.rop-modern .orb-b {
+  width: 150px;
+  height: 150px;
+  bottom: -70px;
+  left: 28%;
+  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.rop-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
+}
+
+.rop-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 244, 200, 0.2), transparent);
+  transform: skewX(-18deg);
+  animation: ropSheen 7s ease-in-out infinite;
+}
+
+@keyframes ropOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes ropSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.rop-modern .header-icon-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #fde68a;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(253, 230, 138, 0.4);
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.rop-modern .header-icon-sm :deep(svg) {
+  animation: ropKeyTurn 3.2s ease-in-out infinite;
+}
+
+@keyframes ropKeyTurn {
+  0%,
+  55%,
+  100% {
+    transform: rotate(0deg);
+  }
+  70% {
+    transform: rotate(-35deg);
+  }
+  85% {
+    transform: rotate(10deg);
+  }
+}
+
+.rop-modern .header-text h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.rop-modern .header-text .subtitle {
+  color: rgba(254, 249, 195, 0.85);
+}
+
+/* 統計カード */
+.rop-modern .header-chips {
+  gap: 10px;
+  perspective: 650px;
+}
+
+.rop-modern .h-chip {
+  position: relative;
+  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 76px;
+  padding: 8px 12px 7px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(253, 230, 138, 0.3);
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.45),
+    0 12px 22px -10px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease;
+}
+
+.rop-modern .h-chip:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
+}
+
+.rop-modern .h-chip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+  box-shadow: 0 0 10px var(--sc);
+}
+
+.rop-modern .h-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 244, 200, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.rop-modern .h-chip:hover::after {
+  opacity: 1;
+}
+
+.rop-modern .h-chip strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.rop-modern .h-chip em {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.rop-modern .h-chip.roles {
+  --sc: #fde047;
+}
+
+.rop-modern .h-chip.accent {
+  --sc: #93c5fd;
+}
+
+.rop-modern .h-chip.system {
+  --sc: #d6d3d1;
+}
+
+.rop-modern .h-chip.super {
+  --sc: #fb923c;
+}
+
+.rop-modern .layout-grid {
+  gap: 10px;
+  height: calc(100vh - 130px);
+}
+
+/* パネル（ロール一覧：ゴールド / 権限設定：インディゴ） */
+.rop-modern .role-panel,
+.rop-modern .permission-panel {
+  --pc: #ca8a04;
+  --pc-deep: #854d0e;
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--pc) 22%, transparent);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px -14px color-mix(in srgb, var(--pc) 55%, transparent),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.rop-modern .permission-panel {
+  --pc: #4f46e5;
+  --pc-deep: #3730a3;
+}
+
+.rop-modern .role-panel::before,
+.rop-modern .permission-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--pc-deep), var(--pc));
+}
+
+.rop-modern .panel-header {
+  padding-top: 11px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pc) 7%, #fff) 0%, #fff 100%);
+  border-bottom-color: color-mix(in srgb, var(--pc) 16%, transparent);
+}
+
+.rop-modern .panel-title .el-icon,
+.rop-modern .panel-title.muted .el-icon {
+  color: var(--pc);
+}
+
+/* ロールカード */
+.rop-modern .role-list-wrap {
+  gap: 6px;
+  padding: 8px;
+  perspective: 700px;
+}
+
+.rop-modern .role-card {
+  background: #fff;
+  border: 1px solid #eee9e1;
+  box-shadow: 0 2px 0 rgba(120, 53, 15, 0.06);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.rop-modern .role-card:hover {
+  background: #fffdf5;
+  border-color: rgba(202, 138, 4, 0.3);
+  transform: translateY(-2px) rotateX(3deg);
+  box-shadow:
+    0 4px 0 rgba(202, 138, 4, 0.14),
+    0 12px 20px -12px rgba(202, 138, 4, 0.5);
+}
+
+.rop-modern .role-card.active {
+  background: linear-gradient(90deg, #fef9c3, #fffbeb);
+  border-color: rgba(202, 138, 4, 0.45);
+  box-shadow:
+    inset 3px 0 0 #ca8a04,
+    0 4px 0 rgba(202, 138, 4, 0.18),
+    0 12px 22px -12px rgba(202, 138, 4, 0.55);
+}
+
+.rop-modern .role-avatar,
+.rop-modern .selected-role-avatar {
+  box-shadow:
+    0 3px 0 rgba(15, 23, 42, 0.22),
+    0 6px 12px -4px rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.rop-modern .role-card:hover .role-avatar {
+  transform: rotate(-6deg) scale(1.05);
+}
+
+.rop-modern .user-count-badge {
+  color: #854d0e;
+  background: color-mix(in srgb, #ca8a04 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(202, 138, 4, 0.25),
+    0 1px 0 rgba(202, 138, 4, 0.2);
+}
+
+.rop-modern .role-code {
+  padding: 0 5px;
+  border-radius: 4px;
+  color: #44403c;
+  background: #f5f5f4;
+  box-shadow: inset 0 0 0 1px #e7e5e4;
+}
+
+.rop-modern .role-badge {
+  font-weight: 700;
+  box-shadow: 0 1px 0 color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.rop-modern .role-badge.admin {
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #b45309);
+}
+
+/* タブ（色分け：メニュー／操作／データ範囲） */
+.rop-modern .compact-tabs :deep(#tab-menu) {
+  --tc: #4f46e5;
+}
+
+.rop-modern .compact-tabs :deep(#tab-operation) {
+  --tc: #0891b2;
+}
+
+.rop-modern .compact-tabs :deep(#tab-data) {
+  --tc: #c026d3;
+}
+
+.rop-modern .compact-tabs :deep(.el-tabs__item) {
+  border-radius: 8px 8px 0 0;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.rop-modern .compact-tabs :deep(.el-tabs__item:hover) {
+  color: var(--tc);
+  background: color-mix(in srgb, var(--tc) 8%, transparent);
+  transform: translateY(-1px);
+}
+
+.rop-modern .compact-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--tc);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tc) 12%, #fff), #fff);
+  box-shadow: inset 0 3px 0 var(--tc);
+}
+
+.rop-modern .compact-tabs :deep(.el-tabs__active-bar) {
+  background: linear-gradient(90deg, #4f46e5, #0891b2, #c026d3);
+}
+
+/* メニュー権限ツリー */
+.rop-modern .menu-toolbar {
+  background: linear-gradient(90deg, #eef2ff, #f8fafc);
+  border-color: rgba(79, 70, 229, 0.16);
+}
+
+.rop-modern .menu-hint .el-icon,
+.rop-modern .permission-tree-node .node-icon {
+  color: #4f46e5;
+}
+
+.rop-modern .permission-tree :deep(.el-tree > .el-tree-node > .el-tree-node__content) {
+  background: linear-gradient(90deg, #eef2ff, #fff);
+  border-color: rgba(79, 70, 229, 0.18);
+  box-shadow: 0 2px 0 rgba(79, 70, 229, 0.1);
+}
+
+.rop-modern .permission-tree :deep(.el-tree-node__content:hover) {
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+
+/* 操作権限マトリクス */
+.rop-modern .op-matrix {
+  border-color: rgba(8, 145, 178, 0.2);
+  box-shadow: 0 8px 18px -12px rgba(8, 145, 178, 0.45);
+}
+
+.rop-modern .op-row.op-head {
+  color: #155e75;
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  border-bottom: 2px solid rgba(8, 145, 178, 0.25);
+}
+
+.rop-modern .op-row:not(.op-head) {
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.rop-modern .op-row:not(.op-head):hover {
+  background: #f0fdff;
+  box-shadow: inset 3px 0 0 #0891b2;
+}
+
+.rop-modern .inline-hint {
+  background: linear-gradient(90deg, #ecfeff, #f0f9ff);
+  color: #155e75;
+}
+
+/* データ範囲チップ */
+.rop-modern .scope-chips {
+  gap: 8px;
+  perspective: 700px;
+}
+
+.rop-modern .scope-chip {
+  background: #fff;
+  border-color: #ede9fe;
+  box-shadow: 0 3px 0 rgba(192, 38, 211, 0.1);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.rop-modern .scope-chip:hover {
+  background: #fdf4ff;
+  border-color: rgba(192, 38, 211, 0.3);
+  transform: translateY(-3px) rotateX(5deg);
+  box-shadow:
+    0 5px 0 rgba(192, 38, 211, 0.14),
+    0 14px 22px -12px rgba(192, 38, 211, 0.5);
+}
+
+.rop-modern .scope-chip.active {
+  background: linear-gradient(160deg, #fdf4ff, #fae8ff);
+  border-color: #c026d3;
+  box-shadow:
+    0 4px 0 #a21caf,
+    0 14px 22px -10px rgba(192, 38, 211, 0.55);
+}
+
+.rop-modern .scope-chip.active .el-icon {
+  color: #c026d3;
+}
+
+/* 立体ボタン（キーキャップ） */
+.rop-modern .btn-add-sm,
+.rop-modern .btn-save,
+.rop-modern .role-dialog-footer .btn-submit {
+  --k-edge: #854d0e;
+  --k-glow: rgba(202, 138, 4, 0.5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #facc15 0%, #eab308 45%, #ca8a04 100%);
+  text-shadow: 0 1px 0 rgba(120, 53, 15, 0.45);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.rop-modern .btn-save {
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.5);
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 45%, #4f46e5 100%);
+  text-shadow: none;
+}
+
+.rop-modern .btn-add-sm:hover,
+.rop-modern .role-dialog-footer .btn-submit:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #facc15 0%, #eab308 45%, #ca8a04 100%);
+}
+
+.rop-modern .btn-save:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 45%, #4f46e5 100%);
+}
+
+.rop-modern .btn-add-sm:hover,
+.rop-modern .btn-save:hover,
+.rop-modern .role-dialog-footer .btn-submit:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.rop-modern .btn-add-sm:active,
+.rop-modern .btn-save:active,
+.rop-modern .role-dialog-footer .btn-submit:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.rop-modern .empty-icon {
+  color: #ca8a04;
+  animation: ropFloat 3.4s ease-in-out infinite;
+}
+
+@keyframes ropFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ロール編集ダイアログ */
+.rop-modern .role-dialog-hero {
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 40%, var(--hx-3) 80%, var(--hx-4) 100%);
+}
+
+.rop-modern .role-dialog-avatar {
+  box-shadow:
+    0 4px 0 rgba(0, 0, 0, 0.4),
+    0 10px 18px -6px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rop-modern .fx-orb,
+  .rop-modern .fx-sheen,
+  .rop-modern .header-icon-sm :deep(svg),
+  .rop-modern .empty-icon {
+    animation: none;
+  }
+
+  .rop-modern .h-chip,
+  .rop-modern .role-card:hover,
+  .rop-modern .scope-chip:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .rop-modern .layout-grid {
+    height: auto;
   }
 }
 </style>

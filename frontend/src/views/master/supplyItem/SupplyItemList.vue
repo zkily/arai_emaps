@@ -1,6 +1,12 @@
 <template>
-  <div class="supply-item-master">
+  <div class="supply-item-master sui-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -9,10 +15,18 @@
           </h1>
           <p class="subtitle">仕入先別の備品カタログを登録・管理します</p>
         </div>
-        <div class="header-stats">
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card">
             <div class="stat-number">{{ pagination.total }}</div>
             <div class="stat-label">総件数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">{{ tableData.length }}</div>
+            <div class="stat-label">表示中</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">{{ discontinuedCount }}</div>
+            <div class="stat-label">終息（表示中）</div>
           </div>
         </div>
       </div>
@@ -57,8 +71,8 @@
           <el-option label="有効" value="0" />
           <el-option label="終息" value="1" />
         </el-select>
-        <el-button size="small" :icon="Search" @click="handleSearch">検索</el-button>
-        <el-button size="small" :icon="Refresh" @click="clearFilter">クリア</el-button>
+        <el-button size="small" :icon="Search" class="tb-search" @click="handleSearch">検索</el-button>
+        <el-button size="small" :icon="Refresh" class="tb-clear" @click="clearFilter">クリア</el-button>
       </div>
       <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" class="add-btn" @click="openDialog()">
         新規追加
@@ -76,7 +90,7 @@
       >
         <el-table-column label="仕入先CD" prop="supplier_cd" width="110" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="code-cell">{{ row.supplier_cd }}</span>
+            <span class="code-cell code-cell--sup">{{ row.supplier_cd }}</span>
           </template>
         </el-table-column>
         <el-table-column label="仕入先名" prop="supplier_name" min-width="140" show-overflow-tooltip />
@@ -91,7 +105,9 @@
         <el-table-column label="個数" prop="pack_qty" width="70" align="right" />
         <el-table-column label="注文ロット" prop="order_lot" width="100" align="right" />
         <el-table-column label="単価" width="100" align="right">
-          <template #default="{ row }">{{ formatMoney(row.unit_price) }}</template>
+          <template #default="{ row }">
+            <span class="price-pill">{{ formatMoney(row.unit_price) }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="終息" width="72" align="center">
           <template #default="{ row }">
@@ -240,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Box, Check, Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { getSupplierList } from '@/api/master/supplierMaster'
@@ -294,6 +310,35 @@ const form = reactive({
 const formRules: FormRules = {
   supplier_cd: [{ required: true, message: '仕入先を選択してください', trigger: 'change' }],
   item_name: [{ required: true, message: '品名を入力してください', trigger: 'blur' }],
+}
+
+const discontinuedCount = computed(() => tableData.value.filter((r) => r.is_discontinued).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
 }
 
 function formatMoney(v: number) {
@@ -758,5 +803,435 @@ onMounted(async () => {
 .dialog-cancel {
   height: 36px;
   border-radius: 10px;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（備品マスタ / green→lime）
+ * ============================================================ */
+.supply-item-master.sui-modern {
+  --hx-1: #14532d;
+  --hx-2: #15803d;
+  --hx-3: #65a30d;
+  --hx-4: #84cc16;
+  --hx-deep: #14532d;
+  --hx-accent: #16a34a;
+  --hx-soft: #f7fee7;
+  --hx-soft2: #ecfccb;
+  --hx-line: #d9f99d;
+  --hx-orb-a: #bef264;
+  --hx-orb-b: #86efac;
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(22, 163, 74, 0.08), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(132, 204, 22, 0.08), transparent 60%),
+    #f8fafc;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.sui-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 34%, var(--hx-3) 70%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px color-mix(in srgb, var(--hx-2) 70%, transparent),
+    0 4px 12px -6px color-mix(in srgb, var(--hx-3) 40%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.sui-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sui-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.sui-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: suiOrbFloat 11s ease-in-out infinite;
+}
+
+.sui-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, var(--hx-orb-a) 0%, transparent 70%);
+}
+
+.sui-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, var(--hx-orb-b) 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.sui-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.sui-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: suiSheen 7s ease-in-out infinite;
+}
+
+.sui-modern .main-title {
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.35);
+}
+
+.sui-modern .title-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 color-mix(in srgb, var(--hx-1) 70%, transparent),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: suiIconFloat 5s ease-in-out infinite;
+}
+
+.sui-modern .subtitle {
+  color: rgba(247, 254, 231, 0.9);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.sui-modern .header-stats {
+  perspective: 700px;
+}
+
+.sui-modern .stat-card {
+  --sc: rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+  min-width: 82px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease,
+    background 0.2s ease;
+}
+
+.sui-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.sui-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+}
+
+.sui-modern .stat-card:hover {
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.sui-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.sui-modern .stat-card:nth-child(2) {
+  --sc: #fde68a;
+}
+
+.sui-modern .stat-card:nth-child(3) {
+  --sc: #cbd5e1;
+  background: rgba(20, 83, 45, 0.3);
+}
+
+.sui-modern .stat-number {
+  font-weight: 800;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.sui-modern .stat-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- ツールバー ---------- */
+.sui-modern .toolbar-section,
+.sui-modern .table-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: var(--hx-line);
+  box-shadow:
+    0 14px 28px -22px color-mix(in srgb, var(--hx-2) 55%, transparent),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.sui-modern .toolbar-section::before,
+.sui-modern .table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--hx-2) 0%, var(--hx-3) 55%, var(--hx-4) 100%);
+}
+
+.sui-modern .toolbar-section {
+  padding-top: 12px;
+  background: linear-gradient(110deg, var(--hx-soft) 0%, #ffffff 60%);
+}
+
+.sui-modern .toolbar-filters :deep(.el-input__wrapper),
+.sui-modern .toolbar-filters :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
+}
+
+.sui-modern .toolbar-filters :deep(.el-input__wrapper.is-focus),
+.sui-modern .toolbar-filters :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--hx-accent) inset,
+    0 0 0 3px color-mix(in srgb, var(--hx-accent) 18%, transparent);
+}
+
+.sui-modern .tb-clear {
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.sui-modern .tb-clear:hover {
+  color: var(--hx-accent);
+  border-color: var(--hx-line);
+  background: var(--hx-soft);
+}
+
+/* 3Dキーキャップ */
+.sui-modern .tb-search,
+.sui-modern .add-btn {
+  --k-edge: var(--hx-1);
+  --k-glow: color-mix(in srgb, var(--hx-2) 55%, transparent);
+  color: #fff;
+  font-weight: 700;
+  border: none !important;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--hx-4) 0%, var(--hx-3) 45%, var(--hx-2) 100%) !important;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.sui-modern .tb-search {
+  --k-edge: #134e4a;
+  --k-glow: rgba(13, 148, 136, 0.5);
+  background: linear-gradient(135deg, #2dd4bf 0%, #0d9488 55%, #0f766e 100%) !important;
+}
+
+.sui-modern .tb-search:hover,
+.sui-modern .add-btn:hover {
+  color: #fff;
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.sui-modern .tb-search:active,
+.sui-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- テーブル ---------- */
+.sui-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: var(--hx-deep) !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, var(--hx-soft) 0%, var(--hx-soft2) 100%) !important;
+  border-bottom: 2px solid #bef264 !important;
+}
+
+.sui-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.sui-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-accent);
+}
+
+.sui-modern .code-cell {
+  display: inline-block;
+  color: var(--hx-deep);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft2) 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--hx-line),
+    0 2px 0 var(--hx-line);
+  transition: transform 0.15s ease;
+}
+
+.sui-modern .code-cell--sup {
+  color: #9f1239;
+  background: linear-gradient(180deg, #ffffff 0%, #ffe4e6 100%);
+  box-shadow:
+    inset 0 0 0 1px #fecdd3,
+    0 2px 0 #fecdd3;
+}
+
+.sui-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.sui-modern .price-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  color: #92400e;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+.sui-modern .modern-table :deep(.el-button.is-link) {
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.sui-modern .modern-table :deep(.el-button--primary.is-link:hover) {
+  transform: translateY(-1px);
+  background: #eff6ff;
+}
+
+.sui-modern .modern-table :deep(.el-button--danger.is-link:hover) {
+  transform: translateY(-1px);
+  background: #fef2f2;
+}
+
+/* ---------- ページネーション ---------- */
+.sui-modern .pagination-section {
+  padding: 8px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
+  box-shadow: 0 14px 28px -24px color-mix(in srgb, var(--hx-2) 55%, transparent);
+}
+
+.sui-modern .pagination-section :deep(.el-pager li) {
+  border-radius: 7px;
+}
+
+.sui-modern .pagination-section :deep(.el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, var(--hx-4) 0%, var(--hx-3) 55%, var(--hx-2) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 var(--hx-1),
+    0 6px 12px -6px color-mix(in srgb, var(--hx-2) 70%, transparent);
+}
+
+.sui-modern .pagination-section :deep(.el-pager li:not(.is-active):hover) {
+  color: var(--hx-accent);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes suiOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes suiSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes suiIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sui-modern .page-header-fx .fx-orb,
+  .sui-modern .page-header-fx .fx-sheen,
+  .sui-modern .title-icon {
+    animation: none;
+  }
+
+  .sui-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

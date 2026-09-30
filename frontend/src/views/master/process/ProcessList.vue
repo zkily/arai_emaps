@@ -1,6 +1,12 @@
 <template>
-  <div class="process-master-container">
+  <div class="process-master-container prc-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-row">
           <span class="title-icon">⚙️</span>
@@ -8,6 +14,16 @@
           <div class="stat-badge">
             <span class="stat-number">{{ tableData.length }}</span>
             <span class="stat-label">{{ t('master.common.items') }}</span>
+          </div>
+        </div>
+        <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="stat-card stat-card--inhouse">
+            <div class="stat-card-number">{{ inHouseCount }}</div>
+            <div class="stat-card-label">{{ t('master.process.inHouse') }}</div>
+          </div>
+          <div class="stat-card stat-card--outsource">
+            <div class="stat-card-number">{{ outsourceCount }}</div>
+            <div class="stat-card-label">{{ t('master.process.outsource') }}</div>
           </div>
         </div>
         <div class="header-buttons">
@@ -34,7 +50,7 @@
         <el-table-column :label="t('master.process.shortName')" prop="short_name" width="70" align="center" />
         <el-table-column :label="t('master.process.category')" prop="category" width="80" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.category" size="small" effect="plain" class="category-tag">{{ getCategoryLabel(row.category) }}</el-tag>
+            <el-tag v-if="row.category" size="small" effect="plain" :class="['category-tag', `cat-${row.category}`]">{{ getCategoryLabel(row.category) }}</el-tag>
             <span v-else class="empty-cell">-</span>
           </template>
         </el-table-column>
@@ -75,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Printer } from '@element-plus/icons-vue'
@@ -93,6 +109,36 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editTarget = ref<ProcessItem | null>(null)
+
+const outsourceCount = computed(() => tableData.value.filter((p) => p.is_outsource).length)
+const inHouseCount = computed(() => tableData.value.length - outsourceCount.value)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const categoryKeyMap: Record<string, string> = {
   cut: 'Cut', chamfer: 'Chamfer', swaging: 'Swaging', forming: 'Forming',
@@ -227,4 +273,460 @@ onMounted(() => fetchList())
 :deep(.el-table) { --el-table-border-color: #e2e8f0; --el-table-row-hover-bg-color: #f0f4ff; }
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) { background-color: #fafbfc; }
 :deep(.el-tag) { border-radius: 10px; font-weight: 500; }
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（工程マスタ / slate→cyan）
+ * ============================================================ */
+.process-master-container.prc-modern {
+  --hx-1: #0f172a;
+  --hx-2: #334155;
+  --hx-3: #0e7490;
+  --hx-4: #06b6d4;
+  --hx-deep: #164e63;
+  --hx-accent: #0891b2;
+  --hx-soft: #ecfeff;
+  --hx-soft2: #cffafe;
+  --hx-line: #a5f3fc;
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(51, 65, 85, 0.08), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(6, 182, 212, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.prc-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 34%, var(--hx-3) 70%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(15, 23, 42, 0.7),
+    0 4px 12px -6px rgba(14, 116, 144, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.prc-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.prc-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.prc-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: prcOrbFloat 11s ease-in-out infinite;
+}
+
+.prc-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+}
+
+.prc-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #94a3b8 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.prc-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.prc-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.14) 50%, transparent 100%);
+  animation: prcSheen 7s ease-in-out infinite;
+}
+
+.prc-modern .title-row {
+  gap: 12px;
+}
+
+.prc-modern .title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 4px 0 rgba(2, 6, 23, 0.55),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: prcIconSpin 5s ease-in-out infinite;
+}
+
+.prc-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.4);
+}
+
+.prc-modern .stat-badge {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.prc-modern .header-stats {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  perspective: 700px;
+}
+
+.prc-modern .stat-card {
+  --sc: #67e8f9;
+  position: relative;
+  overflow: hidden;
+  min-width: 78px;
+  padding: 6px 14px;
+  color: #fff;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.prc-modern .stat-card--outsource {
+  --sc: #fca5a5;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.prc-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.prc-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.3) 0%,
+    transparent 60%
+  );
+}
+
+.prc-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.prc-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.prc-modern .stat-card-number {
+  font-size: 1.3rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.prc-modern .stat-card-label {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+/* ヘッダーボタン：ガラス調3Dキーキャップ */
+.prc-modern .qr-btn,
+.prc-modern .add-btn {
+  --k-edge: rgba(2, 6, 23, 0.6);
+  --k-glow: rgba(2, 6, 23, 0.45);
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.prc-modern .qr-btn,
+.prc-modern .qr-btn:hover {
+  --k-edge: #92400e;
+  --k-glow: rgba(217, 119, 6, 0.55);
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+}
+
+.prc-modern .add-btn,
+.prc-modern .add-btn:hover {
+  --k-edge: #155e75;
+  --k-glow: rgba(8, 145, 178, 0.55);
+  background: linear-gradient(135deg, #22d3ee 0%, #0891b2 55%, #0e7490 100%);
+}
+
+.prc-modern .qr-btn:hover,
+.prc-modern .add-btn:hover {
+  color: #fff;
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.prc-modern .qr-btn:active,
+.prc-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- テーブル ---------- */
+.prc-modern .table-section,
+.prc-modern .footer-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  box-shadow:
+    0 14px 28px -22px rgba(15, 23, 42, 0.45),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.prc-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--hx-2) 0%, var(--hx-3) 55%, var(--hx-4) 100%);
+}
+
+.prc-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: var(--hx-deep) !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #f8fafc 0%, var(--hx-soft2) 100%) !important;
+  border-bottom: 2px solid #67e8f9 !important;
+}
+
+.prc-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-accent);
+}
+
+.prc-modern .code-cell {
+  display: inline-block;
+  color: var(--hx-deep);
+  font-size: 11.5px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft2) 100%);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 1px var(--hx-line),
+    0 2px 0 var(--hx-line);
+  transition: transform 0.15s ease;
+}
+
+.prc-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.prc-modern .number-cell {
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+/* 工程区分タグ：区分ごとの色分け */
+.prc-modern .category-tag {
+  --ct: #64748b;
+  color: var(--ct);
+  font-weight: 700;
+  border-color: color-mix(in srgb, var(--ct) 35%, #fff);
+  background: color-mix(in srgb, var(--ct) 9%, #fff);
+}
+
+.prc-modern .category-tag.cat-cut {
+  --ct: #2563eb;
+}
+
+.prc-modern .category-tag.cat-chamfer {
+  --ct: #0891b2;
+}
+
+.prc-modern .category-tag.cat-swaging {
+  --ct: #7c3aed;
+}
+
+.prc-modern .category-tag.cat-forming {
+  --ct: #0284c7;
+}
+
+.prc-modern .category-tag.cat-plating {
+  --ct: #ca8a04;
+}
+
+.prc-modern .category-tag.cat-weld {
+  --ct: #c026d3;
+}
+
+.prc-modern .category-tag.cat-inspect {
+  --ct: #ea580c;
+}
+
+.prc-modern .category-tag.cat-warehouse {
+  --ct: #059669;
+}
+
+.prc-modern .action-btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.prc-modern .action-btn.el-button--primary {
+  box-shadow: 0 2px 0 #bfdbfe;
+}
+
+.prc-modern .action-btn.el-button--danger {
+  box-shadow: 0 2px 0 #fecaca;
+}
+
+.prc-modern .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.prc-modern .action-btn.el-button--primary:hover {
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.6);
+}
+
+.prc-modern .action-btn.el-button--danger:hover {
+  box-shadow:
+    0 3px 0 #991b1b,
+    0 8px 14px -8px rgba(220, 38, 38, 0.6);
+}
+
+.prc-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ---------- フッター ---------- */
+.prc-modern .footer-section {
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
+}
+
+.prc-modern .result-info {
+  padding: 2px 10px;
+  color: var(--hx-deep);
+  font-weight: 700;
+  border-radius: 999px;
+  background: var(--hx-soft2);
+  box-shadow: inset 0 0 0 1px var(--hx-line);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes prcOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes prcSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes prcIconSpin {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) rotate(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) rotate(30deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .prc-modern .header-stats {
+    margin-left: 0;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prc-modern .page-header-fx .fx-orb,
+  .prc-modern .page-header-fx .fx-sheen,
+  .prc-modern .title-icon {
+    animation: none;
+  }
+
+  .prc-modern .stat-card {
+    transform: none;
+    transition: none;
+  }
+}
 </style>

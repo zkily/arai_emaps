@@ -1,7 +1,12 @@
 <template>
-  <div class="part-order-container">
+  <div class="part-order-container po-modern" :class="`po-tab-${activeTab}`">
     <!-- ページヘッダー -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="header-left">
         <div class="title-section">
           <div class="title-icon">
@@ -10,6 +15,20 @@
           <div class="title-text">
             <h1 class="main-title">部品在庫管理(発注・使用)</h1>
             <p class="subtitle">部品の在庫推移・使用実績・発注を一元管理</p>
+            <div class="header-chips">
+              <span class="header-chip">
+                <el-icon><Calendar /></el-icon>
+                {{ headerDateRangeText }}
+              </span>
+              <span class="header-chip">
+                <el-icon><Shop /></el-icon>
+                仕入先 {{ searchForm.supplier.length ? `${searchForm.supplier.length}社` : '全て' }}
+              </span>
+              <span v-if="searchForm.part_cd" class="header-chip">
+                <el-icon><Search /></el-icon>
+                部品 {{ searchForm.part_cd }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -1384,6 +1403,13 @@ const searchForm = reactive({
   part_cd: '',
   dateRange: [getTodayJapanStr(), getTodayJapanStr()] as string[], // デフォルトは日本時間の当日
   supplier: [] as string[],
+})
+
+const headerDateRangeText = computed(() => {
+  const [start, end] = searchForm.dateRange || []
+  if (!start && !end) return '期間 全て'
+  if (start === end) return start
+  return `${start || '—'} 〜 ${end || '—'}`
 })
 
 // 分页数据
@@ -5434,6 +5460,450 @@ onMounted(() => {
 /* 調整数输入框样式 */
 .adjustment-quantity-input {
   width: 100%;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（部品在庫管理 / indigo→violet・タブ連動カラー）
+ * ============================================================ */
+.po-modern {
+  --po-tab: #4f46e5;
+  --po-tab-2: #818cf8;
+  --po-tab-edge: #3730a3;
+}
+.po-modern.po-tab-initial {
+  --po-tab: #0284c7;
+  --po-tab-2: #38bdf8;
+  --po-tab-edge: #075985;
+}
+.po-modern.po-tab-usage {
+  --po-tab: #059669;
+  --po-tab-2: #34d399;
+  --po-tab-edge: #065f46;
+}
+.po-modern.po-tab-order {
+  --po-tab: #d97706;
+  --po-tab-2: #fbbf24;
+  --po-tab-edge: #92400e;
+}
+.po-modern.po-tab-orderHistory {
+  --po-tab: #7c3aed;
+  --po-tab-2: #a78bfa;
+  --po-tab-edge: #5b21b6;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.po-modern .page-header {
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #3730a3 0%, #4f46e5 32%, #7c3aed 70%, #a855f7 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(76, 29, 149, 0.65),
+    0 4px 12px -6px rgba(79, 70, 229, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+.po-modern .page-header:hover {
+  transform: none;
+}
+.po-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.po-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: poOrbFloat 12s ease-in-out infinite;
+}
+.po-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 22%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.po-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.38) 0%, rgba(125, 211, 252, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.po-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+.po-modern .title-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  font-size: 21px;
+  box-shadow:
+    0 10px 20px -8px rgba(30, 27, 75, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -3px 0 rgba(67, 56, 202, 0.4) inset;
+  animation: poIconFloat 5.5s ease-in-out infinite;
+}
+.po-modern .page-header:hover .title-icon {
+  transform: none;
+}
+.po-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+}
+.po-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.po-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #fff;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- ヘッダー操作：3Dキーキャップ ---------- */
+.po-modern .action-btn {
+  --btn-edge: rgba(30, 27, 75, 0.45);
+  height: 34px;
+  border-radius: 10px;
+  box-shadow:
+    0 3px 0 var(--btn-edge),
+    0 10px 18px -8px var(--btn-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease;
+}
+.po-modern .action-btn.success-btn {
+  --btn-edge: #047857;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.po-modern .action-btn.warning-btn {
+  --btn-edge: #b45309;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.po-modern .action-btn:hover,
+.po-modern .action-btn:focus-visible {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--btn-edge),
+    0 14px 22px -8px var(--btn-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.po-modern .action-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--btn-edge),
+    0 4px 8px -4px var(--btn-glow);
+}
+
+/* ---------- 検索バー ---------- */
+.po-modern .search-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.po-modern .search-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #0ea5e9 50%, #8b5cf6 100%);
+  pointer-events: none;
+}
+.po-modern .filter-label .el-icon {
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--label-color) 35%, #ffffff),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform 0.2s ease;
+}
+.po-modern .filter-item:hover .filter-label .el-icon {
+  transform: translateY(-1px) rotate(-6deg);
+}
+.po-modern .date-nav-btn {
+  box-shadow: 0 2px 0 #e2e8f0;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.po-modern .date-nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 #c7d2fe;
+}
+.po-modern .date-nav-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #c7d2fe;
+}
+.po-modern .date-nav-btn.today-btn {
+  box-shadow:
+    0 2px 0 #3730a3,
+    0 6px 12px -6px rgba(99, 102, 241, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.po-modern .date-nav-btn.today-btn:hover {
+  box-shadow:
+    0 3px 0 #3730a3,
+    0 10px 16px -6px rgba(99, 102, 241, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.po-modern .date-nav-btn.today-btn:active {
+  box-shadow:
+    0 1px 0 #3730a3,
+    0 3px 6px -3px rgba(99, 102, 241, 0.5);
+}
+
+/* ---------- テーブルエリア：タブ連動アクセント ---------- */
+.po-modern .table-section {
+  position: relative;
+  border-radius: 16px;
+  box-shadow:
+    0 18px 36px -26px color-mix(in srgb, var(--po-tab) 70%, transparent),
+    0 2px 6px rgba(15, 23, 42, 0.05),
+    0 0 0 1px color-mix(in srgb, var(--po-tab) 14%, transparent);
+  transition: box-shadow 0.3s ease;
+}
+.po-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, var(--po-tab-2) 0%, var(--po-tab) 60%, var(--po-tab-edge) 100%);
+  pointer-events: none;
+  transition: background 0.3s ease;
+}
+.po-modern .table-header {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--po-tab) 5%, #f8fafc) 100%
+  );
+  border-bottom-color: color-mix(in srgb, var(--po-tab) 16%, #e6e9f4);
+}
+
+/* タブ：3Dキーキャップ */
+.po-modern .table-tabs {
+  gap: 6px;
+  padding: 4px 4px 6px;
+}
+.po-modern .tab-item {
+  --tab-edge: #3730a3;
+  transition:
+    transform 0.18s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.18s ease;
+}
+.po-modern .tab-item--initial {
+  --tab-edge: #075985;
+}
+.po-modern .tab-item--usage {
+  --tab-edge: #065f46;
+}
+.po-modern .tab-item--order {
+  --tab-edge: #92400e;
+}
+.po-modern .tab-item--history {
+  --tab-edge: #5b21b6;
+}
+.po-modern .tab-item:not(.active):hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 3px 0 #e2e8f0,
+    0 8px 14px -8px var(--tab-glow);
+}
+.po-modern .tab-item.active {
+  transform: translateY(-2px);
+  box-shadow:
+    0 3px 0 var(--tab-edge),
+    0 10px 18px -8px var(--tab-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.po-modern .tab-item.active .el-icon {
+  animation: poTabIcon 0.5s ease-out;
+}
+.po-modern .tab-item:active {
+  transform: translateY(1px);
+}
+
+/* キー操作ヒント：立体キー */
+.po-modern .table-hint kbd {
+  border-bottom-width: 1px;
+  box-shadow:
+    0 2px 0 #cbd5e1,
+    inset 0 1px 0 #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+
+/* テーブル操作ボタン：キーキャップ */
+.po-modern .table-actions .print-btn,
+.po-modern .table-actions .month-start-btn,
+.po-modern .table-actions .reorder-btn {
+  --k-edge: #3730a3;
+  --k-glow: rgba(99, 102, 241, 0.5);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease;
+}
+.po-modern .table-actions .reorder-btn {
+  --k-edge: #fcd34d;
+  --k-glow: rgba(245, 158, 11, 0.45);
+  box-shadow:
+    0 0 0 1px #fcd34d inset,
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow);
+}
+.po-modern .table-actions .print-btn:hover,
+.po-modern .table-actions .month-start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.po-modern .table-actions .reorder-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px #f59e0b inset,
+    0 5px 0 #f59e0b,
+    0 14px 22px -8px var(--k-glow);
+}
+.po-modern .table-actions .print-btn:active,
+.po-modern .table-actions .month-start-btn:active,
+.po-modern .table-actions .reorder-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* 表ヘッダー：タブ色の淡いグラデーション（列別文字色は維持） */
+.po-modern :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--po-tab) 7%, #f8fafc) 100%
+  );
+  border-bottom: 2px solid color-mix(in srgb, var(--po-tab) 30%, #e5e7eb);
+}
+.po-modern .table-section :deep(.el-table .el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--po-tab);
+}
+.po-modern .modern-table :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--po-tab-2) 70%, #ffffff) 0%,
+    color-mix(in srgb, var(--po-tab) 70%, #ffffff) 100%
+  );
+  border-color: #f1f5f9;
+}
+.po-modern .modern-table :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb:hover) {
+  background: linear-gradient(180deg, var(--po-tab-2) 0%, var(--po-tab) 100%);
+}
+.po-modern .modern-table :deep(.el-loading-spinner .path) {
+  stroke: var(--po-tab);
+}
+
+/* ページネーション：キーキャップ */
+.po-modern .pagination-wrapper {
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--po-tab) 5%, #f8fafc) 100%
+  );
+}
+.po-modern .modern-pagination :deep(.el-pager li),
+.po-modern .modern-pagination :deep(.btn-prev),
+.po-modern .modern-pagination :deep(.btn-next) {
+  box-shadow: 0 2px 0 #e2e8f0;
+}
+.po-modern .modern-pagination :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, var(--po-tab-2) 0%, var(--po-tab) 100%);
+  box-shadow:
+    0 2px 0 var(--po-tab-edge),
+    0 6px 12px -6px var(--po-tab);
+  transform: translateY(-1px);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes poOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes poIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+@keyframes poTabIcon {
+  0% {
+    transform: perspective(200px) rotateY(0deg) scale(1);
+  }
+  60% {
+    transform: perspective(200px) rotateY(200deg) scale(1.15);
+  }
+  100% {
+    transform: perspective(200px) rotateY(360deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .po-modern .page-header-fx .fx-orb,
+  .po-modern .title-icon,
+  .po-modern .tab-item.active .el-icon {
+    animation: none;
+  }
+  .po-modern .tab-item,
+  .po-modern .action-btn {
+    transition: none;
+  }
 }
 
 

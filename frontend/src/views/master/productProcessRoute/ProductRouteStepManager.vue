@@ -1,5 +1,5 @@
 <template>
-  <div class="route-step-manager">
+  <div class="route-step-manager prr-modern">
     <div class="page-bg" aria-hidden="true">
       <div class="page-bg__gradient" />
       <div class="page-bg__orb page-bg__orb--1" />
@@ -8,6 +8,12 @@
 
     <div class="route-step-manager__inner">
       <header class="page-header">
+        <div class="page-header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="header-main">
           <div class="header-icon-wrap">
             <el-icon class="header-icon" :size="22"><Tools /></el-icon>
@@ -299,6 +305,234 @@ const selectProduct = (productCd: string) => {
     width: 100%;
     justify-content: center;
     max-width: none;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（製品ルートマスタ / navy→indigo→pink）
+ * ============================================================ */
+.prr-modern .page-bg__gradient {
+  background:
+    radial-gradient(900px 340px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
+    radial-gradient(800px 340px at 100% 0%, rgba(236, 72, 153, 0.07), transparent 60%),
+    linear-gradient(160deg, #f8fafc 0%, #eef2ff 60%, #fdf2f8 100%);
+}
+
+.prr-modern .page-bg__orb--1 {
+  background: #a5b4fc;
+}
+
+.prr-modern .page-bg__orb--2 {
+  background: #f9a8d4;
+  opacity: 0.3;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.prr-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #172554 0%, #1e40af 34%, #6366f1 70%, #ec4899 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(30, 64, 175, 0.7),
+    0 4px 12px -6px rgba(236, 72, 153, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.prr-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.prr-modern .header-main,
+.prr-modern .header-pill {
+  position: relative;
+  z-index: 1;
+}
+
+.prr-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: prrOrbFloat 11s ease-in-out infinite;
+}
+
+.prr-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 26%;
+  background: radial-gradient(circle, #f9a8d4 0%, transparent 70%);
+}
+
+.prr-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 20%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.prr-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.prr-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: prrSheen 7s ease-in-out infinite;
+}
+
+.prr-modern .header-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(23, 37, 84, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: prrIconFloat 5s ease-in-out infinite;
+}
+
+.prr-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.35);
+}
+
+.prr-modern .header-pill {
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 3px 0 rgba(23, 37, 84, 0.45),
+    0 10px 18px -10px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  animation: prrPillIn 0.35s ease-out;
+}
+
+.prr-modern .header-pill__cd {
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- パネル ---------- */
+.prr-modern .left-panel {
+  position: relative;
+  border-radius: 14px;
+  border-color: #e0e7ff;
+  box-shadow:
+    0 14px 28px -22px rgba(30, 64, 175, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.prr-modern .left-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #1e40af 0%, #6366f1 55%, #ec4899 100%);
+}
+
+.prr-modern .right-panel--empty {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px dashed #c7d2fe;
+  background:
+    radial-gradient(420px 220px at 50% 38%, rgba(99, 102, 241, 0.08), transparent 70%),
+    rgba(255, 255, 255, 0.88);
+}
+
+.prr-modern .empty-state__icon-wrap {
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(145deg, #818cf8 0%, #6366f1 45%, #db2777 100%);
+  box-shadow:
+    0 6px 0 #3730a3,
+    0 18px 30px -12px rgba(99, 102, 241, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: prrIconFloat 4.5s ease-in-out infinite;
+}
+
+.prr-modern .empty-state__title {
+  color: #1e1b4b;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes prrOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes prrSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes prrIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@keyframes prrPillIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prr-modern .page-header-fx .fx-orb,
+  .prr-modern .page-header-fx .fx-sheen,
+  .prr-modern .header-icon-wrap,
+  .prr-modern .header-pill,
+  .prr-modern .empty-state__icon-wrap {
+    animation: none;
   }
 }
 </style>

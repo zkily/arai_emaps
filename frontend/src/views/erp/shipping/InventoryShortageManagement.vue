@@ -1,13 +1,37 @@
 <template>
-  <div class="inventory-shortage">
+  <div class="inventory-shortage is-modern">
     <div class="overview-card glass-card">
       <!-- ページタイトル（アイコン＋タイトルのみ） -->
       <div class="card-header glass-header">
+        <div class="header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="header-left">
           <div class="header-icon-container">
             <el-icon class="header-icon"><Box /></el-icon>
           </div>
           <h1 class="header-title">{{ t('shipping.inventoryShortageTitle') }}</h1>
+        </div>
+        <div class="header-chips">
+          <span class="header-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ headerPeriodText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Goods /></el-icon>
+            {{ headerProductText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><List /></el-icon>
+            {{ displayedData.length }}件
+          </span>
+          <span v-if="filters.warehouseNegativeOnly" class="header-chip header-chip--alert">
+            <el-icon><Warning /></el-icon>
+            マイナスのみ
+          </span>
         </div>
       </div>
 
@@ -102,7 +126,7 @@
 
       <!-- 統計情報：现在在库数统计・安全在库统计・负数合计 -->
       <div v-if="!loading && listData.length > 0" class="stats-section glass-stats">
-        <div class="stats-grid">
+        <div class="stats-grid" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card glass-stat current-inv">
             <div class="stat-icon">
               <el-icon><Box /></el-icon>
@@ -130,6 +154,15 @@
               <div class="stat-label">{{ t('shipping.shortage') }}</div>
             </div>
           </div>
+          <div class="stat-card glass-stat shortage-rows">
+            <div class="stat-icon">
+              <el-icon><List /></el-icon>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ formatNumber(negativeRowCount) }}</div>
+              <div class="stat-label">不足件数</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -151,9 +184,16 @@
               :summary-method="getSummaries"
               size="small"
               class="modern-table"
+              :row-class-name="shortageRowClass"
             >
             <el-table-column label="日付" prop="date" width="120" align="center" fixed />
-            <el-table-column label="曜日" prop="day_of_week" width="80" align="center" />
+            <el-table-column label="曜日" prop="day_of_week" width="80" align="center">
+              <template #default="{ row }">
+                <span v-if="row.day_of_week" class="dow-chip" :class="`dow-chip--${dowTone(row.day_of_week)}`">
+                  {{ row.day_of_week }}
+                </span>
+              </template>
+            </el-table-column>
             <el-table-column label="製品CD" prop="product_cd" width="90" show-overflow-tooltip />
             <el-table-column label="製品名" prop="product_name" width="140" show-overflow-tooltip />
             <el-table-column label="受注数" prop="order_quantity" width="100" align="right">
@@ -505,7 +545,20 @@ import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
-import { Box, Lock, Warning, Printer, Operation, Loading, TrendCharts, EditPen, Plus } from '@element-plus/icons-vue'
+import {
+  Box,
+  Lock,
+  Warning,
+  Printer,
+  Operation,
+  Loading,
+  TrendCharts,
+  EditPen,
+  Plus,
+  Calendar,
+  Goods,
+  List,
+} from '@element-plus/icons-vue'
 import echarts from '@/utils/echarts'
 import {
   getProductionSummarysList,
@@ -681,6 +734,61 @@ const totalNegativeWarehouse = computed(() => {
     return v < 0 ? sum + v : sum
   }, 0)
 })
+
+const negativeRowCount = computed(
+  () => displayedData.value.filter((row) => (Number(row.warehouse_inventory) || 0) < 0).length
+)
+
+const headerPeriodText = computed(() => {
+  const [from, to] = filters.dateRange || []
+  if (!from) return '—'
+  return !to || from === to ? from : `${from} 〜 ${to}`
+})
+
+const headerProductText = computed(() => {
+  const cd = filters.productCd
+  if (!cd) return '全製品'
+  const name = productOptions.value.find((p) => p.product_cd === cd)?.product_name
+  return name ? `${cd} ${name}` : cd
+})
+
+function shortageRowClass({ row }: { row: SummaryRow }): string {
+  return (Number(row.warehouse_inventory) || 0) < 0 ? 'is-shortage-row' : ''
+}
+
+function dowTone(dow: string): 'sun' | 'sat' | 'wd' {
+  const s = (dow || '').trim()
+  if (s.startsWith('日') || /^sun/i.test(s)) return 'sun'
+  if (s.startsWith('土') || /^sat/i.test(s)) return 'sat'
+  return 'wd'
+}
+
+// 統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 /** 土日判定（JST）：月〜金を true、土日を false */
 function isWeekday(dateStr: string): boolean {
@@ -2651,6 +2759,582 @@ onMounted(() => {
 
   .print-table-wrap {
     box-shadow: none;
+  }
+}
+
+/* 页面美化：現代UI・3D動効・色分け（倉庫在庫管理 / 在庫系 teal→cyan→blue・画面表示のみ） */
+@media screen {
+  .inventory-shortage.is-modern {
+    background:
+      radial-gradient(1000px 360px at 0% 0%, rgba(13, 148, 136, 0.1), transparent 60%),
+      radial-gradient(900px 360px at 100% 0%, rgba(8, 145, 178, 0.09), transparent 60%),
+      #f0f6f7;
+  }
+
+  .is-modern .overview-card.glass-card {
+    border-radius: 16px;
+    border: 1px solid rgba(153, 246, 228, 0.6);
+    box-shadow:
+      0 18px 40px -26px rgba(15, 118, 110, 0.55),
+      0 2px 6px rgba(15, 23, 42, 0.04);
+  }
+
+  /* ---------- ヘッダー ---------- */
+  .is-modern .card-header.glass-header {
+    position: relative;
+    overflow: hidden;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-bottom: none;
+    background: linear-gradient(120deg, #134e4a 0%, #0f766e 32%, #0891b2 68%, #2563eb 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  .is-modern .header-fx {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .is-modern .header-left,
+  .is-modern .header-chips {
+    position: relative;
+    z-index: 1;
+  }
+
+  .is-modern .header-fx .fx-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(24px);
+    opacity: 0.6;
+    animation: isOrbFloat 10s ease-in-out infinite;
+  }
+
+  .is-modern .header-fx .orb-a {
+    width: 220px;
+    height: 220px;
+    top: -120px;
+    right: 18%;
+    background: radial-gradient(circle, #5eead4 0%, transparent 70%);
+  }
+
+  .is-modern .header-fx .orb-b {
+    width: 200px;
+    height: 200px;
+    bottom: -130px;
+    left: 22%;
+    background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+    animation-delay: -5s;
+  }
+
+  .is-modern .header-fx .fx-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
+  }
+
+  .is-modern .header-fx .fx-sheen {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -40%;
+    width: 35%;
+    background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+    animation: isSheen 7s ease-in-out infinite;
+  }
+
+  .is-modern .header-icon-container {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    box-shadow:
+      0 4px 0 rgba(19, 78, 74, 0.55),
+      0 10px 20px -8px rgba(2, 6, 23, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(6px);
+    animation: isIconFloat 4.5s ease-in-out infinite;
+  }
+
+  .is-modern .header-title {
+    font-weight: 800;
+    text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+  }
+
+  .is-modern .header-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .is-modern .header-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 320px;
+    padding: 3px 10px;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    backdrop-filter: blur(6px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .is-modern .header-chip--alert {
+    background: linear-gradient(135deg, rgba(244, 63, 94, 0.85) 0%, rgba(225, 29, 72, 0.85) 100%);
+    border-color: rgba(255, 255, 255, 0.4);
+    animation: isPulse 2.4s ease-in-out infinite;
+  }
+
+  /* ---------- 絞り込み ---------- */
+  .is-modern .glass-filter {
+    position: relative;
+    overflow: hidden;
+    padding-top: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(153, 246, 228, 0.7);
+    background: linear-gradient(110deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.92) 60%);
+    box-shadow: 0 10px 22px -18px rgba(15, 118, 110, 0.5);
+  }
+
+  .is-modern .glass-filter::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0f766e 0%, #0891b2 55%, #2563eb 100%);
+  }
+
+  .is-modern .filter-label {
+    padding: 0 10px;
+    color: #115e59;
+    border-radius: 999px;
+    background: linear-gradient(145deg, #f0fdfa 0%, #ccfbf1 100%);
+    box-shadow:
+      0 2px 0 #99f6e4,
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .is-modern .date-picker :deep(.el-input__wrapper),
+  .is-modern .product-select :deep(.el-input__wrapper),
+  .is-modern .product-select :deep(.el-select__wrapper) {
+    border-radius: 8px;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .is-modern .date-picker :deep(.el-input__wrapper:hover),
+  .is-modern .product-select :deep(.el-select__wrapper:hover) {
+    box-shadow:
+      0 0 0 1px rgba(13, 148, 136, 0.45) inset,
+      0 4px 10px -6px rgba(13, 148, 136, 0.5);
+  }
+
+  /* ---------- 3D キーキャップボタン（色分け） ---------- */
+  .is-modern .nav-btn,
+  .is-modern .action-btn {
+    --k-from: #2dd4bf;
+    --k-to: #0f766e;
+    --k-edge: #134e4a;
+    --k-glow: rgba(13, 148, 136, 0.5);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+    box-shadow:
+      0 3px 0 var(--k-edge),
+      0 10px 18px -8px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease;
+  }
+
+  .is-modern .nav-btn:not(:disabled):hover,
+  .is-modern .action-btn:not(:disabled):hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+    filter: brightness(1.06);
+    transform: translateY(-2px);
+    box-shadow:
+      0 5px 0 var(--k-edge),
+      0 14px 22px -8px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.36);
+  }
+
+  .is-modern .nav-btn:not(:disabled):active,
+  .is-modern .action-btn:not(:disabled):active {
+    transform: translateY(2px);
+    box-shadow:
+      0 1px 0 var(--k-edge),
+      0 4px 8px -4px var(--k-glow),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .is-modern .action-btn:disabled {
+    box-shadow: none;
+  }
+
+  .is-modern .nav-btn.nav-prev {
+    --k-from: #fb7185;
+    --k-to: #e11d48;
+    --k-edge: #9f1239;
+    --k-glow: rgba(225, 29, 72, 0.45);
+  }
+
+  .is-modern .nav-btn.today-btn {
+    --k-from: #22d3ee;
+    --k-to: #0891b2;
+    --k-edge: #155e75;
+    --k-glow: rgba(8, 145, 178, 0.5);
+  }
+
+  .is-modern .nav-btn.nav-next {
+    --k-from: #34d399;
+    --k-to: #059669;
+    --k-edge: #065f46;
+    --k-glow: rgba(5, 150, 105, 0.5);
+  }
+
+  .is-modern .action-btn-chart {
+    --k-from: #2dd4bf;
+    --k-to: #0d9488;
+    --k-edge: #115e59;
+    --k-glow: rgba(13, 148, 136, 0.5);
+  }
+
+  .is-modern .action-btn-print {
+    --k-from: #94a3b8;
+    --k-to: #334155;
+    --k-edge: #0f172a;
+    --k-glow: rgba(51, 65, 85, 0.5);
+  }
+
+  .is-modern .action-btn-long-stay {
+    --k-from: #60a5fa;
+    --k-to: #2563eb;
+    --k-edge: #1e3a8a;
+    --k-glow: rgba(37, 99, 235, 0.5);
+  }
+
+  .is-modern .action-btn-update {
+    --k-from: #fbbf24;
+    --k-to: #ea580c;
+    --k-edge: #9a3412;
+    --k-glow: rgba(234, 88, 12, 0.5);
+  }
+
+  /* ---------- 統計カード（3D チルト・色分け） ---------- */
+  .is-modern .glass-stats {
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .is-modern .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    perspective: 900px;
+  }
+
+  .is-modern .glass-stat {
+    --tc: #0891b2;
+    position: relative;
+    overflow: hidden;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
+    box-shadow:
+      0 3px 0 color-mix(in srgb, var(--tc) 26%, #e2e8f0),
+      0 12px 20px -16px color-mix(in srgb, var(--tc) 70%, transparent);
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transform-style: preserve-3d;
+    transition:
+      transform 0.18s ease-out,
+      box-shadow 0.2s ease;
+    animation: isRise 0.4s ease-out backwards;
+  }
+
+  .is-modern .glass-stat:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+
+  .is-modern .glass-stat:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+
+  .is-modern .glass-stat:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+
+  .is-modern .glass-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--tc), color-mix(in srgb, var(--tc) 40%, #fff));
+  }
+
+  .is-modern .glass-stat::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    background: radial-gradient(
+      circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 255, 255, 0.75) 0%,
+      transparent 60%
+    );
+  }
+
+  .is-modern .glass-stat:hover {
+    box-shadow:
+      0 5px 0 color-mix(in srgb, var(--tc) 34%, #e2e8f0),
+      0 18px 28px -16px color-mix(in srgb, var(--tc) 80%, transparent);
+  }
+
+  .is-modern .glass-stat:hover::after {
+    opacity: 1;
+  }
+
+  .is-modern .glass-stat.current-inv {
+    --tc: #0891b2;
+  }
+
+  .is-modern .glass-stat.safety-inv {
+    --tc: #059669;
+  }
+
+  .is-modern .glass-stat.negative-inv {
+    --tc: #e11d48;
+  }
+
+  .is-modern .glass-stat.shortage-rows {
+    --tc: #d97706;
+  }
+
+  .is-modern .glass-stat .stat-icon {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 19px;
+    color: #fff;
+    border-radius: 11px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 65%, #fff) 0%, var(--tc) 100%);
+    box-shadow:
+      0 3px 0 color-mix(in srgb, var(--tc) 70%, #0f172a),
+      0 8px 14px -6px color-mix(in srgb, var(--tc) 80%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateZ(18px);
+  }
+
+  .is-modern .glass-stat .stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    transform: translateZ(12px);
+  }
+
+  .is-modern .glass-stat .stat-value-negative {
+    color: #dc2626;
+  }
+
+  .is-modern .glass-stat .stat-label {
+    font-weight: 700;
+    color: color-mix(in srgb, var(--tc) 70%, #334155);
+  }
+
+  /* ---------- 一覧テーブル ---------- */
+  .is-modern .glass-table-wrap {
+    position: relative;
+    overflow: hidden;
+    padding-top: 9px;
+    border-radius: 12px;
+    border: 1px solid rgba(153, 246, 228, 0.7);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 26px -20px rgba(15, 118, 110, 0.5);
+  }
+
+  .is-modern .glass-table-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 3;
+    background: linear-gradient(90deg, #2563eb 0%, #0891b2 50%, #0d9488 100%);
+  }
+
+  .is-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+    color: #134e4a;
+    font-weight: 700;
+    background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+    border-bottom: 2px solid #5eead4;
+  }
+
+  .is-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+    box-shadow: inset 3px 0 0 #0d9488;
+  }
+
+  .is-modern .modern-table :deep(.el-table__body tr.is-shortage-row > td.el-table__cell:first-child) {
+    box-shadow: inset 3px 0 0 #e11d48;
+  }
+
+  .is-modern .cell-negative {
+    display: inline-block;
+    padding: 0 6px;
+    font-weight: 700;
+    color: #be123c;
+    border-radius: 6px;
+    background: rgba(244, 63, 94, 0.1);
+  }
+
+  .is-modern .dow-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    color: #0f766e;
+    background: #f0fdfa;
+    box-shadow: inset 0 0 0 1px #99f6e4;
+  }
+
+  .is-modern .dow-chip--sat {
+    color: #1d4ed8;
+    background: #eff6ff;
+    box-shadow: inset 0 0 0 1px #bfdbfe;
+  }
+
+  .is-modern .dow-chip--sun {
+    color: #be123c;
+    background: #fff1f2;
+    box-shadow: inset 0 0 0 1px #fecdd3;
+  }
+
+  .is-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell) {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(90deg, #134e4a 0%, #0f766e 50%, #0891b2 100%) !important;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .is-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell .cell) {
+    color: #fff;
+  }
+
+  .is-modern .modern-table :deep(.el-table__body-wrapper) {
+    scrollbar-width: thin;
+    scrollbar-color: #5eead4 transparent;
+  }
+
+  .is-modern .pagination-wrap :deep(.el-pagination.is-background .el-pager li.is-active) {
+    background: linear-gradient(145deg, #2dd4bf 0%, #0f766e 100%);
+    box-shadow: 0 2px 0 #134e4a;
+  }
+
+  .is-modern .empty-state :deep(.el-empty__image) {
+    animation: isIconFloat 4.5s ease-in-out infinite;
+  }
+
+  @keyframes isOrbFloat {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(24px, 12px) scale(1.12);
+    }
+  }
+
+  @keyframes isSheen {
+    0%,
+    60% {
+      left: -40%;
+    }
+    100% {
+      left: 130%;
+    }
+  }
+
+  @keyframes isIconFloat {
+    0%,
+    100% {
+      transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+    }
+    50% {
+      transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+    }
+  }
+
+  @keyframes isRise {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @keyframes isPulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgba(244, 63, 94, 0);
+    }
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .is-modern .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (prefers-reduced-motion: reduce) {
+  .is-modern .header-fx .fx-orb,
+  .is-modern .header-fx .fx-sheen,
+  .is-modern .header-icon-container,
+  .is-modern .header-chip--alert,
+  .is-modern .glass-stat,
+  .is-modern .empty-state :deep(.el-empty__image) {
+    animation: none;
+  }
+
+  .is-modern .glass-stat {
+    transform: none;
+    transition: none;
   }
 }
 </style>

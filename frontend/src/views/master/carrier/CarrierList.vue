@@ -1,11 +1,17 @@
 <template>
-  <div class="carrier-master-container">
+  <div class="carrier-master-container car-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="title-row">
           <span class="title-icon">🚚</span>
           <h1 class="main-title">{{ t('master.carrier.title') }}</h1>
-          <div class="stat-badges">
+          <div class="stat-badges" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="stat-badge">
               <span class="stat-number">{{ carrierList.length }}</span>
               <span class="stat-label">{{ t('master.common.items') }}</span>
@@ -13,6 +19,10 @@
             <div class="stat-badge stat-active">
               <span class="stat-number">{{ activeCount }}</span>
               <span class="stat-label">{{ t('master.common.active') }}</span>
+            </div>
+            <div class="stat-badge stat-inactive">
+              <span class="stat-number">{{ carrierList.length - activeCount }}</span>
+              <span class="stat-label">{{ t('master.common.inactive') }}</span>
             </div>
           </div>
         </div>
@@ -111,7 +121,12 @@
           width="100"
           align="center"
         >
-          <template #default="{ row }">{{ formatShippingTime(row.shipping_time) }}</template>
+          <template #default="{ row }">
+            <span v-if="row.shipping_time" class="time-chip">
+              {{ formatShippingTime(row.shipping_time) }}
+            </span>
+            <span v-else class="muted-cell">—</span>
+          </template>
         </el-table-column>
         <el-table-column
           prop="report_no"
@@ -219,6 +234,33 @@ const clearFilters = () => {
 }
 
 const activeCount = computed(() => carrierList.value.filter((row) => row.status === 1).length)
+
+// ヘッダー統計バッジの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-badge')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-badge').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-badge').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 function formatShippingTime(t: string | undefined): string {
   if (!t) return '—'
@@ -504,5 +546,410 @@ onMounted(fetchList)
 }
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
   background-color: #fafbfc;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（運送便マスタ / indigo→sky）
+ * ============================================================ */
+.carrier-master-container.car-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(67, 56, 202, 0.08), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 60%),
+    #f1f5f9;
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.car-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(125deg, #1e1b4b 0%, #312e81 34%, #4338ca 66%, #0ea5e9 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(49, 46, 129, 0.7),
+    0 4px 12px -6px rgba(14, 165, 233, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.car-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.car-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.car-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: carOrbFloat 11s ease-in-out infinite;
+}
+
+.car-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 30%;
+  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
+}
+
+.car-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 22%;
+  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.car-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.car-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: carSheen 6s ease-in-out infinite;
+}
+
+.car-modern .title-row {
+  gap: 12px;
+}
+
+.car-modern .title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 4px 0 rgba(30, 27, 75, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: carDrive 3.2s ease-in-out infinite;
+}
+
+.car-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  text-shadow: 0 2px 8px rgba(2, 6, 23, 0.4);
+}
+
+/* 統計バッジ：3Dチルト＋グレア */
+.car-modern .stat-badges {
+  perspective: 600px;
+}
+
+.car-modern .stat-badge {
+  position: relative;
+  overflow: hidden;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 3px 0 rgba(30, 27, 75, 0.5),
+    0 10px 18px -10px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.car-modern .stat-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 65%
+  );
+}
+
+.car-modern .stat-badge:hover::after {
+  opacity: 1;
+}
+
+.car-modern .stat-number {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.car-modern .stat-inactive {
+  background: rgba(15, 23, 42, 0.32);
+}
+
+/* 追加ボタン：3Dキーキャップ */
+.car-modern .add-btn,
+.car-modern .add-btn:hover,
+.car-modern .add-btn:focus {
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: linear-gradient(135deg, #7dd3fc 0%, #0ea5e9 50%, #0369a1 100%);
+}
+
+.car-modern .add-btn {
+  box-shadow:
+    0 3px 0 #0c4a6e,
+    0 10px 18px -8px rgba(14, 165, 233, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.car-modern .add-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #0c4a6e,
+    0 14px 22px -8px rgba(14, 165, 233, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.car-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #0c4a6e,
+    0 4px 8px -4px rgba(14, 165, 233, 0.5);
+}
+
+/* ---------- 検索バー ---------- */
+.car-modern .search-section,
+.car-modern .table-section,
+.car-modern .footer-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #c7d2fe;
+  box-shadow:
+    0 14px 28px -22px rgba(49, 46, 129, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.car-modern .search-section::before,
+.car-modern .table-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, #312e81 0%, #4338ca 50%, #0ea5e9 100%);
+}
+
+.car-modern .search-section {
+  padding-top: 12px;
+  background: linear-gradient(110deg, #eef2ff 0%, #ffffff 60%);
+}
+
+.car-modern .search-row :deep(.el-input__wrapper.is-focus),
+.car-modern .search-row :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #4f46e5 inset,
+    0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.car-modern .clear-btn {
+  font-weight: 600;
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.car-modern .clear-btn:hover {
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+
+/* ---------- テーブル ---------- */
+.car-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #312e81 !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  border-bottom: 2px solid #a5b4fc !important;
+}
+
+.car-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
+.car-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #4f46e5;
+}
+
+.car-modern .code-cell {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #3730a3;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #ffffff 0%, #e0e7ff 100%);
+  box-shadow:
+    inset 0 0 0 1px #c7d2fe,
+    0 2px 0 #c7d2fe;
+  transition: transform 0.15s ease;
+}
+
+.car-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
+  transform: translateY(-1px);
+}
+
+.car-modern .time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0369a1;
+  border-radius: 999px;
+  background: #f0f9ff;
+  box-shadow: inset 0 0 0 1px #bae6fd;
+}
+
+.car-modern .time-chip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
+}
+
+.car-modern .muted-cell {
+  color: #cbd5e1;
+}
+
+.car-modern .modern-table :deep(.el-switch.is-checked .el-switch__core) {
+  background: #10b981;
+  border-color: #10b981;
+}
+
+.car-modern .action-btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.car-modern .action-btn.el-button--primary {
+  box-shadow: 0 2px 0 #bfdbfe;
+}
+
+.car-modern .action-btn.el-button--danger {
+  box-shadow: 0 2px 0 #fecaca;
+}
+
+.car-modern .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.car-modern .action-btn.el-button--primary:hover {
+  box-shadow:
+    0 3px 0 #1e40af,
+    0 8px 14px -8px rgba(37, 99, 235, 0.6);
+}
+
+.car-modern .action-btn.el-button--danger:hover {
+  box-shadow:
+    0 3px 0 #991b1b,
+    0 8px 14px -8px rgba(220, 38, 38, 0.6);
+}
+
+.car-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ---------- フッター ---------- */
+.car-modern .footer-section {
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+}
+
+.car-modern .result-info {
+  padding: 2px 10px;
+  color: #312e81;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #e0e7ff;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes carOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes carSheen {
+  0%,
+  55% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes carDrive {
+  0%,
+  100% {
+    transform: perspective(300px) rotateY(0deg) translateX(0);
+  }
+  25% {
+    transform: perspective(300px) rotateY(-10deg) translateX(-1px) translateY(-1px);
+  }
+  50% {
+    transform: perspective(300px) rotateY(0deg) translateX(1px);
+  }
+  75% {
+    transform: perspective(300px) rotateY(10deg) translateX(0) translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .car-modern .page-header-fx .fx-orb,
+  .car-modern .page-header-fx .fx-sheen,
+  .car-modern .title-icon {
+    animation: none;
+  }
+
+  .car-modern .stat-badge {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

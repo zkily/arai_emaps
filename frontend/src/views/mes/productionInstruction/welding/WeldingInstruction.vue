@@ -1,7 +1,13 @@
 <template>
-  <div class="welding-instruction-container">
+  <div class="welding-instruction-container wi-modern">
     <!-- コンパクトヘッダー -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-content">
         <div class="header-info">
           <div class="title-wrapper">
@@ -9,9 +15,23 @@
             <h1 class="page-title">溶接指示書発行管理</h1>
           </div>
           <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+          <div class="header-chips">
+            <span v-if="planSelectedDate" class="header-chip">
+              <el-icon><Calendar /></el-icon>
+              生産日 {{ planSelectedDate }}
+            </span>
+            <span class="header-chip">
+              <el-icon><List /></el-icon>
+              計画 {{ planData.length }}件
+            </span>
+            <span v-if="planSearchForm.machineName" class="header-chip">
+              <el-icon><Monitor /></el-icon>
+              {{ planSearchForm.machineName }}
+            </span>
+          </div>
         </div>
         <div class="page-header-actions">
-          <div class="header-stats">
+          <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="header-stat-item">
               <div class="stat-icon total-icon">
                 <el-icon><TrendCharts /></el-icon>
@@ -505,6 +525,8 @@ import {
   Printer,
   Memo,
   Delete,
+  Calendar,
+  List,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchWorkingDays } from '@/api/erp/budget'
@@ -561,6 +583,35 @@ const planSelectedDate = computed<string>({
     void setSpecifiedWorkingDaysByMonth(value)
   },
 })
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.header-stat-item')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.header-stat-item').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement)
+    .querySelectorAll<HTMLElement>('.header-stat-item')
+    .forEach((el) => {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    })
+}
 
 // 指示検索フォーム
 const searchForm = reactive({
@@ -6489,5 +6540,493 @@ onUnmounted(() => {
   box-shadow:
     0 10px 20px rgba(15, 23, 42, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+/* 页面美化：現代UI・3D動効・色分け（溶接指示書発行管理 / MES 溶接：violet→fuchsia） */
+.welding-instruction-container.wi-modern {
+  background:
+    radial-gradient(circle at 6% -8%, rgba(147, 51, 234, 0.08), transparent 34%),
+    radial-gradient(circle at 100% -12%, rgba(192, 38, 211, 0.07), transparent 30%),
+    linear-gradient(135deg, #faf5ff 0%, #f1f5f9 100%);
+}
+
+.welding-instruction-container.wi-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(125deg, #4c1d95 0%, #6d28d9 34%, #9333ea 68%, #c026d3 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(109, 40, 217, 0.65),
+    0 6px 14px -8px rgba(15, 23, 42, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.wi-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.wi-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.wi-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(26px);
+  opacity: 0.55;
+  animation: wiOrbFloat 9s ease-in-out infinite;
+}
+
+.wi-modern .page-header-fx .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  right: 12%;
+  background: radial-gradient(circle, #e879f9 0%, transparent 70%);
+}
+
+.wi-modern .page-header-fx .orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -100px;
+  left: 18%;
+  background: radial-gradient(circle, #a78bfa 0%, transparent 70%);
+  animation-delay: -4.5s;
+}
+
+.wi-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 35%, #000 70%, transparent 100%);
+}
+
+.wi-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.16) 50%,
+    transparent 100%
+  );
+  animation: wiSheen 7s ease-in-out infinite;
+}
+
+@keyframes wiOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(24px, 12px) scale(1.12);
+  }
+}
+
+@keyframes wiSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes wiIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+.wi-modern .title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.welding-instruction-container.wi-modern .title-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 19px;
+  color: #fff;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(76, 29, 149, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: wiIconFloat 4.5s ease-in-out infinite;
+}
+
+.welding-instruction-container.wi-modern .page-title {
+  background: none;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+  letter-spacing: 0.4px;
+}
+
+.welding-instruction-container.wi-modern .page-subtitle {
+  color: rgba(245, 232, 255, 0.88);
+}
+
+.wi-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.wi-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.wi-modern .header-stats {
+  gap: 8px;
+  perspective: 700px;
+}
+
+.welding-instruction-container.wi-modern .header-stat-item {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 12px;
+  min-width: 132px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.welding-instruction-container.wi-modern .header-stat-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.welding-instruction-container.wi-modern .header-stat-item:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.welding-instruction-container.wi-modern .header-stat-item:hover::after {
+  opacity: 1;
+}
+
+.welding-instruction-container.wi-modern .header-stat-item .stat-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  border-radius: 8px;
+  transform: translateZ(18px);
+}
+
+.welding-instruction-container.wi-modern .header-stat-item .total-icon {
+  background: linear-gradient(145deg, #c084fc 0%, #7e22ce 100%);
+  box-shadow:
+    0 3px 0 #581c87,
+    0 8px 14px -6px rgba(147, 51, 234, 0.7);
+}
+
+.welding-instruction-container.wi-modern .header-stat-item .machine-icon {
+  background: linear-gradient(145deg, #f0abfc 0%, #c026d3 100%);
+  box-shadow:
+    0 3px 0 #86198f,
+    0 8px 14px -6px rgba(192, 38, 211, 0.7);
+}
+
+.welding-instruction-container.wi-modern .header-stat-item .stat-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+}
+
+.welding-instruction-container.wi-modern .header-stat-item .stat-label {
+  font-size: 10px;
+  color: rgba(245, 232, 255, 0.85);
+}
+
+.welding-instruction-container.wi-modern .action-btn.refresh-btn {
+  height: 34px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  color: #4c1d95;
+  background: linear-gradient(180deg, #ffffff 0%, #f3e8ff 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 3px 0 #d8b4fe,
+    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.welding-instruction-container.wi-modern .action-btn.refresh-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #d8b4fe,
+    0 14px 22px -8px rgba(2, 6, 23, 0.6);
+}
+
+.welding-instruction-container.wi-modern .action-btn.refresh-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #d8b4fe,
+    0 4px 8px -4px rgba(2, 6, 23, 0.5);
+}
+
+/* セクションカード：アクセントバー */
+.wi-modern .plan-section .section-card,
+.wi-modern .plan-qty-chart-section .section-card {
+  position: relative;
+  border-radius: 14px;
+  border-color: rgba(216, 180, 254, 0.5);
+  box-shadow:
+    0 12px 26px -20px rgba(109, 40, 217, 0.55),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.wi-modern .plan-section .section-card::before,
+.wi-modern .plan-qty-chart-section .section-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(90deg, #7c3aed 0%, #9333ea 55%, #c026d3 100%);
+}
+
+.wi-modern .plan-qty-chart-section .section-card::before {
+  background: linear-gradient(90deg, #c026d3 0%, #db2777 55%, #f97316 100%);
+}
+
+.wi-modern .plan-section .search-bar {
+  background: linear-gradient(135deg, rgba(250, 245, 255, 0.95) 0%, rgba(253, 244, 255, 0.9) 100%);
+  border-top: none;
+  border-bottom: 1px dashed rgba(216, 180, 254, 0.7);
+  border-radius: 10px 10px 0 0;
+}
+
+.wi-modern .plan-section .filter-label {
+  color: #6b21a8;
+  padding: 0 10px;
+  height: 26px;
+  line-height: 26px;
+  align-self: center;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #f3e8ff 0%, #e9d5ff 100%);
+  box-shadow:
+    0 2px 0 #d8b4fe,
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* 検索バーボタン：3Dキーキャップ（色分け） */
+.wi-modern .plan-section .search-controls .date-btn,
+.wi-modern .plan-section .search-controls .print-btn,
+.wi-modern .plan-qty-chart-section .month-btn {
+  --k-from: #c084fc;
+  --k-to: #7e22ce;
+  --k-edge: #581c87;
+  --k-glow: rgba(147, 51, 234, 0.55);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.wi-modern .plan-section .search-controls .date-btn:hover,
+.wi-modern .plan-section .search-controls .print-btn:hover,
+.wi-modern .plan-qty-chart-section .month-btn:hover {
+  color: #fff;
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.wi-modern .plan-section .search-controls .date-btn:active,
+.wi-modern .plan-section .search-controls .print-btn:active,
+.wi-modern .plan-qty-chart-section .month-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.wi-modern .plan-section .search-controls .date-btn.prev,
+.wi-modern .plan-qty-chart-section .month-btn.prev {
+  --k-from: #fb7185;
+  --k-to: #dc2626;
+  --k-edge: #991b1b;
+  --k-glow: rgba(220, 38, 38, 0.5);
+}
+
+.wi-modern .plan-section .search-controls .date-btn.next,
+.wi-modern .plan-qty-chart-section .month-btn.next {
+  --k-from: #34d399;
+  --k-to: #059669;
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+
+.wi-modern .plan-section .search-controls .print-btn.el-button--success {
+  --k-from: #4ade80;
+  --k-to: #16a34a;
+  --k-edge: #166534;
+  --k-glow: rgba(22, 163, 74, 0.5);
+}
+
+.wi-modern .plan-section .search-controls .print-btn.el-button--primary {
+  --k-from: #818cf8;
+  --k-to: #4f46e5;
+  --k-edge: #3730a3;
+  --k-glow: rgba(79, 70, 229, 0.5);
+}
+
+.wi-modern .plan-section .search-controls .print-btn.is-loading {
+  filter: saturate(0.8);
+}
+
+.wi-modern .plan-section .forming-notes-toolbar-btn {
+  box-shadow:
+    0 3px 0 #d8b4fe,
+    0 8px 14px -8px rgba(88, 28, 135, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.wi-modern .plan-section .forming-notes-toolbar-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 #d8b4fe,
+    0 12px 18px -8px rgba(88, 28, 135, 0.4);
+}
+
+/* 計画テーブル：ヘッダー violet グラデーション（行背景は維持） */
+.wi-modern .plan-section .compact-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  color: #6b21a8;
+  font-weight: 700;
+  border-bottom: 2px solid #d8b4fe;
+}
+
+.wi-modern .plan-section .compact-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #9333ea;
+}
+
+.wi-modern .plan-section .compact-table :deep(.el-table__body-wrapper) {
+  scrollbar-width: thin;
+  scrollbar-color: #d8b4fe transparent;
+}
+
+/* 日別チャートカード：ヘッダー */
+.wi-modern .plan-qty-chart-section .card-header {
+  background: linear-gradient(135deg, rgba(253, 244, 255, 0.95) 0%, rgba(255, 241, 242, 0.9) 100%);
+}
+
+.wi-modern .plan-qty-chart-section .card-header::after {
+  background: linear-gradient(90deg, #c026d3 0%, #db2777 55%, #f97316 100%);
+}
+
+.wi-modern .plan-qty-chart-title-row {
+  font-size: 17px;
+  color: #701a75;
+}
+
+.wi-modern .plan-qty-chart-title-row > .el-icon {
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #f0abfc 0%, #a21caf 100%);
+  box-shadow:
+    0 3px 0 #701a75,
+    0 8px 14px -6px rgba(162, 28, 175, 0.6);
+  animation: wiIconFloat 5s ease-in-out infinite;
+}
+
+.wi-modern .plan-qty-chart-sub {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #86198f;
+  background: rgba(192, 38, 211, 0.1);
+  border: 1px solid rgba(192, 38, 211, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wi-modern .page-header-fx .fx-orb,
+  .wi-modern .page-header-fx .fx-sheen,
+  .welding-instruction-container.wi-modern .title-icon,
+  .wi-modern .plan-qty-chart-title-row > .el-icon {
+    animation: none;
+  }
+
+  .welding-instruction-container.wi-modern .header-stat-item {
+    transform: none;
+    transition: none;
+  }
 }
 </style>

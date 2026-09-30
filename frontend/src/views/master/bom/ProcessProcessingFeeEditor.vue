@@ -1,8 +1,14 @@
 <template>
-  <div class="ppf-page">
+  <div class="ppf-page ppf-modern">
     <header class="ppf-hero">
       <div class="ppf-hero__accent" aria-hidden="true" />
       <div class="ppf-hero__inner">
+        <div class="page-header-fx" aria-hidden="true">
+          <span class="fx-orb orb-a" />
+          <span class="fx-orb orb-b" />
+          <span class="fx-grid" />
+          <span class="fx-sheen" />
+        </div>
         <div class="ppf-hero__brand">
           <div class="ppf-hero__icon">
             <el-icon :size="20"><Operation /></el-icon>
@@ -10,6 +16,24 @@
           <div class="ppf-hero__text">
             <h1 class="ppf-hero__title">工程加工費マスタ</h1>
             <p class="ppf-hero__sub">工程×加工方法の単価を登録 · 明細BOMの加工費プルダウンに使用</p>
+          </div>
+        </div>
+        <div class="ppf-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="stat-card">
+            <div class="stat-card__num">{{ total }}</div>
+            <div class="stat-card__label">総件数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__num">{{ rows.length }}</div>
+            <div class="stat-card__label">表示中</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__num">{{ formatPrice(avgPrice) }}</div>
+            <div class="stat-card__label">平均単価（表示中）</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card__num">{{ formatPrice(maxPrice) }}</div>
+            <div class="stat-card__label">最高単価（表示中）</div>
           </div>
         </div>
       </div>
@@ -53,9 +77,9 @@
             </el-select>
           </el-form-item>
           <el-form-item class="ppf-toolbar__btns">
-            <el-button type="primary" size="small" :icon="Search" @click="loadList">検索</el-button>
-            <el-button size="small" @click="resetFilter">クリア</el-button>
-            <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" plain @click="openCreate">新規</el-button>
+            <el-button type="primary" size="small" :icon="Search" class="ppf-btn-search" @click="loadList">検索</el-button>
+            <el-button size="small" class="ppf-btn-clear" @click="resetFilter">クリア</el-button>
+            <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" plain class="ppf-btn-new" @click="openCreate">新規</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -77,12 +101,22 @@
         style="width: 100%"
         max-height="calc(100vh - 280px)"
       >
-        <el-table-column prop="process_cd" label="工程CD" width="120" />
+        <el-table-column prop="process_cd" label="工程CD" width="120">
+          <template #default="{ row }">
+            <span class="ppf-code">{{ row.process_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="process_name" label="工程名" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="method_cd" label="加工方法CD" width="130" />
+        <el-table-column prop="method_cd" label="加工方法CD" width="130">
+          <template #default="{ row }">
+            <span class="ppf-code ppf-code--method">{{ row.method_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="method_name" label="加工方法名" min-width="160" show-overflow-tooltip />
         <el-table-column prop="unit_price" label="加工費単価" width="130" align="right">
-          <template #default="{ row }">{{ formatPrice(row.unit_price) }}</template>
+          <template #default="{ row }">
+            <span class="ppf-price">{{ formatPrice(row.unit_price) }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="charge_uom" label="課金単位" width="100" align="center" />
         <el-table-column prop="currency" label="通貨" width="80" align="center" />
@@ -285,7 +319,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Search, CirclePlus, EditPen, Check, Operation } from '@element-plus/icons-vue'
 import {
@@ -343,6 +377,41 @@ const rules: FormRules = {
   process_cd: [{ required: true, message: '工程を選択してください', trigger: 'change' }],
   method_cd: [{ required: true, message: '加工方法CDを入力してください', trigger: 'blur' }],
   unit_price: [{ required: true, message: '単価を入力してください', trigger: 'change' }],
+}
+
+const avgPrice = computed(() => {
+  if (!rows.value.length) return 0
+  return rows.value.reduce((s, r) => s + (Number(r.unit_price) || 0), 0) / rows.value.length
+})
+const maxPrice = computed(() =>
+  rows.value.reduce((m, r) => Math.max(m, Number(r.unit_price) || 0), 0),
+)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
 }
 
 function formatPrice(n: number | undefined) {
@@ -909,6 +978,493 @@ onMounted(() => {
   .ppf-filt-select,
   .ppf-filt-input {
     width: 100%;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（工程加工費マスタ / gold）
+ * ============================================================ */
+.ppf-page.ppf-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(202, 138, 4, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(234, 179, 8, 0.08), transparent 60%),
+    linear-gradient(180deg, #fafaf9 0%, #f5f5f4 100%);
+}
+
+/* ---------- ヒーローヘッダー ---------- */
+.ppf-modern .ppf-hero {
+  border-radius: 16px;
+  box-shadow:
+    0 18px 36px -18px rgba(133, 77, 14, 0.7),
+    0 4px 12px -6px rgba(202, 138, 4, 0.4);
+}
+
+.ppf-modern .ppf-hero__accent {
+  background: linear-gradient(90deg, #fde68a, #facc15, #f59e0b, #fde68a);
+  background-size: 200% 100%;
+  animation: ppfAccentFlow 6s linear infinite;
+}
+
+.ppf-modern .ppf-hero__inner {
+  position: relative;
+  overflow: hidden;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: linear-gradient(125deg, #422006 0%, #854d0e 36%, #ca8a04 72%, #eab308 100%);
+}
+
+.ppf-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ppf-modern .ppf-hero__brand,
+.ppf-modern .ppf-hero__stats {
+  position: relative;
+  z-index: 1;
+}
+
+.ppf-modern .page-header-fx .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.6;
+  animation: ppfOrbFloat 11s ease-in-out infinite;
+}
+
+.ppf-modern .page-header-fx .orb-a {
+  width: 240px;
+  height: 240px;
+  top: -140px;
+  right: 34%;
+  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
+}
+
+.ppf-modern .page-header-fx .orb-b {
+  width: 190px;
+  height: 190px;
+  bottom: -120px;
+  left: 20%;
+  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.ppf-modern .page-header-fx .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
+}
+
+.ppf-modern .page-header-fx .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
+  animation: ppfSheen 7s ease-in-out infinite;
+}
+
+.ppf-modern .ppf-hero__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow:
+    0 4px 0 rgba(66, 32, 6, 0.6),
+    0 10px 20px -8px rgba(2, 6, 23, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+  animation: ppfIconFloat 5s ease-in-out infinite;
+}
+
+.ppf-modern .ppf-hero__title {
+  font-size: 20px;
+  text-shadow: 0 2px 8px rgba(66, 32, 6, 0.4);
+}
+
+.ppf-modern .ppf-hero__sub {
+  color: rgba(254, 249, 195, 0.92);
+}
+
+/* 統計カード：3Dチルト＋グレア＋上端アクセント */
+.ppf-modern .ppf-hero__stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  perspective: 700px;
+}
+
+.ppf-modern .stat-card {
+  --sc: rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+  min-width: 84px;
+  padding: 7px 14px;
+  color: #fff;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 22px -12px rgba(2, 6, 23, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 0.18s ease-out,
+    box-shadow 0.25s ease;
+}
+
+.ppf-modern .stat-card:nth-child(2) {
+  --sc: #fde68a;
+}
+
+.ppf-modern .stat-card:nth-child(3) {
+  --sc: #86efac;
+  background: rgba(66, 32, 6, 0.24);
+}
+
+.ppf-modern .stat-card:nth-child(4) {
+  --sc: #fca5a5;
+  background: rgba(66, 32, 6, 0.24);
+}
+
+.ppf-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.ppf-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.32) 0%,
+    transparent 60%
+  );
+}
+
+.ppf-modern .stat-card:hover {
+  box-shadow:
+    0 16px 28px -12px rgba(2, 6, 23, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.ppf-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.ppf-modern .stat-card__num {
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
+  transform: translateZ(14px);
+}
+
+.ppf-modern .stat-card__label {
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+/* ---------- フィルタ ---------- */
+.ppf-modern .ppf-toolbar-card,
+.ppf-modern .ppf-data-card {
+  position: relative;
+  border-radius: 14px;
+  border-color: #fde68a;
+  box-shadow:
+    0 14px 28px -22px rgba(133, 77, 14, 0.5),
+    0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.ppf-modern .ppf-toolbar-card::before,
+.ppf-modern .ppf-data-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(90deg, #854d0e 0%, #ca8a04 55%, #facc15 100%);
+}
+
+.ppf-modern .ppf-toolbar-card {
+  background: linear-gradient(110deg, #fefce8 0%, #ffffff 60%);
+}
+
+.ppf-modern .ppf-filter-form :deep(.el-form-item__label) {
+  color: #854d0e;
+}
+
+.ppf-modern .ppf-btn-clear {
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.ppf-modern .ppf-btn-clear:hover {
+  color: #a16207;
+  border-color: #fde68a;
+  background: #fefce8;
+}
+
+/* 3Dキーキャップ */
+.ppf-modern .ppf-btn-search,
+.ppf-modern .ppf-btn-new {
+  --k-edge: #713f12;
+  --k-glow: rgba(202, 138, 4, 0.55);
+  color: #fff;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #facc15 0%, #eab308 45%, #a16207 100%);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+
+.ppf-modern .ppf-btn-new {
+  --k-edge: #92400e;
+  --k-glow: rgba(234, 88, 12, 0.5);
+  background: linear-gradient(135deg, #fdba74 0%, #f97316 50%, #c2410c 100%);
+}
+
+.ppf-modern .ppf-btn-search:hover,
+.ppf-modern .ppf-btn-new:hover,
+.ppf-modern .ppf-btn-search:focus,
+.ppf-modern .ppf-btn-new:focus {
+  color: #fff;
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #facc15 0%, #eab308 45%, #a16207 100%);
+}
+
+.ppf-modern .ppf-btn-new:hover,
+.ppf-modern .ppf-btn-new:focus {
+  background: linear-gradient(135deg, #fdba74 0%, #f97316 50%, #c2410c 100%);
+}
+
+.ppf-modern .ppf-btn-search:hover,
+.ppf-modern .ppf-btn-new:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.ppf-modern .ppf-btn-search:active,
+.ppf-modern .ppf-btn-new:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- 一覧 ---------- */
+.ppf-modern .ppf-data-card :deep(.el-card__header) {
+  padding-top: 10px;
+  background: linear-gradient(110deg, #fefce8 0%, #ffffff 70%);
+  border-bottom: 1px dashed #fde68a;
+}
+
+.ppf-modern .ppf-data-cap__dot {
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, #facc15, #c2410c);
+  box-shadow: 0 0 0 4px #fef9c3;
+  animation: ppfDotPulse 2.4s ease-in-out infinite;
+}
+
+.ppf-modern .ppf-data-cap__title {
+  color: #713f12;
+}
+
+.ppf-modern .ppf-data-cap__meta {
+  padding: 1px 10px;
+  color: #854d0e;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #fef9c3;
+  box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+.ppf-modern .ppf-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  color: #713f12 !important;
+  background: linear-gradient(180deg, #fefce8 0%, #fef3c7 100%) !important;
+  border-bottom: 2px solid #fcd34d !important;
+}
+
+.ppf-modern .ppf-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: #fffbeb !important;
+}
+
+.ppf-modern .ppf-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #ca8a04;
+}
+
+.ppf-modern .ppf-code {
+  display: inline-block;
+  padding: 1px 8px;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #854d0e;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fffdf5 0%, #fef3c7 100%);
+  box-shadow:
+    inset 0 0 0 1px #fde68a,
+    0 2px 0 #fde68a;
+  transition: transform 0.15s ease;
+}
+
+.ppf-modern .ppf-code--method {
+  color: #0f766e;
+  background: linear-gradient(180deg, #f7fffd 0%, #ccfbf1 100%);
+  box-shadow:
+    inset 0 0 0 1px #99f6e4,
+    0 2px 0 #99f6e4;
+}
+
+.ppf-modern .ppf-table :deep(.el-table__body tr:hover) .ppf-code {
+  transform: translateY(-1px);
+}
+
+.ppf-modern .ppf-price {
+  display: inline-block;
+  padding: 1px 8px;
+  color: #92400e;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: inset 0 0 0 1px #fcd34d;
+}
+
+.ppf-modern .ppf-table :deep(.el-button.is-link) {
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.ppf-modern .ppf-table :deep(.el-button--primary.is-link:hover) {
+  transform: translateY(-1px);
+  background: #eff6ff;
+}
+
+.ppf-modern .ppf-table :deep(.el-button--danger.is-link:hover) {
+  transform: translateY(-1px);
+  background: #fef2f2;
+}
+
+.ppf-modern .ppf-pagination {
+  background: linear-gradient(180deg, #ffffff 0%, #fefce8 100%);
+}
+
+.ppf-modern .ppf-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #facc15 0%, #eab308 50%, #a16207 100%);
+  box-shadow:
+    0 2px 0 #713f12,
+    0 6px 12px -6px rgba(202, 138, 4, 0.7);
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes ppfOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+
+@keyframes ppfSheen {
+  0%,
+  60% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes ppfIconFloat {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  }
+}
+
+@keyframes ppfAccentFlow {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes ppfDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px #fef9c3;
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(254, 249, 195, 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppf-modern .page-header-fx .fx-orb,
+  .ppf-modern .page-header-fx .fx-sheen,
+  .ppf-modern .ppf-hero__icon,
+  .ppf-modern .ppf-hero__accent,
+  .ppf-modern .ppf-data-cap__dot {
+    animation: none;
+  }
+
+  .ppf-modern .stat-card {
+    transform: none;
+    transition: none;
   }
 }
 </style>

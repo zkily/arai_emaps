@@ -1,7 +1,8 @@
 <template>
-  <div class="inventory-value-management">
+  <div class="inventory-value-management ivm-modern">
     <!-- ページヘッダー -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="header-content">
         <div class="header-left">
           <div class="header-icon">
@@ -142,7 +143,7 @@
 
     <!-- 金額 KPI（合計・製品は API；材料・部品は stock-panel 金額合計を優先） -->
     <div class="kpi-strip">
-      <div class="kpi-grid">
+      <div class="kpi-grid" @mousemove="handleKpiTilt" @mouseleave="resetKpiTilt">
         <div class="kpi-tile kpi-tile--total">
           <div class="kpi-tile__glow" aria-hidden="true" />
           <div class="kpi-tile__body">
@@ -151,6 +152,11 @@
               ¥{{ formatNumber(displayTotalKpiAmount) }}
             </div>
             <p class="kpi-tile__desc">棚卸金額合計</p>
+            <div class="kpi-mix" aria-hidden="true">
+              <span class="kpi-mix__seg kpi-mix__seg--material" :style="{ width: `${kpiSharePct(displayMaterialKpiAmount)}%` }" />
+              <span class="kpi-mix__seg kpi-mix__seg--component" :style="{ width: `${kpiSharePct(displayComponentKpiAmount)}%` }" />
+              <span class="kpi-mix__seg kpi-mix__seg--product" :style="{ width: `${kpiSharePct(displayProductKpiAmount)}%` }" />
+            </div>
           </div>
         </div>
         <div class="kpi-tile kpi-tile--material">
@@ -160,7 +166,8 @@
             <div class="kpi-tile__value">
               ¥{{ formatNumber(displayMaterialKpiAmount) }}
             </div>
-            <p class="kpi-tile__desc">材料金額</p>
+            <p class="kpi-tile__desc">材料金額<span class="kpi-share">{{ kpiSharePct(displayMaterialKpiAmount).toFixed(1) }}%</span></p>
+            <div class="kpi-bar" aria-hidden="true"><span :style="{ width: `${kpiSharePct(displayMaterialKpiAmount)}%` }" /></div>
           </div>
         </div>
         <div class="kpi-tile kpi-tile--component">
@@ -170,7 +177,8 @@
             <div class="kpi-tile__value">
               ¥{{ formatNumber(displayComponentKpiAmount) }}
             </div>
-            <p class="kpi-tile__desc">部品金額</p>
+            <p class="kpi-tile__desc">部品金額<span class="kpi-share">{{ kpiSharePct(displayComponentKpiAmount).toFixed(1) }}%</span></p>
+            <div class="kpi-bar" aria-hidden="true"><span :style="{ width: `${kpiSharePct(displayComponentKpiAmount)}%` }" /></div>
           </div>
         </div>
         <div class="kpi-tile kpi-tile--product">
@@ -180,7 +188,8 @@
             <div class="kpi-tile__value">
               ¥{{ formatNumber(displayProductKpiAmount) }}
             </div>
-            <p class="kpi-tile__desc">製品金額</p>
+            <p class="kpi-tile__desc">製品金額<span class="kpi-share">{{ kpiSharePct(displayProductKpiAmount).toFixed(1) }}%</span></p>
+            <div class="kpi-bar" aria-hidden="true"><span :style="{ width: `${kpiSharePct(displayProductKpiAmount)}%` }" /></div>
           </div>
         </div>
       </div>
@@ -1113,6 +1122,41 @@ const displayTotalKpiAmount = computed(() => (
   + (Number(displayProductKpiAmount.value) || 0)
 ))
 
+/** KPI 構成比（％）：合計 0 のときは 0 */
+function kpiSharePct(amount: unknown): number {
+  const total = displayTotalKpiAmount.value
+  const v = Number(amount) || 0
+  if (!total || v <= 0) return 0
+  return Math.min(100, (v / total) * 100)
+}
+
+// KPI カードの3Dチルト（マウス追従）
+function handleKpiTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.kpi-tile')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.kpi-tile').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 10).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 10).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetKpiTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.kpi-tile').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
+
 async function loadProductStockPanelKpiAmount() {
   const endDate = dateRange.value?.[1]
   if (!endDate) {
@@ -1980,7 +2024,7 @@ function buildProductCountPrintHtml(): string {
       background: #f1f5f9;
       font-weight: 700;
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       border-top: 2px solid #475569;
       border-bottom: 2px solid #475569;
     }
@@ -2092,7 +2136,7 @@ function buildProductAmountPrintHtml(): string {
       background: #f1f5f9;
       font-weight: 700;
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       border-top: 2px solid #475569;
       border-bottom: 2px solid #475569;
     }
@@ -2232,7 +2276,7 @@ function buildProductUnitPricePrintHtml(): string {
       background: #f1f5f9;
       font-weight: 700;
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       border-top: 2px solid #475569;
       border-bottom: 2px solid #475569;
     }
@@ -3772,6 +3816,473 @@ onMounted(() => {
 
   .iv-tab-label__icon {
     font-size: 15px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（棚卸金額管理 / ミッドナイト→サファイア→ラスト→ゴールド）
+ * ============================================================ */
+.ivm-modern {
+  --hx-1: #0b1026;
+  --hx-2: #1e3a8a;
+  --hx-3: #9a3412;
+  --hx-4: #f59e0b;
+  --hx-line: rgba(30, 58, 138, 0.14);
+  background:
+    radial-gradient(ellipse 80% 50% at 8% -8%, rgba(30, 58, 138, 0.08), transparent 55%),
+    radial-gradient(ellipse 55% 42% at 96% 2%, rgba(245, 158, 11, 0.08), transparent 50%),
+    linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e8edf3 100%);
+}
+
+.ivm-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 40%, var(--hx-3) 76%, var(--hx-4) 100%);
+  backdrop-filter: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 14px 32px -12px rgba(30, 58, 138, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.ivm-modern .page-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.ivm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ivm-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.5;
+  animation: ivmOrbFloat 11s ease-in-out infinite;
+}
+
+.ivm-modern .orb-a {
+  width: 180px;
+  height: 180px;
+  top: -80px;
+  left: 30%;
+  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
+}
+
+.ivm-modern .orb-b {
+  width: 160px;
+  height: 160px;
+  bottom: -80px;
+  right: 18%;
+  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.ivm-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 110% at 40% 40%, #000 20%, transparent 75%);
+}
+
+.ivm-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 26%;
+  background: linear-gradient(100deg, transparent, rgba(255, 244, 214, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: ivmSheen 7s ease-in-out infinite;
+}
+
+@keyframes ivmOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes ivmSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.ivm-modern .header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(11, 16, 38, 0.5),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.ivm-modern .header-icon .icon {
+  font-size: 20px;
+  animation: ivmCoinSpin 5s ease-in-out infinite;
+}
+
+@keyframes ivmCoinSpin {
+  0%,
+  70%,
+  100% {
+    transform: perspective(200px) rotateY(0deg);
+  }
+  85% {
+    transform: perspective(200px) rotateY(180deg);
+  }
+  95% {
+    transform: perspective(200px) rotateY(360deg);
+  }
+}
+
+.ivm-modern .page-title {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 8px rgba(11, 16, 38, 0.45);
+}
+
+.ivm-modern .page-description {
+  color: rgba(254, 243, 199, 0.85);
+}
+
+/* ヘッダーボタン（キーキャップ・寸法は InventoryValueTable と共通のため不変） */
+.ivm-modern .header-action-btn {
+  --k-edge: rgba(15, 23, 42, 0.35);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.ivm-modern .header-action-btn:hover {
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 #fff;
+}
+
+.ivm-modern .header-action-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.ivm-modern .header-action-btn--material {
+  --k-edge: #0369a1;
+}
+
+.ivm-modern .header-action-btn--component {
+  --k-edge: #047857;
+}
+
+.ivm-modern .header-action-btn--product-count,
+.ivm-modern .header-action-btn--report {
+  --k-edge: #6d28d9;
+}
+
+.ivm-modern .header-action-btn--product-amount {
+  --k-edge: #b45309;
+}
+
+.ivm-modern .header-action-btn--bom {
+  --k-edge: #4338ca;
+}
+
+.ivm-modern .header-action-btn--cost {
+  --k-edge: #0f766e;
+}
+
+.ivm-modern .header-action-btn--alert {
+  --k-edge: #be123c;
+}
+
+/* フィルター */
+.ivm-modern .filter-container {
+  position: relative;
+  overflow: hidden;
+  padding: 11px 12px 8px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px -14px rgba(30, 58, 138, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.ivm-modern .filter-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--hx-2), #7c3aed, var(--hx-4));
+}
+
+.ivm-modern .filter-inline-label {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.ivm-modern .search-btn,
+.ivm-modern .clear-btn {
+  --k-edge: #cbd5e1;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 8px 14px -8px rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.ivm-modern .search-btn {
+  --k-edge: #1e40af;
+  border: none;
+  background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 45%, #2563eb 100%);
+}
+
+.ivm-modern .search-btn:hover,
+.ivm-modern .clear-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 12px 18px -8px rgba(15, 23, 42, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.ivm-modern .search-btn:hover {
+  background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 45%, #2563eb 100%);
+}
+
+.ivm-modern .search-btn:active,
+.ivm-modern .clear-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+/* KPI カード（3D チルト＋構成比） */
+.ivm-modern .kpi-grid {
+  gap: 10px;
+  perspective: 800px;
+}
+
+.ivm-modern .kpi-tile,
+.ivm-modern .kpi-tile:hover {
+  --kc: var(--kpi-total);
+  --kc-deep: var(--kpi-total-deep);
+  border: 1px solid color-mix(in srgb, var(--kc) 22%, transparent);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  box-shadow:
+    0 4px 0 color-mix(in srgb, var(--kc) 22%, transparent),
+    0 14px 30px -14px color-mix(in srgb, var(--kc) 55%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.25s ease;
+}
+
+.ivm-modern .kpi-tile:hover {
+  box-shadow:
+    0 6px 0 color-mix(in srgb, var(--kc) 26%, transparent),
+    0 20px 36px -14px color-mix(in srgb, var(--kc) 60%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+.ivm-modern .kpi-tile--material {
+  --kc: var(--kpi-material);
+  --kc-deep: var(--kpi-material-deep);
+}
+
+.ivm-modern .kpi-tile--component {
+  --kc: var(--kpi-component);
+  --kc-deep: var(--kpi-component-deep);
+}
+
+.ivm-modern .kpi-tile--product {
+  --kc: var(--kpi-product);
+  --kc-deep: var(--kpi-product-deep);
+}
+
+.ivm-modern .kpi-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.55), transparent 55%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.ivm-modern .kpi-tile:hover::after {
+  opacity: 1;
+}
+
+.ivm-modern .kpi-tile__glow {
+  opacity: 0.32;
+  animation: ivmGlowDrift 9s ease-in-out infinite;
+}
+
+@keyframes ivmGlowDrift {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(16%);
+  }
+}
+
+.ivm-modern .kpi-tile__body {
+  box-shadow: inset 0 3px 0 0 var(--kc);
+}
+
+.ivm-modern .kpi-tile__tag {
+  box-shadow:
+    0 2px 0 var(--kc-deep),
+    0 6px 12px -4px color-mix(in srgb, var(--kc) 60%, transparent);
+}
+
+.ivm-modern .kpi-tile__value {
+  display: block;
+  color: color-mix(in srgb, var(--kc-deep) 70%, #0f172a);
+  transform: translateZ(16px);
+}
+
+.ivm-modern .kpi-tile__desc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ivm-modern .kpi-share {
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--kc-deep);
+  background: color-mix(in srgb, var(--kc) 12%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kc) 28%, transparent);
+}
+
+.ivm-modern .kpi-bar,
+.ivm-modern .kpi-mix {
+  display: flex;
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.ivm-modern .kpi-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--kc-deep), var(--kc));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--kc) 60%, transparent);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ivm-modern .kpi-mix__seg {
+  display: block;
+  height: 100%;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ivm-modern .kpi-mix__seg--material {
+  background: linear-gradient(90deg, var(--kpi-material-deep), var(--kpi-material));
+}
+
+.ivm-modern .kpi-mix__seg--component {
+  background: linear-gradient(90deg, var(--kpi-component-deep), var(--kpi-component));
+}
+
+.ivm-modern .kpi-mix__seg--product {
+  background: linear-gradient(90deg, var(--kpi-product-deep), var(--kpi-product));
+}
+
+/* タブカード（アクティブタブで色分け） */
+.ivm-modern .tab-card {
+  --pc: var(--kpi-material);
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--pc) 22%, transparent);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 14px 32px -16px color-mix(in srgb, var(--pc) 50%, transparent);
+}
+
+.ivm-modern .tab-card:has(#tab-component.is-active) {
+  --pc: var(--kpi-component);
+}
+
+.ivm-modern .tab-card:has(#tab-product.is-active) {
+  --pc: var(--kpi-product);
+}
+
+.ivm-modern .tab-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 70%, #0f172a), var(--pc));
+  transition: background 0.3s ease;
+}
+
+.ivm-modern .tab-card:hover {
+  border-color: color-mix(in srgb, var(--pc) 32%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ivm-modern .fx-orb,
+  .ivm-modern .fx-sheen,
+  .ivm-modern .header-icon .icon,
+  .ivm-modern .kpi-tile__glow {
+    animation: none;
+  }
+
+  .ivm-modern .kpi-tile,
+  .ivm-modern .kpi-tile:hover {
+    transform: none;
   }
 }
 </style>

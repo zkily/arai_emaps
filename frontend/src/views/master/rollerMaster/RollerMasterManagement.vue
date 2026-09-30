@@ -1,6 +1,7 @@
 <template>
-  <div class="rm-page">
+  <div class="rm-page rlm-modern">
     <div class="rm-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="rm-header-left">
         <div class="rm-title-row">
           <el-icon class="rm-title-icon" :size="20"><Histogram /></el-icon>
@@ -8,6 +9,25 @@
             <h1 class="rm-title">ローラーマスタ管理</h1>
             <p class="rm-subtitle">roller_master の登録・編集・照会を行います</p>
           </div>
+        </div>
+      </div>
+
+      <div class="rm-header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <div class="stat-card stat-total">
+          <span class="stat-num">{{ total }}</span>
+          <span class="stat-lbl">総件数</span>
+        </div>
+        <div class="stat-card stat-shown">
+          <span class="stat-num">{{ rows.length }}</span>
+          <span class="stat-lbl">表示中</span>
+        </div>
+        <div class="stat-card stat-manual">
+          <span class="stat-num">{{ manualCount }}</span>
+          <span class="stat-lbl">手動予定</span>
+        </div>
+        <div class="stat-card stat-linked">
+          <span class="stat-num">{{ linkedCount }}</span>
+          <span class="stat-lbl">設備紐付</span>
         </div>
       </div>
 
@@ -80,25 +100,42 @@
         :cell-style="cellStyle"
         height="calc(100vh - 240px)"
       >
-        <el-table-column prop="roller_cd" label="ローラーCD" width="120" show-overflow-tooltip />
+        <el-table-column prop="roller_cd" label="ローラーCD" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="code-chip">{{ row.roller_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="roller_name" label="ローラー名" min-width="160" sortable show-overflow-tooltip />
         <el-table-column prop="exchange_freq_qty" label="交換頻度本数" width="150" align="center">
           <template #default="{ row }">
-            {{ row.exchange_freq_qty ?? '—' }}
+            <span v-if="row.exchange_freq_qty != null" class="freq-pill freq--qty">{{ row.exchange_freq_qty }}</span>
+            <span v-else class="freq-empty">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="exchange_freq_month" label="交換頻度月" width="130" align="center">
           <template #default="{ row }">
-            {{ row.exchange_freq_month ?? '—' }}
+            <span v-if="row.exchange_freq_month != null" class="freq-pill freq--month">{{ row.exchange_freq_month }}</span>
+            <span v-else class="freq-empty">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="cleaning_freq_month" label="清掃頻度月" width="130" align="center">
           <template #default="{ row }">
-            {{ row.cleaning_freq_month ?? '—' }}
+            <span v-if="row.cleaning_freq_month != null" class="freq-pill freq--clean">{{ row.cleaning_freq_month }}</span>
+            <span v-else class="freq-empty">—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="category" label="区分" width="120" show-overflow-tooltip />
-        <el-table-column prop="machine_cd" label="設備CD" width="120" align="center" show-overflow-tooltip />
+        <el-table-column prop="category" label="区分" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.category" :class="['cat-tag', `cat--${categoryTone(row.category)}`]">{{ row.category }}</span>
+            <span v-else class="freq-empty">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="machine_cd" label="設備CD" width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.machine_cd" class="mc-chip">{{ row.machine_cd }}</span>
+            <span v-else class="freq-empty">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="設備名" width="140" show-overflow-tooltip>
           <template #default="{ row }">
             {{ machineNameMap[row.machine_cd || ''] || '—' }}
@@ -300,6 +337,42 @@ const headerCellStyle = () => ({
 })
 
 const cellStyle = () => ({ padding: '5px 8px', fontSize: '12px' })
+
+const manualCount = computed(() => rows.value.filter((r) => r.schedule_mode === 'manual').length)
+const linkedCount = computed(() => rows.value.filter((r) => !!r.machine_cd).length)
+
+const categoryTone = (category?: string | null) => {
+  if (category === 'コットン機') return 'cotton'
+  if (category === '金型') return 'mold'
+  return 'other'
+}
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const formatDt = (s?: string) => {
   if (!s) return '—'
@@ -705,6 +778,460 @@ onMounted(async () => {
 
 .rm-filter-select {
   width: 210px;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（ローラーマスタ / crimson→flame）
+ * ============================================================ */
+.rlm-modern {
+  --hx-1: #450a0a;
+  --hx-2: #991b1b;
+  --hx-3: #dc2626;
+  --hx-4: #f97316;
+  --hx-deep: #7f1d1d;
+  --hx-accent: #dc2626;
+  --hx-soft: #fef2f2;
+  --hx-soft2: #fff7ed;
+  --hx-line: rgba(220, 38, 38, 0.16);
+  background:
+    radial-gradient(1200px 380px at 12% -8%, rgba(249, 115, 22, 0.1), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(220, 38, 38, 0.08), transparent 60%),
+    linear-gradient(165deg, #fff7f5 0%, #fef2f2 40%, #f8fafc 100%);
+}
+
+.rlm-modern .rm-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(153, 27, 27, 0.6),
+    0 6px 14px -6px rgba(249, 115, 22, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.rlm-modern .rm-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.rlm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.rlm-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: rlmOrbFloat 11s ease-in-out infinite;
+}
+
+.rlm-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -90px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.75), transparent 70%);
+}
+
+.rlm-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(254, 202, 202, 0.55), transparent 70%);
+  animation-delay: -5s;
+}
+
+.rlm-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.rlm-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: rlmSheen 7s ease-in-out infinite;
+}
+
+.rlm-modern .rm-title-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(69, 10, 10, 0.45),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: rlmIconSpin 6s ease-in-out infinite;
+}
+
+.rlm-modern .rm-title {
+  text-shadow: 0 2px 10px rgba(69, 10, 10, 0.35);
+}
+
+.rlm-modern .rm-header-stats {
+  display: flex;
+  gap: 8px;
+  perspective: 650px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.rlm-modern .stat-card {
+  --sc: #fecaca;
+  position: relative;
+  overflow: hidden;
+  min-width: 78px;
+  padding: 7px 12px 6px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 3px 0 rgba(69, 10, 10, 0.35),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.rlm-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.rlm-modern .stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.rlm-modern .stat-card:hover::after {
+  opacity: 1;
+}
+
+.rlm-modern .stat-card:hover {
+  box-shadow:
+    0 5px 0 rgba(69, 10, 10, 0.4),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.rlm-modern .stat-total { --sc: #fde68a; }
+.rlm-modern .stat-shown { --sc: #fecaca; }
+.rlm-modern .stat-manual { --sc: #fdba74; }
+.rlm-modern .stat-linked { --sc: #a7f3d0; }
+
+.rlm-modern .stat-num {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(69, 10, 10, 0.35);
+}
+
+.rlm-modern .stat-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.04em;
+}
+
+.rlm-modern .rm-add-btn {
+  --k-edge: #9a3412;
+  --k-glow: rgba(249, 115, 22, 0.55);
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #fb923c, #ea580c) !important;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.rlm-modern .rm-add-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #fb923c, #ea580c) !important;
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.rlm-modern .rm-add-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.rlm-modern .rm-toolbar,
+.rlm-modern .rm-table-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(153, 27, 27, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.rlm-modern .rm-toolbar::before,
+.rlm-modern .rm-table-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4), #fbbf24);
+}
+
+.rlm-modern .rm-toolbar {
+  padding-top: 12px;
+}
+
+.rlm-modern .rm-toolbar :deep(.el-input__wrapper),
+.rlm-modern .rm-toolbar :deep(.el-select__wrapper) {
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease;
+}
+
+.rlm-modern .rm-toolbar :deep(.el-input__wrapper.is-focus),
+.rlm-modern .rm-toolbar :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--hx-3) inset, 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.rlm-modern .rm-clear-btn {
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  box-shadow: 0 2px 0 rgba(220, 38, 38, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rlm-modern .rm-clear-btn:hover {
+  transform: translateY(-1px);
+  color: var(--hx-deep);
+  background: #fee2e2;
+  box-shadow: 0 3px 0 rgba(220, 38, 38, 0.24);
+}
+
+.rlm-modern .rm-table-wrap {
+  padding-top: 3px;
+}
+
+.rlm-modern .rm-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #7f1d1d, #991b1b) !important;
+  color: #fff !important;
+  border-bottom: 2px solid #f97316 !important;
+  letter-spacing: 0.02em;
+}
+
+.rlm-modern .rm-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #fff1ec !important;
+}
+
+.rlm-modern .rm-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.rlm-modern .code-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: #991b1b;
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.25), 0 2px 0 rgba(220, 38, 38, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rlm-modern .rm-table :deep(tr:hover) .code-chip {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.35), 0 3px 0 rgba(220, 38, 38, 0.24);
+}
+
+.rlm-modern .mc-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.3), 0 1px 0 rgba(100, 116, 139, 0.25);
+}
+
+.rlm-modern .freq-pill {
+  --ft: #ea580c;
+  display: inline-block;
+  min-width: 34px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ft);
+  background: color-mix(in srgb, var(--ft) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--ft) 32%, #fff);
+}
+
+.rlm-modern .freq--qty { --ft: #dc2626; }
+.rlm-modern .freq--month { --ft: #ea580c; }
+.rlm-modern .freq--clean { --ft: #0891b2; }
+
+.rlm-modern .freq-empty {
+  color: #cbd5e1;
+}
+
+.rlm-modern .cat-tag {
+  --ct: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ct);
+  background: color-mix(in srgb, var(--ct) 9%, #fff);
+  border: 1px solid color-mix(in srgb, var(--ct) 35%, #fff);
+}
+
+.rlm-modern .cat-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ct);
+}
+
+.rlm-modern .cat--cotton { --ct: #0d9488; }
+.rlm-modern .cat--mold { --ct: #b45309; }
+.rlm-modern .cat--other { --ct: #64748b; }
+
+.rlm-modern .rm-result-bar b {
+  color: var(--hx-3);
+}
+
+.rlm-modern .rm-result-bar :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4)) !important;
+  color: #fff;
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+.rlm-modern .rm-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(125deg, var(--hx-1), var(--hx-2) 45%, var(--hx-3) 80%, var(--hx-4));
+}
+
+.rlm-modern .rm-form :deep(.el-form-item__label) {
+  color: var(--hx-deep);
+}
+
+.rlm-modern .rm-form :deep(.el-input__wrapper.is-focus),
+.rlm-modern .rm-form :deep(.el-select__wrapper.is-focus) {
+  border-color: var(--hx-3);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.rlm-modern .rm-btn-save {
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
+  box-shadow: 0 3px 0 var(--hx-deep), 0 10px 18px -8px rgba(249, 115, 22, 0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rlm-modern .rm-btn-save:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
+  box-shadow: 0 5px 0 var(--hx-deep), 0 14px 22px -8px rgba(249, 115, 22, 0.55);
+}
+
+.rlm-modern .rm-btn-save:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--hx-deep);
+}
+
+@keyframes rlmOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes rlmSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes rlmIconSpin {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) rotateZ(-8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rlm-modern .fx-orb,
+  .rlm-modern .fx-sheen,
+  .rlm-modern .rm-title-icon {
+    animation: none;
+  }
+
+  .rlm-modern .stat-card {
+    transform: none;
+  }
 }
 </style>
 

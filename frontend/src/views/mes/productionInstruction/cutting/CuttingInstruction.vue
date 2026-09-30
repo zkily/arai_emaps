@@ -1,11 +1,31 @@
 <template>
-  <div class="cutting-instruction-container">
+  <div class="cutting-instruction-container ci-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+        <span class="fx-sheen" />
+      </div>
       <div class="header-left">
         <div class="header-title">
           <!-- <span class="page-header-badge">生産指示</span> -->
           <h1><span class="page-title-mark" aria-hidden="true"></span>切断・面取指示管理</h1>
           <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
+          <div class="header-chips">
+            <span v-if="selectedDateToday" class="header-chip">
+              <el-icon><Calendar /></el-icon>
+              切断 {{ selectedDateToday }}
+            </span>
+            <span v-if="selectedChamferingDateToday" class="header-chip">
+              <el-icon><Calendar /></el-icon>
+              面取 {{ selectedChamferingDateToday }}
+            </span>
+            <span class="header-chip">
+              <el-icon><Document /></el-icon>
+              ロット {{ planListFiltered.length }}件
+            </span>
+          </div>
         </div>
       </div>
       <div class="header-right">
@@ -13974,6 +13994,369 @@ onUnmounted(() => {
   }
   .section-title {
     font-size: 13px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（MES 切断 = インディゴ→シアン系）
+ * ============================================================ */
+
+/* ---------- ヒーローヘッダー ---------- */
+.cutting-instruction-container.ci-modern .page-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 14px 18px !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: linear-gradient(135deg, #312e81 0%, #4338ca 28%, #2563eb 62%, #0891b2 100%) !important;
+  box-shadow:
+    0 18px 36px -18px rgba(49, 46, 129, 0.6),
+    0 4px 12px -6px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+.ci-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.ci-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(4px);
+  animation: ciOrbFloat 12s ease-in-out infinite;
+}
+.ci-modern .fx-orb.orb-a {
+  width: 260px;
+  height: 260px;
+  top: -150px;
+  left: 34%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.ci-modern .fx-orb.orb-b {
+  width: 220px;
+  height: 220px;
+  bottom: -140px;
+  right: 22%;
+  background: radial-gradient(circle, rgba(103, 232, 249, 0.4) 0%, rgba(103, 232, 249, 0) 70%);
+  animation-duration: 15s;
+  animation-delay: -6s;
+}
+.ci-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+}
+.ci-modern .fx-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 62%
+  );
+  background-size: 250% 100%;
+  animation: ciSheen 7s ease-in-out infinite;
+}
+.ci-modern .page-header .header-left,
+.ci-modern .page-header .header-right {
+  position: relative;
+  z-index: 1;
+}
+.cutting-instruction-container.ci-modern .header-title h1 {
+  font-size: 20px !important;
+  letter-spacing: 0.02em !important;
+  color: #fff !important;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+}
+.cutting-instruction-container.ci-modern .page-title-mark {
+  width: 10px;
+  height: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #a5f3fc 55%, #67e8f9 100%);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.16),
+    0 4px 12px rgba(8, 145, 178, 0.55);
+  animation: ciMarkPulse 2.4s ease-in-out infinite;
+}
+.cutting-instruction-container.ci-modern .header-title .header-desc {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+.ci-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0 20px;
+}
+.ci-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #fff;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* ヘッダー右：ピルボタンを3Dキーキャップ化 */
+.ci-modern .header-right .header-pill-btn.el-button {
+  --edge: #c7d2fe;
+  box-shadow:
+    0 3px 0 var(--edge),
+    0 10px 18px -8px rgba(15, 23, 42, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+.ci-modern .header-right .header-pill-btn--molding.el-button {
+  --edge: #a78bfa;
+}
+.ci-modern .header-right .header-pill-btn--cutting.el-button {
+  --edge: #60a5fa;
+}
+.ci-modern .header-right .header-pill-btn--chamfering.el-button {
+  --edge: #34d399;
+}
+.ci-modern .header-right .header-pill-btn--report.el-button {
+  --edge: #818cf8;
+}
+.ci-modern .header-right .header-pill-btn.el-button:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--edge),
+    0 14px 22px -8px rgba(15, 23, 42, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.ci-modern .header-right .header-pill-btn.el-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--edge),
+    0 4px 8px -4px rgba(15, 23, 42, 0.5);
+}
+
+/* ---------- セクションアイコン（3Dキーキャップ） ---------- */
+.cutting-instruction-container.ci-modern .sec-icon {
+  --edge: #1e3a8a;
+  --glow: rgba(37, 99, 235, 0.5);
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 2px 0 var(--edge),
+    0 6px 10px -4px var(--glow);
+  animation: ciIconTilt 6s ease-in-out infinite;
+}
+.cutting-instruction-container.ci-modern .sec-icon--cutting {
+  --edge: #312e81;
+  --glow: rgba(79, 70, 229, 0.5);
+  animation-delay: -1s;
+}
+.cutting-instruction-container.ci-modern .sec-icon--cutting-tm {
+  --edge: #075985;
+  --glow: rgba(2, 132, 199, 0.5);
+  animation-delay: -2s;
+}
+.cutting-instruction-container.ci-modern .sec-icon--chamfer {
+  --edge: #065f46;
+  --glow: rgba(5, 150, 105, 0.5);
+  animation-delay: -3s;
+}
+.cutting-instruction-container.ci-modern .sec-icon--chamfer-tm {
+  --edge: #115e59;
+  --glow: rgba(13, 148, 136, 0.5);
+  animation-delay: -4s;
+}
+.cutting-instruction-container.ci-modern .sec-icon--kanban {
+  --edge: #92400e;
+  --glow: rgba(217, 119, 6, 0.5);
+  animation-delay: -5s;
+}
+
+/* ---------- 各セクション：操作ボタン（3Dキーキャップ・色分け） ---------- */
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button),
+.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary) {
+  --k-from: #60a5fa;
+  --k-to: #2563eb;
+  --k-edge: #1d4ed8;
+  --k-glow: rgba(37, 99, 235, 0.5);
+  color: #fff !important;
+  border-color: var(--k-edge) !important;
+  background: linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%) !important;
+  font-weight: 700;
+  border-radius: 8px;
+  opacity: 1;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 8px 14px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.18s ease;
+}
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button--default),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(2)) {
+  --k-from: #fbbf24;
+  --k-to: #d97706;
+  --k-edge: #b45309;
+  --k-glow: rgba(217, 119, 6, 0.5);
+}
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(1)) {
+  --k-from: #fb7185;
+  --k-to: #e11d48;
+  --k-edge: #be123c;
+  --k-glow: rgba(225, 29, 72, 0.5);
+}
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button--success),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button--success) {
+  --k-from: #4ade80;
+  --k-to: #16a34a;
+  --k-edge: #15803d;
+  --k-glow: rgba(22, 163, 74, 0.5);
+}
+.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary) {
+  --k-from: #34d399;
+  --k-to: #059669;
+  --k-edge: #047857;
+  --k-glow: rgba(5, 150, 105, 0.5);
+}
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button:not(.is-disabled):hover),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button:not(.is-disabled):hover),
+.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary:not(.is-disabled):hover) {
+  color: #fff !important;
+  border-color: var(--k-edge) !important;
+  background: linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%) !important;
+  opacity: 1;
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 12px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button:not(.is-disabled):active),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button:not(.is-disabled):active),
+.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary:not(.is-disabled):active) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    0 4px 8px -4px var(--k-glow);
+}
+
+/* ---------- ページネーション ---------- */
+.ci-modern .pagination-wrap :deep(.el-pager li),
+.ci-modern .kanban-pagination :deep(.el-pager li) {
+  border-radius: 7px;
+  transition:
+    transform 0.15s ease,
+    color 0.15s ease;
+}
+.ci-modern .pagination-wrap :deep(.el-pager li:not(.is-active):hover) {
+  color: #2563eb;
+  transform: translateY(-1px);
+}
+.ci-modern .kanban-pagination :deep(.el-pager li:not(.is-active):hover) {
+  color: #d97706;
+  transform: translateY(-1px);
+}
+.ci-modern .pagination-wrap :deep(.el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow:
+    0 2px 0 #1d4ed8,
+    0 6px 10px -6px rgba(37, 99, 235, 0.6);
+}
+.ci-modern .kanban-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  box-shadow:
+    0 2px 0 #b45309,
+    0 6px 10px -6px rgba(217, 119, 6, 0.6);
+}
+.ci-modern .pagination-wrap :deep(.el-pagination__total) {
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #1d4ed8;
+  font-weight: 700;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.ci-modern .kanban-pagination :deep(.el-pagination__total) {
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #b45309;
+  font-weight: 700;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+/* ---------- キーフレーム ---------- */
+@keyframes ciSheen {
+  0%,
+  100% {
+    background-position: 130% 0;
+  }
+  50% {
+    background-position: -30% 0;
+  }
+}
+@keyframes ciOrbFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 10px, 0) scale(1.08);
+  }
+}
+@keyframes ciIconTilt {
+  0%,
+  100% {
+    transform: perspective(200px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(200px) rotateX(12deg) rotateY(-16deg);
+  }
+}
+@keyframes ciMarkPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.16),
+      0 4px 12px rgba(8, 145, 178, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(255, 255, 255, 0.08),
+      0 4px 16px rgba(8, 145, 178, 0.75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ci-modern .fx-orb,
+  .ci-modern .fx-sheen,
+  .cutting-instruction-container.ci-modern .page-title-mark,
+  .cutting-instruction-container.ci-modern .sec-icon {
+    animation: none;
   }
 }
 </style>

@@ -1,6 +1,7 @@
 <template>
-  <div class="plc-page">
+  <div class="plc-page plm-modern">
     <header class="plc-hero">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="plc-hero-inner">
         <div class="plc-title-row">
           <span class="plc-title-icon"><el-icon :size="20"><PriceTag /></el-icon></span>
@@ -9,9 +10,23 @@
             <p class="plc-subtitle">現品票（A4縦・2列×3行）の加工用製品名・入数・8枠・印刷色を管理（製品CD末尾「1」のみ）</p>
           </div>
         </div>
-        <div class="plc-stat">
-          <span class="plc-stat-num">{{ pagination.total }}</span>
-          <span class="plc-stat-lbl">登録件数</span>
+        <div class="plc-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="plc-stat plc-stat--total">
+            <span class="plc-stat-num">{{ pagination.total }}</span>
+            <span class="plc-stat-lbl">登録件数</span>
+          </div>
+          <div class="plc-stat plc-stat--shown">
+            <span class="plc-stat-num">{{ list.length }}</span>
+            <span class="plc-stat-lbl">表示中</span>
+          </div>
+          <div class="plc-stat plc-stat--out">
+            <span class="plc-stat-num">{{ outsourceRowCount }}</span>
+            <span class="plc-stat-lbl">外注（表示中）</span>
+          </div>
+          <div class="plc-stat plc-stat--lock">
+            <span class="plc-stat-num">{{ lockedRowCount }}</span>
+            <span class="plc-stat-lbl">上段固定</span>
+          </div>
         </div>
       </div>
     </header>
@@ -115,7 +130,11 @@
         :height="tableHeight"
         @sort-change="handleSortChange"
       >
-        <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" :fixed="tableFixed" show-overflow-tooltip />
+        <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" :fixed="tableFixed" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="plm-code">{{ row.product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="master_product_name"
           label="製品名（マスタ）"
@@ -132,7 +151,10 @@
         </el-table-column>
         <el-table-column prop="label_product_name" label="加工用製品名" :min-width="TABLE_COL.labelName" show-overflow-tooltip />
         <el-table-column prop="process_unit_qty" label="入数" :width="TABLE_COL.qty" align="center">
-          <template #default="{ row }">{{ row.process_unit_qty ?? '—' }}</template>
+          <template #default="{ row }">
+            <span v-if="row.process_unit_qty != null" class="plm-qty">{{ row.process_unit_qty }}</span>
+            <span v-else>—</span>
+          </template>
         </el-table-column>
         <el-table-column label="区分" :width="TABLE_COL.supplyType" align="center">
           <template #default="{ row }">
@@ -844,6 +866,38 @@ const canSendOutsourceEmail = computed(
 
 const filters = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
+
+const outsourceRowCount = computed(
+  () => list.value.filter((r) => normalizeSupplyType(r.supply_type) === '外注').length,
+)
+const lockedRowCount = computed(() => list.value.filter((r) => !!r.upper_slots_locked).length)
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.plc-stat')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.plc-stat').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.plc-stat').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 const sortConfig = reactive({
   prop: 'master_product_name',
   order: 'asc' as 'asc' | 'desc',
@@ -2549,6 +2603,424 @@ onUnmounted(() => {
   .plc-toolbar-actions :deep(.plc-btn) {
     width: 100%;
     margin: 0;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（成型用ラベル設定 / サンセット：焦橙→珊瑚→ローズ）
+ * ============================================================ */
+.plm-modern {
+  --hx-1: #431407;
+  --hx-2: #c2410c;
+  --hx-3: #f43f5e;
+  --hx-4: #fb923c;
+  --hx-deep: #9a3412;
+  --hx-soft: #fff7ed;
+  --hx-line: rgba(234, 88, 12, 0.18);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(249, 115, 22, 0.12), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 95% 0%, rgba(244, 63, 94, 0.1), transparent 50%),
+    linear-gradient(165deg, #f8fafc 0%, #fff7ed 40%, #f8fafc 100%);
+}
+
+.plm-modern .plc-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 14px 32px -12px rgba(194, 65, 12, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.plm-modern .plc-hero > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.plm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.plm-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: plmOrbFloat 11s ease-in-out infinite;
+}
+
+.plm-modern .orb-a {
+  width: 180px;
+  height: 180px;
+  top: -70px;
+  right: 18%;
+  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
+}
+
+.plm-modern .orb-b {
+  width: 150px;
+  height: 150px;
+  bottom: -70px;
+  left: 30%;
+  background: radial-gradient(circle, #fda4af 0%, transparent 70%);
+  animation-delay: -5s;
+}
+
+.plm-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
+}
+
+.plm-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  transform: skewX(-18deg);
+  animation: plmSheen 7s ease-in-out infinite;
+}
+
+@keyframes plmOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes plmSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+.plm-modern .plc-title-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 4px 0 rgba(67, 20, 7, 0.45),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: plmTagSwing 3.6s ease-in-out infinite;
+  transform-origin: 30% 20%;
+}
+
+@keyframes plmTagSwing {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  25% {
+    transform: rotate(-8deg) translateY(-1px);
+  }
+  60% {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+.plm-modern .plc-title {
+  text-shadow: 0 2px 8px rgba(67, 20, 7, 0.35);
+}
+
+.plm-modern .plc-subtitle {
+  color: rgba(255, 247, 237, 0.88);
+}
+
+/* 統計カード */
+.plm-modern .plc-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  perspective: 650px;
+}
+
+.plm-modern .plc-stat,
+.plm-modern .plc-stat:hover {
+  position: relative;
+  overflow: hidden;
+  min-width: 86px;
+  padding: 10px 14px 9px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 4px 0 rgba(67, 20, 7, 0.35),
+    0 12px 22px -10px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.plm-modern .plc-stat:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+}
+
+.plm-modern .plc-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sc);
+  box-shadow: 0 0 10px var(--sc);
+}
+
+.plm-modern .plc-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.plm-modern .plc-stat:hover::after {
+  opacity: 1;
+}
+
+.plm-modern .plc-stat-num {
+  display: block;
+  transform: translateZ(14px);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(67, 20, 7, 0.4);
+}
+
+.plm-modern .plc-stat-lbl {
+  color: rgba(255, 247, 237, 0.85);
+  letter-spacing: 0.04em;
+}
+
+.plm-modern .plc-stat--total {
+  --sc: #fde68a;
+}
+
+.plm-modern .plc-stat--shown {
+  --sc: #fda4af;
+}
+
+.plm-modern .plc-stat--out {
+  --sc: #c4b5fd;
+}
+
+.plm-modern .plc-stat--lock {
+  --sc: #5eead4;
+}
+
+/* ツールバー・テーブルカード */
+.plm-modern .plc-toolbar-card,
+.plm-modern .plc-table-wrap {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 26px -14px rgba(194, 65, 12, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.plm-modern .plc-toolbar-card::before,
+.plm-modern .plc-table-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4));
+}
+
+.plm-modern .plc-toolbar {
+  padding-top: 15px;
+}
+
+.plm-modern .plc-result-bar {
+  padding-top: 11px;
+  background: linear-gradient(180deg, #fff7ed 0%, #fffbf7 100%);
+  border-bottom-color: var(--hx-line);
+}
+
+.plm-modern .plc-search-label {
+  color: var(--hx-deep);
+}
+
+.plm-modern .plc-search :deep(.el-input__wrapper) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(234, 88, 12, 0.16);
+}
+
+.plm-modern .plc-search :deep(.el-input__wrapper:hover),
+.plm-modern .plc-search :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 12px -2px rgba(234, 88, 12, 0.2),
+    0 0 0 1px rgba(234, 88, 12, 0.45);
+}
+
+/* 立体ボタン：押下時の縁を強調 */
+.plm-modern .plc-btn:not(:disabled):hover {
+  filter: brightness(1.07) saturate(1.05);
+}
+
+.plm-modern .plc-btn--create {
+  background: linear-gradient(180deg, #fb923c 0%, #f97316 40%, #ea580c 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 4px 0 #9a3412,
+    0 8px 18px -4px rgba(234, 88, 12, 0.5) !important;
+}
+
+.plm-modern .plc-btn--create:not(:disabled):active {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 1px 0 #9a3412,
+    0 3px 8px rgba(234, 88, 12, 0.35) !important;
+}
+
+/* テーブル */
+.plm-modern .plc-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+  color: var(--hx-deep) !important;
+  border-bottom: 2px solid rgba(234, 88, 12, 0.28) !important;
+  font-weight: 700;
+}
+
+.plm-modern .plc-table :deep(.el-table__row:hover > td) {
+  background: #fff7ed !important;
+}
+
+.plm-modern .plc-table :deep(.el-table__row:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-2);
+}
+
+.plm-modern .plm-code {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--hx-deep);
+  background: color-mix(in srgb, #f97316 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(234, 88, 12, 0.28),
+    0 2px 0 rgba(234, 88, 12, 0.2);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.plm-modern .plm-qty {
+  display: inline-block;
+  min-width: 34px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #9f1239;
+  background: color-mix(in srgb, #f43f5e 12%, #fff);
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 63, 94, 0.26),
+    0 2px 0 rgba(244, 63, 94, 0.18);
+}
+
+.plm-modern .plc-table :deep(.el-table__row:hover) .plm-code,
+.plm-modern .plc-table :deep(.el-table__row:hover) .plm-qty {
+  transform: translateY(-1px);
+}
+
+.plm-modern .plc-paper-chip {
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.12),
+    0 2px 0 rgba(15, 23, 42, 0.1);
+}
+
+.plm-modern .plc-color-dot {
+  box-shadow:
+    0 2px 0 rgba(15, 23, 42, 0.18),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.plm-modern .plc-slot-top:not(.is-empty) {
+  color: #c2410c;
+}
+
+.plm-modern .plc-slot-bottom:not(.is-empty) {
+  color: #be123c;
+}
+
+.plm-modern .plc-result-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--hx-2), var(--hx-3));
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+/* ダイアログ */
+.plm-modern .plc-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 45%, var(--hx-3) 100%);
+}
+
+.plm-modern .plc-edit-tabs :deep(.el-tabs__header) {
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+.plm-modern .plc-edit-tabs :deep(.el-tabs__item:hover) {
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.08);
+}
+
+.plm-modern .plc-edit-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--hx-deep);
+  box-shadow: inset 0 3px 0 #f97316;
+}
+
+.plm-modern .plc-form :deep(.el-form-item__label),
+.plm-modern .plc-section-title {
+  color: var(--hx-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plm-modern .fx-orb,
+  .plm-modern .fx-sheen,
+  .plm-modern .plc-title-icon {
+    animation: none;
+  }
+
+  .plm-modern .plc-stat,
+  .plm-modern .plc-stat:hover {
+    transform: none;
   }
 }
 </style>

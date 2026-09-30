@@ -1,6 +1,7 @@
 <template>
-  <div class="rb-page">
+  <div class="rb-page rbm-modern">
     <div class="rb-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="rb-header-left">
         <div class="rb-title-row">
           <span class="rb-title-icon"><el-icon :size="20"><Histogram /></el-icon></span>
@@ -8,8 +9,8 @@
         </div>
         <p class="rb-subtitle">ローラー・製品・設備の対応関係を登録・検索・一括操作します</p>
       </div>
-      <div class="rb-stats">
-        <div v-for="s in statItems" :key="s.l" class="rb-stat">
+      <div class="rb-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <div v-for="(s, i) in statItems" :key="s.l" :class="['rb-stat', `rb-stat--${i}`]">
           <span class="rb-stat-num">{{ s.n }}</span>
           <span class="rb-stat-lbl">{{ s.l }}</span>
         </div>
@@ -95,15 +96,31 @@
       >
         <el-table-column type="selection" width="42" align="center" fixed />
         <!-- <el-table-column type="index" label="#" width="55" align="center" :index="indexMethod" fixed /> -->
-        <el-table-column prop="roller_cd" label="ローラーCD" width="110" show-overflow-tooltip />
-        <el-table-column prop="roller_type" label="ローラー種類" width="150" sortable show-overflow-tooltip />
-        <el-table-column prop="product_cd" label="製品CD" width="90" align="center"  />
+        <el-table-column prop="roller_cd" label="ローラーCD" width="110" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="rb-chip rb-chip--roller">{{ row.roller_cd }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="roller_type" label="ローラー種類" width="150" sortable show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.roller_type" class="rb-type">{{ row.roller_type }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="product_cd" label="製品CD" width="90" align="center">
+          <template #default="{ row }">
+            <span v-if="row.product_cd" class="rb-chip rb-chip--product">{{ row.product_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="製品名" width="130" sortable show-overflow-tooltip >
           <template #default="{ row }">
             {{ productNameByCd[row.product_cd || ''] || '—' }}
           </template>
         </el-table-column>
-        <el-table-column prop="machine_cd" label="設備CD" width="100" align="center"  />
+        <el-table-column prop="machine_cd" label="設備CD" width="100" align="center">
+          <template #default="{ row }">
+            <span v-if="row.machine_cd" class="rb-chip rb-chip--machine">{{ row.machine_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="設備名" width="100" sortable show-overflow-tooltip>
           <template #default="{ row }">
             {{ machineNameMap[row.machine_cd || ''] || '—' }}
@@ -306,6 +323,33 @@ const headerCellStyle = () => ({
   lineHeight: '1.3',
 })
 const cellStyle = () => ({ padding: '3px 8px', fontSize: '12px', lineHeight: '1.35' })
+
+// ヘッダー統計カードの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.rb-stat')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.rb-stat').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.rb-stat').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const tableRef = ref()
 const selectedIds = ref<number[]>([])
@@ -836,5 +880,399 @@ onMounted(async () => {
 .rb-input-readonly :deep(.el-input__wrapper) {
   background-color: #f8fafc;
   box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（ローラーBOM / graphite→copper）
+ * ============================================================ */
+.rbm-modern {
+  --hx-1: #1c1917;
+  --hx-2: #44403c;
+  --hx-3: #9a3412;
+  --hx-4: #ea580c;
+  --hx-deep: #7c2d12;
+  --hx-soft: #fff7ed;
+  --hx-line: rgba(154, 52, 18, 0.16);
+  background:
+    radial-gradient(1100px 360px at 10% -10%, rgba(234, 88, 12, 0.08), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(120, 113, 108, 0.1), transparent 60%),
+    linear-gradient(165deg, #faf8f6 0%, #f7f3ef 40%, #f8fafc 100%);
+}
+
+.rbm-modern .rb-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(68, 64, 60, 0.65),
+    0 6px 14px -6px rgba(234, 88, 12, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.rbm-modern .rb-header > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.rbm-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.rbm-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: rbmOrbFloat 11s ease-in-out infinite;
+}
+
+.rbm-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.6), transparent 70%);
+}
+
+.rbm-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(214, 211, 209, 0.45), transparent 70%);
+  animation-delay: -5s;
+}
+
+.rbm-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.rbm-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: rbmSheen 7s ease-in-out infinite;
+}
+
+.rbm-modern .rb-title-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow:
+    0 4px 0 rgba(28, 25, 23, 0.55),
+    0 10px 18px -6px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: rbmIconRoll 6s ease-in-out infinite;
+}
+
+.rbm-modern .rb-title {
+  font-size: 18px;
+  font-weight: 800;
+  text-shadow: 0 2px 10px rgba(28, 25, 23, 0.4);
+}
+
+.rbm-modern .rb-subtitle {
+  margin-left: 48px;
+}
+
+.rbm-modern .rb-stats {
+  gap: 8px;
+  perspective: 650px;
+  flex-wrap: wrap;
+}
+
+.rbm-modern .rb-stat {
+  --sc: #fed7aa;
+  position: relative;
+  overflow: hidden;
+  min-width: 66px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.07));
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 3px 0 rgba(28, 25, 23, 0.45),
+    0 10px 20px -10px rgba(0, 0, 0, 0.5);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.rbm-modern .rb-stat::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.rbm-modern .rb-stat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.rbm-modern .rb-stat:hover {
+  box-shadow:
+    0 5px 0 rgba(28, 25, 23, 0.5),
+    0 16px 26px -12px rgba(0, 0, 0, 0.55);
+}
+
+.rbm-modern .rb-stat:hover::after {
+  opacity: 1;
+}
+
+.rbm-modern .rb-stat--0 { --sc: #fde68a; }
+.rbm-modern .rb-stat--1 { --sc: #fdba74; }
+.rbm-modern .rb-stat--2 { --sc: #86efac; }
+.rbm-modern .rb-stat--3 { --sc: #93c5fd; }
+
+.rbm-modern .rb-stat-num {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(28, 25, 23, 0.4);
+}
+
+.rbm-modern .rb-toolbar,
+.rbm-modern .rb-table-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(124, 45, 18, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.rbm-modern .rb-toolbar::before,
+.rbm-modern .rb-table-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4), #fbbf24);
+}
+
+.rbm-modern .rb-toolbar {
+  padding-top: 11px;
+}
+
+.rbm-modern .rb-table-wrap {
+  padding-top: 3px;
+}
+
+.rbm-modern .rb-toolbar :deep(.el-input__wrapper.is-focus),
+.rbm-modern .rb-toolbar :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--hx-4) inset, 0 0 0 3px rgba(234, 88, 12, 0.12);
+}
+
+.rbm-modern .rb-btn-ghost {
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border-color: rgba(234, 88, 12, 0.22);
+  box-shadow: 0 2px 0 rgba(154, 52, 18, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rbm-modern .rb-btn-ghost:hover {
+  transform: translateY(-1px);
+  color: var(--hx-deep);
+  background: #ffedd5;
+  border-color: rgba(234, 88, 12, 0.3);
+  box-shadow: 0 3px 0 rgba(154, 52, 18, 0.26);
+}
+
+.rbm-modern .rb-btn-batch:not(.is-disabled) {
+  box-shadow: 0 2px 0 rgba(220, 38, 38, 0.3);
+}
+
+.rbm-modern .rb-btn-add {
+  --k-edge: #7c2d12;
+  --k-glow: rgba(234, 88, 12, 0.5);
+  font-weight: 700;
+  background: linear-gradient(135deg, #f97316, #c2410c);
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.rbm-modern .rb-btn-add:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #f97316, #c2410c);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.rbm-modern .rb-btn-add:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge);
+}
+
+.rbm-modern .rb-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #292524, #44403c) !important;
+  color: #fff !important;
+  border-bottom: 2px solid var(--hx-4) !important;
+}
+
+.rbm-modern .rb-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #fff7ed !important;
+}
+
+.rbm-modern .rb-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-4);
+}
+
+.rbm-modern .rb-chip {
+  --cc: #9a3412;
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 9%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc) 32%, #fff), 0 2px 0 color-mix(in srgb, var(--cc) 25%, #fff);
+  transition: transform 0.15s ease;
+}
+
+.rbm-modern .rb-chip--roller { --cc: #c2410c; }
+.rbm-modern .rb-chip--product { --cc: #1d4ed8; }
+.rbm-modern .rb-chip--machine { --cc: #047857; }
+
+.rbm-modern .rb-table :deep(tr:hover) .rb-chip {
+  transform: translateY(-1px);
+}
+
+.rbm-modern .rb-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.rbm-modern .rb-type::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fdba74, #9a3412);
+  box-shadow: 0 1px 2px rgba(124, 45, 18, 0.4);
+}
+
+.rbm-modern .rb-result-bar b {
+  color: var(--hx-4);
+}
+
+.rbm-modern .rb-result-bar :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, var(--hx-3), var(--hx-4)) !important;
+  color: #fff;
+  box-shadow: 0 2px 0 var(--hx-deep);
+}
+
+.rbm-modern .rb-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(125deg, var(--hx-1), var(--hx-2) 40%, var(--hx-3) 75%, var(--hx-4));
+}
+
+.rbm-modern .rb-form :deep(.el-form-item__label) {
+  color: var(--hx-deep);
+}
+
+.rbm-modern .rb-form :deep(.el-input__wrapper:focus-within),
+.rbm-modern .rb-form :deep(.el-select__wrapper:focus-within) {
+  border-color: var(--hx-4);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.14);
+}
+
+.rbm-modern .rb-btn-save {
+  background: linear-gradient(135deg, #f97316, #c2410c);
+  box-shadow: 0 3px 0 var(--hx-deep), 0 10px 18px -8px rgba(234, 88, 12, 0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rbm-modern .rb-btn-save:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #f97316, #c2410c);
+  box-shadow: 0 5px 0 var(--hx-deep), 0 14px 22px -8px rgba(234, 88, 12, 0.55);
+}
+
+.rbm-modern .rb-btn-save:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--hx-deep);
+}
+
+@keyframes rbmOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes rbmSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes rbmIconRoll {
+  0%,
+  100% {
+    transform: perspective(300px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(300px) rotateX(-14deg) rotateY(18deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rbm-modern .fx-orb,
+  .rbm-modern .fx-sheen,
+  .rbm-modern .rb-title-icon {
+    animation: none;
+  }
+
+  .rbm-modern .rb-stat {
+    transform: none;
+  }
 }
 </style>

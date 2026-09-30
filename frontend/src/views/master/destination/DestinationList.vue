@@ -1,11 +1,12 @@
 <template>
-  <div class="destination-master-container">
+  <div class="destination-master-container dst-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
       <div class="header-content">
         <div class="title-row">
           <span class="title-icon">🚚</span>
           <h1 class="main-title">{{ t('master.destination.title') }}</h1>
-          <div class="stat-badges">
+          <div class="stat-badges" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="stat-badge">
               <span class="stat-number">{{ destinationList.length }}</span>
               <span class="stat-label">{{ t('master.common.items') }}</span>
@@ -13,6 +14,14 @@
             <div class="stat-badge stat-active">
               <span class="stat-number">{{ activeCount }}</span>
               <span class="stat-label">{{ t('master.common.active') }}</span>
+            </div>
+            <div class="stat-badge stat-inactive">
+              <span class="stat-number">{{ destinationList.length - activeCount }}</span>
+              <span class="stat-label">{{ t('master.common.inactive') }}</span>
+            </div>
+            <div class="stat-badge stat-shown">
+              <span class="stat-number">{{ filteredList.length }}</span>
+              <span class="stat-label">表示中</span>
             </div>
           </div>
         </div>
@@ -118,13 +127,21 @@
           :label="t('master.destination.customerCD')"
           width="90"
           align="center"
-        />
+        >
+          <template #default="{ row }">
+            <span v-if="row.customer_cd" class="ref-chip ref--customer">{{ row.customer_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="carrier_cd"
           :label="t('master.destination.carrierCD')"
           width="90"
           align="center"
-        />
+        >
+          <template #default="{ row }">
+            <span v-if="row.carrier_cd" class="ref-chip ref--carrier">{{ row.carrier_cd }}</span>
+          </template>
+        </el-table-column>
         <el-table-column
           prop="delivery_lead_time"
           :label="t('master.destination.deliveryLeadTime')"
@@ -146,6 +163,7 @@
               :type="row.issue_type === '自動' ? 'info' : 'warning'"
               size="small"
               effect="plain"
+              :class="['issue-tag', `issue--${row.issue_type === '自動' ? 'auto' : row.issue_type || 'none'}`]"
             >
               {{ row.issue_type || '—' }}
             </el-tag>
@@ -247,6 +265,33 @@ const clearFilters = () => {
 }
 
 const activeCount = computed(() => destinationList.value.filter((row) => row.status === 1).length)
+
+// ヘッダー統計バッジの3Dチルト（マウス追従）
+function handleStatTilt(e: MouseEvent) {
+  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-badge')
+  const host = e.currentTarget as HTMLElement
+  host.querySelectorAll<HTMLElement>('.stat-badge').forEach((el) => {
+    if (el !== item) {
+      el.style.removeProperty('--rx')
+      el.style.removeProperty('--ry')
+    }
+  })
+  if (!item) return
+  const rect = item.getBoundingClientRect()
+  const px = (e.clientX - rect.left) / rect.width
+  const py = (e.clientY - rect.top) / rect.height
+  item.style.setProperty('--rx', `${((0.5 - py) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--ry', `${((px - 0.5) * 18).toFixed(2)}deg`)
+  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+}
+
+function resetStatTilt(e: MouseEvent) {
+  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-badge').forEach((el) => {
+    el.style.removeProperty('--rx')
+    el.style.removeProperty('--ry')
+  })
+}
 
 const filteredList = computed(() => {
   let result = destinationList.value
@@ -552,5 +597,426 @@ onMounted(fetchList)
 :deep(.el-tag) {
   border-radius: 10px;
   font-weight: 500;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（納入先マスタ / magenta→pink）
+ * ============================================================ */
+.dst-modern {
+  --hx-1: #500724;
+  --hx-2: #9d174d;
+  --hx-3: #db2777;
+  --hx-4: #f472b6;
+  --hx-deep: #831843;
+  --hx-accent: #db2777;
+  --hx-soft: #fdf2f8;
+  --hx-line: rgba(219, 39, 119, 0.16);
+  background:
+    radial-gradient(1100px 360px at 10% -10%, rgba(244, 114, 182, 0.12), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(168, 85, 247, 0.07), transparent 60%),
+    linear-gradient(160deg, #fdf4f9 0%, #fdf2f8 40%, #f8fafc 100%);
+}
+
+.dst-modern .page-header {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(157, 23, 77, 0.6),
+    0 6px 14px -6px rgba(244, 114, 182, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.dst-modern .header-content {
+  position: relative;
+  z-index: 1;
+}
+
+.dst-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.dst-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: dstOrbFloat 11s ease-in-out infinite;
+}
+
+.dst-modern .fx-orb.orb-a {
+  width: 220px;
+  height: 220px;
+  top: -100px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(249, 168, 212, 0.75), transparent 70%);
+}
+
+.dst-modern .fx-orb.orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -90px;
+  right: 10%;
+  background: radial-gradient(circle, rgba(196, 181, 253, 0.6), transparent 70%);
+  animation-delay: -5s;
+}
+
+.dst-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
+}
+
+.dst-modern .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: dstSheen 7s ease-in-out infinite;
+}
+
+.dst-modern .title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 1.3rem;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 0 rgba(80, 7, 36, 0.45),
+    0 10px 18px -6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: dstIconDrive 5s ease-in-out infinite;
+}
+
+.dst-modern .main-title {
+  text-shadow: 0 2px 10px rgba(80, 7, 36, 0.35);
+}
+
+.dst-modern .stat-badges {
+  perspective: 600px;
+  flex-wrap: wrap;
+}
+
+.dst-modern .stat-badge {
+  --sc: #fbcfe8;
+  position: relative;
+  overflow: hidden;
+  padding: 5px 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 3px 0 rgba(80, 7, 36, 0.35),
+    0 10px 20px -10px rgba(0, 0, 0, 0.45);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
+}
+
+.dst-modern .stat-badge::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--sc);
+}
+
+.dst-modern .stat-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.dst-modern .stat-badge:hover::after {
+  opacity: 1;
+}
+
+.dst-modern .stat-badge:hover {
+  box-shadow:
+    0 5px 0 rgba(80, 7, 36, 0.4),
+    0 16px 26px -12px rgba(0, 0, 0, 0.5);
+}
+
+.dst-modern .stat-active {
+  --sc: #6ee7b7;
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.35), rgba(16, 185, 129, 0.12));
+}
+
+.dst-modern .stat-inactive {
+  --sc: #cbd5e1;
+  background: linear-gradient(160deg, rgba(100, 116, 139, 0.4), rgba(100, 116, 139, 0.14));
+}
+
+.dst-modern .stat-shown {
+  --sc: #fde68a;
+}
+
+.dst-modern .stat-number {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transform: translateZ(14px);
+  text-shadow: 0 2px 6px rgba(80, 7, 36, 0.35);
+}
+
+.dst-modern .add-btn {
+  --k-edge: #047857;
+  --k-glow: rgba(16, 185, 129, 0.55);
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: none;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #34d399, #059669) !important;
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    0 10px 18px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.dst-modern .add-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #34d399, #059669) !important;
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    0 14px 22px -8px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dst-modern .add-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-edge), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.dst-modern .search-section,
+.dst-modern .table-section,
+.dst-modern .footer-section {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(157, 23, 77, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.dst-modern .search-section::before,
+.dst-modern .table-section::before,
+.dst-modern .footer-section::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), var(--hx-4), #c084fc);
+}
+
+.dst-modern .search-section {
+  padding-top: 13px;
+}
+
+.dst-modern .search-section :deep(.el-input__wrapper),
+.dst-modern .search-section :deep(.el-select__wrapper) {
+  border-radius: 10px;
+}
+
+.dst-modern .search-section :deep(.el-input__wrapper.is-focus),
+.dst-modern .search-section :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--hx-3) inset, 0 0 0 3px rgba(219, 39, 119, 0.12);
+}
+
+.dst-modern .clear-btn {
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--hx-deep);
+  background: var(--hx-soft);
+  border: 1px solid rgba(219, 39, 119, 0.2);
+  box-shadow: 0 2px 0 rgba(219, 39, 119, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dst-modern .clear-btn:hover {
+  transform: translateY(-1px);
+  color: var(--hx-deep);
+  background: #fce7f3;
+  box-shadow: 0 3px 0 rgba(219, 39, 119, 0.24);
+}
+
+.dst-modern .table-section {
+  padding-top: 3px;
+}
+
+.dst-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #831843, #9d174d) !important;
+  color: #fff !important;
+  border-bottom: 2px solid var(--hx-4) !important;
+  letter-spacing: 0.02em;
+}
+
+.dst-modern :deep(.el-table) {
+  --el-table-row-hover-bg-color: #fdf2f8;
+}
+
+.dst-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--hx-3);
+}
+
+.dst-modern .code-cell {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  color: var(--hx-deep);
+  background: linear-gradient(135deg, #fdf2f8, #fce7f3);
+  box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.28), 0 2px 0 rgba(219, 39, 119, 0.18);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dst-modern .modern-table :deep(tr:hover) .code-cell {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.38), 0 3px 0 rgba(219, 39, 119, 0.24);
+}
+
+.dst-modern .ref-chip {
+  --rc: #64748b;
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rc);
+  background: color-mix(in srgb, var(--rc) 9%, #fff);
+  border: 1px solid color-mix(in srgb, var(--rc) 32%, #fff);
+}
+
+.dst-modern .ref--customer { --rc: #0284c7; }
+.dst-modern .ref--carrier { --rc: #4f46e5; }
+
+.dst-modern .number-cell {
+  display: inline-block;
+  min-width: 26px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 800;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.dst-modern .issue-tag {
+  --it: #64748b;
+  --el-tag-text-color: var(--it);
+  --el-tag-bg-color: color-mix(in srgb, var(--it) 9%, #fff);
+  --el-tag-border-color: color-mix(in srgb, var(--it) 35%, #fff);
+  font-weight: 700;
+  min-width: 30px;
+}
+
+.dst-modern .issue--auto { --it: #0891b2; }
+.dst-modern .issue--1 { --it: #db2777; }
+.dst-modern .issue--2 { --it: #ea580c; }
+.dst-modern .issue--3 { --it: #7c3aed; }
+.dst-modern .issue--4 { --it: #16a34a; }
+
+.dst-modern .action-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dst-modern .action-btn.el-button--primary {
+  box-shadow: 0 2px 0 rgba(37, 99, 235, 0.35);
+}
+
+.dst-modern .action-btn.el-button--danger {
+  box-shadow: 0 2px 0 rgba(220, 38, 38, 0.35);
+}
+
+.dst-modern .action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.dst-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.dst-modern .footer-section {
+  padding-top: 10px;
+}
+
+.dst-modern .result-info {
+  color: var(--hx-deep);
+  font-weight: 600;
+}
+
+@keyframes dstOrbFloat {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(26px, 14px) scale(1.12);
+  }
+}
+
+@keyframes dstSheen {
+  0% {
+    left: -40%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+
+@keyframes dstIconDrive {
+  0%,
+  100% {
+    transform: perspective(300px) translateX(0) rotateY(0deg);
+  }
+  30% {
+    transform: perspective(300px) translateX(2px) rotateY(-16deg) rotateX(6deg);
+  }
+  70% {
+    transform: perspective(300px) translateX(-2px) rotateY(12deg) rotateX(-4deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dst-modern .fx-orb,
+  .dst-modern .fx-sheen,
+  .dst-modern .title-icon {
+    animation: none;
+  }
+
+  .dst-modern .stat-badge {
+    transform: none;
+  }
 }
 </style>
