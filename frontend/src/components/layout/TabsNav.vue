@@ -1,5 +1,5 @@
 <template>
-  <div class="tabs-nav">
+  <div class="tabs-nav tbn-lite">
     <!-- 左箭头：内容超出时显示 -->
     <button
       v-show="canScrollLeft"
@@ -19,6 +19,7 @@
           :ref="(el) => setTabRef(tab.path, el)"
           :class="[
             'tab-item',
+            `tab-item--${tabTone(tab.path)}`,
             {
               'is-active': tab.path === tabsStore.activeTab,
               'is-dragging': draggingPath === tab.path,
@@ -155,6 +156,15 @@ const tabTitle = (tab: TabItem) => {
     return labelForPath(tab.path, code)
   }
   return tab.title || tab.path
+}
+
+const TAB_TONES = new Set(['dashboard', 'erp', 'aps', 'mes', 'fin', 'master', 'system'])
+
+const tabTone = (path: string) => {
+  const seg = path.split('/')[1] ?? ''
+  if (seg === 'account') return 'system'
+  if (seg === 'operation-manuals') return 'manual'
+  return TAB_TONES.has(seg) ? seg : 'other'
 }
 
 const contextMenuPinned = computed(() => {
@@ -857,6 +867,121 @@ onUnmounted(() => {
   .action-btn {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D・色分け（タブナビ / 軽量版）
+ * 常時アニメーション・blur・追加DOM なし（描画コスト優先）
+ * ============================================================ */
+.tbn-lite {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tbn-lite .tab-item--dashboard {
+  --tc: #6366f1;
+  --tc-rgb: 99, 102, 241;
+}
+.tbn-lite .tab-item--erp {
+  --tc: #a855f7;
+  --tc-rgb: 168, 85, 247;
+}
+.tbn-lite .tab-item--aps {
+  --tc: #f43f5e;
+  --tc-rgb: 244, 63, 94;
+}
+.tbn-lite .tab-item--mes {
+  --tc: #0891b2;
+  --tc-rgb: 8, 145, 178;
+}
+.tbn-lite .tab-item--fin {
+  --tc: #d97706;
+  --tc-rgb: 217, 119, 6;
+}
+.tbn-lite .tab-item--master {
+  --tc: #059669;
+  --tc-rgb: 5, 150, 105;
+}
+.tbn-lite .tab-item--system {
+  --tc: #3b82f6;
+  --tc-rgb: 59, 130, 246;
+}
+.tbn-lite .tab-item--manual {
+  --tc: #0d9488;
+  --tc-rgb: 13, 148, 136;
+}
+.tbn-lite .tab-item--other {
+  --tc: #64748b;
+  --tc-rgb: 100, 116, 139;
+}
+
+.tbn-lite .tab-item {
+  border-color: rgba(var(--tc-rgb), 0.25);
+  box-shadow:
+    0 2px 0 rgba(var(--tc-rgb), 0.2),
+    inset 0 1px 0 #fff;
+}
+
+.tbn-lite .tab-item .tab-icon {
+  color: var(--tc);
+  opacity: 0.9;
+}
+
+.tbn-lite .tab-item::before {
+  background: var(--tc);
+}
+
+.tbn-lite .tab-item:hover {
+  border-color: rgba(var(--tc-rgb), 0.5);
+  box-shadow:
+    0 3px 0 rgba(var(--tc-rgb), 0.35),
+    inset 0 1px 0 #fff;
+}
+
+.tbn-lite .tab-item:not(.is-active):hover::before {
+  width: calc(100% - 16px);
+  left: 8px;
+}
+
+.tbn-lite .tab-item.is-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(0, 0, 0, 0.14) 100%),
+    var(--tc);
+  border-color: transparent;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 rgba(15, 23, 42, 0.45),
+    0 4px 10px -4px rgba(var(--tc-rgb), 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.tbn-lite .tab-item.is-active .tab-icon {
+  color: #fff;
+  opacity: 1;
+}
+
+.tbn-lite .nav-arrow,
+.tbn-lite .action-btn {
+  box-shadow:
+    0 2px 0 #cbd5e1,
+    inset 0 1px 0 #fff;
+}
+
+.tbn-lite .nav-arrow:hover,
+.tbn-lite .action-btn:hover {
+  box-shadow:
+    0 2px 0 #a5b4fc,
+    inset 0 1px 0 #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tbn-lite .tab-item,
+  .tbn-lite .tab-item:hover,
+  .tbn-lite .tab-item.is-active {
+    transform: none;
   }
 }
 </style>

@@ -196,17 +196,19 @@ watch(
 /* 页面切换动画 */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    opacity 0.12s ease-out,
+    transform 0.12s ease-out;
 }
 
 .fade-slide-enter-from {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-4px);
 }
 
 .fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(4px);
 }
 
 /* 小屏下菜单遮罩 */

@@ -1,5 +1,5 @@
 <template>
-  <div class="header-bar">
+  <div class="header-bar hdr-lite">
     <div class="header-bar__mesh" aria-hidden="true" />
     <div class="header-bar__shine" aria-hidden="true" />
     <div class="header-bar__inner">
@@ -1473,6 +1473,109 @@ const handleCommand = async (command: string) => {
   .header-divider {
     margin: 0 2px;
     height: 20px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D・色分け（ヘッダー / 軽量版）
+ * 常時アニメーション・blur・追加DOM なし（描画コスト優先）
+ * ============================================================ */
+.hdr-lite::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg, #a855f7, #f43f5e, #06b6d4, #f59e0b, #10b981, #60a5fa);
+  opacity: 0.8;
+}
+
+/* 不透明グラデ上では backdrop-filter の見た目差がほぼ無く、描画負荷だけ大きい */
+.hdr-lite .menu-trigger,
+.hdr-lite .time-badge,
+.hdr-lite .header-action--icon,
+.hdr-lite .lang-dropdown .lang-trigger {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.hdr-lite .time-badge {
+  box-shadow:
+    0 3px 0 rgba(15, 12, 48, 0.5),
+    var(--hdr-inset);
+}
+
+/* ヘッダーボタン：色分けキーキャップ */
+.hdr-lite .header-action--icon,
+.hdr-lite .lang-dropdown .lang-trigger,
+.hdr-lite .menu-trigger {
+  --k-edge: rgba(15, 12, 48, 0.55);
+}
+.hdr-lite .header-action--notif,
+.hdr-lite .header-action--events {
+  --k-edge: #2e2a7a;
+}
+.hdr-lite .header-action--manual {
+  --k-edge: #064e3b;
+}
+.hdr-lite .header-action--ai {
+  --k-edge: #92400e;
+}
+
+.hdr-lite .header-action--icon,
+.hdr-lite .header-action--events,
+.hdr-lite .header-action--ai,
+.hdr-lite .lang-dropdown .lang-trigger,
+.hdr-lite .menu-trigger {
+  box-shadow:
+    0 3px 0 var(--k-edge),
+    var(--hdr-inset);
+}
+
+.hdr-lite .header-action--icon:hover,
+.hdr-lite .header-action--events:hover,
+.hdr-lite .header-action--ai:hover,
+.hdr-lite .lang-dropdown .lang-trigger:hover,
+.hdr-lite .menu-trigger:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--k-edge),
+    var(--hdr-inset);
+}
+
+.hdr-lite .header-action--icon:active,
+.hdr-lite .header-action--events:active,
+.hdr-lite .header-action--ai:active,
+.hdr-lite .lang-dropdown .lang-trigger:active,
+.hdr-lite .menu-trigger:active,
+.hdr-lite .header-action--ai.header-action--ai-active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 var(--k-edge),
+    var(--hdr-inset);
+}
+
+/* ユーザーアバター：立体エッジ */
+.hdr-lite .user-avatar {
+  box-shadow:
+    0 3px 0 rgba(15, 12, 48, 0.55),
+    0 0 0 2px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.hdr-lite .user-dropdown:hover .user-avatar {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hdr-lite .header-action,
+  .hdr-lite .lang-dropdown .lang-trigger,
+  .hdr-lite .user-avatar {
+    transform: none !important;
   }
 }
 </style>

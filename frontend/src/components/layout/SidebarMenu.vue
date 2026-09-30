@@ -1,5 +1,5 @@
 <template>
-  <div class="sidebar-menu">
+  <div class="sidebar-menu sbm-lite">
     <!-- Logo -->
     <div class="logo" @click="goHome">
       <transition name="fade-text">
@@ -43,6 +43,7 @@
           :key="section.code"
           :node="section"
           :is-collapsed="isCollapsed"
+          :class="`sb-root sb-root--${section.code.toLowerCase()}`"
         />
       </el-menu>
     </el-scrollbar>
@@ -120,7 +121,9 @@ const toggleCollapse = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 54px;
+  /* HeaderBar の高さ（48px / 768px 以下 46px）と揃える */
+  height: 48px;
+  flex-shrink: 0;
   gap: 10px;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.15) 100%);
   cursor: pointer;
@@ -743,6 +746,121 @@ const toggleCollapse = () => {
 
 :deep(.el-scrollbar__thumb:hover) {
   background: rgba(255, 255, 255, 0.35);
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D・色分け（サイドバー / 軽量版）
+ * 常時アニメーション・blur・追加DOM なし（描画コスト優先）
+ * ============================================================ */
+.sbm-lite {
+  background:
+    radial-gradient(120% 36% at 0% 0%, rgba(99, 102, 241, 0.2) 0%, transparent 60%),
+    linear-gradient(180deg, #171b36 0%, #222847 50%, #181c37 100%);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+.sbm-lite .logo {
+  position: relative;
+  border-bottom-color: transparent;
+}
+
+.sbm-lite .logo::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #a855f7, #f43f5e, #06b6d4, #f59e0b, #10b981, #60a5fa);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ルートメニュー（ERP/APS/MES/FIN/MASTER/SYSTEM）の色分け */
+.sbm-lite :deep(.sb-root--erp) {
+  --sc: #c084fc;
+  --sc-rgb: 168, 85, 247;
+}
+.sbm-lite :deep(.sb-root--aps) {
+  --sc: #fb7185;
+  --sc-rgb: 244, 63, 94;
+}
+.sbm-lite :deep(.sb-root--mes) {
+  --sc: #22d3ee;
+  --sc-rgb: 6, 182, 212;
+}
+.sbm-lite :deep(.sb-root--fin) {
+  --sc: #fbbf24;
+  --sc-rgb: 245, 158, 11;
+}
+.sbm-lite :deep(.sb-root--master) {
+  --sc: #34d399;
+  --sc-rgb: 16, 185, 129;
+}
+.sbm-lite :deep(.sb-root--system) {
+  --sc: #60a5fa;
+  --sc-rgb: 59, 130, 246;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) > .el-sub-menu.sb-root > .el-sub-menu__title) {
+  border-left-color: var(--sc);
+  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.22) 0%, rgba(var(--sc-rgb), 0.05) 100%) !important;
+  box-shadow:
+    0 3px 0 rgba(8, 10, 28, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) > .el-sub-menu.sb-root > .el-sub-menu__title:hover),
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) > .el-sub-menu.sb-root.is-opened > .el-sub-menu__title) {
+  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.34) 0%, rgba(var(--sc-rgb), 0.1) 100%) !important;
+}
+
+.sbm-lite :deep(.sb-root > .el-sub-menu__title .sidebar-collapsed-entry .el-icon) {
+  color: var(--sc);
+}
+
+.sbm-lite :deep(.sidebar-el-menu > .el-sub-menu.sb-root > .el-sub-menu__list) {
+  box-shadow: inset 2px 0 0 rgba(var(--sc-rgb), 0.45);
+}
+
+/* 選択中リーフ：所属モジュール色のキーキャップ */
+.sbm-lite :deep(.sidebar-el-menu .sb-root .el-menu-item.is-active) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(0, 0, 0, 0.22) 100%),
+    rgb(var(--sc-rgb)) !important;
+  box-shadow:
+    0 3px 0 rgba(8, 10, 28, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.sbm-lite :deep(.sb-root--fin .el-menu-item.menu-item-home.is-active),
+.sbm-lite :deep(.sb-root--fin .el-menu-item.menu-item-home.is-active .el-menu-tooltip__trigger) {
+  color: #fff !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu > .el-menu-item.menu-item-top),
+.sbm-lite :deep(.sidebar-el-menu > .el-menu-item.menu-item-top.is-active) {
+  box-shadow:
+    0 3px 0 rgba(8, 10, 28, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* 折りたたみ時：所属中モジュールのハイライト */
+.sbm-lite :deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu.sb-root > .el-sub-menu__title:hover),
+.sbm-lite :deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu.sb-root.is-active > .el-sub-menu__title) {
+  background: rgba(var(--sc-rgb), 0.2) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--sc-rgb), 0.45) !important;
+}
+
+.sbm-lite .collapse-btn {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 768px) {
+  .logo {
+    height: 46px;
+  }
 }
 </style>
 
