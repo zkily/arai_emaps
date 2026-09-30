@@ -190,10 +190,7 @@ watch(
   flex: 1;
   overflow: auto;
   padding: 0 0px 0px 0px;
-  background:
-    radial-gradient(900px 480px at 100% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
-    radial-gradient(760px 420px at 0% 100%, rgba(6, 182, 212, 0.05) 0%, transparent 60%),
-    linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
 }
 
 /* 页面切换动画 */
