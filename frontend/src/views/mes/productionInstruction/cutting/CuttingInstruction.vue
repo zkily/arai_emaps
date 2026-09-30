@@ -12,20 +12,6 @@
           <!-- <span class="page-header-badge">生産指示</span> -->
           <h1><span class="page-title-mark" aria-hidden="true"></span>切断・面取指示管理</h1>
           <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
-          <div class="header-chips">
-            <span v-if="selectedDateToday" class="header-chip">
-              <el-icon><Calendar /></el-icon>
-              切断 {{ selectedDateToday }}
-            </span>
-            <span v-if="selectedChamferingDateToday" class="header-chip">
-              <el-icon><Calendar /></el-icon>
-              面取 {{ selectedChamferingDateToday }}
-            </span>
-            <span class="header-chip">
-              <el-icon><Document /></el-icon>
-              ロット {{ planListFiltered.length }}件
-            </span>
-          </div>
         </div>
       </div>
       <div class="header-right">

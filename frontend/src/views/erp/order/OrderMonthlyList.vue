@@ -404,7 +404,7 @@
             <span class="cell-num">{{ fmtNum(row.forecast_total_units) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="forecast_diff" :label="t('orderMonthly.tableForecastDiff')" width="90" align="right">
+        <el-table-column prop="forecast_diff" :label="t('orderMonthly.tableForecastDiff')" width="110" align="right">
           <template #default="{ row }">
             <span
               class="cell-num"
@@ -3570,16 +3570,6 @@ onMounted(() => {
   font-weight: 700;
   color: #059669;
   background: rgba(16, 185, 129, 0.08);
-}
-
-.om-modern .data-table .cell-positive::before {
-  content: '▲ ';
-  font-size: 0.75em;
-}
-
-.om-modern .data-table .cell-negative::before {
-  content: '▼ ';
-  font-size: 0.75em;
 }
 
 /* タグ：ソフトカラー */

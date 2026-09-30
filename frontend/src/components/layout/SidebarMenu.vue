@@ -819,8 +819,171 @@ const toggleCollapse = () => {
   color: var(--sc);
 }
 
-.sbm-lite :deep(.sidebar-el-menu > .el-sub-menu.sb-root > .el-sub-menu__list) {
-  box-shadow: inset 2px 0 0 rgba(var(--sc-rgb), 0.45);
+/* ---- 子メニュー：モジュール色統一 + ツリーガイド線（展開時のみ） ----
+ * Element Plus の子リストは ul.el-menu--inline（.el-sub-menu__list は描画されない） */
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) > .sb-root > .el-menu--inline) {
+  margin: -4px 6px 8px 0;
+  padding: 6px 0 4px;
+  border-radius: 0 0 10px 10px;
+  background: rgba(var(--sc-rgb), 0.05);
+}
+
+/* 1階層目グループ（販売・購買・出荷 など） */
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root > .el-menu--inline > .el-sub-menu > .el-sub-menu__title) {
+  width: auto;
+  height: 36px;
+  line-height: 36px;
+  margin: 2px 6px;
+  padding-left: 10px !important;
+  border-left: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(var(--sc-rgb), 0.08) !important;
+  box-shadow: inset 3px 0 0 rgba(var(--sc-rgb), 0.7);
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root > .el-menu--inline > .el-sub-menu > .el-sub-menu__title:hover) {
+  color: #fff !important;
+  background: rgba(var(--sc-rgb), 0.18) !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root > .el-menu--inline > .el-sub-menu.is-opened > .el-sub-menu__title) {
+  color: #fff !important;
+  background: rgba(var(--sc-rgb), 0.15) !important;
+  box-shadow: inset 3px 0 0 var(--sc);
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root > .el-menu--inline > .el-sub-menu > .el-sub-menu__title > .el-icon:not(.el-sub-menu__icon-arrow)) {
+  color: var(--sc);
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root > .el-menu--inline > .el-menu-item) {
+  height: 34px;
+  line-height: 34px;
+  margin: 1px 6px !important;
+  padding-left: 10px !important;
+}
+
+/* 2階層目以降：縦ガイド線 + 統一インデント */
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline) {
+  position: relative;
+  margin-left: 20px;
+  padding: 2px 0 4px !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 12px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(var(--sc-rgb), 0.55) 0%, rgba(var(--sc-rgb), 0.12) 100%);
+  pointer-events: none;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item),
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu > .el-sub-menu__title) {
+  position: relative;
+  width: auto;
+  height: 32px;
+  line-height: 32px;
+  margin: 1px 6px 1px 10px !important;
+  padding-left: 10px !important;
+  border-left: none !important;
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+
+/* 親 span の line-height:1 を継承すると、overflow:hidden のラベルで和文グリフの上下が欠ける */
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu-item .menu-tree-leaf__label),
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-sub-menu__title > span) {
+  line-height: 1.6;
+  padding: 1px 0;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item:not(.menu-item-home):not(.is-active)) {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu > .el-sub-menu__title) {
+  font-weight: 600;
+  color: var(--sc) !important;
+  background: transparent !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item:not(.is-active):hover),
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu > .el-sub-menu__title:hover) {
+  background: rgba(var(--sc-rgb), 0.15) !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu.el-menu:not(.el-menu--collapse) .sb-root .el-menu-item:not(.menu-item-home):not(.is-active):hover) {
+  color: #fff !important;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline .el-menu-item > .el-icon) {
+  font-size: 14px;
+  margin-right: 6px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline .el-menu-item.is-active > .el-icon),
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline .el-menu-item:hover > .el-icon) {
+  color: #fff;
+}
+
+/* ガイド線上のノード：リーフ＝点、サブグループ＝リング */
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item)::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: rgba(var(--sc-rgb), 0.45);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  pointer-events: none;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item:hover)::before {
+  background: var(--sc);
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-menu-item.is-active)::before {
+  background: var(--sc);
+  box-shadow:
+    0 0 0 3px rgba(var(--sc-rgb), 0.3),
+    0 0 8px var(--sc);
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu) {
+  position: relative;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu)::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 13px;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--sc);
+  background: #1b2040;
+  pointer-events: none;
+}
+
+.sbm-lite :deep(.sidebar-el-menu:not(.el-menu--collapse) .sb-root .el-menu--inline .el-menu--inline > .el-sub-menu.is-opened)::before {
+  background: var(--sc);
 }
 
 /* 選択中リーフ：所属モジュール色のキーキャップ */

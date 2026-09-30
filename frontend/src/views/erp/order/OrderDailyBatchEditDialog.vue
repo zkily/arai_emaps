@@ -35,30 +35,6 @@
           <!-- 情報カードエリア -->
           <div class="info-section">
             <div class="stats-cards" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
-              <div class="stat-card stat-card--total">
-                <div class="stat-icon total">
-                  <el-icon>
-                    <List />
-                  </el-icon>
-                </div>
-                <div class="stat-content">
-                  <span class="stat-number">{{ orderDailyList.length }}</span>
-                  <span class="stat-label">{{ t('orderDailyBatchEdit.statTotal') }}</span>
-                </div>
-              </div>
-
-              <div class="stat-card stat-card--changed">
-                <div class="stat-icon changed">
-                  <el-icon>
-                    <Edit />
-                  </el-icon>
-                </div>
-                <div class="stat-content">
-                  <span class="stat-number">{{ changedRows.size }}</span>
-                  <span class="stat-label">{{ t('orderDailyBatchEdit.statChanged') }}</span>
-                </div>
-              </div>
-
               <div class="stat-card stat-card--confirmed">
                 <div class="stat-icon confirmed">
                   <el-icon>
@@ -286,7 +262,7 @@ import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchDailyOrdersByMonthlyOrderId, batchUpdateDailyOrders } from '@/api/order/order'
 import { ElMessage } from 'element-plus'
-import { Edit, Close, List, Check, InfoFilled, Refresh, Printer } from '@element-plus/icons-vue'
+import { Edit, Close, Check, InfoFilled, Refresh, Printer } from '@element-plus/icons-vue'
 import type { OrderDaily } from '@/types/order'
 import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
 import { guardSalesOperation } from '@/utils/salesOperationGuard'

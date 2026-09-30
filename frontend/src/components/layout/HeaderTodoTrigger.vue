@@ -1,7 +1,7 @@
 <template>
   <el-popover
     v-model:visible="popoverVisible"
-    placement="bottom-start"
+    placement="bottom-end"
     :width="popoverWidth"
     trigger="click"
     popper-class="header-todo-popper"
@@ -15,15 +15,14 @@
         :title="todoTooltip"
         :aria-label="todoAriaLabel"
       >
-        <span class="header-todo-trigger__divider" aria-hidden="true" />
         <span class="header-todo-trigger__core" aria-hidden="true">
-          <el-icon class="header-todo-trigger__icon" :size="13"><List /></el-icon>
-          <span
-            v-if="pendingCount > 0"
-            class="header-todo-trigger__count"
-            aria-hidden="true"
-          >{{ pendingBadge }}</span>
+          <el-icon class="header-todo-trigger__icon" :size="16"><List /></el-icon>
         </span>
+        <span
+          v-if="pendingCount > 0"
+          class="header-todo-trigger__count"
+          aria-hidden="true"
+        >{{ pendingBadge }}</span>
       </button>
     </template>
 
@@ -217,96 +216,118 @@ async function commitEdit(id: number) {
 </script>
 
 <style scoped>
+/* HeaderBar の .header-action（36px キーキャップ）と同寸・同構造 */
 .header-todo-trigger {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
+  justify-content: center;
   flex-shrink: 0;
-  color: inherit;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(165, 243, 252, 0.45);
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(34, 211, 238, 0.24) 45%,
+    rgba(8, 51, 68, 0.36) 100%
+  );
+  box-shadow:
+    0 3px 0 #164e63,
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
-.header-todo-trigger__divider {
-  width: 1px;
-  height: 15px;
+.header-todo-trigger:hover {
+  transform: translateY(-2px);
   background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.32) 50%,
-    transparent 100%
+    152deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(103, 232, 249, 0.32) 45%,
+    rgba(8, 51, 68, 0.4) 100%
   );
+  box-shadow:
+    0 5px 0 #164e63,
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.header-todo-trigger:active,
+.header-todo-trigger--active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #164e63,
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.header-todo-trigger:focus-visible {
+  outline: 2px solid rgba(165, 243, 252, 0.9);
+  outline-offset: 2px;
 }
 
 .header-todo-trigger__core {
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(52, 211, 153, 0.22) 55%,
-    rgba(16, 185, 129, 0.18) 100%
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(
+    125% 125% at 28% 18%,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(165, 243, 252, 0.28) 48%,
+    rgba(6, 182, 212, 0.15) 100%
   );
-  border: 1px solid rgba(167, 243, 208, 0.35);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 2px 8px rgba(6, 95, 70, 0.18);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 1px 4px rgba(22, 78, 99, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.header-todo-trigger:hover .header-todo-trigger__core {
+  transform: scale(1.06);
 }
 
 .header-todo-trigger__icon {
-  color: #a7f3d0;
-  filter: drop-shadow(0 1px 1px rgba(6, 78, 59, 0.35));
-}
-
-.header-todo-trigger:hover .header-todo-trigger__core,
-.header-todo-trigger--active .header-todo-trigger__core {
-  transform: translateY(-1px) scale(1.04);
-  border-color: rgba(167, 243, 208, 0.65);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 4px 12px rgba(16, 185, 129, 0.28);
-}
-
-.header-todo-trigger:hover .header-todo-trigger__icon,
-.header-todo-trigger--active .header-todo-trigger__icon {
-  color: #ecfdf5;
+  color: #ecfeff;
+  filter: drop-shadow(0 1px 2px rgba(22, 78, 99, 0.45));
 }
 
 .header-todo-trigger__count {
   position: absolute;
-  top: -7px;
-  right: -9px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: -4px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #6ee7b7 0%, #10b981 52%, #059669 100%);
+  background: linear-gradient(180deg, #67e8f9 0%, #06b6d4 48%, #0891b2 100%);
   color: #fff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow:
-    0 3px 10px rgba(16, 185, 129, 0.4),
-    0 0 0 2px rgba(15, 23, 42, 0.35);
+    0 4px 12px rgba(8, 145, 178, 0.45),
+    0 0 0 2px rgba(15, 23, 42, 0.45);
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-todo-trigger,
+  .header-todo-trigger:hover .header-todo-trigger__core {
+    transform: none;
+  }
 }
 
 .header-todo-panel {

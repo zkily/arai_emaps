@@ -27,7 +27,6 @@
             <span class="weather-emoji" aria-hidden="true">{{ weatherEmoji }}</span>
             <span class="weather-temp">{{ weatherTemp }}</span>
           </span>
-          <HeaderTodoTrigger />
         </div>
       </div>
 
@@ -159,6 +158,8 @@
           </div>
         </el-popover>
 
+        <HeaderTodoTrigger />
+
         <div
           class="header-action header-action--events"
           role="button"
@@ -171,7 +172,6 @@
           <span class="header-events-core" aria-hidden="true">
             <el-icon class="header-events-icon" :size="16"><Calendar /></el-icon>
           </span>
-          <span class="header-events-label">{{ t('common.headerEventsLabel') }}</span>
           <span
             v-if="eventsBadgeCount > 0"
             class="header-events-badge"
@@ -190,7 +190,7 @@
           @keydown.enter.prevent="openManualHome"
         >
           <span class="header-manual-core" aria-hidden="true">
-            <el-icon class="header-manual-icon" :size="17"><Reading /></el-icon>
+            <el-icon class="header-manual-icon" :size="16"><Reading /></el-icon>
           </span>
         </div>
 
@@ -207,7 +207,6 @@
           <span class="header-ai-core" aria-hidden="true">
             <el-icon class="header-ai-icon" :size="16"><MagicStick /></el-icon>
           </span>
-          <span class="header-ai-label">AI</span>
         </div>
 
         <div class="header-divider" aria-hidden="true" />
@@ -995,39 +994,39 @@ const handleCommand = async (command: string) => {
 .header-action--events {
   position: relative;
   flex-shrink: 0;
-  gap: 6px;
-  min-width: auto;
+  width: 36px;
+  min-width: 36px;
   height: 36px;
-  padding: 0 12px 0 8px;
+  padding: 0;
   background: linear-gradient(
     152deg,
     rgba(255, 255, 255, 0.16) 0%,
-    rgba(129, 140, 248, 0.32) 55%,
-    rgba(67, 56, 202, 0.42) 100%
+    rgba(232, 121, 249, 0.3) 55%,
+    rgba(134, 25, 143, 0.42) 100%
   );
-  border: 1px solid rgba(165, 180, 252, 0.55);
+  border: 1px solid rgba(245, 208, 254, 0.5);
   box-shadow:
     var(--hdr-inset),
-    0 2px 12px rgba(79, 70, 229, 0.28);
+    0 2px 12px rgba(192, 38, 211, 0.28);
 }
 
 .header-action--events:hover {
   background: linear-gradient(
     152deg,
     rgba(255, 255, 255, 0.24) 0%,
-    rgba(165, 180, 252, 0.42) 55%,
-    rgba(55, 48, 163, 0.52) 100%
+    rgba(240, 171, 252, 0.42) 55%,
+    rgba(112, 26, 117, 0.52) 100%
   );
-  border-color: rgba(199, 210, 254, 0.75);
+  border-color: rgba(250, 232, 255, 0.75);
   color: #fff;
   transform: translateY(-1px);
   box-shadow:
     var(--hdr-inset),
-    0 4px 16px rgba(99, 102, 241, 0.35);
+    0 4px 16px rgba(217, 70, 239, 0.35);
 }
 
 .header-action--events:focus-visible {
-  outline: 2px solid rgba(165, 180, 252, 0.9);
+  outline: 2px solid rgba(240, 171, 252, 0.9);
   outline-offset: 2px;
 }
 
@@ -1059,27 +1058,19 @@ const handleCommand = async (command: string) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   background: radial-gradient(
     125% 125% at 28% 18%,
     rgba(255, 255, 255, 0.72) 0%,
-    rgba(199, 210, 254, 0.45) 50%,
-    rgba(99, 102, 241, 0.28) 100%
+    rgba(245, 208, 254, 0.45) 50%,
+    rgba(217, 70, 239, 0.28) 100%
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 2px 8px rgba(67, 56, 202, 0.35);
+    0 2px 8px rgba(134, 25, 143, 0.35);
   transition: transform 0.2s ease;
-}
-
-.header-events-label {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #eef2ff;
-  text-shadow: 0 1px 2px rgba(49, 46, 129, 0.45);
 }
 
 .header-action--events:hover .header-events-core {
@@ -1087,13 +1078,13 @@ const handleCommand = async (command: string) => {
 }
 
 .header-events-icon {
-  color: #312e81;
+  color: #701a75;
   filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.35));
 }
 
 .header-action--events:hover .header-events-icon {
-  color: #1e1b4b;
-  filter: drop-shadow(0 0 6px rgba(199, 210, 254, 0.65));
+  color: #4a044e;
+  filter: drop-shadow(0 0 6px rgba(245, 208, 254, 0.65));
 }
 
 .header-action--manual {
@@ -1188,10 +1179,10 @@ const handleCommand = async (command: string) => {
 .header-action--ai {
   position: relative;
   flex-shrink: 0;
-  gap: 6px;
-  min-width: auto;
+  width: 36px;
+  min-width: 36px;
   height: 36px;
-  padding: 0 12px 0 8px;
+  padding: 0;
   background: linear-gradient(
     152deg,
     rgba(255, 251, 235, 0.2) 0%,
@@ -1229,9 +1220,9 @@ const handleCommand = async (command: string) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   background: radial-gradient(
     125% 125% at 28% 18%,
     rgba(255, 255, 255, 0.72) 0%,
@@ -1242,14 +1233,6 @@ const handleCommand = async (command: string) => {
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
     0 2px 8px rgba(180, 83, 9, 0.35);
   transition: transform 0.2s ease;
-}
-
-.header-ai-label {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: #fffbeb;
-  text-shadow: 0 1px 2px rgba(120, 53, 15, 0.45);
 }
 
 .header-action--ai:hover .header-ai-core,
@@ -1441,15 +1424,6 @@ const handleCommand = async (command: string) => {
   .lang-label {
     display: none;
   }
-  .header-ai-label {
-    display: none;
-  }
-  .header-action--ai {
-    min-width: 36px;
-    width: 36px;
-    padding: 0;
-    justify-content: center;
-  }
   .dropdown-arrow {
     display: none;
   }
@@ -1514,9 +1488,11 @@ const handleCommand = async (command: string) => {
 .hdr-lite .menu-trigger {
   --k-edge: rgba(15, 12, 48, 0.55);
 }
-.hdr-lite .header-action--notif,
-.hdr-lite .header-action--events {
+.hdr-lite .header-action--notif {
   --k-edge: #2e2a7a;
+}
+.hdr-lite .header-action--events {
+  --k-edge: #701a75;
 }
 .hdr-lite .header-action--manual {
   --k-edge: #064e3b;
