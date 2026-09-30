@@ -1,5 +1,5 @@
 <template>
-  <div class="tabs-nav">
+  <div class="tabs-nav tbn-modern">
     <!-- 左箭头：内容超出时显示 -->
     <button
       v-show="canScrollLeft"
@@ -19,6 +19,7 @@
           :ref="(el) => setTabRef(tab.path, el)"
           :class="[
             'tab-item',
+            `tab-item--${tabTone(tab.path)}`,
             {
               'is-active': tab.path === tabsStore.activeTab,
               'is-dragging': draggingPath === tab.path,
@@ -155,6 +156,15 @@ const tabTitle = (tab: TabItem) => {
     return labelForPath(tab.path, code)
   }
   return tab.title || tab.path
+}
+
+const TAB_TONES = ['dashboard', 'erp', 'aps', 'mes', 'fin', 'master', 'system'] as const
+
+const tabTone = (path: string) => {
+  const seg = path.split('/')[1] ?? ''
+  if (seg === 'account') return 'system'
+  if (seg === 'operation-manuals') return 'manual'
+  return (TAB_TONES as readonly string[]).includes(seg) ? seg : 'other'
 }
 
 const contextMenuPinned = computed(() => {
@@ -857,6 +867,163 @@ onUnmounted(() => {
   .action-btn {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（タブナビ / command aurora）
+ * ============================================================ */
+.tbn-modern {
+  background:
+    radial-gradient(60% 140% at 0% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+    radial-gradient(50% 140% at 100% 100%, rgba(6, 182, 212, 0.05) 0%, transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.tbn-modern .tab-item--dashboard {
+  --tc: #6366f1;
+}
+.tbn-modern .tab-item--erp {
+  --tc: #a855f7;
+}
+.tbn-modern .tab-item--aps {
+  --tc: #f43f5e;
+}
+.tbn-modern .tab-item--mes {
+  --tc: #06b6d4;
+}
+.tbn-modern .tab-item--fin {
+  --tc: #f59e0b;
+}
+.tbn-modern .tab-item--master {
+  --tc: #10b981;
+}
+.tbn-modern .tab-item--system {
+  --tc: #3b82f6;
+}
+.tbn-modern .tab-item--manual {
+  --tc: #14b8a6;
+}
+.tbn-modern .tab-item--other {
+  --tc: #64748b;
+}
+
+.tbn-modern .tab-item {
+  border-color: color-mix(in srgb, var(--tc) 22%, #e2e8f0);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--tc) 20%, #e2e8f0),
+    inset 0 1px 0 #fff;
+}
+
+.tbn-modern .tab-item .tab-icon {
+  color: var(--tc);
+  opacity: 0.9;
+}
+
+.tbn-modern .tab-item::before {
+  background: var(--tc);
+}
+
+.tbn-modern .tab-item::after {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tc) 10%, transparent) 0%,
+    color-mix(in srgb, var(--tc) 3%, transparent) 100%
+  );
+}
+
+.tbn-modern .tab-item:hover {
+  border-color: color-mix(in srgb, var(--tc) 50%, #e2e8f0);
+  transform: translateY(-2px);
+  box-shadow:
+    0 3px 0 color-mix(in srgb, var(--tc) 38%, #e2e8f0),
+    0 8px 14px -8px color-mix(in srgb, var(--tc) 65%, transparent),
+    inset 0 1px 0 #fff;
+}
+
+.tbn-modern .tab-item:not(.is-active):hover::before {
+  width: calc(100% - 16px);
+  left: 8px;
+}
+
+.tbn-modern .tab-item.is-active {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tc) 90%, #fff) 0%,
+    color-mix(in srgb, var(--tc) 68%, #1e1b4b) 100%
+  );
+  border-color: transparent;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--tc) 50%, #0f172a),
+    0 8px 16px -8px color-mix(in srgb, var(--tc) 75%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.tbn-modern .tab-item.is-active .tab-icon {
+  color: #fff;
+  opacity: 1;
+  animation: tbnIconPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tbn-modern .tab-item.is-active::after {
+  display: block;
+  opacity: 1;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.32) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: tbnSheen 4s ease-in-out infinite;
+}
+
+@keyframes tbnIconPop {
+  0% {
+    transform: scale(0.6) rotate(-25deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes tbnSheen {
+  0%,
+  45% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+.tbn-modern .nav-arrow,
+.tbn-modern .action-btn {
+  box-shadow:
+    0 2px 0 #cbd5e1,
+    inset 0 1px 0 #fff;
+}
+
+.tbn-modern .nav-arrow:hover,
+.tbn-modern .action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 3px 0 #a5b4fc,
+    0 6px 12px -6px rgba(99, 102, 241, 0.5),
+    inset 0 1px 0 #fff;
+}
+
+.tbn-modern .nav-arrow:active,
+.tbn-modern .action-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #a5b4fc;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tbn-modern .tab-item.is-active .tab-icon,
+  .tbn-modern .tab-item.is-active::after {
+    animation: none;
+  }
+  .tbn-modern .tab-item:hover,
+  .tbn-modern .tab-item.is-active {
+    transform: none;
   }
 }
 </style>
