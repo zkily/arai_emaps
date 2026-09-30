@@ -151,7 +151,7 @@
             <span :class="numClass(row.planned_usage)">{{ formatNum(row.planned_usage) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="manual_usage" label="手動使用数" width="92" align="right">
+        <el-table-column prop="manual_usage" label="使用数調整" width="92" align="right">
           <template #default="{ row }">
             <span :class="numClass(row.manual_usage)">{{ formatNum(row.manual_usage) }}</span>
           </template>
@@ -242,7 +242,7 @@ const totalCount = ref(0)
 const STAT_FIELDS: { key: keyof PartStockInquiryRow; label: string }[] = [
   { key: 'current_stock', label: '現在在庫' },
   { key: 'planned_usage', label: '使用数' },
-  { key: 'manual_usage', label: '手動使用数' },
+  { key: 'manual_usage', label: '使用数調整' },
   { key: 'usage_plan_qty', label: '計画使用' },
   { key: 'order_quantity', label: '注文数' }
 ]
@@ -437,7 +437,7 @@ function exportCsv() {
     '初期在庫',
     '現在在庫',
     '使用数',
-    '手動使用数',
+    '使用数調整',
     '計画使用',
     '推移',
     '調整数',

@@ -3,17 +3,17 @@
   part_stock → /api/part/stock
 """
 import logging
-import os
 import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, distinct, update, text, case
+from sqlalchemy import select, func, or_, distinct, update, text
 from collections import defaultdict
 from typing import Optional, Any
 from datetime import date, timedelta
 
+from app.core.config import settings
 from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -249,38 +249,16 @@ def _stock_to_dict(r: PartStock) -> dict:
     }
 
 
-def _stock_to_dict_with_parts_status(r: PartStock, parts_status: Optional[int] = None) -> dict:
-    """一覧用: parts.status を付与（フロントで status=0 を弾くため）"""
+def _stock_to_dict_with_parts_status(
+    r: PartStock, parts_status: Optional[int] = None, master: Optional[dict] = None
+) -> dict:
+    """一覧用: parts.status を付与（フロントで status=0 を弾くため）。master は部品マスタ由来の付加項目"""
     d = _stock_to_dict(r)
     if parts_status is not None:
         d["part_master_status"] = int(parts_status)
+    if master:
+        d.update(master)
     return d
-
-
-async def _summarize_stock_query(db: AsyncSession, q) -> dict:
-    """一覧と同じ絞り込み条件での全件集計（統計カード用。ページングの影響を受けない）"""
-    sq = q.subquery()
-    ppb = func.coalesce(func.nullif(sq.c.pieces_per_bundle, 0), 1)
-    order_qty = case((sq.c.order_quantity > 0, sq.c.order_quantity), else_=0)
-    agg = select(
-        func.count(distinct(sq.c.part_cd)),
-        func.coalesce(func.sum(sq.c.current_stock), 0),
-        func.avg(sq.c.unit_price),
-        func.coalesce(
-            func.sum(func.coalesce(sq.c.planned_usage, 0) + func.coalesce(sq.c.manual_usage, 0)), 0
-        ),
-        func.coalesce(func.sum(order_qty), 0),
-        func.coalesce(func.sum(order_qty * ppb * func.coalesce(sq.c.unit_price, 0)), 0),
-    )
-    row = (await db.execute(agg)).one()
-    return {
-        "part_count": int(row[0] or 0),
-        "total_current_stock": int(row[1] or 0),
-        "avg_unit_price": float(row[2] or 0),
-        "total_usage": int(row[3] or 0),
-        "total_order_quantity": int(row[4] or 0),
-        "total_order_amount": float(row[5] or 0),
-    }
 
 
 @router.get("")
@@ -303,7 +281,13 @@ async def list_part_stocks(
         # part_stock と parts の照合用 COLLATE
         join_cond = PartStock.part_cd.collate("utf8mb4_unicode_ci") == PartMaster.part_cd.collate("utf8mb4_unicode_ci")
         q = (
-            select(PartStock, PartMaster.status)
+            select(
+                PartStock,
+                PartMaster.status,
+                PartMaster.part_material,
+                PartMaster.capacity_qty,
+                PartMaster.settlement_type,
+            )
             .join(PartMaster, join_cond)
             .where(PartMaster.status != 0)
         )
@@ -353,14 +337,20 @@ async def list_part_stocks(
 
         total_q = select(func.count()).select_from(q.subquery())
         total = (await db.execute(total_q)).scalar() or 0
-        summary = await _summarize_stock_query(db, q)
 
         q = q.order_by(PartStock.part_name.asc(), PartStock.part_cd, PartStock.date.asc())
         q = q.offset((page - 1) * pageSize).limit(pageSize)
         raw_rows = (await db.execute(q)).all()
-        list_out = [_stock_to_dict_with_parts_status(row[0], row[1]) for row in raw_rows]
+        list_out = [
+            _stock_to_dict_with_parts_status(
+                row[0],
+                row[1],
+                {"part_material": row[2], "capacity_qty": row[3], "settlement_type": row[4]},
+            )
+            for row in raw_rows
+        ]
 
-        return {"success": True, "data": {"list": list_out, "total": total, "summary": summary}}
+        return {"success": True, "data": {"list": list_out, "total": total}}
     except HTTPException:
         raise
     except Exception as e:
@@ -1074,44 +1064,38 @@ async def delete_part_stock(
     return {"success": True, "message": "削除しました"}
 
 
-# 丸一注文書PDF（フロントで画像化したPDF）保存先 — 環境変数 MARUICHI_ORDER_PDF_DIR で上書き可
-_MARUICHI_ORDER_PDF_DIR = Path(
-    os.environ.get(
-        "MARUICHI_ORDER_PDF_DIR",
-        r"\\192.168.1.200\99_電子取引データ\4生産管理部\1.丸一注文書",
-    )
-)
-_MARUICHI_ORDER_PDF_NAME_RE = re.compile(r"^\d{8}注文書_丸一鋼管\.pdf$")
+# 部品注文書PDF（フロントで画像化したPDF）: YYYYMM注文書_<仕入先>.pdf（月単位）
+_PART_ORDER_PDF_NAME_RE = re.compile(r"^\d{6}(\d{2})?注文書_[^\\/:*?\"<>|]{1,80}\.pdf$")
 
 
-def _validate_maruichi_order_pdf_filename(name: str) -> str:
-    if not name or not isinstance(name, str):
-        raise HTTPException(status_code=400, detail="ファイル名が不正です")
-    base = name.strip()
-    if "/" in base or "\\" in base or ".." in base:
-        raise HTTPException(status_code=400, detail="ファイル名が不正です")
-    if not _MARUICHI_ORDER_PDF_NAME_RE.match(base):
+def _validate_part_order_pdf_filename(name: str) -> str:
+    base = (name or "").strip()
+    if ".." in base or not _PART_ORDER_PDF_NAME_RE.match(base):
         raise HTTPException(
             status_code=400,
-            detail="ファイル名は YYYYMMDD注文書_丸一鋼管.pdf 形式である必要があります",
+            detail="ファイル名は YYYYMM注文書_仕入先名.pdf 形式である必要があります",
         )
     return base
 
 
-@router.post("/maruichi-order-pdf")
-async def save_maruichi_part_order_pdf(
+@router.post("/order-pdf")
+async def save_part_order_pdf(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_purchase_operation("edit")),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
-    """丸一注文書PDFを共有フォルダへ保存する。同名ファイルは上書き。"""
+    """部品注文書PDFを PART_ORDER_PDF_DIR へ保存する。同名ファイルは上書き。"""
     _ = current_user
-    safe_name = _validate_maruichi_order_pdf_filename(file.filename or "")
+    dir_raw = (settings.PART_ORDER_PDF_DIR or "").strip()
+    if not dir_raw:
+        return {"success": False, "skipped": True, "message": "PDF保存先（PART_ORDER_PDF_DIR）が未設定です"}
+    safe_name = _validate_part_order_pdf_filename(file.filename or "")
+    pdf_dir = Path(dir_raw)
     try:
-        _MARUICHI_ORDER_PDF_DIR.mkdir(parents=True, exist_ok=True)
+        pdf_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        logger.exception("丸一注文書PDF: フォルダ作成・参照に失敗: %s", e)
+        logger.exception("部品注文書PDF: フォルダ作成・参照に失敗: %s", e)
         raise HTTPException(status_code=500, detail=f"保存フォルダにアクセスできません: {e}") from e
-    dest = _MARUICHI_ORDER_PDF_DIR / safe_name
+    dest = pdf_dir / safe_name
     try:
         content = await file.read()
         if len(content) < 8 or not content.startswith(b"%PDF"):
@@ -1120,6 +1104,6 @@ async def save_maruichi_part_order_pdf(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("丸一注文書PDF保存失敗: %s", e)
+        logger.exception("部品注文書PDF保存失敗: %s", e)
         raise HTTPException(status_code=500, detail=f"保存に失敗しました: {e}") from e
     return {"success": True, "message": "保存しました", "path": str(dest)}

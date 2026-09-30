@@ -41,83 +41,6 @@
       </div>
     </div>
 
-    <!-- 統計カード -->
-    <div class="stats-container">
-      <div class="stats-grid">
-        <!-- 第一行統計 -->
-        <div class="stat-card primary">
-          <div class="stat-icon">
-            <el-icon><Goods /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ formatNumber(stats.totalParts) }}</div>
-            <div class="stat-label">総部品種類数</div>
-          </div>
-        </div>
-
-        <div class="stat-card info">
-          <div class="stat-icon">
-            <el-icon><Box /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalCurrentStock) }">
-              {{ formatNumber(stats.totalCurrentStock) }}<span class="unit">束</span>
-            </div>
-            <div class="stat-label">在庫数合計</div>
-          </div>
-        </div>
-
-        <div class="stat-card warning">
-          <div class="stat-icon">
-            <el-icon><Coin /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">
-              {{ formatCurrency(Number((stats.averageUnitPrice || 0).toFixed(2))) }}
-            </div>
-            <div class="stat-label">平均単価</div>
-          </div>
-        </div>
-
-        <div class="stat-card success">
-          <div class="stat-icon">
-            <el-icon><TrendCharts /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalUsageQuantity) }">
-              {{ formatNumber(stats.totalUsageQuantity) }}
-            </div>
-            <div class="stat-label">使用数合計</div>
-          </div>
-        </div>
-
-        <!-- 第二行統計 -->
-        <div class="stat-card order">
-          <div class="stat-icon">
-            <el-icon><ShoppingCart /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">
-              {{ formatNumber(stats.totalOrderQuantity) }}
-            </div>
-            <div class="stat-label">注文本数</div>
-          </div>
-        </div>
-
-        <div class="stat-card amount">
-          <div class="stat-icon">
-            <el-icon><Money /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value" :class="{ 'is-negative': isNegative(stats.totalOrderValue) }">
-              {{ formatCurrency(stats.totalOrderValue || 0) }}
-            </div>
-            <div class="stat-label">参考注文金額</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 検索とフィルター区域 -->
     <div class="search-section">
       <div class="search-container">
@@ -269,10 +192,6 @@
                 発注提案
               </el-button>
             </el-badge>
-            <el-button type="success" @click="handleAddManualOrder" class="add-btn">
-              <el-icon><Plus /></el-icon>
-              部品注文追加
-            </el-button>
             <el-button type="primary" @click="handlePrintOrder" class="print-btn">
               <el-icon><Printer /></el-icon>
               注文書発行
@@ -344,7 +263,7 @@
               </template>
             </el-table-column>
             <el-table-column
-              label="手動使用数"
+              label="使用数調整"
               width="140"
               align="center"
               class-name="usage-quantity-column"
@@ -353,13 +272,13 @@
                 <el-input-number
                   :key="`manual-usage-${row.id}`"
                   :model-value="emptyIfZero(row.manual_usage)"
-                  :min="0"
+                  :min="-999999"
                   :max="999999"
                   :precision="0"
                   :controls="false"
                   :value-on-clear="null"
                   size="small"
-                  class="usage-quantity-input"
+                  :class="['usage-quantity-input', { 'is-negative': isNegative(row.manual_usage) }]"
                   @change="(val) => handleManualUsageChange(row, val)"
                   @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
@@ -474,7 +393,7 @@
               </template>
             </el-table-column>
             <el-table-column
-              label="手動使用数"
+              label="使用数調整"
               width="140"
               align="center"
               class-name="usage-quantity-column"
@@ -483,13 +402,13 @@
                 <el-input-number
                   :key="`manual-usage-${row.id}`"
                   :model-value="emptyIfZero(row.manual_usage)"
-                  :min="0"
+                  :min="-999999"
                   :max="999999"
                   :precision="0"
                   :controls="false"
                   :value-on-clear="null"
                   size="small"
-                  class="usage-quantity-input"
+                  :class="['usage-quantity-input', { 'is-negative': isNegative(row.manual_usage) }]"
                   @change="(val) => handleManualUsageChange(row, val)"
                   @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
@@ -556,16 +475,17 @@
             />
             <el-table-column prop="standard_spec" label="規格" width="150" show-overflow-tooltip />
             <el-table-column
-              prop="current_stock"
-              label="現在在庫"
+              prop="stock_trend"
+              label="在庫推移"
               width="100"
               align="center"
-              class-name="current-stock-column"
+              class-name="usage-quantity-column"
             >
               <template #default="{ row }">
-                <span :class="{ 'negative-number': row.current_stock < 0 }">{{
-                  formatValue(row.current_stock)
-                }}</span>
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.stock_trend) }"
+                >{{ formatValue(row.stock_trend) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -846,268 +766,191 @@
       </template>
     </el-dialog>
 
-    <!-- 手入力部品注文ダイアログ -->
+    <!-- 注文書発行ダイアログ（納入日×仕入先ごとに発行） -->
     <el-dialog
-      v-model="manualOrderDialogVisible"
-      title="部品注文追加"
-      width="640px"
+      v-model="printConfirmDialogVisible"
+      width="960px"
+      align-center
       :close-on-click-modal="false"
-      class="manual-order-dialog manual-order-dialog--compact"
+      :show-close="false"
+      class="order-sheet-dialog"
     >
-      <div class="manual-order-content manual-order-content--compact">
-        <div class="manual-order-header-compact">
-          <div class="manual-order-header-compact__icon">
-            <el-icon><Plus /></el-icon>
+      <template #header="{ close, titleId }">
+        <div class="osd-head">
+          <div class="osd-head__icon"><el-icon><Printer /></el-icon></div>
+          <div class="osd-head__text">
+            <h3 :id="titleId" class="osd-head__title">注文書発行</h3>
+            <p class="osd-head__sub">対象月・仕入先ごとに注文書を作成し、印刷・PDF保存します</p>
           </div>
-          <div class="manual-order-header-compact__text">
-            <h3>部品注文追加</h3>
-            <p>新しい部品注文を手動で入力</p>
+          <button type="button" class="osd-close" aria-label="閉じる" @click="close">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+      </template>
+
+      <div class="osd-body">
+        <div class="osd-target">
+          <div class="osd-field">
+            <label class="osd-label">対象月</label>
+            <el-date-picker
+              v-model="printForm.month"
+              type="month"
+              format="YYYY年MM月"
+              value-format="YYYY-MM"
+              :clearable="false"
+              size="small"
+              style="width: 140px"
+              @change="loadPrintOrders"
+            />
+          </div>
+          <div class="osd-field">
+            <label class="osd-label">納入期間</label>
+            <span class="osd-period">{{ printPeriod.start }} ～ {{ printPeriod.end }}</span>
+          </div>
+          <div class="osd-field osd-field--grow">
+            <label class="osd-label">仕入先（画面の絞り込み）</label>
+            <el-select
+              v-model="printForm.supplier"
+              size="small"
+              placeholder="仕入先を選択"
+              :loading="printLoading"
+              :disabled="printSupplierGroups.length <= 1"
+              @change="onPrintSupplierChange"
+            >
+              <el-option
+                v-for="g in printSupplierGroups"
+                :key="g.supplier"
+                :label="`${g.supplier}（${g.items.length}件）`"
+                :value="g.supplier"
+              />
+            </el-select>
           </div>
         </div>
 
-        <el-form
-          :model="manualOrderForm"
-          :rules="manualOrderRules"
-          ref="manualOrderFormRef"
-          label-position="top"
-          label-width="auto"
-          class="manual-order-form manual-order-form--compact"
-        >
-          <div class="manual-order-grid manual-order-grid--main">
-            <el-form-item label="日付" prop="date" class="manual-order-field">
-              <el-date-picker
-                v-model="manualOrderForm.date"
-                type="date"
-                placeholder="日付を選択"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                class="manual-order-input"
-                size="default"
-              />
-            </el-form-item>
-            <el-form-item label="部品" prop="part_cd" class="manual-order-field manual-order-field--span2">
-              <el-select
-                v-model="manualOrderForm.part_cd"
-                placeholder="部品を選択"
-                filterable
-                :loading="partSearchLoading"
-                @change="handlePartChange"
-                class="manual-order-input"
-                size="default"
-              >
-                <el-option
-                  v-for="material in partOptions"
-                  :key="material.part_cd"
-                  :label="`${material.part_cd} - ${material.part_name}`"
-                  :value="material.part_cd"
-                  :data-material="material"
-                />
-              </el-select>
-            </el-form-item>
-          </div>
-
-          <div class="manual-order-grid manual-order-grid--order">
-            <el-form-item label="注文本数" prop="order_quantity" class="manual-order-field">
-              <el-input-number
-                v-model="manualOrderForm.order_quantity"
-                :min="0"
-                :max="999999"
-                :precision="0"
-                :controls="false"
-                placeholder="本数"
-                class="manual-order-input"
-                size="default"
-              />
-            </el-form-item>
-            <el-form-item label="備考" class="manual-order-field manual-order-field--full">
-              <el-input
-                v-model="manualOrderForm.remarks"
-                type="textarea"
-                :rows="2"
-                placeholder="備考（任意）"
-                class="manual-order-input"
-                size="default"
-              />
-            </el-form-item>
-          </div>
-
-          <div class="manual-order-detail" v-if="selectedPart">
-            <div class="manual-order-detail__title">
-              <el-icon><InfoFilled /></el-icon>
-              <span>部品詳細</span>
-              <span class="manual-order-detail__summary" v-if="calculatedAmount > 0">
-                参考金額 {{ formatCurrency(calculatedAmount) }}
-              </span>
+        <div class="osd-grid">
+          <div class="osd-section">
+            <div class="osd-section__title"><el-icon><User /></el-icon>宛先</div>
+            <div class="osd-field">
+              <label class="osd-label">会社名</label>
+              <el-input v-model="printForm.recipientCompany" size="small" placeholder="〇〇株式会社 御中" />
             </div>
-            <div class="manual-order-detail__grid">
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">部品CD</span>
-                <span class="manual-order-detail__value">{{ selectedPart.part_cd || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">部品名</span>
-                <span class="manual-order-detail__value">{{ selectedPart.part_name || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">仕入先</span>
-                <span class="manual-order-detail__value">{{ selectedPart.supplier_name || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">規格</span>
-                <span class="manual-order-detail__value">{{ selectedPart.standard_spec || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">単価</span>
-                <span class="manual-order-detail__value">{{ formatCurrency(selectedPart.unit_price || 0) }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">束本数</span>
-                <span class="manual-order-detail__value">{{ selectedPart.pieces_per_bundle ?? '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">単位</span>
-                <span class="manual-order-detail__value">{{ selectedPart.unit || '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">リードタイム</span>
-                <span class="manual-order-detail__value">{{ selectedPart.lead_time ?? '—' }}<template v-if="selectedPart.lead_time != null">日</template></span>
-              </div>
+            <div class="osd-field">
+              <label class="osd-label">担当者</label>
+              <el-input v-model="printForm.recipientPersons" size="small" placeholder="担当者名（任意）" />
             </div>
           </div>
-        </el-form>
+          <div class="osd-section">
+            <div class="osd-section__title"><el-icon><EditPen /></el-icon>発行情報</div>
+            <div class="osd-row">
+              <div v-for="role in ORDER_SHEET_PERSON_ROLES" :key="role.key" class="osd-field">
+                <label class="osd-label">{{ role.label }}</label>
+                <el-select
+                  v-model="printForm[role.key]"
+                  size="small"
+                  filterable
+                  allow-create
+                  default-first-option
+                  clearable
+                  :reserve-keyword="false"
+                  placeholder="選択 または 入力して Enter で追加"
+                  popper-class="osd-person-popper"
+                  @change="(v: string) => onOrderSheetPersonChange(role.key, v)"
+                >
+                  <el-option
+                    v-for="name in orderSheetPeople[role.key]"
+                    :key="name"
+                    :label="name"
+                    :value="name"
+                  >
+                    <span class="osd-person-option">
+                      <span>{{ name }}</span>
+                      <el-icon
+                        class="osd-person-option__del"
+                        title="候補から削除"
+                        @click.stop="removeOrderSheetPerson(role.key, name)"
+                      >
+                        <Close />
+                      </el-icon>
+                    </span>
+                  </el-option>
+                </el-select>
+              </div>
+            </div>
+            <div class="osd-field">
+              <label class="osd-label">納入場所</label>
+              <el-input v-model="printForm.deliveryPlace" size="small" placeholder="例：部品置場（任意）" />
+            </div>
+          </div>
+        </div>
+
+        <div class="osd-section">
+          <div class="osd-section__title">
+            <el-icon><List /></el-icon>明細プレビュー
+            <span v-if="printItems.length" class="osd-section__meta">
+              {{ printItems.length }}件 ／ 注文数計 {{ formatNumber(printTotals.qty) }} ／ 合計 {{ formatCurrency(printTotals.amount) }}
+            </span>
+            <span v-if="printSheetInfo" class="osd-section__meta osd-section__meta--sheet">
+              注文書：{{ printSheetInfo.parts }}品目 ／ A4横 {{ printSheetInfo.pages }}ページ{{
+                printSheetInfo.tierCount > 1 ? `（${printSheetInfo.tierCount}段表示）` : ''
+              }}
+            </span>
+          </div>
+          <el-table
+            v-loading="printLoading"
+            :data="printItems"
+            size="small"
+            max-height="230"
+            class="osd-table"
+            empty-text="対象の注文がありません"
+          >
+            <el-table-column type="index" label="No" width="48" align="center" />
+            <el-table-column prop="date" label="納入日" width="96" align="center" />
+            <el-table-column prop="part_name" label="部品名" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="standard_spec" label="規格" width="100" show-overflow-tooltip />
+            <el-table-column prop="part_material" label="材料" width="90" show-overflow-tooltip />
+            <el-table-column label="収容数" width="70" align="right">
+              <template #default="{ row }">{{ row.capacity_qty ? formatNumber(row.capacity_qty) : '' }}</template>
+            </el-table-column>
+            <el-table-column prop="settlement_type" label="区分" width="80" align="center" />
+            <el-table-column label="注文数" width="80" align="right">
+              <template #default="{ row }">{{ formatNumber(row.order_quantity) }}</template>
+            </el-table-column>
+            <el-table-column label="単価" width="90" align="right">
+              <template #default="{ row }">{{ formatCurrency(Number(row.unit_price) || 0) }}</template>
+            </el-table-column>
+            <el-table-column label="金額" width="110" align="right">
+              <template #default="{ row }">{{ formatCurrency(orderSheetAmount(row)) }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <div class="osd-section">
+          <div class="osd-section__title"><el-icon><InfoFilled /></el-icon>備考・注意事項</div>
+          <div class="osd-notes">
+            <el-input v-model="printForm.note1" type="textarea" :rows="2" size="small" />
+            <el-input v-model="printForm.note2" type="textarea" :rows="2" size="small" />
+          </div>
+        </div>
       </div>
 
       <template #footer>
-        <div class="manual-order-footer manual-order-footer--compact">
-          <el-button @click="handleCancelManualOrder" size="default" class="manual-order-btn manual-order-btn--cancel">
-            <el-icon><Close /></el-icon>
-            キャンセル
-          </el-button>
+        <div class="osd-footer">
+          <span v-if="printFileName" class="osd-footer__file">
+            <el-icon><Document /></el-icon>{{ printFileName }}
+          </span>
+          <el-button size="small" @click="printConfirmDialogVisible = false">キャンセル</el-button>
           <el-button
             type="primary"
-            @click="handleConfirmManualOrder"
-            :loading="manualOrderLoading"
-            size="default"
-            class="manual-order-btn manual-order-btn--confirm"
-          >
-            <el-icon><Check /></el-icon>
-            登録
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <!-- 印刷確認ダイアログ -->
-    <el-dialog
-      v-model="printConfirmDialogVisible"
-      width="650px"
-      :close-on-click-modal="false"
-      :show-close="true"
-      class="print-confirm-dialog"
-    >
-      <template #header>
-        <div class="dialog-header-with-button">
-          <span class="dialog-title">注文書印刷確認</span>
-          <el-button
-            type="primary"
-            @click="confirmPrint"
-            class="confirm-btn-header"
             size="small"
+            class="osd-footer__print"
             :loading="printPdfSaving"
+            :disabled="!printItems.length"
+            @click="confirmPrint"
           >
-            <el-icon><Printer /></el-icon>
-            印刷実行
+            <el-icon><Printer /></el-icon>印刷・PDF保存
           </el-button>
         </div>
       </template>
-      <div class="print-confirm-content-compact">
-        <div class="form-sections-compact">
-          <div class="form-section-compact">
-            <div class="section-header-compact">
-              <el-icon class="section-icon"><User /></el-icon>
-              <span class="section-title">受注先情報</span>
-            </div>
-            <div class="form-fields-compact">
-              <div class="form-field-row">
-                <label class="field-label">受注先会社名</label>
-                <el-input
-                  v-model="printForm.recipientCompany"
-                  placeholder="丸一鋼管株式会社 御中"
-                  class="form-input-compact"
-                  size="small"
-                />
-              </div>
-              <div class="form-field-row">
-                <label class="field-label">受注先担当者</label>
-                <el-input
-                  v-model="printForm.recipientPersons"
-                  placeholder="鈴木様 村松様 只井様"
-                  class="form-input-compact"
-                  size="small"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="form-section-compact">
-            <div class="section-header-compact">
-              <el-icon class="section-icon"><EditPen /></el-icon>
-              <span class="section-title">承認・発行情報</span>
-            </div>
-            <div class="form-fields-compact">
-              <div class="form-field-row">
-                <label class="field-label">承認者</label>
-                <el-input
-                  v-model="printForm.approver"
-                  placeholder="篠田"
-                  class="form-input-compact"
-                  size="small"
-                />
-              </div>
-              <div class="form-field-row">
-                <label class="field-label">発行者</label>
-                <el-input
-                  v-model="printForm.issuer"
-                  placeholder="趙"
-                  class="form-input-compact"
-                  size="small"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="form-section-compact">
-            <div class="section-header-compact">
-              <el-icon class="section-icon"><Box /></el-icon>
-              <span class="section-title">備考・注意事項</span>
-            </div>
-            <div class="form-fields-compact">
-              <div class="form-field-row">
-                <label class="field-label">備考1</label>
-                <el-input
-                  v-model="printForm.note1"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="支払期日には法定税率による消費税額及び地方消費税分を加算して支払います。"
-                  class="form-textarea-compact"
-                  size="small"
-                />
-              </div>
-              <div class="form-field-row">
-                <label class="field-label">備考2</label>
-                <el-input
-                  v-model="printForm.note2"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="支払期日・支払方法・検査完了期日・有償支給原材料代金の決済期日及び方法については、令和8年7月1日の「支払方法等について」によります。"
-                  class="form-textarea-compact"
-                  size="small"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </el-dialog>
 
     <!-- 発注提案ダイアログ -->
@@ -1249,10 +1092,44 @@
       v-model="chartDrawerVisible"
       size="62%"
       class="part-chart-drawer"
-      :title="chartPart ? `${chartPart.part_name}（${chartPart.part_cd}）` : '在庫推移'"
+      :show-close="false"
     >
-      <div class="part-chart">
-        <div class="part-chart__toolbar">
+      <template #header="{ close, titleId }">
+        <div class="pcd-head">
+          <div class="pcd-head__main">
+            <div class="pcd-head__icon"><el-icon><DataLine /></el-icon></div>
+            <div class="pcd-head__text">
+              <div class="pcd-head__eyebrow">在庫推移チャート</div>
+              <h3 :id="titleId" class="pcd-head__title">{{ chartPart?.part_name || '在庫推移' }}</h3>
+              <div class="pcd-head__chips">
+                <span v-if="chartPart?.part_cd" class="pcd-chip pcd-chip--code">{{ chartPart.part_cd }}</span>
+                <span class="pcd-chip">
+                  <el-icon><Shop /></el-icon>{{ chartPart?.supplier_name || '仕入先未設定' }}
+                </span>
+                <span class="pcd-chip">
+                  <el-icon><Timer /></el-icon>LT {{ chartKpis.leadTime }} 日
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="pcd-head__side">
+            <span
+              v-if="chartDays.length"
+              :class="['pcd-status', chartKpis.shortageDate ? 'is-danger' : 'is-safe']"
+            >
+              <i class="pcd-status__dot" />
+              {{ chartKpis.shortageDate ? '欠品予測あり' : '在庫安定' }}
+            </span>
+            <button type="button" class="pcd-close" aria-label="閉じる" @click="close">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <div class="pcd-body">
+        <div class="pcd-toolbar">
+          <div class="pcd-toolbar__label"><el-icon><Calendar /></el-icon>表示期間</div>
           <el-date-picker
             v-model="chartRange"
             type="daterange"
@@ -1263,54 +1140,103 @@
             value-format="YYYY-MM-DD"
             :clearable="false"
             size="small"
-            style="width: 240px"
-            @change="loadPartChart"
+            class="pcd-toolbar__range"
+            @change="onChartRangeChange"
           />
-          <el-radio-group v-model="chartPreset" size="small" @change="applyChartPreset">
-            <el-radio-button label="short" value="short">前1週〜後2週</el-radio-button>
-            <el-radio-button label="mid" value="mid">前2週〜後1ヶ月</el-radio-button>
-            <el-radio-button label="long" value="long">前1ヶ月〜後3ヶ月</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div class="part-chart__kpis">
-          <div class="part-chart__kpi">
-            <span class="part-chart__kpi-label">仕入先</span>
-            <span class="part-chart__kpi-value">{{ chartPart?.supplier_name || '—' }}</span>
+          <div class="pcd-month">
+            <button type="button" class="pcd-month__btn" @click="shiftChartMonth(-1)">
+              <el-icon><ArrowLeft /></el-icon>前月
+            </button>
+            <button
+              type="button"
+              :class="['pcd-month__btn', 'pcd-month__btn--current', { 'is-active': chartMonthOffset !== null }]"
+              @click="shiftChartMonth(0)"
+            >
+              {{ chartMonthOffset !== null ? chartMonthLabel : '今月' }}
+            </button>
+            <button type="button" class="pcd-month__btn" @click="shiftChartMonth(1)">
+              次月<el-icon><ArrowRight /></el-icon>
+            </button>
           </div>
-          <div class="part-chart__kpi">
-            <span class="part-chart__kpi-label">リードタイム</span>
-            <span class="part-chart__kpi-value">{{ chartKpis.leadTime }} 日</span>
-          </div>
-          <div class="part-chart__kpi">
-            <span class="part-chart__kpi-label">期間内 最小在庫推移</span>
-            <span class="part-chart__kpi-value" :class="{ 'negative-number': chartKpis.minTrend < 0 }">
-              {{ formatNumber(chartKpis.minTrend) }}
-              <small v-if="chartKpis.minTrendDate">（{{ chartKpis.minTrendDate }}）</small>
-            </span>
-          </div>
-          <div class="part-chart__kpi">
-            <span class="part-chart__kpi-label">欠品予定日</span>
-            <span class="part-chart__kpi-value" :class="{ 'negative-number': !!chartKpis.shortageDate }">
-              {{ chartKpis.shortageDate || 'なし' }}
-            </span>
-          </div>
-          <div class="part-chart__kpi">
-            <span class="part-chart__kpi-label">期間内 使用数／注文本数</span>
-            <span class="part-chart__kpi-value">
-              {{ formatNumber(chartKpis.totalUsage) }} ／ {{ formatNumber(chartKpis.totalOrder) }}
-            </span>
+          <div class="pcd-segment">
+            <button
+              v-for="p in chartPresetOptions"
+              :key="p.value"
+              type="button"
+              :class="['pcd-segment__item', { 'is-active': chartPreset === p.value }]"
+              @click="chartPreset = p.value; chartMonthOffset = null; applyChartPreset()"
+            >
+              {{ p.label }}
+            </button>
           </div>
         </div>
 
-        <div v-loading="chartLoading" class="part-chart__canvas">
-          <ChartWrapper
-            v-if="chartDays.length"
-            :data="chartData"
-            :options="chartOptions"
-            height="420px"
-          />
-          <el-empty v-else-if="!chartLoading" description="期間内のデータがありません" />
+        <div class="pcd-kpis">
+          <div :class="['pcd-kpi', chartKpis.minTrend < 0 ? 'pcd-kpi--rose' : 'pcd-kpi--violet']">
+            <div class="pcd-kpi__icon"><el-icon><DataLine /></el-icon></div>
+            <div class="pcd-kpi__body">
+              <div class="pcd-kpi__label">最小在庫推移</div>
+              <div class="pcd-kpi__value" :class="{ 'is-negative': chartKpis.minTrend < 0 }">
+                {{ formatNumber(chartKpis.minTrend) }}
+              </div>
+              <div class="pcd-kpi__sub">{{ chartKpis.minTrendDate || '—' }}</div>
+            </div>
+          </div>
+          <div :class="['pcd-kpi', chartKpis.shortageDate ? 'pcd-kpi--rose' : 'pcd-kpi--emerald']">
+            <div class="pcd-kpi__icon">
+              <el-icon>
+                <WarningFilled v-if="chartKpis.shortageDate" />
+                <CircleCheckFilled v-else />
+              </el-icon>
+            </div>
+            <div class="pcd-kpi__body">
+              <div class="pcd-kpi__label">欠品予定日</div>
+              <div class="pcd-kpi__value" :class="{ 'is-negative': !!chartKpis.shortageDate }">
+                {{ chartKpis.shortageDate ? chartKpis.shortageDate.slice(5).replace('-', '/') : 'なし' }}
+              </div>
+              <div class="pcd-kpi__sub">{{ chartKpis.shortageDate ? '在庫推移がマイナス' : '期間内は欠品なし' }}</div>
+            </div>
+          </div>
+          <div class="pcd-kpi pcd-kpi--sky">
+            <div class="pcd-kpi__icon"><el-icon><TrendCharts /></el-icon></div>
+            <div class="pcd-kpi__body">
+              <div class="pcd-kpi__label">期間内 使用数</div>
+              <div class="pcd-kpi__value" :class="{ 'is-negative': chartKpis.totalUsage < 0 }">
+                {{ formatNumber(chartKpis.totalUsage) }}
+              </div>
+              <div class="pcd-kpi__sub">実績＋調整</div>
+            </div>
+          </div>
+          <div class="pcd-kpi pcd-kpi--amber">
+            <div class="pcd-kpi__icon"><el-icon><ShoppingCart /></el-icon></div>
+            <div class="pcd-kpi__body">
+              <div class="pcd-kpi__label">期間内 注文本数</div>
+              <div class="pcd-kpi__value">{{ formatNumber(chartKpis.totalOrder) }}</div>
+              <div class="pcd-kpi__sub">発注済み合計</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pcd-chart">
+          <div class="pcd-chart__head">
+            <span class="pcd-chart__title">日別推移</span>
+            <div class="pcd-chart__tools">
+              <span class="pcd-chart__hint">左軸：在庫 ／ 右軸：数量</span>
+              <label class="pcd-chart__switch">
+                <el-switch v-model="chartShowValues" size="small" />
+                <span>数値表示</span>
+              </label>
+            </div>
+          </div>
+          <div v-loading="chartLoading" class="pcd-chart__canvas">
+            <ChartWrapper
+              v-if="chartDays.length"
+              :data="chartData"
+              :options="chartOptions"
+              height="400px"
+            />
+            <el-empty v-else-if="!chartLoading" description="期間内のデータがありません" />
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -1324,7 +1250,6 @@ import {
   ShoppingCart,
   Refresh,
   Box,
-  Money,
   Search,
   Operation,
   DocumentAdd,
@@ -1336,32 +1261,32 @@ import {
   Close,
   Calendar,
   InfoFilled,
-  Plus,
   Check,
+  Document,
   List,
-  Goods,
-  Coin,
-  TrendCharts,
   DataLine,
+  TrendCharts,
+  Shop,
+  Timer,
+  WarningFilled,
+  CircleCheckFilled,
   Bell,
 } from '@element-plus/icons-vue'
-import request from '@/utils/request'
 import {
   syncPartStockFromMaster,
   getPartStockSupplierNames,
   getPartStockList,
   updatePartStock,
-  createPartStock,
-  saveMaruichiPartOrderPdf,
+  savePartOrderPdf,
   cancelPartStockOrder,
   getPartReorderSuggestions,
 } from '@/api/part'
-import type { PartStockListSummary, PartReorderSuggestion } from '@/api/part'
+import type { PartReorderSuggestion } from '@/api/part'
 import ChartWrapper from '@/components/ChartWrapper.vue'
+import { Chart as ChartJS } from 'chart.js'
 import { getPartList } from '@/api/master/partMaster'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
-import { MARUICHI_ORDER_SHEET_STYLES } from '@/utils/maruichiOrderSheetStyles'
 import { calculatePartStock } from '@/api/partStockCalculation'
 import { generatePartStockData } from '@/api/partDataGeneration'
 import { updatePartQuantities } from '@/api/partStockUpdate'
@@ -1398,6 +1323,10 @@ interface PartOrderItem {
   stock_trend: number
   order_quantity: number
   order_bundle_quantity: number
+  /** 部品マスタ：部品材料・収容数・決済種類（一覧 API で付与） */
+  part_material?: string | null
+  capacity_qty?: number | null
+  settlement_type?: string | null
   /** 旧材料 API 等との混在レスポンス互換 */
   material_name?: string
   material_cd?: string
@@ -1406,20 +1335,6 @@ interface PartOrderItem {
 interface SupplierOption {
   label: string
   value: string
-}
-
-interface PartMasterOption {
-  part_cd: string
-  part_name: string
-  supplier_cd?: string
-  supplier_name?: string
-  category?: string
-  uom?: string
-  standard_spec?: string
-  unit_price?: number
-  pieces_per_bundle?: number
-  unit?: string
-  lead_time?: number
 }
 
 interface InitialStockItem {
@@ -1441,12 +1356,11 @@ const dataGenerationEndDate = ref('')
 const dataGenerationDialogVisible = ref(false)
 const printConfirmDialogVisible = ref(false)
 const printPdfSaving = ref(false)
-const manualOrderDialogVisible = ref(false)
-const manualOrderLoading = ref(false)
-const partSearchLoading = ref(false)
-const partOptions = ref<PartMasterOption[]>([])
-const selectedPart = ref<PartMasterOption | null>(null)
-const manualOrderFormRef = ref()
+const printLoading = ref(false)
+/** 注文書発行ダイアログ：対象月・画面で絞り込んだ仕入先の注文 */
+const printOrders = ref<PartOrderItem[]>([])
+/** ダイアログを開いた時点の画面の仕入先絞り込み */
+const printSuppliers = ref<string[]>([])
 const tableData = ref<PartOrderItem[]>([])
 const lastSavedManualUsage = new Map<number, number>()
 const initialStockData = ref<InitialStockItem[]>([])
@@ -1463,14 +1377,6 @@ const getTodayJapanStr = () => {
   const month = String(japanTime.getMonth() + 1).padStart(2, '0')
   const day = String(japanTime.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
-}
-
-/** 納入日（検索日付範囲の開始日＝画面の納入日）→ YYYYMMDD。共有フォルダの PDF ファイル名用 */
-const getNonyuDateYmdForPdf = (): string | null => {
-  const raw = searchForm.dateRange?.[0]?.trim() ?? ''
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (m) return `${m[1]}${m[2]}${m[3]}`
-  return null
 }
 
 const searchForm = reactive({
@@ -1519,47 +1425,83 @@ const buildPartStockListParams = (extra?: { order_only?: boolean }): Record<stri
   return p
 }
 
-// 打印表单数据
+// 注文書の承認者・発行者候補（ブラウザの localStorage に保持）
+type OrderSheetPersonRole = 'approver' | 'issuer'
+const ORDER_SHEET_PERSON_ROLES: { key: OrderSheetPersonRole; label: string }[] = [
+  { key: 'approver', label: '承認者' },
+  { key: 'issuer', label: '発行者' },
+]
+const ORDER_SHEET_PEOPLE_STORAGE_KEY = 'smart-emaps:part-order-sheet-people:v2'
+
+const loadOrderSheetPeople = () => {
+  const state = {
+    approver: ['小森'],
+    issuer: ['孫'],
+    last: { approver: '小森', issuer: '孫' } as Record<OrderSheetPersonRole, string>,
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(ORDER_SHEET_PEOPLE_STORAGE_KEY) || 'null')
+    for (const { key } of ORDER_SHEET_PERSON_ROLES) {
+      if (Array.isArray(saved?.[key])) state[key] = saved[key].filter((n: unknown) => typeof n === 'string')
+      if (typeof saved?.last?.[key] === 'string') state.last[key] = saved.last[key]
+    }
+  } catch {
+    // 破損データは既定値で上書き
+  }
+  return state
+}
+
+const initialOrderSheetPeople = loadOrderSheetPeople()
+const orderSheetPeople = reactive<Record<OrderSheetPersonRole, string[]>>({
+  approver: initialOrderSheetPeople.approver,
+  issuer: initialOrderSheetPeople.issuer,
+})
+
+const saveOrderSheetPeople = () => {
+  try {
+    localStorage.setItem(
+      ORDER_SHEET_PEOPLE_STORAGE_KEY,
+      JSON.stringify({
+        approver: orderSheetPeople.approver,
+        issuer: orderSheetPeople.issuer,
+        last: { approver: printForm.approver, issuer: printForm.issuer },
+      }),
+    )
+  } catch {
+    // localStorage 不可の環境では保持しない
+  }
+}
+
+const onOrderSheetPersonChange = (role: OrderSheetPersonRole, value: string) => {
+  const name = (value || '').trim()
+  printForm[role] = name
+  if (name && !orderSheetPeople[role].includes(name)) {
+    orderSheetPeople[role].push(name)
+    ElMessage.success(`「${name}」を${role === 'approver' ? '承認者' : '発行者'}候補に追加しました`)
+  }
+  saveOrderSheetPeople()
+}
+
+const removeOrderSheetPerson = (role: OrderSheetPersonRole, name: string) => {
+  orderSheetPeople[role] = orderSheetPeople[role].filter((n) => n !== name)
+  if (printForm[role] === name) printForm[role] = ''
+  saveOrderSheetPeople()
+}
+
+// 注文書発行フォーム（宛先は選択した仕入先から自動入力）
 const printForm = reactive({
-  recipientCompany: '丸一鋼管株式会社 御中',
-  recipientPersons: '鈴木様 村松様 只井様',
-  approver: '篠田',
-  issuer: '趙',
+  /** 対象月 YYYY-MM（納入日がこの月の注文を対象） */
+  month: '',
+  supplier: '',
+  recipientCompany: '',
+  recipientPersons: '',
+  approver: initialOrderSheetPeople.last.approver,
+  issuer: initialOrderSheetPeople.last.issuer,
+  deliveryPlace: '',
   note1: '1.支払期日には法定税率による消費税額及び地方消費税分を加算して支払います。',
   note2:
     '2.支払期日・支払方法・検査完了期日・有償支給原材料代金の決済期日及び方法については、令和8年7月1日の「支払方法等について」によります。',
 })
-
-// 手入力部品注文フォームデータ
-const manualOrderForm = reactive({
-  date: '',
-  part_cd: '',
-  part_name: '',
-  order_quantity: 0,
-  unit: '',
-  unit_price: 0,
-  supplier_cd: '',
-  supplier_name: '',
-  standard_spec: '',
-  pieces_per_bundle: 0,
-  lead_time: 0,
-  remarks: '',
-})
-
-// 手入力フォーム検証ルール
-const manualOrderRules = {
-  date: [{ required: true, message: '日付を選択してください', trigger: 'change' }],
-  part_cd: [{ required: true, message: '部品を選択してください', trigger: 'change' }],
-  order_quantity: [
-    { required: true, message: '注文本数を入力してください', trigger: 'blur' },
-    {
-      type: 'number' as const,
-      min: 0,
-      message: '注文本数は0以上である必要があります',
-      trigger: 'blur',
-    },
-  ],
-}
 
 // 計算プロパティ - 現在データは直接バックエンドからフィルタリングされ、ここでは表示用のみ
 const filteredTableData = computed(() => {
@@ -1570,60 +1512,6 @@ const filteredTableData = computed(() => {
     return orderHistoryData.value
   }
   return tableData.value
-})
-
-// 統計カード：サーバー側の全件集計 ＋ 表示中ページで編集された差分
-interface PageSums {
-  currentStock: number
-  usage: number
-  orderQty: number
-  orderValue: number
-}
-
-const sumPageRows = (rows: Partial<PartOrderItem>[]): PageSums =>
-  rows.reduce<PageSums>(
-    (acc, row) => {
-      const oq = Number(row.order_quantity) || 0
-      acc.currentStock += Number(row.current_stock) || 0
-      acc.usage += (Number(row.usage_quantity) || 0) + (Number(row.manual_usage) || 0)
-      if (oq > 0) {
-        acc.orderQty += oq
-        acc.orderValue += Number(row.order_amount) || 0
-      }
-      return acc
-    },
-    { currentStock: 0, usage: 0, orderQty: 0, orderValue: 0 },
-  )
-
-const serverSummary = ref<PartStockListSummary | null>(null)
-const pageBaseline = ref<PageSums>(sumPageRows([]))
-
-const applyServerSummary = (summary: PartStockListSummary | undefined, rows: Partial<PartOrderItem>[]) => {
-  serverSummary.value = summary ?? null
-  pageBaseline.value = sumPageRows(rows)
-}
-
-const stats = computed(() => {
-  const s = serverSummary.value
-  const editable = ['stock', 'usage', 'order'].includes(activeTab.value)
-  const live = editable ? sumPageRows(tableData.value) : pageBaseline.value
-  const base = pageBaseline.value
-  return {
-    totalParts: s?.part_count ?? 0,
-    totalCurrentStock: (s?.total_current_stock ?? 0) + live.currentStock - base.currentStock,
-    averageUnitPrice: s?.avg_unit_price ?? 0,
-    totalUsageQuantity: (s?.total_usage ?? 0) + live.usage - base.usage,
-    totalOrderQuantity: (s?.total_order_quantity ?? 0) + live.orderQty - base.orderQty,
-    totalOrderValue: (s?.total_order_amount ?? 0) + live.orderValue - base.orderValue,
-  }
-})
-
-// 手入力：注文本数×梱本数×単価（参考金額）
-const calculatedAmount = computed(() => {
-  const q = manualOrderForm.order_quantity || 0
-  const ppb = manualOrderForm.pieces_per_bundle || 1
-  if (q <= 0) return 0
-  return q * ppb * (manualOrderForm.unit_price || 0)
 })
 
 const mapPartStockRow = (item: any): PartOrderItem => {
@@ -1667,7 +1555,6 @@ const fetchData = async () => {
         if (row.id) lastSavedManualUsage.set(row.id, Number(row.manual_usage) || 0)
       }
       pagination.total = total
-      applyServerSummary((result as any)?.data?.summary, tableData.value)
     } else {
       ElMessage.error('データ取得に失敗しました')
     }
@@ -1697,7 +1584,6 @@ const fetchOrderHistory = async () => {
       const filtered = list.filter((item: any) => excludePartsStatusZero(item))
       orderHistoryData.value = filtered.map((item: any) => mapPartStockRow(item))
       pagination.total = total
-      applyServerSummary((result as any)?.data?.summary, orderHistoryData.value)
     } else {
       ElMessage.error('注文履歴の取得に失敗しました')
       orderHistoryData.value = []
@@ -1737,7 +1623,6 @@ const fetchInitialStockData = async () => {
           }
         })
         pagination.total = (result as any)?.data?.total ?? list.length
-        applyServerSummary((result as any)?.data?.summary, filtered)
         console.log('初期在庫管理データ取得成功:', initialStockData.value.length, '件')
       } else {
         ElMessage.error('初期在庫管理データ取得に失敗しました')
@@ -1761,7 +1646,6 @@ const fetchInitialStockData = async () => {
             adjustment_quantity: 0,
           }))
           pagination.total = (fallbackResult as any)?.data?.total ?? fallbackList.length
-          applyServerSummary((fallbackResult as any)?.data?.summary, fbFiltered)
           ElMessage.info('初期在庫管理機能は開発中です。材料在庫データを表示しています。')
           console.log('バックアップデータを使用:', initialStockData.value.length, '件')
         } else {
@@ -2140,7 +2024,7 @@ const commitQty = (val: number | null | undefined): number => {
   return Number.isFinite(n) ? n : 0
 }
 
-/** 同一部品の現在在庫を一覧へ反映（手動使用数・注文本数更新後） */
+/** 同一部品の現在在庫を一覧へ反映（使用数調整・注文本数更新後） */
 const patchCurrentStockForPart = async (partCd: string) => {
   if (!partCd) return
   try {
@@ -2177,7 +2061,7 @@ const handleManualUsageChange = async (row: PartOrderItem, committed?: number | 
   try {
     const response = await updatePartStock(row.id, { manual_usage: next })
     if ((response as any)?.success) {
-      ElMessage.success('手動使用数を更新しました')
+      ElMessage.success('使用数調整を更新しました')
       lastSavedManualUsage.set(row.id, next)
       const data = (response as any)?.data
       if (data?.current_stock !== undefined) {
@@ -2185,11 +2069,11 @@ const handleManualUsageChange = async (row: PartOrderItem, committed?: number | 
       }
       await patchCurrentStockForPart(row.part_cd)
     } else {
-      ElMessage.error('手動使用数の更新に失敗しました')
+      ElMessage.error('使用数調整の更新に失敗しました')
     }
   } catch (error: any) {
-    console.error('手動使用数更新失敗:', error)
-    ElMessage.error(`手動使用数の更新に失敗しました: ${error.message || 'ネットワークエラー'}`)
+    console.error('使用数調整更新失敗:', error)
+    ElMessage.error(`使用数調整の更新に失敗しました: ${error.message || 'ネットワークエラー'}`)
   }
 }
 
@@ -2391,6 +2275,11 @@ interface ChartPart {
 
 const CHART_PRESETS = { short: [-7, 14], mid: [-14, 30], long: [-30, 90] } as const
 type ChartPreset = keyof typeof CHART_PRESETS
+const chartPresetOptions: { value: ChartPreset; label: string }[] = [
+  { value: 'short', label: '前1週〜後2週' },
+  { value: 'mid', label: '前2週〜後1ヶ月' },
+  { value: 'long', label: '前1ヶ月〜後3ヶ月' },
+]
 
 const chartDrawerVisible = ref(false)
 const chartLoading = ref(false)
@@ -2447,6 +2336,38 @@ const applyChartPreset = () => {
   loadPartChart()
 }
 
+/** 月表示：今月からのオフセット（null は月表示以外） */
+const chartMonthOffset = ref<number | null>(null)
+
+const chartMonthStart = (offset: number) => {
+  const [y, m] = getTodayJapanStr().split('-').map(Number)
+  return new Date(y, m - 1 + offset, 1)
+}
+
+const chartMonthLabel = computed(() => {
+  if (chartMonthOffset.value === null) return ''
+  const d = chartMonthStart(chartMonthOffset.value)
+  return `${d.getFullYear()}年${d.getMonth() + 1}月`
+})
+
+/** 前月(-1)・次月(+1) は表示中の月から1ヶ月ずつ移動、今月(0)は当月へ戻す */
+const shiftChartMonth = (delta: -1 | 0 | 1) => {
+  const offset = delta === 0 ? 0 : (chartMonthOffset.value ?? 0) + delta
+  const first = chartMonthStart(offset)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  chartMonthOffset.value = offset
+  chartPreset.value = ''
+  chartRange.value = [fmt(first), fmt(new Date(first.getFullYear(), first.getMonth() + 1, 0))]
+  loadPartChart()
+}
+
+const onChartRangeChange = () => {
+  chartPreset.value = ''
+  chartMonthOffset.value = null
+  loadPartChart()
+}
+
 const openPartChart = (row: Partial<ChartPart> | null | undefined) => {
   if (!row?.part_cd) return
   chartPart.value = {
@@ -2457,6 +2378,7 @@ const openPartChart = (row: Partial<ChartPart> | null | undefined) => {
   }
   chartDays.value = []
   chartPreset.value = 'mid'
+  chartMonthOffset.value = null
   chartDrawerVisible.value = true
   applyChartPreset()
 }
@@ -2486,98 +2408,271 @@ const chartKpis = computed(() => {
   }
 })
 
-const chartData = computed(() => ({
-  labels: chartDays.value.map((d) => d.date.slice(5).replace('-', '/')),
-  datasets: [
-    {
-      type: 'line',
-      label: '在庫推移',
-      data: chartDays.value.map((d) => d.trend),
-      borderColor: '#8b5cf6',
-      borderDash: [6, 4],
-      borderWidth: 2,
-      pointRadius: 0,
-      tension: 0.25,
-      fill: false,
-      yAxisID: 'y',
-      order: 0,
-    },
-    {
-      type: 'line',
-      label: '現在在庫',
-      data: chartDays.value.map((d) => d.current),
-      borderColor: '#4f46e5',
-      backgroundColor: 'rgba(79, 70, 229, 0.08)',
-      borderWidth: 2,
-      pointRadius: 2,
-      tension: 0.25,
-      fill: true,
-      yAxisID: 'y',
-      order: 1,
-    },
-    {
-      type: 'bar',
-      label: '使用数（実績＋手動）',
-      data: chartDays.value.map((d) => d.usage),
-      backgroundColor: 'rgba(16, 185, 129, 0.55)',
-      borderRadius: 3,
-      yAxisID: 'y1',
-      order: 2,
-    },
-    {
-      type: 'bar',
-      label: '使用計画',
-      data: chartDays.value.map((d) => d.plan),
-      backgroundColor: 'rgba(14, 165, 233, 0.35)',
-      borderRadius: 3,
-      yAxisID: 'y1',
-      order: 3,
-    },
-    {
-      type: 'bar',
-      label: '注文本数',
-      data: chartDays.value.map((d) => d.order),
-      backgroundColor: 'rgba(245, 158, 11, 0.75)',
-      borderRadius: 3,
-      yAxisID: 'y1',
-      order: 4,
-    },
-  ],
-}))
+/** Chart.js scriptable color: チャート領域の高さに合わせた縦グラデーション */
+const verticalGradient =
+  (top: string, bottom: string, fallback: string) =>
+  (ctx: any) => {
+    const area = ctx.chart?.chartArea
+    if (!area) return fallback
+    const g = ctx.chart.ctx.createLinearGradient(0, area.top, 0, area.bottom)
+    g.addColorStop(0, top)
+    g.addColorStop(1, bottom)
+    return g
+  }
+
+/**
+ * データセットごとの数値ラベル設定（dataset.valueLabel）。
+ * keyIndices は常に候補、それ以外は minGap(px) 間隔で間引き。優先度順に配置し重なるものは省略する。
+ */
+interface ValueLabelCfg {
+  color: string
+  position?: 'above' | 'below'
+  keyIndices?: number[]
+  keyPriority: number
+  basePriority: number
+  minGap: number
+  skipZero?: boolean
+}
+
+const partChartValueLabelsPlugin = {
+  id: 'partChartValueLabels',
+  afterDatasetsDraw(chart: any, _args: unknown, opts: { display?: boolean }) {
+    if (!opts?.display) return
+    const area = chart.chartArea
+    const count = chart.data?.labels?.length ?? 0
+    if (!area || !count) return
+    const spacing = area.width / count
+    const ctx: CanvasRenderingContext2D = chart.ctx
+    const cands: { x: number; y: number; text: string; color: string; priority: number }[] = []
+
+    chart.data.datasets.forEach((ds: any, di: number) => {
+      const cfg: ValueLabelCfg | undefined = ds.valueLabel
+      if (!cfg || !chart.isDatasetVisible(di)) return
+      const meta = chart.getDatasetMeta(di)
+      const keys = new Set(cfg.keyIndices ?? [])
+      const step = Math.max(1, Math.ceil(cfg.minGap / spacing))
+      ;(ds.data as number[]).forEach((raw, i) => {
+        const v = Number(raw) || 0
+        if (cfg.skipZero && v === 0) return
+        const isKey = keys.has(i)
+        if (!isKey && i % step !== 0) return
+        const el = meta.data[i]
+        if (!el) return
+        const below = cfg.position === 'below' || (meta.type === 'bar' && v < 0)
+        cands.push({
+          x: el.x,
+          y: below ? el.y + 13 : el.y - 6,
+          text: v.toLocaleString('ja-JP'),
+          color: v < 0 ? '#dc2626' : cfg.color,
+          priority: isKey ? cfg.keyPriority : cfg.basePriority,
+        })
+      })
+    })
+    if (!cands.length) return
+
+    ctx.save()
+    ctx.font = '700 10px "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'bottom'
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = 3
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+    const placed: { l: number; r: number; t: number; b: number }[] = []
+    cands.sort((a, b) => b.priority - a.priority || a.x - b.x)
+    for (const c of cands) {
+      const w = ctx.measureText(c.text).width
+      const box = { l: c.x - w / 2 - 2, r: c.x + w / 2 + 2, t: c.y - 12, b: c.y + 1 }
+      if (box.l < area.left - 4 || box.r > area.right + 4 || box.t < 0 || box.b > area.bottom) continue
+      if (placed.some((p) => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t)) continue
+      placed.push(box)
+      ctx.strokeText(c.text, c.x, c.y)
+      ctx.fillStyle = c.color
+      ctx.fillText(c.text, c.x, c.y)
+    }
+    ctx.restore()
+  },
+}
+ChartJS.register(partChartValueLabelsPlugin)
+
+/** 折れ線の代表点：先頭・末尾・最小・最大・当日・正負の切替点 */
+const lineKeyIndices = (values: number[], todayIndex: number): number[] => {
+  if (!values.length) return []
+  const keys = new Set<number>([0, values.length - 1])
+  let min = 0
+  let max = 0
+  values.forEach((v, i) => {
+    if (v < values[min]) min = i
+    if (v > values[max]) max = i
+    if (i > 0 && values[i - 1] >= 0 !== v >= 0) keys.add(i)
+  })
+  keys.add(min)
+  keys.add(max)
+  if (todayIndex >= 0) keys.add(todayIndex)
+  return [...keys]
+}
+
+const maxIndexOf = (values: number[]): number[] => {
+  let idx = -1
+  values.forEach((v, i) => {
+    if (v > 0 && (idx < 0 || v > values[idx])) idx = i
+  })
+  return idx < 0 ? [] : [idx]
+}
+
+const chartShowValues = ref(true)
+
+const chartData = computed(() => {
+  const days = chartDays.value
+  const today = getTodayJapanStr()
+  const todayIndex = days.findIndex((d) => d.date >= today)
+  const trend = days.map((d) => d.trend)
+  const current = days.map((d) => d.current)
+  const usage = days.map((d) => d.usage)
+  const plan = days.map((d) => d.plan)
+  const order = days.map((d) => d.order)
+  const labelCfg: Record<string, ValueLabelCfg> = {
+    trend: { color: '#7c3aed', position: 'below', keyIndices: lineKeyIndices(trend, todayIndex), keyPriority: 100, basePriority: 20, minGap: 46 },
+    current: { color: '#4338ca', keyIndices: lineKeyIndices(current, todayIndex), keyPriority: 90, basePriority: 25, minGap: 46 },
+    order: { color: '#b45309', keyIndices: order.flatMap((v, i) => (v ? [i] : [])), keyPriority: 95, basePriority: 0, minGap: 0, skipZero: true },
+    usage: { color: '#047857', keyIndices: maxIndexOf(usage), keyPriority: 60, basePriority: 12, minGap: 36, skipZero: true },
+    plan: { color: '#0369a1', keyIndices: maxIndexOf(plan), keyPriority: 40, basePriority: 5, minGap: 44, skipZero: true },
+  }
+  return {
+    labels: days.map((d) => d.date.slice(5).replace('-', '/')),
+    datasets: [
+      {
+        type: 'line',
+        label: '在庫推移',
+        data: trend,
+        valueLabel: labelCfg.trend,
+        borderColor: '#8b5cf6',
+        borderDash: [6, 4],
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#8b5cf6',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        tension: 0.35,
+        fill: false,
+        yAxisID: 'y',
+        order: 0,
+      },
+      {
+        type: 'line',
+        label: '現在在庫',
+        data: current,
+        valueLabel: labelCfg.current,
+        borderColor: '#4f46e5',
+        backgroundColor: verticalGradient('rgba(79, 70, 229, 0.32)', 'rgba(79, 70, 229, 0.02)', 'rgba(79, 70, 229, 0.08)'),
+        borderWidth: 2.5,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: '#4f46e5',
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2,
+        tension: 0.35,
+        fill: 'origin',
+        yAxisID: 'y',
+        order: 1,
+      },
+      {
+        type: 'bar',
+        label: '使用数（実績＋調整）',
+        data: usage,
+        valueLabel: labelCfg.usage,
+        backgroundColor: verticalGradient('rgba(16, 185, 129, 0.85)', 'rgba(16, 185, 129, 0.35)', 'rgba(16, 185, 129, 0.55)'),
+        borderRadius: 4,
+        borderSkipped: false,
+        maxBarThickness: 14,
+        yAxisID: 'y1',
+        order: 2,
+      },
+      {
+        type: 'bar',
+        label: '使用計画',
+        data: plan,
+        valueLabel: labelCfg.plan,
+        backgroundColor: verticalGradient('rgba(14, 165, 233, 0.55)', 'rgba(14, 165, 233, 0.18)', 'rgba(14, 165, 233, 0.35)'),
+        borderRadius: 4,
+        borderSkipped: false,
+        maxBarThickness: 14,
+        yAxisID: 'y1',
+        order: 3,
+      },
+      {
+        type: 'bar',
+        label: '注文本数',
+        data: order,
+        valueLabel: labelCfg.order,
+        backgroundColor: verticalGradient('rgba(245, 158, 11, 0.95)', 'rgba(245, 158, 11, 0.45)', 'rgba(245, 158, 11, 0.75)'),
+        borderRadius: 4,
+        borderSkipped: false,
+        maxBarThickness: 14,
+        yAxisID: 'y1',
+        order: 4,
+      },
+    ],
+  }
+})
 
 const formatTick = (v: number | string) => Number(v).toLocaleString('ja-JP')
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  animation: { duration: 700, easing: 'easeOutQuart' },
   interaction: { mode: 'index', intersect: false },
+  layout: { padding: { top: 14 } },
   plugins: {
-    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } },
+    partChartValueLabels: { display: chartShowValues.value },
+    legend: {
+      position: 'bottom',
+      labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 14, color: '#475569', font: { size: 11 } },
+    },
     tooltip: {
+      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+      titleColor: '#e2e8f0',
+      bodyColor: '#f8fafc',
+      titleFont: { size: 12, weight: 'bold' },
+      bodyFont: { size: 12 },
+      padding: 10,
+      cornerRadius: 10,
+      boxPadding: 4,
+      usePointStyle: true,
       callbacks: {
-        label: (ctx: any) => `${ctx.dataset.label}: ${formatTick(ctx.parsed.y || 0)}`,
+        label: (ctx: any) => ` ${ctx.dataset.label}: ${formatTick(ctx.parsed.y || 0)}`,
       },
     },
   },
   scales: {
-    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true } },
+    x: {
+      grid: { display: false },
+      border: { display: false },
+      ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 0, autoSkip: true },
+    },
     y: {
       position: 'left',
-      title: { display: true, text: '在庫' },
+      title: { display: true, text: '在庫', color: '#64748b', font: { size: 11, weight: 'bold' } },
+      border: { display: false },
       grid: {
-        color: (ctx: any) => (ctx.tick?.value === 0 ? 'rgba(239, 68, 68, 0.6)' : 'rgba(226, 232, 240, 0.7)'),
+        color: (ctx: any) => (ctx.tick?.value === 0 ? 'rgba(239, 68, 68, 0.65)' : 'rgba(226, 232, 240, 0.7)'),
+        lineWidth: (ctx: any) => (ctx.tick?.value === 0 ? 1.5 : 1),
       },
-      ticks: { callback: formatTick },
+      grace: '10%',
+      ticks: { color: '#94a3b8', font: { size: 10 }, callback: formatTick },
     },
     y1: {
       position: 'right',
       beginAtZero: true,
-      title: { display: true, text: '数量' },
+      title: { display: true, text: '数量', color: '#64748b', font: { size: 11, weight: 'bold' } },
+      border: { display: false },
       grid: { drawOnChartArea: false },
-      ticks: { callback: formatTick },
+      grace: '12%',
+      ticks: { color: '#94a3b8', font: { size: 10 }, callback: formatTick },
     },
   },
-}
+}))
 
 // 部品マスタ更新: parts（status=1）→ 既存 part_stock 行のマスタ項目を上書き（期間で絞り可）
 const handleSyncPartMaster = async () => {
@@ -2670,330 +2765,707 @@ const handleStockCalculation = async () => {
   }
 }
 
-// 打印注文書：対象は部品在庫メイン（丸一系仕入先・当日分）
-const getMergedOrderData = async () => {
+// ─────────────────────────────────────────────
+// 注文書発行（対象月 × 仕入先ごと）
+// ─────────────────────────────────────────────
+/** 対象月（YYYY-MM）→ 月初〜月末 */
+const printPeriod = computed(() => {
+  const m = (printForm.month || '').match(/^(\d{4})-(\d{2})$/)
+  if (!m) return { start: '', end: '' }
+  const lastDay = new Date(Number(m[1]), Number(m[2]), 0).getDate()
+  return { start: `${m[1]}-${m[2]}-01`, end: `${m[1]}-${m[2]}-${String(lastDay).padStart(2, '0')}` }
+})
+
+const printSupplierGroups = computed(() =>
+  printSuppliers.value.map((supplier) => ({
+    supplier,
+    items: printOrders.value.filter((row) => (row.supplier_name || '').trim() === supplier),
+  })),
+)
+
+/** 納入日 → 部品名の順 */
+const printItems = computed(() =>
+  [...(printSupplierGroups.value.find((g) => g.supplier === printForm.supplier)?.items ?? [])].sort(
+    (a, b) => (a.date || '').localeCompare(b.date || '') || comparePartName(a, b),
+  ),
+)
+
+/** 数量 = 注文本数 × 入数（束本数） */
+const orderSheetQty = (row: Partial<PartOrderItem>) =>
+  (Number(row.order_quantity) || 0) * (Number(row.pieces_per_bundle) || 1)
+const orderSheetAmount = (row: Partial<PartOrderItem>) => orderSheetQty(row) * (Number(row.unit_price) || 0)
+
+const printTotals = computed(() => ({
+  qty: printItems.value.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0),
+  amount: printItems.value.reduce((s, r) => s + orderSheetAmount(r), 0),
+}))
+
+const printFileName = computed(() => {
+  if (!printForm.month || !printForm.supplier) return ''
+  const safe = printForm.supplier.replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 80) || '仕入先'
+  return `${printForm.month.replace('-', '')}注文書_${safe}.pdf`
+})
+
+const onPrintSupplierChange = () => {
+  printForm.recipientCompany = printForm.supplier ? `${printForm.supplier} 御中` : ''
+  printForm.recipientPersons = ''
+}
+
+const loadPrintOrders = async () => {
+  const { start, end } = printPeriod.value
+  if (!start || printSuppliers.value.length === 0) return
+  printLoading.value = true
   try {
-    return tableData.value.filter(
-      (item) =>
-        item.order_quantity > 0 &&
-        item.date === searchForm.dateRange[0] &&
-        (item.supplier_name === '丸一NST' || item.supplier_name === '丸一ﾒﾀﾙｱｸﾄ'),
-    )
+    const res = await getPartStockList({
+      start_date: start,
+      end_date: end,
+      suppliers: printSuppliers.value.join(','),
+      order_only: true,
+      page: 1,
+      pageSize: 10000,
+    })
+    printOrders.value = ((res?.data?.list ?? []) as any[])
+      .filter((item) => excludePartsStatusZero(item))
+      .map((item) => mapPartStockRow(item))
+      .filter((row) => row.order_quantity > 0)
   } catch (error) {
     console.error('注文データの取得に失敗:', error)
     ElMessage.error('注文データの取得に失敗しました')
-    return []
+    printOrders.value = []
+  } finally {
+    printLoading.value = false
   }
 }
 
 const handlePrintOrder = async () => {
   if (!guardPurchaseOperation(canExport)) return
-
-  // 检查是否有选择日期
-  if (!searchForm.dateRange || searchForm.dateRange.length === 0) {
-    ElMessage.warning('先に日付（期間）を選択してください')
+  const suppliers = (searchForm.supplier ?? []).map((s) => s.trim()).filter(Boolean)
+  if (suppliers.length === 0) {
+    ElMessage.warning('仕入先を選択してください（注文書は仕入先ごとに発行します）')
     return
   }
-
-  // 获取合并后的注文数据
-  const mergedOrderItems = await getMergedOrderData()
-
-  if (mergedOrderItems.length === 0) {
-    ElMessage.warning('対象の注文データがありません（丸一NST・丸一ﾒﾀﾙｱｸﾄ／開始日分）')
-    return
-  }
-
-  // 印刷確認ダイアログを表示
+  printSuppliers.value = suppliers
+  printForm.month = (searchForm.dateRange?.[0] || getTodayJapanStr()).slice(0, 7)
+  printForm.supplier = suppliers[0]
+  onPrintSupplierChange()
+  printOrders.value = []
   printConfirmDialogVisible.value = true
+  await loadPrintOrders()
 }
 
-// 确认打印
 const confirmPrint = async () => {
   if (!guardPurchaseOperation(canExport)) return
+  const items = printItems.value
+  if (items.length === 0) {
+    ElMessage.warning('対象の注文がありません')
+    return
+  }
+  const fileName = printFileName.value
 
+  printPdfSaving.value = true
   try {
-    const mergedOrderItems = await getMergedOrderData()
-
-    if (mergedOrderItems.length === 0) {
-      ElMessage.warning('対象の注文データがありません（丸一NST・丸一ﾒﾀﾙｱｸﾄ／開始日分）')
-      return
+    const pdfBlob = await generateOrderSheetImagePdfBlob(items)
+    const res = await savePartOrderPdf(pdfBlob, fileName)
+    if (res?.skipped) {
+      ElMessage.info('PDF保存先が未設定のため、印刷のみ行います')
+    } else if (res?.success === false) {
+      ElMessage.error(res?.message || 'PDFの保存に失敗しました')
+    } else {
+      ElMessage.success(`共有フォルダに保存しました（${fileName}）`)
     }
+  } catch (e: unknown) {
+    console.error('部品注文書PDF保存エラー:', e)
+    const ax = e as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error(ax?.response?.data?.detail || ax?.message || 'PDFの保存に失敗しました')
+  } finally {
+    printPdfSaving.value = false
+  }
 
-    const deliveryYmd = getNonyuDateYmdForPdf()
-    if (!deliveryYmd) {
-      ElMessage.error('納入日（日付範囲の開始日）が不正です。日付を選択してください。')
-      return
+  const printWindow = window.open('', '_blank')
+  if (printWindow) {
+    printWindow.document.write(`
+      <html>
+      <head>
+        <title>注文書</title>
+        <meta charset="UTF-8">
+        <style>${PART_ORDER_SHEET_STYLES}</style>
+      </head>
+      <body>${generatePrintHtml(items)}</body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.onload = function () {
+      printWindow.print()
+      setTimeout(function () {
+        printWindow.close()
+      }, 1000)
     }
-
-    printPdfSaving.value = true
-    const pdfName = `${deliveryYmd}注文書_丸一鋼管.pdf`
-    try {
-      ElMessage.info('画像PDFを生成し、共有フォルダへ保存しています…')
-      const pdfBlob = await generateOrderSheetImagePdfBlob(mergedOrderItems)
-      const res = (await saveMaruichiPartOrderPdf(pdfBlob, pdfName)) as {
-        success?: boolean
-        message?: string
-        detail?: string
-      }
-      if (res?.success === false) {
-        ElMessage.error(res?.message || 'PDFの保存に失敗しました')
-      } else {
-        ElMessage.success(`共有フォルダに保存しました（${pdfName}）`)
-      }
-    } catch (e: unknown) {
-      console.error('丸一注文書PDF保存エラー:', e)
-      const ax = e as { response?: { data?: { detail?: string } }; message?: string }
-      const detail = ax?.response?.data?.detail || ax?.message || 'PDFの保存に失敗しました'
-      ElMessage.error(detail)
-    } finally {
-      printPdfSaving.value = false
-    }
-
-    ElMessage.info('印刷プレビューを生成中...')
-    const printContent = generatePrintHtml(mergedOrderItems)
-    const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-        <head>
-          <title>注文書</title>
-          <meta charset="UTF-8">
-          <style>${MARUICHI_ORDER_SHEET_STYLES}</style>
-        </head>
-        <body>${printContent}</body>
-        </html>
-      `)
-      printWindow.document.close()
-
-      printWindow.onload = function () {
-        printWindow.print()
-        setTimeout(function () {
-          printWindow.close()
-        }, 1000)
-      }
-    }
-  } catch (error) {
-    console.error('印刷・PDFエラー:', error)
-    ElMessage.error('処理中にエラーが発生しました')
+  } else {
+    ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください')
   }
 
   printConfirmDialogVisible.value = false
 }
 
-// 生成打印HTML内容
-const generatePrintHtml = (filteredOrderItems: PartOrderItem[]) => {
-  // 部品名でソート（旧レスポンス互換で material_name も参照）
-  const sortedOrderItems = [...filteredOrderItems].sort((a, b) => {
-    const sizeA = a.part_name || a.material_name || ''
-    const sizeB = b.part_name || b.material_name || ''
-    return sizeA.localeCompare(sizeB, 'ja-JP', { numeric: true, sensitivity: 'base' })
-  })
-
-  const totalChumonHonsu = sortedOrderItems.reduce((sum, item) => sum + (item.order_quantity || 0), 0)
-
-  const issuedDateTime = new Date().toLocaleString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-
-  const deliveryDate = searchForm.dateRange[0] || '未指定'
-
-  let tableRowsHtml = ''
-  sortedOrderItems.forEach((row) => {
-    const size = row.part_name || ''
-
-    // 長さ: 部品名末尾4桁
-    const materialName = row.part_name || ''
-    const lengthMatch = materialName.match(/(\d{4})$/)
-    const length = lengthMatch ? lengthMatch[1] : ''
-
-    tableRowsHtml += `
-      <tr>
-        <td class="text-center">${row.standard_spec || ''}</td>
-        <td class="text-center">${size}</td>
-        <td class="text-right">${length}</td>
-        <td class="text-center">${row.order_quantity || 0}</td>
-        <td>${row.remarks || ''}</td>
-      </tr>
-    `
-  })
-
-  return `
-    <div class="order-sheet">
-      <div class="order-sheet-main">
-      <div class="issued-info">発行日: ${issuedDateTime}</div>
-
-      <div class="title">注 文 書</div>
-
-      <div class="header">
-        <div class="recipient-block">
-          <div>${printForm.recipientCompany}</div>
-          <div>${printForm.recipientPersons}</div>
-        </div>
-
-        <div class="sender-block">
-          <div>日鉄物産荒井オートモーティブ(株)     </div>
-          <div>〒496-0902 愛知県愛西市須依町2189  </div>
-          <div>TEL<0567>28-4171</div>
-          <div>FAX<0567>26-2281</div>
-          <div class="approval-box">
-            <table>
-              <tr>
-                <td>承認</td>
-                <td>発行</td>
-              </tr>
-              <tr>
-                <td>${printForm.approver}</td>
-                <td>${printForm.issuer}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-
-        <div class="delivery-info">
-          <div>納入日 ${deliveryDate}</div>
-          <div>(納入場所:長尺材置場)</div>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th width="15%">規格</th>
-            <th width="22%">サイズ</th>
-            <th width="12%">長さ</th>
-            <th width="15%">注文本数</th>
-            <th width="36%">備考</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRowsHtml}
-        </tbody>
-      </table>
-
-      <div class="summary-row">
-        <div class="summary-item">注文本数計  ${totalChumonHonsu}</div>
-      </div>
-      </div>
-
-      <div class="notes">
-        <p>${printForm.note1}</p>
-        <p>${printForm.note2}</p>
-      </div>
-    </div>
-  `
+/** 部品注文書（月間・部品×日付マトリクス / A4横）の印刷・キャプチャ共通スタイル */
+const PART_ORDER_SHEET_STYLES = `
+@page { size: A4 landscape; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+body {
+  font-family: 'Meiryo', 'Yu Gothic', 'Hiragino Sans', sans-serif;
+  color: #0f172a;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
+.os-page {
+  position: relative;
+  width: 297mm;
+  height: 210mm;
+  padding: 7mm 8mm 6mm;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  page-break-after: always;
+  break-after: page;
+}
+.os-page:last-child { page-break-after: auto; break-after: auto; }
 
-/** PDF キャプチュラ用：iframe を内容高さに閉じ、余白のないキャンバスにする */
-const ORDER_SHEET_CAPTURE_EXTRA_CSS = `
-html.sheet-capture-doc, html.sheet-capture-doc body {
-  height: auto !important;
-  min-height: 0 !important;
+.os-head {
+  flex-shrink: 0;
+  height: 32mm;
+  margin-bottom: 2.5mm;
+  padding-bottom: 2mm;
+  display: grid;
+  grid-template-columns: 1fr 78mm 1fr;
+  gap: 6mm;
+  align-items: start;
+  border-bottom: 0.6mm solid #312e81;
+  overflow: hidden;
 }
-html.sheet-capture-doc body.order-pdf-capture {
-  margin: 3mm !important;
-  padding: 0 !important;
+.os-to {
+  display: inline-block;
+  margin-top: 1mm;
+  padding: 0 8mm 0.8mm 0;
+  font-size: 15pt;
+  font-weight: 800;
+  border-bottom: 0.3mm solid #0f172a;
 }
-html.sheet-capture-doc .order-sheet {
-  min-height: 277mm !important;
-  padding-bottom: 36mm !important;
-  position: relative !important;
-  /* 捕获时给左右留白，避免 PDF 内容贴到页面左右边缘 */
-  padding-left: 6mm !important;
-  padding-right: 6mm !important;
-  box-sizing: border-box !important;
+.os-to-sub { margin-top: 1mm; font-size: 9pt; }
+.os-lead { margin-top: 2.5mm; font-size: 9pt; }
+.os-meta { margin-top: 1.5mm; display: flex; flex-direction: column; gap: 1mm; font-size: 9pt; }
+.os-meta b {
+  display: inline-block;
+  min-width: 16mm;
+  margin-right: 2mm;
+  padding: 0.3mm 1.5mm;
+  font-size: 7.5pt;
+  color: #fff;
+  text-align: center;
+  background: #4338ca;
+  border-radius: 1mm;
 }
-html.sheet-capture-doc .order-sheet .notes {
-  position: absolute !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  margin-top: 0 !important;
+.os-head__center { text-align: center; }
+.os-title {
+  padding-left: 6mm;
+  font-size: 22pt;
+  font-weight: 800;
+  letter-spacing: 6mm;
+  color: #1e1b4b;
+}
+.os-month { margin-top: 0.5mm; font-size: 10pt; font-weight: 700; color: #4338ca; }
+.os-total {
+  margin-top: 2.5mm;
+  display: flex;
+  border: 0.4mm solid #312e81;
+  border-radius: 1.5mm;
+  overflow: hidden;
+}
+.os-total span {
+  display: flex;
+  align-items: center;
+  padding: 1.5mm 2.5mm;
+  font-size: 8pt;
+  color: #fff;
+  white-space: nowrap;
+  background: #312e81;
+}
+.os-total strong {
+  flex: 1;
+  padding: 0.8mm 3mm;
+  font-size: 14pt;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.os-head__right { display: flex; flex-direction: column; align-items: flex-end; gap: 1.5mm; }
+.os-no { font-size: 8pt; line-height: 1.5; text-align: right; color: #334155; }
+.os-from { display: flex; align-items: flex-start; gap: 2.5mm; }
+.os-from__text { font-size: 7.5pt; line-height: 1.5; text-align: right; }
+.os-from__text b { font-size: 9pt; }
+.os-stamp { border-collapse: collapse; }
+.os-stamp th, .os-stamp td { width: 13mm; border: 0.3mm solid #334155; text-align: center; }
+.os-stamp th { height: 4mm; font-size: 7pt; font-weight: 700; background: #eef2ff; }
+.os-stamp td { height: 11mm; font-size: 9pt; font-weight: 700; }
+
+.os-grid { flex-shrink: 0; width: 100%; border-collapse: collapse; table-layout: fixed; }
+.os-grid th, .os-grid td {
+  padding: 0 0.6mm;
+  font-size: 7pt;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  border: 0.2mm solid #94a3b8;
+}
+.os-grid thead th {
+  height: 4.5mm;
+  font-size: 6.8pt;
+  font-weight: 700;
+  text-align: center;
+  color: #1e1b4b;
+  background: #e0e7ff;
+}
+.os-grid thead th small { margin-left: 0.4mm; font-size: 5.8pt; font-weight: 400; }
+.os-grid thead th.is-sat { color: #1d4ed8; background: #dbeafe; }
+.os-grid thead th.is-sun { color: #be123c; background: #ffe4e6; }
+.os-grid tbody td { height: 6.6mm; }
+.os-grid.is-multi-tier tbody td { height: 5.2mm; }
+.os-grid tr.is-alt td { background: #f8fafc; }
+.os-grid td.q {
+  padding: 0;
+  font-size: 6.8pt;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: clip;
+  font-variant-numeric: tabular-nums;
+}
+.os-grid:not(.is-multi-tier) td.q.d3 { font-size: 5.6pt; letter-spacing: -0.1mm; }
+.os-grid td.q.is-sat { background: #eff6ff; }
+.os-grid td.q.is-sun { background: #fff1f2; }
+.os-grid .is-void { background: #f1f5f9 !important; }
+.os-grid td.c { text-align: center; }
+.os-grid td.name { font-size: 8pt; font-weight: 700; }
+.os-grid td.spec { color: #334155; }
+.os-grid thead th .hsub {
+  display: block;
+  margin-top: 0.3mm;
+  font-size: 5.8pt;
+  font-weight: 600;
+  color: #6366f1;
+}
+.os-grid td.stack { line-height: 1.05; }
+.os-grid td.stack .l1, .os-grid td.stack .l2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.os-grid td.stack .l2 { margin-top: 0.2mm; font-size: 5.6pt; color: #6366f1; }
+.os-grid td.st { padding: 0 0.3mm; text-overflow: clip; }
+.os-grid td.st span {
+  display: inline-block;
+  padding: 0.2mm 0.8mm;
+  font-size: 5.8pt;
+  font-weight: 700;
+  line-height: 1.2;
+  border-radius: 0.8mm;
+}
+.os-grid .st-paid { color: #4338ca; background: #eef2ff; }
+.os-grid .st-free { color: #047857; background: #ecfdf5; }
+.os-grid .st-self { color: #b45309; background: #fffbeb; }
+.os-grid .st-other { color: #475569; background: #f1f5f9; }
+.os-grid .ppb { margin-left: 1mm; font-size: 6pt; color: #4f46e5; }
+.os-grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.os-grid td.sum {
+  font-weight: 800;
+  text-align: right;
+  background: #eef2ff;
+  font-variant-numeric: tabular-nums;
+}
+.os-grid td.amt { font-weight: 700; }
+.os-grid.is-compact td.q { font-size: 6pt; letter-spacing: -0.08mm; }
+.os-grid tr.tier-top td.q, .os-grid tr.tier-mid td.q { border-bottom: 0.2mm dashed #cbd5e1; }
+.os-grid tr.tier-mid td.q, .os-grid tr.tier-bottom td.q { border-top: 0.2mm dashed #cbd5e1; }
+.os-grid tr.tier-bottom td { border-bottom-color: #64748b; }
+
+.os-spacer { flex: 1; min-height: 1mm; }
+.os-foot { flex-shrink: 0; height: 14mm; margin-top: 2mm; display: flex; align-items: stretch; gap: 5mm; }
+.os-notes {
+  flex: 1;
+  padding: 1.5mm 3mm;
+  font-size: 7pt;
+  line-height: 1.5;
+  color: #334155;
+  background: #f8fafc;
+  border-left: 0.8mm solid #6366f1;
+  border-radius: 1mm;
+  overflow: hidden;
+}
+.os-notes p { margin: 0; }
+.os-summary { display: flex; border: 0.3mm solid #312e81; border-radius: 1.5mm; overflow: hidden; }
+.os-summary div {
+  min-width: 24mm;
+  padding: 1mm 4mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: right;
+  border-left: 0.2mm solid #c7d2fe;
+}
+.os-summary div:first-child { border-left: 0; }
+.os-summary span { font-size: 6.5pt; color: #475569; }
+.os-summary b { font-size: 11pt; font-variant-numeric: tabular-nums; }
+.os-summary .is-total { color: #fff; background: #312e81; }
+.os-summary .is-total span { color: #c7d2fe; }
+.os-pagefoot {
+  flex-shrink: 0;
+  height: 4mm;
+  margin-top: 1.2mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  font-size: 6.5pt;
+  color: #64748b;
 }
 `
 
-/** html2canvas + jsPDF で画像ベースの PDF を生成（1ページに収まらない場合は複数ページ） */
-const generateOrderSheetImagePdfBlob = (mergedOrderItems: PartOrderItem[]): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const printContent = generatePrintHtml(mergedOrderItems)
-    const iframe = document.createElement('iframe')
-    iframe.setAttribute('title', 'order-sheet-capture')
-    // min-height / 大きな固定高を付けない（body が無駄に伸び、下端空白＋2ページ目が真っ白になる原因）
-    iframe.style.cssText =
-      'position:fixed;left:-12000px;top:0;width:210mm;border:0;opacity:0;pointer-events:none'
-    document.body.appendChild(iframe)
-    const doc = iframe.contentDocument
-    if (!doc) {
-      iframe.remove()
-      reject(new Error('iframe document'))
-      return
-    }
-    const html = `<!DOCTYPE html><html class="sheet-capture-doc"><head><meta charset="UTF-8"><style>${MARUICHI_ORDER_SHEET_STYLES}${ORDER_SHEET_CAPTURE_EXTRA_CSS}</style></head><body class="order-pdf-capture">${printContent}</body></html>`
-    doc.open()
-    doc.write(html)
-    doc.close()
+interface OrderSheetMatrixRow {
+  part_cd: string
+  part_name: string
+  standard_spec: string
+  part_material: string
+  capacity_qty: number
+  settlement_type: string
+  pieces_per_bundle: number
+  unit_price: number
+  /** 日（1〜31）→ 注文数 */
+  daily: Record<number, number>
+  total: number
+  amount: number
+}
 
-    const cleanup = () => {
-      iframe.remove()
-    }
-
-    const runCapture = async () => {
-      if (!guardPurchaseOperation(canEdit)) return
-
-      try {
-        const target = doc.querySelector('.order-sheet') as HTMLElement | null
-        if (!target) {
-          cleanup()
-          reject(new Error('.order-sheet not found'))
-          return
-        }
-        await new Promise((r) => setTimeout(r, 280))
-        const canvas = await html2canvas(target, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-        })
-        const imgData = canvas.toDataURL('image/jpeg', 0.92)
-        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
-        const pageWidth = pdf.internal.pageSize.getWidth()
-        const pageHeight = pdf.internal.pageSize.getHeight()
-        // キャンバス縦横比から mm 高さを直接算出（JPEG メタデータとの不一致による誤分割を防ぐ）
-        const imgWidthMm = pageWidth
-        const imgHeightMm = (canvas.height / canvas.width) * imgWidthMm
-        const MM_EPS = 0.8
-        if (imgHeightMm <= pageHeight + MM_EPS) {
-          pdf.addImage(imgData, 'JPEG', 0, 0, imgWidthMm, imgHeightMm, undefined, 'FAST')
-        } else {
-          let heightLeft = imgHeightMm
-          let position = 0
-          pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
-          heightLeft -= pageHeight
-          while (heightLeft > MM_EPS) {
-            position = heightLeft - imgHeightMm
-            pdf.addPage()
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
-            heightLeft -= pageHeight
-          }
-        }
-        const blob = pdf.output('blob')
-        cleanup()
-        resolve(blob)
-      } catch (e) {
-        cleanup()
-        reject(e)
+/** 部品（＋単価）単位に集約し、日別の注文数を持たせる */
+const buildOrderSheetMatrix = (items: PartOrderItem[]): OrderSheetMatrixRow[] => {
+  const map = new Map<string, OrderSheetMatrixRow>()
+  for (const r of items) {
+    const unitPrice = Number(r.unit_price) || 0
+    const key = `${r.part_cd}__${unitPrice}`
+    let row = map.get(key)
+    if (!row) {
+      row = {
+        part_cd: r.part_cd,
+        part_name: r.part_name,
+        standard_spec: r.standard_spec || '',
+        part_material: (r.part_material || '').trim(),
+        capacity_qty: Number(r.capacity_qty) || 0,
+        settlement_type: (r.settlement_type || '').trim(),
+        pieces_per_bundle: Number(r.pieces_per_bundle) || 1,
+        unit_price: unitPrice,
+        daily: {},
+        total: 0,
+        amount: 0,
       }
+      map.set(key, row)
     }
+    const day = Number((r.date || '').slice(8, 10))
+    const qty = Number(r.order_quantity) || 0
+    if (day) row.daily[day] = (row.daily[day] || 0) + qty
+    row.total += qty
+    row.amount += orderSheetAmount(r)
+  }
+  return [...map.values()].sort(comparePartName)
+}
 
-    requestAnimationFrame(() => {
-      void runCapture()
+/** 最終ページに last 行以下が残るまで normal 行ずつ詰める（最終ページは必ず1行以上） */
+function paginateRows<T>(list: T[], normal: number, last: number): T[][] {
+  const pages: T[][] = []
+  let rest = list
+  while (rest.length > last) {
+    const take = Math.min(normal, rest.length - 1)
+    pages.push(rest.slice(0, take))
+    rest = rest.slice(take)
+  }
+  pages.push(rest)
+  return pages
+}
+
+const OS_WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
+/** 部品マスタの決済種類 → 区分表示の色 */
+const OS_SETTLEMENT_CLASS: Record<string, string> = {
+  有償支給: 'st-paid',
+  無償支給: 'st-free',
+  自給: 'st-self',
+}
+
+/** A4横の寸法（mm）。行高を CSS と合わせて固定し、ページあたりの行数を算出する */
+const OS_LAYOUT = {
+  /** 表見出し上端（41.6mm）〜ページフッター（198.8mm）− 余裕 1.7mm */
+  tableH: 155.5,
+  /** 見出し1行の高さ（1段表示は日付＋曜日の2行） */
+  headRowH: 4.5,
+  /** 1段表示の行高 / 複数段表示の1段あたりの行高 */
+  rowH: 6.6,
+  tierRowH: 5.2,
+  /** 最終ページの備考・合計欄 */
+  footH: 16,
+}
+
+/**
+ * 1日あたりの列幅に収まる桁数から段数を決める
+ * - 1段（31列・約4.6mm）：3桁まで
+ * - 2段（1〜15日／16日〜末日、約9mm）：それ以上
+ *   5桁以上は文字を詰めた「コンパクト表示」にする
+ */
+const OS_SINGLE_TIER_MAX = 999
+const OS_COMPACT_MAX = 9999
+/** 段ごとの区切り日（この日までを1段目…） */
+const OS_TIER_SPLITS: Record<number, number[]> = { 1: [], 2: [15] }
+
+const buildOrderSheetLayout = (items: PartOrderItem[], month: string) => {
+  const rows = buildOrderSheetMatrix(items)
+  const [y, m] = month.split('-').map(Number)
+  const daysInMonth = y && m ? new Date(y, m, 0).getDate() : 31
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  const maxCell = Math.max(0, ...rows.flatMap((r) => Object.values(r.daily)))
+  const tierCount = maxCell <= OS_SINGLE_TIER_MAX ? 1 : 2
+  const compact = maxCell > OS_COMPACT_MAX
+
+  const rowH = tierCount === 1 ? OS_LAYOUT.rowH : OS_LAYOUT.tierRowH * tierCount
+  const headH = OS_LAYOUT.headRowH * Math.max(2, tierCount)
+  const bodyH = OS_LAYOUT.tableH - headH
+  const normal = Math.max(1, Math.floor(bodyH / rowH))
+  const last = Math.max(1, Math.floor((bodyH - OS_LAYOUT.footH) / rowH))
+  return {
+    y,
+    m,
+    days,
+    rows,
+    tierCount,
+    compact,
+    pages: paginateRows(rows, normal, last),
+  }
+}
+
+const printSheetInfo = computed(() => {
+  if (!printItems.value.length || !printForm.month) return null
+  const layout = buildOrderSheetLayout(printItems.value, printForm.month)
+  return { parts: layout.rows.length, pages: layout.pages.length, tierCount: layout.tierCount }
+})
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+  )
+
+const generatePrintHtml = (items: PartOrderItem[]) => {
+  const { y, m, days, rows, tierCount, compact, pages } = buildOrderSheetLayout(
+    items,
+    printForm.month,
+  )
+  const multiTier = tierCount > 1
+  const num = (n: number) => n.toLocaleString('ja-JP')
+  const yen = (n: number, digits = 0) =>
+    `¥${n.toLocaleString('ja-JP', { maximumFractionDigits: digits })}`
+  const dow = (d: number) => new Date(y, m - 1, d).getDay()
+  const dayCls = (d?: number) => {
+    if (!d) return 'is-void'
+    const w = dow(d)
+    return w === 0 ? 'is-sun' : w === 6 ? 'is-sat' : ''
+  }
+
+  // 段ごとに日付を分け、2段表示は31日月に合わせて16列に揃え、空きセルで埋める
+  const bounds = [0, ...OS_TIER_SPLITS[tierCount], days.length]
+  const rawTiers = bounds.slice(1).map((b, i) => days.slice(bounds[i], b))
+  const tierCols = multiTier ? 16 : days.length
+  const tiers: (number | undefined)[][] = rawTiers.map((t) => [
+    ...t,
+    ...Array<undefined>(Math.max(0, tierCols - t.length)).fill(undefined),
+  ])
+  // No・部品名・規格／材料・収容数・区分。コンパクト表示は日付列を広げるため部品名・規格を詰める
+  const fixedW = compact ? [6, 36, 18, 9, 11] : [6, 38, 24, 9, 11]
+  const tailW = [15, 15, 21]
+  const dayW = (281 - [...fixedW, ...tailW].reduce((s, w) => s + w, 0)) / tiers[0].length
+  const colgroup = `<colgroup>${[...fixedW, ...tiers[0].map(() => dayW), ...tailW]
+    .map((w) => `<col style="width:${w.toFixed(2)}mm">`)
+    .join('')}</colgroup>`
+
+  const totalQty = rows.reduce((s, r) => s + r.total, 0)
+  const totalAmount = Math.round(rows.reduce((s, r) => s + r.amount, 0))
+
+  const headCells = (tier: (number | undefined)[], withDow: boolean) =>
+    tier
+      .map((d) =>
+        d
+          ? `<th class="${dayCls(d)}">${d}${withDow ? `<small>${OS_WEEKDAYS[dow(d)]}</small>` : ''}</th>`
+          : '<th class="is-void"></th>',
+      )
+      .join('')
+  const qtyCells = (tier: (number | undefined)[], get: (d: number) => number | undefined) =>
+    tier
+      .map((d) => {
+        const q = d ? get(d) : undefined
+        return `<td class="q ${dayCls(d)}${q && q >= 100 ? ' d3' : ''}">${q ? num(q) : ''}</td>`
+      })
+      .join('')
+
+  const headSpan = ` rowspan="${Math.max(2, tierCount)}"`
+  const headLead = ['No', '部品名', '規格<span class="hsub">材料</span>', '収容数', '区分']
+    .map((t) => `<th${headSpan}>${t}</th>`)
+    .join('')
+  const headTail = ['月計', '単価', '金額'].map((t) => `<th${headSpan}>${t}</th>`).join('')
+  const thead = multiTier
+    ? tiers
+        .map((t, i) => `<tr>${i === 0 ? headLead : ''}${headCells(t, true)}${i === 0 ? headTail : ''}</tr>`)
+        .join('')
+    : `<tr>${headLead}${headCells(days, false)}${headTail}</tr><tr>${days
+        .map((d) => `<th class="${dayCls(d)}">${OS_WEEKDAYS[dow(d)]}</th>`)
+        .join('')}</tr>`
+
+  /** 複数段表示：1段目に固定列（rowspan）、各段に日別セル */
+  const tierRows = (
+    cls: string,
+    lead: string,
+    tail: string,
+    get: (d: number) => number | undefined,
+  ) =>
+    tiers
+      .map((t, i) => {
+        const pos = i === 0 ? 'tier-top' : i === tiers.length - 1 ? 'tier-bottom' : 'tier-mid'
+        return `<tr class="${pos}${cls}">${i === 0 ? lead : ''}${qtyCells(t, get)}${i === 0 ? tail : ''}</tr>`
+      })
+      .join('')
+
+  const span = multiTier ? ` rowspan="${tierCount}"` : ''
+  const bodyRow = (r: OrderSheetMatrixRow, no: number) => {
+    const alt = no % 2 === 0 ? ' is-alt' : ''
+    const ppb = r.pieces_per_bundle !== 1 ? `<span class="ppb">入数${num(r.pieces_per_bundle)}</span>` : ''
+    /** 上段：規格、下段：部品マスタの部品材料 */
+    const stack = (main: string, sub: string) =>
+      `<div class="l1">${main}</div>${sub ? `<div class="l2">${sub}</div>` : ''}`
+    const stCls = OS_SETTLEMENT_CLASS[r.settlement_type] || 'st-other'
+    const lead =
+      `<td${span} class="c">${no}</td>` +
+      `<td${span} class="name">${escapeHtml(r.part_name)}</td>` +
+      `<td${span} class="spec stack">${stack(escapeHtml(r.standard_spec) + ppb, escapeHtml(r.part_material))}</td>` +
+      `<td${span} class="num">${r.capacity_qty ? num(r.capacity_qty) : ''}</td>` +
+      `<td${span} class="c st">${r.settlement_type ? `<span class="${stCls}">${escapeHtml(r.settlement_type)}</span>` : ''}</td>`
+    const tail =
+      `<td${span} class="sum">${num(r.total)}</td>` +
+      `<td${span} class="num">${yen(r.unit_price, 2)}</td>` +
+      `<td${span} class="num amt">${yen(Math.round(r.amount))}</td>`
+    const get = (d: number) => r.daily[d]
+    return multiTier
+      ? tierRows(alt, lead, tail, get)
+      : `<tr class="${alt}">${lead}${qtyCells(days, get)}${tail}</tr>`
+  }
+  const today = getTodayJapanStr().replace(/-/g, '/')
+  const supplierCd = items.find((r) => r.supplier_cd)?.supplier_cd || ''
+  const orderNo = `${printForm.month.replace('-', '')}${supplierCd ? `-${supplierCd}` : ''}`
+  const { start, end } = printPeriod.value
+
+  const headHtml = `
+    <header class="os-head">
+      <div>
+        <div class="os-to">${escapeHtml(printForm.recipientCompany)}</div>
+        ${printForm.recipientPersons ? `<div class="os-to-sub">${escapeHtml(printForm.recipientPersons)}</div>` : ''}
+        <div class="os-lead">下記の通り注文いたします。</div>
+        <div class="os-meta">
+          <span><b>納入期間</b>${escapeHtml(start.replace(/-/g, '/'))} ～ ${escapeHtml(end.replace(/-/g, '/'))}</span>
+          ${printForm.deliveryPlace ? `<span><b>納入場所</b>${escapeHtml(printForm.deliveryPlace)}</span>` : ''}
+        </div>
+      </div>
+      <div class="os-head__center">
+        <div class="os-title">注文書</div>
+        <div class="os-month">${y}年${m}月分</div>
+        <div class="os-total"><span>ご注文金額（税抜）</span><strong>${yen(totalAmount)}</strong></div>
+      </div>
+      <div class="os-head__right">
+        <div class="os-no">注文番号　${escapeHtml(orderNo)}<br>発行日　${today}</div>
+        <div class="os-from">
+          <div class="os-from__text">
+            <b>日鉄物産荒井オートモーティブ(株)</b>
+            <div>〒496-0902 愛知県愛西市須依町2189</div>
+            <div>TEL (0567) 28-4171 ／ FAX (0567) 26-2281</div>
+          </div>
+          <table class="os-stamp">
+            <tr><th>承認</th><th>発行</th></tr>
+            <tr><td>${escapeHtml(printForm.approver)}</td><td>${escapeHtml(printForm.issuer)}</td></tr>
+          </table>
+        </div>
+      </div>
+    </header>`
+
+  const footHtml = `
+    <div class="os-foot">
+      <div class="os-notes">
+        <p>${escapeHtml(printForm.note1)}</p>
+        <p>${escapeHtml(printForm.note2)}</p>
+      </div>
+      <div class="os-summary">
+        <div><span>品目数</span><b>${num(rows.length)}</b></div>
+        <div><span>注文数計</span><b>${num(totalQty)}</b></div>
+        <div class="is-total"><span>合計金額（税抜）</span><b>${yen(totalAmount)}</b></div>
+      </div>
+    </div>`
+
+  let no = 0
+  return pages
+    .map((pageRows, pi) => {
+      const isLast = pi === pages.length - 1
+      const body = pageRows.map((r) => bodyRow(r, ++no)).join('')
+      return `
+    <section class="os-page">
+      ${headHtml}
+      <table class="os-grid${multiTier ? ' is-multi-tier' : ''}${compact ? ' is-compact' : ''}">${colgroup}<thead>${thead}</thead><tbody>${body}</tbody></table>
+      <div class="os-spacer"></div>
+      ${isLast ? footHtml : ''}
+      <div class="os-pagefoot">
+        <span>※ 表中の数値は各納入日の注文数。土曜は青、日曜は赤で表示</span>
+        <span>${escapeHtml(printForm.supplier)} ／ ${pi + 1} / ${pages.length}</span>
+      </div>
+    </section>`
     })
-  })
+    .join('')
+}
+
+/** html2canvas + jsPDF で画像ベースの PDF を生成（.os-page ごとに A4横1ページ） */
+const generateOrderSheetImagePdfBlob = async (orderItems: PartOrderItem[]): Promise<Blob> => {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'order-sheet-capture')
+  iframe.style.cssText =
+    'position:fixed;left:-12000px;top:0;width:297mm;border:0;opacity:0;pointer-events:none'
+  document.body.appendChild(iframe)
+  try {
+    const doc = iframe.contentDocument
+    if (!doc) throw new Error('iframe document')
+    doc.open()
+    doc.write(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PART_ORDER_SHEET_STYLES}</style></head><body>${generatePrintHtml(orderItems)}</body></html>`,
+    )
+    doc.close()
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 280)))
+
+    const pages = Array.from(doc.querySelectorAll<HTMLElement>('.os-page'))
+    if (pages.length === 0) throw new Error('.os-page not found')
+    const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4', compress: true })
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await html2canvas(pages[i], {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      })
+      if (i > 0) pdf.addPage('a4', 'l')
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST')
+    }
+    return pdf.output('blob')
+  } finally {
+    iframe.remove()
+  }
 }
 
 // データ生成処理
@@ -3111,227 +3583,6 @@ const confirmDataGeneration = async () => {
 }
 
 // 工具方法 - formatCurrency已在上面定义，这里删除重复定义
-
-// 手入力部品注文まわり
-const handleAddManualOrder = async () => {
-  if (!guardPurchaseOperation(canCreate)) return
-
-  console.log('手入力部品注文ダイアログを開く')
-
-  // 重置表单
-  Object.assign(manualOrderForm, {
-    date: getTodayJapanStr(),
-    part_cd: '',
-    part_name: '',
-    order_quantity: 0,
-    unit: '',
-    unit_price: 0,
-    supplier_cd: '',
-    supplier_name: '',
-    standard_spec: '',
-    pieces_per_bundle: 0,
-    lead_time: 0,
-    remarks: 'バラ束', // デフォルト備考
-  })
-
-  selectedPart.value = null
-
-  await loadParts()
-
-  manualOrderDialogVisible.value = true
-}
-
-const handleCancelManualOrder = () => {
-  console.log('手入力部品注文をキャンセル')
-
-  // 关闭对话框
-  manualOrderDialogVisible.value = false
-
-  // 重置表单
-  if (manualOrderFormRef.value) {
-    manualOrderFormRef.value.resetFields()
-  }
-
-  // 重置选中的材料
-  selectedPart.value = null
-  console.log('已重置selectedPart')
-}
-
-const loadParts = async () => {
-  try {
-    partSearchLoading.value = true
-    console.log('开始请求材料数据...')
-
-    // 使用正确的API路径
-    let response
-    try {
-      // 使用正确的materials API路径
-      response = await request.get('/api/master/parts', {
-        params: { page: 1, pageSize: 10000, status: 1 },
-      })
-      console.log('成功获取材料数据，使用 /api/master/parts')
-    } catch (error) {
-      console.log('材料データ取得失敗:', error)
-      throw error
-    }
-
-    console.log('材料データレスポンス:', response)
-    // 处理后端响应格式 - axios 返回 { data: 后端body }，后端可能是 { success: true, data: { list, total } } 或 { data: [...] } 或直接数组
-    const resBody = (response as any)?.data ?? response
-    console.log('响应状态:', resBody?.success)
-    console.log('响应数据:', resBody?.data)
-    console.log('完整响应对象:', JSON.stringify(response, null, 2))
-    if (response) {
-      const list = resBody?.data?.list ?? resBody?.data ?? resBody?.list
-      if (resBody?.success !== false && Array.isArray(resBody?.data)) {
-        // 标准格式: { success: true, data: [...] }
-        partOptions.value = resBody.data
-        console.log('成功获取材料数据 (标准格式):', partOptions.value.length, '条')
-      } else if (Array.isArray(list)) {
-        // 格式: { success: true, data: { list: [...] } } 或 { data: { list: [...] } }
-        partOptions.value = list
-        console.log('成功获取材料数据 (list格式):', partOptions.value.length, '条')
-      } else if (Array.isArray(resBody)) {
-        // 直接数组格式: [...]
-        partOptions.value = resBody
-        console.log('成功获取材料数据 (数组格式):', partOptions.value.length, '条')
-      } else if (resBody?.data && Array.isArray(resBody.data)) {
-        // 其他可能的格式: { data: [...] }
-        partOptions.value = resBody.data
-        console.log('成功获取材料数据 (data格式):', partOptions.value.length, '条')
-      } else {
-        console.error('材料数据响应格式错误:', response)
-        partOptions.value = []
-        return
-      }
-
-      partOptions.value = (partOptions.value || []).filter((p: any) => excludePartsStatusZero(p))
-
-      console.log('第一条材料数据示例:', partOptions.value[0])
-      console.log('材料字段检查:', {
-        part_cd: partOptions.value[0]?.part_cd,
-        part_name: partOptions.value[0]?.part_name,
-        supplier_name: partOptions.value[0]?.supplier_name,
-        standard_spec: partOptions.value[0]?.standard_spec,
-        unit_price: partOptions.value[0]?.unit_price,
-        pieces_per_bundle: partOptions.value[0]?.pieces_per_bundle,
-        unit: partOptions.value[0]?.unit,
-        lead_time: partOptions.value[0]?.lead_time,
-      })
-    } else {
-      console.error('响应为空')
-      partOptions.value = []
-    }
-  } catch (error: any) {
-    console.error('材料データの取得に失敗しました:', error)
-    console.error('错误详情:', error.response || error.message || error)
-    partOptions.value = []
-  } finally {
-    partSearchLoading.value = false
-  }
-}
-
-const handlePartChange = (partCd: string) => {
-  const part = partOptions.value.find((m) => m.part_cd === partCd)
-
-  if (part) {
-    selectedPart.value = { ...part }
-    manualOrderForm.part_name = part.part_name
-    fillPartData(part)
-    nextTick(() => {})
-  } else {
-    selectedPart.value = null
-  }
-}
-
-const fillPartData = (part: PartMasterOption) => {
-  const p = part as PartMasterOption & {
-    category?: string
-    uom?: string
-    standard_spec?: string
-    pieces_per_bundle?: number
-    lead_time?: number
-  }
-  manualOrderForm.supplier_cd = p.supplier_cd || ''
-  manualOrderForm.supplier_name = p.supplier_name || ''
-  manualOrderForm.standard_spec = p.category || p.standard_spec || ''
-  manualOrderForm.unit_price = p.unit_price || 0
-  manualOrderForm.pieces_per_bundle = p.pieces_per_bundle ?? 1
-  manualOrderForm.unit = p.uom || p.unit || ''
-  manualOrderForm.lead_time = p.lead_time ?? 0
-
-  console.log('填充后的表单数据:', {
-    supplier_cd: manualOrderForm.supplier_cd,
-    supplier_name: manualOrderForm.supplier_name,
-    standard_spec: manualOrderForm.standard_spec,
-    unit_price: manualOrderForm.unit_price,
-    pieces_per_bundle: manualOrderForm.pieces_per_bundle,
-    unit: manualOrderForm.unit,
-    lead_time: manualOrderForm.lead_time,
-  })
-}
-
-const handleConfirmManualOrder = async () => {
-  if (!guardPurchaseOperation(canApprove)) return
-
-  if (!manualOrderFormRef.value) return
-
-  try {
-    await manualOrderFormRef.value.validate()
-
-    manualOrderLoading.value = true
-
-    const dateStr =
-      typeof manualOrderForm.date === 'string'
-        ? manualOrderForm.date
-        : (manualOrderForm.date as Date)?.toISOString?.()?.slice(0, 10) ?? ''
-
-    const oq = manualOrderForm.order_quantity ?? 0
-    const ppb = manualOrderForm.pieces_per_bundle || 1
-    const order_bundle_quantity = oq > 0 ? oq * ppb : 0
-    const order_amount = order_bundle_quantity > 0 ? order_bundle_quantity * (manualOrderForm.unit_price ?? 0) : 0
-
-    const orderData = {
-      date: dateStr,
-      part_cd: manualOrderForm.part_cd || '',
-      part_name: manualOrderForm.part_name || '',
-      initial_stock: 0,
-      current_stock: 0,
-      adjustment_quantity: 0,
-      unit: manualOrderForm.unit || undefined,
-      unit_price: manualOrderForm.unit_price ?? 0,
-      supplier_cd: manualOrderForm.supplier_cd || undefined,
-      supplier_name: manualOrderForm.supplier_name || undefined,
-      lead_time: manualOrderForm.lead_time ?? 0,
-      planned_usage: 0,
-      manual_usage: 0,
-      usage_plan_qty: 0,
-      stock_trend: 0,
-      order_quantity: oq,
-      order_bundle_quantity,
-      order_amount,
-      standard_spec: manualOrderForm.standard_spec || undefined,
-      pieces_per_bundle: manualOrderForm.pieces_per_bundle ?? 0,
-      remarks: manualOrderForm.remarks || undefined,
-    }
-
-    const result = await createPartStock(orderData) as any
-    if (result?.success !== false) {
-      ElMessage.success('部品注文が正常に登録されました')
-      manualOrderDialogVisible.value = false
-      await fetchData()
-    } else {
-      ElMessage.error('部品注文の登録に失敗しました')
-    }
-  } catch (error) {
-    if (error !== false) {
-      console.error('部品注文登録に失敗しました:', error)
-      ElMessage.error('部品注文の登録に失敗しました')
-    }
-  } finally {
-    manualOrderLoading.value = false
-  }
-}
 
 // 生命周期
 onMounted(() => {
@@ -3542,203 +3793,6 @@ onMounted(() => {
   --btn-bg: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
   --btn-bg-hover: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%);
   --btn-glow: rgba(217, 119, 6, 0.45);
-}
-
-/* 統計カード */
-.stats-container {
-  margin-bottom: 10px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.stat-card {
-  --card-color: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
-  --card-solid: #4f46e5;
-  --card-soft: rgba(79, 70, 229, 0.08);
-  --card-glow: rgba(79, 70, 229, 0.28);
-  background:
-    linear-gradient(135deg, var(--card-soft) 0%, rgba(255, 255, 255, 0) 55%),
-    #ffffff;
-  border-radius: 12px;
-  padding: 9px 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 4px 14px rgba(15, 23, 42, 0.05);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-  position: relative;
-  overflow: hidden;
-  min-height: 58px;
-  animation: cardRise 0.45s ease-out both;
-}
-
-.stat-card:nth-child(1) { animation-delay: 0.02s; }
-.stat-card:nth-child(2) { animation-delay: 0.06s; }
-.stat-card:nth-child(3) { animation-delay: 0.1s; }
-.stat-card:nth-child(4) { animation-delay: 0.14s; }
-.stat-card:nth-child(5) { animation-delay: 0.18s; }
-.stat-card:nth-child(6) { animation-delay: 0.22s; }
-
-/* 上端のアクセントライン */
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--card-color);
-  opacity: 0.9;
-}
-
-/* 右上の装飾バブル */
-.stat-card::after {
-  content: '';
-  position: absolute;
-  right: -18px;
-  top: -22px;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--card-color);
-  opacity: 0.08;
-  transition: transform 0.35s ease, opacity 0.35s ease;
-  pointer-events: none;
-}
-
-.stat-card:hover {
-  transform: translateY(-3px);
-  border-color: transparent;
-  box-shadow:
-    0 12px 26px var(--card-glow),
-    0 0 0 1px var(--card-soft);
-}
-
-.stat-card:hover::after {
-  transform: scale(1.35);
-  opacity: 0.14;
-}
-
-.stat-card.primary {
-  --card-color: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
-  --card-solid: #4f46e5;
-  --card-soft: rgba(79, 70, 229, 0.08);
-  --card-glow: rgba(79, 70, 229, 0.22);
-}
-
-.stat-card.info {
-  --card-color: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-  --card-solid: #0284c7;
-  --card-soft: rgba(2, 132, 199, 0.08);
-  --card-glow: rgba(2, 132, 199, 0.22);
-}
-
-.stat-card.warning {
-  --card-color: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
-  --card-solid: #d97706;
-  --card-soft: rgba(217, 119, 6, 0.08);
-  --card-glow: rgba(217, 119, 6, 0.22);
-}
-
-.stat-card.success {
-  --card-color: linear-gradient(135deg, #34d399 0%, #059669 100%);
-  --card-solid: #059669;
-  --card-soft: rgba(5, 150, 105, 0.08);
-  --card-glow: rgba(5, 150, 105, 0.22);
-}
-
-.stat-card.order {
-  --card-color: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
-  --card-solid: #7c3aed;
-  --card-soft: rgba(124, 58, 237, 0.08);
-  --card-glow: rgba(124, 58, 237, 0.22);
-}
-
-.stat-card.amount {
-  --card-color: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
-  --card-solid: #e11d48;
-  --card-soft: rgba(225, 29, 72, 0.07);
-  --card-glow: rgba(225, 29, 72, 0.2);
-}
-
-.stat-card .stat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--card-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 17px;
-  box-shadow:
-    0 6px 14px var(--card-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
-  flex-shrink: 0;
-  position: relative;
-  z-index: 1;
-  transition: transform 0.3s ease;
-}
-
-.stat-card:hover .stat-icon {
-  transform: translateY(-1px) rotate(-6deg) scale(1.06);
-}
-
-.stat-content {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.stat-value {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--po-ink);
-  margin-bottom: 1px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.stat-value .unit {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--card-solid);
-  margin-left: 3px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: var(--po-muted);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.stat-label::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--card-solid);
-  box-shadow: 0 0 0 3px var(--card-soft);
-  flex-shrink: 0;
 }
 
 /* ===== Filter Bar ===== */
@@ -4434,395 +4488,6 @@ onMounted(() => {
   font-size: 12px;
 }
 
-/* 手入力部品注文ダイアログ - コンパクトUI */
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog) {
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__header) {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: #fff;
-  border: none;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__title) {
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn) {
-  top: 12px;
-  width: 28px;
-  height: 28px;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 16px;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__body) {
-  padding: 0;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__footer) {
-  padding: 10px 16px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-}
-
-/* 紧凑头部 */
-.manual-order-content--compact {
-  padding: 12px 16px 16px;
-}
-
-.manual-order-header-compact {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.manual-order-header-compact__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.manual-order-header-compact__text h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.manual-order-header-compact__text p {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #64748b;
-}
-
-/* 表单紧凑 */
-.manual-order-form--compact {
-  margin-top: 0;
-}
-
-.manual-order-form--compact :deep(.el-form-item) {
-  margin-bottom: 10px;
-}
-
-.manual-order-form--compact :deep(.el-form-item__label) {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  padding-bottom: 4px;
-  line-height: 1.3;
-}
-
-.manual-order-grid {
-  display: grid;
-  gap: 0 12px;
-  margin-bottom: 12px;
-}
-
-.manual-order-grid--main {
-  grid-template-columns: 120px 1fr;
-}
-
-.manual-order-grid--main .manual-order-field--span2 {
-  grid-column: span 1;
-}
-
-.manual-order-grid--order {
-  grid-template-columns: 1fr 1fr;
-}
-
-.manual-order-grid--order .manual-order-field--full {
-  grid-column: 1 / -1;
-}
-
-.manual-order-field :deep(.el-input-number),
-.manual-order-field :deep(.el-date-editor),
-.manual-order-field :deep(.el-select) {
-  width: 100%;
-}
-
-.manual-order-input :deep(.el-input__wrapper),
-.manual-order-input :deep(.el-input__inner),
-.manual-order-input :deep(.el-textarea__inner) {
-  border-radius: 8px;
-  font-size: 13px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.manual-order-input :deep(.el-input__wrapper:hover),
-.manual-order-input :deep(.el-textarea__inner:hover) {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.manual-order-input :deep(.el-input__wrapper.is-focus),
-.manual-order-input :deep(.el-textarea__inner:focus) {
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
-}
-
-/* 部品詳細ブロック */
-.manual-order-detail {
-  margin-top: 12px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.manual-order-detail__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  margin-bottom: 8px;
-}
-
-.manual-order-detail__title .el-icon {
-  font-size: 14px;
-  color: #6366f1;
-}
-
-.manual-order-detail__summary {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 500;
-  color: #4f46e5;
-}
-
-.manual-order-detail__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px 12px;
-}
-
-.manual-order-detail__item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.manual-order-detail__label {
-  font-size: 10px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.manual-order-detail__value {
-  font-size: 12px;
-  color: #334155;
-  font-weight: 500;
-}
-
-/* フッターボタン */
-.manual-order-footer--compact {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.manual-order-btn {
-  min-width: 88px;
-}
-
-.manual-order-btn :deep(.el-icon) {
-  margin-right: 4px;
-  font-size: 14px;
-}
-
-.manual-order-btn--confirm {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  border: none;
-}
-
-.manual-order-btn--confirm:hover {
-  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-  border: none;
-}
-
-/* 旧样式保留兼容（其他可能引用） */
-.manual-order-dialog:not(.manual-order-dialog--compact) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog) {
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  padding: 20px 24px;
-  border-radius: 16px 16px 0 0;
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__title) {
-  color: white;
-  font-weight: 600;
-  font-size: 18px;
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
-  font-size: 20px;
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__body) {
-  padding: 0;
-}
-
-.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__footer) {
-  padding: 20px 24px;
-  background-color: #f8f9fa;
-  border-radius: 0 0 16px 16px;
-}
-
-.manual-order-content:not(.manual-order-content--compact) {
-  padding: 24px;
-}
-
-.manual-order-form:not(.manual-order-form--compact) {
-  margin-top: 20px;
-}
-
-.manual-order-form:not(.manual-order-form--compact) .form-section {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-}
-
-.manual-order-form:not(.manual-order-form--compact) .section-header {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-bottom: 1px solid #dee2e6;
-  font-weight: 600;
-  color: #495057;
-  font-size: 14px;
-}
-
-.manual-order-form:not(.manual-order-form--compact) .section-header .el-icon {
-  margin-right: 8px;
-  color: #6366f1;
-  font-size: 16px;
-}
-
-.manual-order-form:not(.manual-order-form--compact) .el-form-item {
-  padding: 16px 20px;
-  margin-bottom: 0;
-  border-bottom: 1px solid #f1f3f4;
-}
-
-.manual-order-form:not(.manual-order-form--compact) .el-form-item:last-child {
-  border-bottom: none;
-}
-
-.manual-order-form:not(.manual-order-form--compact) :deep(.el-form-item__label) {
-  font-weight: 600;
-  color: #495057;
-}
-
-.form-date-picker,
-.form-input,
-.form-select,
-.form-input-number,
-.form-textarea {
-  width: 100%;
-}
-
-.form-date-picker :deep(.el-input__inner),
-.form-input :deep(.el-input__inner),
-.form-select :deep(.el-input__inner),
-.form-textarea :deep(.el-textarea__inner) {
-  border-radius: 10px;
-  border: 2px solid #e2e8f0;
-  padding: 12px 16px;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.form-date-picker :deep(.el-input__inner:focus),
-.form-input :deep(.el-input__inner:focus),
-.form-select :deep(.el-input__inner:focus),
-.form-textarea :deep(.el-textarea__inner:focus) {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.material-info {
-  padding: 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  margin-top: 16px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  font-weight: 600;
-  color: #495057;
-  min-width: 100px;
-}
-
-.info-value {
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.add-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border: none;
-  color: white;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 5px 16px rgba(16, 185, 129, 0.4);
-}
-
 /* データ生成確認ダイアログ */
 :deep(.data-generation-confirm-dialog) {
   border-radius: 16px !important;
@@ -4924,26 +4589,6 @@ onMounted(() => {
 
 /* Large screen: <= 1280px */
 @media (max-width: 1280px) {
-  .stats-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .stat-card {
-    padding: 8px 10px;
-    gap: 8px;
-  }
-
-  .stat-card .stat-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 15px;
-  }
-
-  .stat-value {
-    font-size: 15px;
-  }
-
   .search-group.date-group {
     min-width: 300px;
   }
@@ -4953,11 +4598,6 @@ onMounted(() => {
 @media (max-width: 1024px) {
   .part-order-container {
     padding: 8px 10px;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
   }
 
   .search-row {
@@ -5023,31 +4663,6 @@ onMounted(() => {
     flex: 1;
     justify-content: center;
     min-width: 100px;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .stat-card {
-    padding: 6px 8px;
-    min-height: 48px;
-    gap: 6px;
-  }
-
-  .stat-card .stat-icon {
-    width: 26px;
-    height: 26px;
-    font-size: 12px;
-  }
-
-  .stat-value {
-    font-size: 13px;
-  }
-
-  .stat-label {
-    font-size: 9px;
   }
 
   .search-container {
@@ -5138,33 +4753,6 @@ onMounted(() => {
 
 /* Phone: <= 640px */
 @media (max-width: 640px) {
-  .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .stat-card {
-    padding: 5px 6px;
-    min-height: 44px;
-    border-radius: 6px;
-  }
-
-  .stat-card::before {
-    height: 2px;
-  }
-
-  .stat-value {
-    font-size: 12px;
-  }
-
-  .stat-label {
-    font-size: 8px;
-  }
-
-  .stat-card .stat-icon {
-    display: none;
-  }
-
   .main-title {
     font-size: 14px;
   }
@@ -5194,26 +4782,6 @@ onMounted(() => {
     padding: 4px 6px;
   }
 
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 5px;
-  }
-
-  .stat-card .stat-icon {
-    display: flex;
-    width: 22px;
-    height: 22px;
-    font-size: 10px;
-  }
-
-  .stat-value {
-    font-size: 14px;
-  }
-
-  .stat-label {
-    font-size: 9px;
-  }
-
   .title-icon {
     display: none;
   }
@@ -5233,17 +4801,6 @@ onMounted(() => {
 
   .tab-item.active span {
     display: none;
-  }
-
-  .manual-order-dialog :deep(.el-dialog) {
-    width: 100% !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-  }
-
-  .print-confirm-dialog :deep(.el-dialog) {
-    width: 100% !important;
-    margin: 0 !important;
   }
 }
 
@@ -5342,7 +4899,7 @@ onMounted(() => {
   border-color: #6366f1;
 }
 
-/* 手動使用数：文字色とフォーカス色のみエメラルド */
+/* 使用数調整：文字色とフォーカス色のみエメラルド */
 :deep(.usage-quantity-input .el-input__inner) {
   color: #047857 !important;
 }
@@ -5353,6 +4910,16 @@ onMounted(() => {
 
 :deep(.el-table .usage-quantity-input .el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #10b981 inset, 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+/* 使用数調整がマイナス（戻し・返却）のときは赤字 */
+:deep(.el-table .usage-quantity-input.is-negative .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #fca5a5 inset;
+}
+
+:deep(.el-table .usage-quantity-input.is-negative .el-input__inner) {
+  color: #dc2626 !important;
+  font-weight: 700;
 }
 
 /* 删除按钮样式 */
@@ -5442,97 +5009,6 @@ onMounted(() => {
 .negative-number {
   color: #ef4444 !important;
   font-weight: 700 !important;
-}
-
-/* 印刷確認ダイアログ */
-.print-confirm-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.print-confirm-dialog :deep(.el-dialog) {
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-.print-confirm-dialog :deep(.el-dialog__header) {
-  padding: 10px 44px 10px 14px;
-  margin-right: 0;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
-  color: #ffffff;
-  border-bottom: none;
-}
-
-.dialog-header-with-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  gap: 12px;
-}
-
-.dialog-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.03em;
-}
-
-.confirm-btn-header {
-  border-radius: 8px;
-  padding: 5px 14px;
-  font-weight: 700;
-  font-size: 12px;
-  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  color: #ffffff;
-  box-shadow:
-    0 4px 12px rgba(5, 150, 105, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.confirm-btn-header:hover,
-.confirm-btn-header:focus-visible {
-  color: #ffffff;
-  background: linear-gradient(135deg, #6ee7b7 0%, #10b981 100%);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-1px);
-  box-shadow:
-    0 8px 18px rgba(5, 150, 105, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.confirm-btn-header :deep(.el-icon) {
-  margin-right: 4px;
-  font-size: 12px;
-}
-
-.print-confirm-dialog :deep(.el-dialog__headerbtn) {
-  top: 10px;
-  right: 14px;
-}
-
-.print-confirm-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
-  font-size: 16px;
-}
-
-.print-confirm-dialog :deep(.el-dialog__body) {
-  padding: 0;
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-}
-
-.print-confirm-dialog :deep(.el-dialog__footer) {
-  padding: 20px 24px;
-  background-color: #f8f9fa;
-  border-radius: 0 0 12px 12px;
-}
-
-/* 印刷確認ダイアログ - コンパクト */
-.print-confirm-content-compact {
-  padding: 10px 14px;
 }
 
 .form-sections-compact {
@@ -5771,10 +5247,6 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.stat-value.is-negative {
-  color: #dc2626;
-}
-
 /* 表ヘッダー：キー操作ヒント */
 .table-hint {
   margin-left: auto;
@@ -5946,77 +5418,6 @@ onMounted(() => {
   color: #475569;
 }
 
-/* 部品在庫推移グラフ */
-.part-chart-drawer :deep(.el-drawer__header) {
-  margin-bottom: 0;
-  padding: 14px 18px;
-  color: #0f172a;
-  font-weight: 700;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.part-chart-drawer :deep(.el-drawer__body) {
-  padding: 14px 18px;
-  background: #fbfcfe;
-}
-
-.part-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.part-chart__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.part-chart__kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.part-chart__kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  background: #ffffff;
-  border: 1px solid #eef2f7;
-  border-radius: 10px;
-}
-
-.part-chart__kpi-label {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.part-chart__kpi-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.part-chart__kpi-value small {
-  font-size: 11px;
-  font-weight: 500;
-  color: #94a3b8;
-}
-
-.part-chart__canvas {
-  min-height: 440px;
-  padding: 12px;
-  background: #ffffff;
-  border: 1px solid #eef2f7;
-  border-radius: 12px;
-}
-
 .initial-stock-input.positive-stock :deep(.el-input-number__increase),
 .initial-stock-input.positive-stock :deep(.el-input-number__decrease) {
   background-color: #e0f2fe;
@@ -6036,4 +5437,970 @@ onMounted(() => {
 }
 
 
+</style>
+
+<!-- 部品在庫推移ドロワー：el-drawer 内部要素には scoped 属性が付かないため別ブロック -->
+<style>
+@keyframes pcdRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pcdShine {
+  0% { transform: translateX(-140%) skewX(-18deg); }
+  55%, 100% { transform: translateX(360%) skewX(-18deg); }
+}
+
+@keyframes pcdPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+
+.part-chart-drawer.el-drawer {
+  overflow: hidden;
+  border-radius: 18px 0 0 18px;
+  background:
+    radial-gradient(900px 300px at 100% 0%, rgba(139, 92, 246, 0.08), transparent 60%),
+    linear-gradient(180deg, #f6f7fd 0%, #eef1f8 100%);
+  box-shadow:
+    -24px 0 60px -12px rgba(30, 27, 75, 0.35),
+    -1px 0 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+.part-chart-drawer .el-drawer__header {
+  margin: 0;
+  padding: 0;
+}
+
+.part-chart-drawer .el-drawer__body {
+  padding: 16px 20px 20px;
+}
+
+/* ヘッダー */
+.pcd-head {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
+  box-shadow: 0 10px 26px -10px rgba(79, 70, 229, 0.55);
+}
+
+.pcd-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 92% -40%, rgba(255, 255, 255, 0.3) 0, transparent 40%),
+    radial-gradient(circle at 70% 150%, rgba(255, 255, 255, 0.16) 0, transparent 36%),
+    radial-gradient(circle at 4% 130%, rgba(56, 189, 248, 0.32) 0, transparent 32%);
+  pointer-events: none;
+}
+
+.pcd-head::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  animation: pcdShine 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.pcd-head__main,
+.pcd-head__side {
+  position: relative;
+  z-index: 1;
+}
+
+.pcd-head__main {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pcd-head__icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 8px 18px rgba(30, 27, 75, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.3s ease;
+}
+
+.pcd-head:hover .pcd-head__icon {
+  transform: rotate(-6deg) scale(1.06);
+}
+
+.pcd-head__text {
+  min-width: 0;
+}
+
+.pcd-head__eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.pcd-head__title {
+  margin: 2px 0 8px;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcd-head__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pcd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  backdrop-filter: blur(6px);
+}
+
+.pcd-chip .el-icon {
+  font-size: 12px;
+}
+
+.pcd-chip--code {
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  color: #4338ca;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: transparent;
+}
+
+.pcd-head__side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pcd-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 14px rgba(30, 27, 75, 0.22);
+}
+
+.pcd-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pcdPulse 1.8s ease-in-out infinite;
+}
+
+.pcd-status.is-danger {
+  color: #e11d48;
+}
+
+.pcd-status.is-safe {
+  color: #059669;
+}
+
+.pcd-close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.2s ease, transform 0.25s ease;
+}
+
+.pcd-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: rotate(90deg);
+}
+
+/* 本体 */
+.pcd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pcd-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+  animation: pcdRise 0.4s ease-out both;
+}
+
+.pcd-toolbar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.pcd-toolbar__label .el-icon {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  font-size: 14px;
+  color: #4f46e5;
+  border-radius: 7px;
+  background: rgba(79, 70, 229, 0.1);
+}
+
+.pcd-toolbar__range.el-date-editor {
+  width: 250px;
+}
+
+.pcd-toolbar .el-range-editor.el-input__wrapper {
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+.pcd-toolbar .el-range-editor.el-input__wrapper.is-active,
+.pcd-toolbar .el-range-editor.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px #a5b4fc inset;
+}
+
+.pcd-month {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px #e2e8f0 inset,
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.pcd-month__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.pcd-month__btn .el-icon {
+  font-size: 12px;
+}
+
+.pcd-month__btn:hover {
+  color: #4f46e5;
+  background: #eef2ff;
+}
+
+.pcd-month__btn:active {
+  transform: scale(0.96);
+}
+
+.pcd-month__btn--current {
+  min-width: 88px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pcd-month__btn--current.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+}
+
+.pcd-segment {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border-radius: 11px;
+  background: #eef1f8;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.pcd-segment__item {
+  height: 26px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pcd-segment__item:hover {
+  color: #4f46e5;
+}
+
+.pcd-segment__item.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+}
+
+/* KPI カード */
+.pcd-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pcd-kpi {
+  --k-grad: linear-gradient(135deg, #a78bfa, #7c3aed);
+  --k-soft: rgba(124, 58, 237, 0.08);
+  --k-glow: rgba(124, 58, 237, 0.25);
+  --k-solid: #7c3aed;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, var(--k-soft) 0%, rgba(255, 255, 255, 0) 60%),
+    #fff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 16px rgba(15, 23, 42, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  animation: pcdRise 0.45s ease-out both;
+}
+
+.pcd-kpi:nth-child(1) { animation-delay: 0.05s; }
+.pcd-kpi:nth-child(2) { animation-delay: 0.1s; }
+.pcd-kpi:nth-child(3) { animation-delay: 0.15s; }
+.pcd-kpi:nth-child(4) { animation-delay: 0.2s; }
+
+.pcd-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--k-grad);
+}
+
+.pcd-kpi::after {
+  content: '';
+  position: absolute;
+  right: -22px;
+  top: -26px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--k-grad);
+  opacity: 0.08;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.pcd-kpi:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 14px 28px var(--k-glow),
+    0 0 0 1px var(--k-soft);
+}
+
+.pcd-kpi:hover::after {
+  transform: scale(1.35);
+  opacity: 0.14;
+}
+
+.pcd-kpi--violet {
+  --k-grad: linear-gradient(135deg, #a78bfa, #7c3aed);
+  --k-soft: rgba(124, 58, 237, 0.08);
+  --k-glow: rgba(124, 58, 237, 0.22);
+  --k-solid: #7c3aed;
+}
+
+.pcd-kpi--rose {
+  --k-grad: linear-gradient(135deg, #fb7185, #e11d48);
+  --k-soft: rgba(225, 29, 72, 0.07);
+  --k-glow: rgba(225, 29, 72, 0.22);
+  --k-solid: #e11d48;
+}
+
+.pcd-kpi--emerald {
+  --k-grad: linear-gradient(135deg, #34d399, #059669);
+  --k-soft: rgba(5, 150, 105, 0.08);
+  --k-glow: rgba(5, 150, 105, 0.22);
+  --k-solid: #059669;
+}
+
+.pcd-kpi--sky {
+  --k-grad: linear-gradient(135deg, #38bdf8, #0284c7);
+  --k-soft: rgba(2, 132, 199, 0.08);
+  --k-glow: rgba(2, 132, 199, 0.22);
+  --k-solid: #0284c7;
+}
+
+.pcd-kpi--amber {
+  --k-grad: linear-gradient(135deg, #fbbf24, #d97706);
+  --k-soft: rgba(217, 119, 6, 0.08);
+  --k-glow: rgba(217, 119, 6, 0.22);
+  --k-solid: #d97706;
+}
+
+.pcd-kpi__icon {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  color: #fff;
+  border-radius: 12px;
+  background: var(--k-grad);
+  box-shadow:
+    0 8px 16px var(--k-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease;
+}
+
+.pcd-kpi:hover .pcd-kpi__icon {
+  transform: translateY(-1px) rotate(-6deg) scale(1.06);
+}
+
+.pcd-kpi__body {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.pcd-kpi__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.pcd-kpi__value {
+  margin: 1px 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pcd-kpi__value.is-negative {
+  color: #dc2626;
+}
+
+.pcd-kpi__sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--k-solid);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* グラフカード */
+.pcd-chart {
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 28px rgba(15, 23, 42, 0.06);
+  animation: pcdRise 0.5s ease-out 0.25s both;
+}
+
+.pcd-chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  background: linear-gradient(180deg, #fafbff, #fff);
+}
+
+.pcd-chart__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.pcd-chart__title::before {
+  content: '';
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+}
+
+.pcd-chart__hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.pcd-chart__tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pcd-chart__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  border-radius: 999px;
+  background: #f1f5f9;
+  transition: background 0.2s ease;
+}
+
+.pcd-chart__switch:hover {
+  background: #e0e7ff;
+}
+
+.pcd-chart__switch .el-switch {
+  --el-switch-on-color: #6366f1;
+}
+
+.pcd-chart__canvas {
+  min-height: 420px;
+  padding: 14px 14px 8px;
+}
+
+@media (max-width: 1280px) {
+  .pcd-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pcd-segment {
+    margin-left: 0;
+  }
+}
+
+/* ─────────── 注文書発行ダイアログ ─────────── */
+.order-sheet-dialog.el-dialog {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f6f7fd 0%, #eef1f8 100%);
+  box-shadow:
+    0 28px 64px -16px rgba(30, 27, 75, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+}
+
+.order-sheet-dialog .el-dialog__header {
+  margin: 0;
+  padding: 0;
+}
+
+.order-sheet-dialog .el-dialog__body {
+  padding: 14px 18px 4px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+.order-sheet-dialog .el-dialog__footer {
+  padding: 10px 18px 14px;
+}
+
+.osd-head {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
+  box-shadow: 0 10px 26px -10px rgba(79, 70, 229, 0.55);
+}
+
+.osd-head::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 92% -40%, rgba(255, 255, 255, 0.3) 0, transparent 40%),
+    radial-gradient(circle at 4% 130%, rgba(56, 189, 248, 0.32) 0, transparent 32%);
+  pointer-events: none;
+}
+
+.osd-head::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  animation: pcdShine 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.osd-head__icon,
+.osd-head__text,
+.osd-close {
+  position: relative;
+  z-index: 1;
+}
+
+.osd-head__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 8px 18px rgba(30, 27, 75, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.3s ease;
+}
+
+.osd-head:hover .osd-head__icon {
+  transform: rotate(-6deg) scale(1.06);
+}
+
+.osd-head__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.osd-head__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.osd-head__sub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.osd-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.2s ease, transform 0.25s ease;
+}
+
+.osd-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: rotate(90deg);
+}
+
+.osd-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.osd-body > * {
+  animation: pcdRise 0.35s ease both;
+}
+
+.osd-body > *:nth-child(2) { animation-delay: 0.05s; }
+.osd-body > *:nth-child(3) { animation-delay: 0.1s; }
+.osd-body > *:nth-child(4) { animation-delay: 0.15s; }
+
+.osd-target {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 6px 16px -10px rgba(79, 70, 229, 0.45);
+}
+
+.osd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.osd-field--grow {
+  flex: 1;
+}
+
+.osd-field .el-select {
+  width: 100%;
+}
+
+.osd-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.osd-period {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+  white-space: nowrap;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #c7d2fe;
+  font-variant-numeric: tabular-nums;
+}
+
+.osd-person-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.osd-person-option__del {
+  font-size: 12px;
+  color: #94a3b8;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.osd-person-popper .el-select-dropdown__item:hover .osd-person-option__del,
+.osd-person-popper .el-select-dropdown__item.is-hovering .osd-person-option__del {
+  opacity: 1;
+}
+
+.osd-person-option__del:hover {
+  color: #e11d48;
+  background: #ffe4e6;
+}
+
+.osd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.osd-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.osd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e8ebf3;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px -14px rgba(30, 27, 75, 0.25);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.osd-section:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 26px -14px rgba(79, 70, 229, 0.35);
+}
+
+.osd-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #1e1b4b;
+}
+
+.osd-section__title .el-icon {
+  color: #6366f1;
+  font-size: 14px;
+}
+
+.osd-section__meta {
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4338ca;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.osd-section__meta + .osd-section__meta {
+  margin-left: 6px;
+}
+
+.osd-section__meta--sheet {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.osd-table.el-table {
+  --el-table-header-bg-color: #f8fafc;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.osd-table.el-table th.el-table__cell {
+  color: #475569;
+  font-weight: 700;
+}
+
+.osd-table.el-table td.el-table__cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.osd-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.osd-notes .el-textarea__inner {
+  font-size: 11.5px;
+}
+
+.osd-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.osd-footer__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.osd-footer__print.el-button--primary {
+  border: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.7);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.osd-footer__print.el-button--primary:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #818cf8 0%, #8b5cf6 100%);
+  box-shadow: 0 10px 22px -6px rgba(99, 102, 241, 0.75);
+}
+
+.osd-footer__print .el-icon {
+  margin-right: 4px;
+}
+
+@media (max-width: 768px) {
+  .osd-grid,
+  .osd-target {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 </style>

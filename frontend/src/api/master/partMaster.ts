@@ -14,9 +14,13 @@ export interface PartMasterRow {
   part_cd: string
   part_name: string
   category?: string | null
+  /** 部品材料（使用材料、自由入力） */
+  part_material?: string | null
   kind: PartKind
   settlement_type: PartSettlementType
   uom: string
+  /** 収容数 */
+  capacity_qty?: number | null
   unit_price: number
   material_unit_price: number
   /** 単価+材料（原通貨）、DB 計算列 */
@@ -37,9 +41,11 @@ export interface PartMasterPayload {
   part_cd: string
   part_name: string
   category?: string | null
+  part_material?: string | null
   kind?: PartKind
   settlement_type?: PartSettlementType
   uom?: string
+  capacity_qty?: number | null
   unit_price?: number
   material_unit_price?: number
   currency?: string

@@ -161,6 +161,9 @@ class Settings(BaseSettings):
     ACCESS_PRODUCTION_PLAN_DB_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\Data\subdata.accdb"
     ACCESS_PRODUCTION_PLAN_TABLE: str = "A生産予定"
 
+    # 部品注文書 PDF の保存先フォルダ（UNC 可）。空なら PDF 保存をスキップし印刷のみ
+    PART_ORDER_PDF_DIR: str = ""
+
     # 自動車ニュースティッカー（RSS 集約・MainLayout 上部表示）
     AUTO_NEWS_ENABLED: bool = False
     AUTO_NEWS_CACHE_TTL_SECONDS: int = 1800

@@ -52,9 +52,11 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
         "part_cd": row.part_cd,
         "part_name": row.part_name,
         "category": row.category,
+        "part_material": row.part_material,
         "kind": row.kind,
         "settlement_type": row.settlement_type,
         "uom": row.uom,
+        "capacity_qty": row.capacity_qty,
         "unit_price": float(row.unit_price) if row.unit_price is not None else 0.0,
         "material_unit_price": float(row.material_unit_price) if row.material_unit_price is not None else 0.0,
         "total_unit_price": float(_total_unit(row)),
@@ -78,9 +80,11 @@ class PartIn(BaseModel):
     part_cd: str = Field(..., min_length=1, max_length=50)
     part_name: str = Field(..., min_length=1, max_length=200)
     category: Optional[str] = Field(None, max_length=100)
+    part_material: Optional[str] = Field(None, max_length=100)
     kind: KindLiteral = "N"
     settlement_type: SettlementTypeLiteral = "有償支給"
     uom: str = Field(default="個", max_length=20)
+    capacity_qty: Optional[int] = Field(None, ge=0)
     unit_price: float = Field(default=0, ge=0)
     material_unit_price: float = Field(default=0, ge=0)
     currency: str = Field(default="JPY", max_length=10)
@@ -93,9 +97,11 @@ class PartIn(BaseModel):
 class PartPatch(BaseModel):
     part_name: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, max_length=100)
+    part_material: Optional[str] = Field(None, max_length=100)
     kind: Optional[KindLiteral] = None
     settlement_type: Optional[SettlementTypeLiteral] = None
     uom: Optional[str] = Field(None, max_length=20)
+    capacity_qty: Optional[int] = Field(None, ge=0)
     unit_price: Optional[float] = Field(None, ge=0)
     material_unit_price: Optional[float] = Field(None, ge=0)
     currency: Optional[str] = Field(None, max_length=10)
@@ -117,7 +123,13 @@ async def list_parts(
     q = select(PartMaster)
     if keyword and keyword.strip():
         k = f"%{keyword.strip()}%"
-        q = q.where(or_(PartMaster.part_cd.like(k), PartMaster.part_name.like(k)))
+        q = q.where(
+            or_(
+                PartMaster.part_cd.like(k),
+                PartMaster.part_name.like(k),
+                PartMaster.part_material.like(k),
+            )
+        )
     if status is not None:
         q = q.where(PartMaster.status == status)
     cnt = await db.execute(select(func.count()).select_from(q.subquery()))
@@ -170,9 +182,11 @@ async def create_part(
         part_cd=body.part_cd.strip(),
         part_name=body.part_name.strip(),
         category=((body.category or "").strip() or None),
+        part_material=((body.part_material or "").strip() or None),
         kind=body.kind,
         settlement_type=body.settlement_type,
         uom=body.uom.strip() or "個",
+        capacity_qty=body.capacity_qty,
         unit_price=body.unit_price,
         material_unit_price=body.material_unit_price,
         currency=(body.currency or "JPY").strip().upper()[:10],
@@ -205,12 +219,17 @@ async def update_part(
     if "category" in data:
         v = data["category"]
         row.category = (str(v).strip() if v is not None else "") or None
+    if "part_material" in data:
+        v = data["part_material"]
+        row.part_material = (str(v).strip() if v is not None else "") or None
     if "kind" in data and data["kind"] is not None:
         row.kind = data["kind"]
     if "settlement_type" in data and data["settlement_type"] is not None:
         row.settlement_type = data["settlement_type"]
     if "uom" in data and data["uom"] is not None:
         row.uom = str(data["uom"]).strip() or "個"
+    if "capacity_qty" in data:
+        row.capacity_qty = data["capacity_qty"]
     if "unit_price" in data and data["unit_price"] is not None:
         row.unit_price = data["unit_price"]
     if "material_unit_price" in data and data["material_unit_price"] is not None:

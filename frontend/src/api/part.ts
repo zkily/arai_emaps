@@ -23,21 +23,11 @@ export function getPartStockList(params?: {
   order_only?: boolean
 }): Promise<{
   success?: boolean
-  data?: { list: unknown[]; total: number; summary?: PartStockListSummary }
+  data?: { list: unknown[]; total: number }
 }> {
   const p = { ...params }
   if (p.material_cd && !p.part_cd) p.part_cd = p.material_cd
   return request.get(`${PREFIX}/stock`, { params: p })
-}
-
-/** 一覧と同じ絞り込み条件での全件集計 */
-export interface PartStockListSummary {
-  part_count: number
-  total_current_stock: number
-  avg_unit_price: number
-  total_usage: number
-  total_order_quantity: number
-  total_order_amount: number
 }
 
 /** 注文取消（手入力で追加された重複行は削除、それ以外は注文数を 0 に戻す） */
@@ -99,13 +89,14 @@ export function syncPartStockFromMaster(params?: {
   return request.post(`${PREFIX}/stock/sync-part-master`, params ?? {})
 }
 
-export function saveMaruichiPartOrderPdf(
+/** 部品注文書PDFを共有フォルダへ保存（保存先未設定時は skipped: true） */
+export function savePartOrderPdf(
   blob: Blob,
   filename: string,
-): Promise<{ success?: boolean; message?: string; path?: string; detail?: string }> {
+): Promise<{ success?: boolean; skipped?: boolean; message?: string; path?: string; detail?: string }> {
   const form = new FormData()
   form.append('file', blob, filename)
-  return request.post(`${PREFIX}/stock/maruichi-order-pdf`, form, { timeout: 120000 })
+  return request.post(`${PREFIX}/stock/order-pdf`, form, { timeout: 120000 })
 }
 
 // ─────────────────────────────────────────────
