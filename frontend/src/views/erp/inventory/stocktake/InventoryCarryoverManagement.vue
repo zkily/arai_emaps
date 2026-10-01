@@ -1,361 +1,512 @@
 <template>
   <div class="inventory-carryover-management">
-    <div class="dynamic-background" aria-hidden="true">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
-      <div class="gradient-orb orb-3"></div>
-      <div class="floating-particles">
-        <div class="particle" v-for="i in 8" :key="i" :style="getParticleStyle(i)"></div>
-      </div>
-      <div class="grid-overlay"></div>
-    </div>
+    <div class="page-ambient" aria-hidden="true" />
 
     <div class="page-shell">
-      <header class="page-header">
-        <div class="header-main">
-          <div class="header-icon">
-            <el-icon><Share /></el-icon>
+      <!-- ヘッダー -->
+      <header class="page-hero">
+        <div class="hero-brand">
+          <div class="hero-icon">
+            <el-icon :size="22"><Share /></el-icon>
           </div>
-          <div class="header-text">
-            <h1 class="page-title">
-              <span class="title-main">棚卸データ繰越管理</span>
-              <span class="title-badge">機能</span>
-            </h1>
-            <p class="page-description">
-              特定月・工程の月末棚卸を翌月の期初在庫へ繰越
-            </p>
+          <div class="hero-text">
+            <h1 class="hero-title">棚卸データ繰越管理</h1>
+            <p class="hero-sub">特定月・工程の月末棚卸を翌月の期初在庫へ繰越</p>
           </div>
+        </div>
+        <div class="hero-tabs" role="tablist">
+          <button
+            type="button"
+            class="hero-tab"
+            :class="{ 'is-active': activeTab === 'carryover' }"
+            @click="activeTab = 'carryover'"
+          >
+            <el-icon><Share /></el-icon>データ繰越
+          </button>
+          <button
+            type="button"
+            class="hero-tab"
+            :class="{ 'is-active': activeTab === 'history' }"
+            @click="activeTab = 'history'"
+          >
+            <el-icon><Collection /></el-icon>繰越履歴管理
+          </button>
         </div>
       </header>
 
-      <div class="tabs-container">
-        <el-tabs v-model="activeTab" class="modern-tabs" @tab-change="handleTabChange">
-        <el-tab-pane label="データ繰越" name="carryover">
-          <template #label>
-            <span class="tab-label">
-              <div class="tab-icon">
-                <el-icon><Share /></el-icon>
-              </div>
-              <span class="tab-text">データ繰越</span>
-            </span>
-          </template>
-        </el-tab-pane>
-        <el-tab-pane label="繰越履歴管理" name="history">
-          <template #label>
-            <span class="tab-label">
-              <div class="tab-icon">
-                <el-icon><Collection /></el-icon>
-              </div>
-              <span class="tab-text">繰越履歴管理</span>
-            </span>
-          </template>
-        </el-tab-pane>
-      </el-tabs>
-      </div>
+      <div v-if="activeTab === 'carryover'" class="carryover-content">
+        <!-- 検索条件 + 一括繰越 -->
+        <section class="panel toolbar-panel">
+          <div class="toolbar-line">
+            <div class="panel-title">
+              <el-icon class="panel-title-icon"><Filter /></el-icon>
+              <span>検索条件</span>
+            </div>
 
-    <div v-if="activeTab === 'carryover'" class="carryover-content">
-      <el-card class="filter-card" shadow="never">
-        <div class="filter-toolbar">
-          <div class="filter-toolbar__label">
-            <el-icon><ZoomIn /></el-icon>
-            <span>検索条件</span>
-          </div>
-          <div class="filter-toolbar__fields">
-            <div class="filter-field">
-              <label class="filter-label">
-                <el-icon><Calendar /></el-icon>
-                対象月
-              </label>
+            <div class="toolbar-field toolbar-field--month">
+              <label class="field-label"><span class="field-dot field-dot--month" />棚卸月</label>
               <el-date-picker
                 v-model="filterParams.month"
                 type="month"
                 placeholder="月を選択"
                 format="YYYY-MM"
                 value-format="YYYY-MM"
-                class="filter-control modern-input"
+                size="small"
+                class="field-control"
                 clearable
-                size="default"
+                @change="handleMonthChange"
               />
             </div>
-            <div class="filter-field">
-              <label class="filter-label">
-                <el-icon><Setting /></el-icon>
-                工程
-              </label>
+
+            <div class="month-hint" :class="{ 'is-ready': !!filterParams.month }">
+              <el-icon class="month-hint-icon"><InfoFilled /></el-icon>
+              <template v-if="filterParams.month">
+                <span class="month-hint-chip month-hint-chip--from">
+                  {{ filterParams.month }} 棚卸データ
+                </span>
+                <el-icon class="month-hint-arrow"><Right /></el-icon>
+                <span class="month-hint-chip month-hint-chip--to">
+                  {{ getNextMonth(filterParams.month) }} 期初在庫へ繰越
+                </span>
+              </template>
+              <span v-else>選択した棚卸月のデータを、翌月の期初在庫へ繰越します</span>
+            </div>
+
+            <div class="toolbar-field toolbar-field--process">
+              <label class="field-label"><span class="field-dot field-dot--process" />工程</label>
               <el-select
                 v-model="filterParams.process_cd"
                 placeholder="工程を選択"
-                class="filter-control modern-input"
+                size="small"
+                class="field-control"
+                popper-class="carryover-option-popper"
                 clearable
                 filterable
                 :loading="processLoading"
+                @change="handleProcessChange"
               >
+                <template #prefix>
+                  <span
+                    v-if="filterParams.process_cd"
+                    class="opt-dot"
+                    :style="{ background: getProcessColor(filterParams.process_cd).color }"
+                  />
+                </template>
                 <el-option
                   v-for="process in processOptions"
                   :key="process.value"
                   :label="process.label"
                   :value="process.value"
-                />
+                >
+                  <div class="opt-row">
+                    <span
+                      class="opt-dot"
+                      :style="{ background: getProcessColor(process.value).color }"
+                    />
+                    <span class="opt-name">{{ process.name }}</span>
+                    <span class="opt-meta">{{ process.value }}</span>
+                  </div>
+                </el-option>
               </el-select>
             </div>
-          </div>
-          <div class="filter-toolbar__actions">
-            <el-button @click="clearFilters" class="btn-ghost">
-              <el-icon><Refresh /></el-icon>
-              クリア
-            </el-button>
-            <el-button type="primary" @click="handleSearch" class="btn-primary" :loading="loading">
-              <el-icon><Search /></el-icon>
-              検索
-            </el-button>
-          </div>
-        </div>
-      </el-card>
 
-      <el-card class="data-card" shadow="never" v-if="carryoverSearched && carryoverTotal > 0">
-        <div class="data-header">
-          <div class="data-title">
-            <div class="data-title__icon">
-              <el-icon><Document /></el-icon>
-            </div>
-            <div class="data-title__text">
-              <h3>棚卸データ</h3>
-              <span class="data-count">{{ carryoverTotal }} 件</span>
-            </div>
-          </div>
-          <div class="data-actions">
-            <el-button
-              @click="selectAll"
-              class="btn-ghost"
-              size="small"
-              :loading="selectAllLoading"
-              :disabled="loading"
-            >
-              <el-icon><Check /></el-icon>
-              全選択（検索結果全件）
-            </el-button>
-            <el-button @click="deselectAll" class="btn-ghost" size="small">
-              <el-icon><Close /></el-icon>
-              全解除
-            </el-button>
-            <el-button
-              type="primary"
-              @click="handleCarryover"
-              :disabled="selectedData.length === 0"
-              :loading="carryoverLoading"
-              class="btn-carryover"
-              size="small"
-            >
-              <el-icon><Share /></el-icon>
-              繰越 ({{ selectedData.length }})
-            </el-button>
-          </div>
-        </div>
+            <el-button size="small" :icon="Refresh" @click="clearFilters">クリア</el-button>
 
-        <div class="table-container">
+            <div class="toolbar-spacer" />
+
+            <el-tooltip
+              :disabled="!!filterParams.month"
+              content="棚卸月を選択してください"
+              placement="top"
+            >
+              <span>
+                <el-button
+                  class="btn-bulk"
+                  :icon="Promotion"
+                  :disabled="!filterParams.month || summaryLoading"
+                  @click="openBulkDialog"
+                >
+                  全工程一括繰越
+                  <span v-if="summaryPendingCount > 0" class="btn-bulk-count">
+                    {{ summaryPendingCount.toLocaleString() }}
+                  </span>
+                </el-button>
+              </span>
+            </el-tooltip>
+          </div>
+        </section>
+
+        <!-- 工程別サマリー -->
+        <section v-if="filterParams.month" v-loading="summaryLoading" class="panel summary-panel">
+          <div class="summary-head">
+            <div class="summary-title">
+              <span class="summary-title-bar" />
+              工程別サマリー
+              <span v-if="summary" class="summary-date">
+                {{ summary.as_of_date }} 月末棚卸
+                <el-icon><Right /></el-icon>
+                {{ summary.target_date }} 期初在庫
+              </span>
+            </div>
+            <div class="summary-stats">
+              <span class="stat-pill stat-pill--indigo">
+                対象 {{ summaryTotals.count.toLocaleString() }} 件
+              </span>
+              <span class="stat-pill stat-pill--emerald">
+                数量 {{ summaryTotals.qty.toLocaleString() }}
+              </span>
+              <span class="stat-pill stat-pill--slate">
+                繰越済 {{ summaryTotals.carried.toLocaleString() }} 件
+              </span>
+              <el-button
+                text
+                size="small"
+                :icon="Refresh"
+                :loading="summaryLoading"
+                @click="loadSummary"
+              >
+                更新
+              </el-button>
+            </div>
+          </div>
+
+          <div class="process-grid">
+            <button
+              v-for="p in summary?.processes ?? []"
+              :key="p.process_cd"
+              type="button"
+              class="process-tile"
+              :class="{
+                'is-active': filterParams.process_cd === p.process_cd,
+                'is-empty': p.count === 0,
+              }"
+              :style="{ '--accent': getProcessColor(p.process_cd).color }"
+              @click="selectProcessFromTile(p.process_cd)"
+            >
+              <div class="tile-head">
+                <span class="tile-dot" />
+                <span class="tile-name">{{ p.process_name || p.process_cd }}</span>
+                <span class="tile-status" :class="`tile-status--${getStatus(p).key}`">
+                  {{ getStatus(p).label }}
+                </span>
+              </div>
+              <div class="tile-metrics">
+                <span class="tile-metric">
+                  <span class="tile-metric-key">件数</span>
+                  <span class="tile-metric-val">{{ p.count.toLocaleString() }}</span>
+                </span>
+                <span class="tile-metric">
+                  <span class="tile-metric-key">数量</span>
+                  <span class="tile-metric-val tile-metric-val--qty">
+                    {{ p.total_quantity.toLocaleString() }}
+                  </span>
+                </span>
+              </div>
+              <div class="tile-progress">
+                <span
+                  class="tile-progress-bar"
+                  :style="{ width: `${getCarriedRatio(p)}%` }"
+                />
+              </div>
+              <div class="tile-foot">
+                <span>{{ p.process_cd }}</span>
+                <span>繰越済 {{ p.carried_count.toLocaleString() }}</span>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <!-- 明細 -->
+        <section
+          v-if="carryoverSearched && carryoverTotal > 0"
+          class="panel data-panel"
+          :style="{ '--accent': getProcessColor(filterParams.process_cd).color }"
+        >
+          <div class="data-header">
+            <div class="data-title">
+              <span class="data-title-bar" />
+              <h3>棚卸データ明細</h3>
+              <span class="process-chip">
+                <span class="process-chip-dot" />
+                {{ currentProcessLabel }}
+              </span>
+              <span class="data-count">{{ carryoverTotal.toLocaleString() }} 件</span>
+              <span v-if="selectedData.length" class="data-selected">
+                選択中 {{ selectedData.length.toLocaleString() }} 件
+              </span>
+            </div>
+            <div class="data-actions">
+              <el-button
+                size="small"
+                :icon="Check"
+                :loading="selectAllLoading"
+                :disabled="loading"
+                @click="selectAll"
+              >
+                全選択（検索結果全件）
+              </el-button>
+              <el-button size="small" :icon="Close" @click="deselectAll">全解除</el-button>
+              <el-button
+                size="small"
+                class="btn-carryover"
+                :icon="Share"
+                :disabled="selectedData.length === 0"
+                :loading="carryoverLoading"
+                @click="handleCarryover"
+              >
+                選択分を繰越 ({{ selectedData.length }})
+              </el-button>
+            </div>
+          </div>
+
           <el-table
             ref="carryoverTableRef"
+            v-loading="loading"
             row-key="product_cd"
             :data="inventoryData"
-            v-loading="loading"
             stripe
             size="small"
             highlight-current-row
+            class="data-table"
             @selection-change="handleSelectionChange"
-            class="data-table modern-table"
           >
-            <el-table-column type="selection" width="55" align="center">
-              <template #header>
-                <div class="table-header-icon">
-                  <el-icon><Check /></el-icon>
-                </div>
+            <el-table-column type="selection" width="48" align="center" />
+            <el-table-column prop="product_cd" label="製品CD" width="130" align="center">
+              <template #default="{ row }">
+                <span class="product-code">{{ row.product_cd }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="product_cd" label="製品CD" width="120" align="center">
+            <el-table-column prop="product_name" min-width="220" show-overflow-tooltip>
               <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><Box /></el-icon>
-                    <span>製品CD</span>
-                  </div>
-                  <div class="header-right"></div>
-                </div>
+                <span class="sortable-header" @click="handleCustomSort('product_name')">
+                  製品名
+                  <el-icon
+                    class="sort-icon"
+                    :class="{
+                      'sort-asc':
+                        sortConfig.prop === 'product_name' && sortConfig.order === 'ascending',
+                      'sort-desc':
+                        sortConfig.prop === 'product_name' && sortConfig.order === 'descending',
+                    }"
+                  >
+                    <Sort />
+                  </el-icon>
+                </span>
               </template>
               <template #default="{ row }">
-                <div class="product-code">{{ row.product_cd }}</div>
+                <span class="product-name">{{ row.product_name }}</span>
               </template>
             </el-table-column>
-            <el-table-column
-              prop="product_name"
-              label="製品名"
-              min-width="200"
-              show-overflow-tooltip
-            >
-              <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><Document /></el-icon>
-                    <span>製品名</span>
-                  </div>
-                  <div class="header-right">
-                    <el-icon
-                      class="sort-icon"
-                      :class="{
-                        'sort-active': sortConfig.prop === 'product_name',
-                        'sort-asc':
-                          sortConfig.prop === 'product_name' && sortConfig.order === 'ascending',
-                        'sort-desc':
-                          sortConfig.prop === 'product_name' && sortConfig.order === 'descending',
-                      }"
-                      @click="handleCustomSort('product_name')"
-                    >
-                      <Sort />
-                    </el-icon>
-                  </div>
-                </div>
-              </template>
+            <el-table-column prop="item" label="項目" width="110" align="center">
               <template #default="{ row }">
-                <div class="product-name">{{ row.product_name }}</div>
+                <span class="color-pill" :style="itemPillStyle(row.item)">{{ row.item }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="item" label="項目" width="120" align="center">
-              <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><Collection /></el-icon>
-                    <span>項目</span>
-                  </div>
-                  <div class="header-right"></div>
-                </div>
-              </template>
+            <el-table-column prop="total_quantity" label="合計数量" width="140" align="right">
               <template #default="{ row }">
-                <el-tag :type="getItemTagType(row.item)" size="small" class="item-tag">{{
-                  row.item
-                }}</el-tag>
+                <span class="quantity-value">{{ formatNumber(row.total_quantity) }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="total_quantity" label="合計数量" width="140" align="center">
-              <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><Operation /></el-icon>
-                    <span>合計数量</span>
-                  </div>
-                  <div class="header-right"></div>
-                </div>
-              </template>
+            <el-table-column prop="unit" label="単位" width="90" align="center">
               <template #default="{ row }">
-                <div class="quantity-value">{{ formatNumber(row.total_quantity) }}</div>
+                <span class="unit-value">{{ row.unit }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="unit" label="単位" width="100" align="center">
-              <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><ScaleToOriginal /></el-icon>
-                    <span>単位</span>
-                  </div>
-                  <div class="header-right"></div>
-                </div>
-              </template>
+            <el-table-column prop="location_cd" label="保管場所" min-width="140" align="center">
               <template #default="{ row }">
-                <div class="unit-value">{{ row.unit }}</div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="location_cd" label="保管場所" width="140" align="center">
-              <template #header>
-                <div class="table-header">
-                  <div class="header-left">
-                    <el-icon><Location /></el-icon>
-                    <span>保管場所</span>
-                  </div>
-                  <div class="header-right"></div>
-                </div>
-              </template>
-              <template #default="{ row }">
-                <el-tag type="info" size="small" class="location-tag">{{ row.location_cd }}</el-tag>
+                <span class="location-tag">
+                  <el-icon><Location /></el-icon>{{ row.location_cd }}
+                </span>
               </template>
             </el-table-column>
           </el-table>
-        </div>
-        <div class="carryover-table-footer">
-          <div class="carryover-sum-row">
-            <span class="carryover-sum-label">合計数量（全件）</span>
-            <span class="carryover-sum-value">{{ formatNumber(totalQuantitySum) }}</span>
-          </div>
-          <el-pagination
-            :current-page="carryoverPage"
-            :page-size="carryoverPageSize"
-            :total="carryoverTotal"
-            :disabled="loading"
-            layout="total, prev, pager, next"
-            @current-change="handleCarryoverPageChange"
-          />
-        </div>
-      </el-card>
 
-      <!-- 空数据状态 -->
-      <el-empty
-        v-if="
-          carryoverSearched &&
-          carryoverTotal === 0 &&
-          !loading &&
-          (filterParams.month || filterParams.process_cd)
-        "
-        description="検索条件に一致するデータが見つかりません"
-        :image-size="72"
-        class="empty-state"
-      >
-        <template #image>
-          <div class="empty-icon">
-            <el-icon><Search /></el-icon>
+          <div class="table-footer">
+            <div class="sum-row">
+              <span class="sum-label">合計数量（全件）</span>
+              <span class="sum-value">{{ formatNumber(totalQuantitySum) }}</span>
+            </div>
+            <el-pagination
+              :current-page="carryoverPage"
+              :page-size="carryoverPageSize"
+              :total="carryoverTotal"
+              :disabled="loading"
+              layout="total, prev, pager, next"
+              background
+              @current-change="handleCarryoverPageChange"
+            />
           </div>
-        </template>
-        <template #description>
-          <div class="empty-description">
-            <h3>データが見つかりません</h3>
-            <p>検索条件を変更して再度お試しください</p>
+        </section>
+
+        <!-- 空状態 -->
+        <section
+          v-else-if="carryoverSearched && carryoverTotal === 0 && !loading"
+          class="panel empty-panel"
+        >
+          <el-empty :image-size="72" description="検索条件に一致するデータが見つかりません" />
+        </section>
+
+        <section v-else-if="!filterParams.month" class="panel guide-panel">
+          <div class="guide-icon"><el-icon :size="26"><Calendar /></el-icon></div>
+          <div class="guide-text">
+            <h3>棚卸月を選択してください</h3>
+            <p>
+              月を選ぶと工程別の繰越対象が表示されます。工程カードをクリックすると明細を確認でき、
+              「全工程一括繰越」で全工程をまとめて繰越できます。
+            </p>
           </div>
-        </template>
-      </el-empty>
+        </section>
+      </div>
+
+      <!-- 繰越履歴管理 -->
+      <div v-if="activeTab === 'history'" class="history-content">
+        <InventoryCarryoverHistory @refresh="refreshHistoryData" />
+      </div>
     </div>
 
-    <!-- 繰越履歴管理选项卡内容 -->
-    <div v-if="activeTab === 'history'" class="history-content">
-      <InventoryCarryoverHistory @refresh="refreshHistoryData" />
-    </div>
-    </div>
+    <!-- 一括繰越ダイアログ -->
+    <el-dialog
+      v-model="bulkDialogVisible"
+      :title="bulkResult ? '一括繰越 結果' : '全工程一括繰越'"
+      width="680px"
+      class="bulk-dialog"
+      :close-on-click-modal="!bulkLoading"
+      :show-close="!bulkLoading"
+      append-to-body
+    >
+      <template v-if="!bulkResult">
+        <div class="bulk-banner">
+          <el-icon :size="20"><Promotion /></el-icon>
+          <div>
+            <strong>{{ filterParams.month }}</strong> の全工程の月末棚卸を
+            <strong>{{ summary?.target_date }}</strong> の期初在庫として登録します。
+          </div>
+        </div>
+        <el-table :data="summary?.processes ?? []" size="small" class="bulk-table" max-height="340">
+          <el-table-column label="工程" min-width="150">
+            <template #default="{ row }">
+              <span
+                class="color-pill"
+                :style="pillStyle(getProcessColor(row.process_cd))"
+              >
+                <span class="pill-dot" />{{ row.process_name || row.process_cd }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="件数" width="90" align="right">
+            <template #default="{ row }">{{ row.count.toLocaleString() }}</template>
+          </el-table-column>
+          <el-table-column label="数量" width="120" align="right">
+            <template #default="{ row }">{{ row.total_quantity.toLocaleString() }}</template>
+          </el-table-column>
+          <el-table-column label="状態" width="100" align="center">
+            <template #default="{ row }">
+              <span class="tile-status" :class="`tile-status--${getStatus(row).key}`">
+                {{ getStatus(row).label }}
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="bulk-options">
+          <el-checkbox v-model="skipExisting">繰越済みのデータはスキップする（重複登録防止）</el-checkbox>
+          <span class="bulk-total">
+            合計 <strong>{{ summaryTotals.count.toLocaleString() }}</strong> 件 / 数量
+            <strong>{{ summaryTotals.qty.toLocaleString() }}</strong>
+          </span>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="bulk-result-head">
+          <div class="result-card result-card--success">
+            <span class="result-key">登録</span>
+            <span class="result-val">{{ bulkResult.successCount.toLocaleString() }}</span>
+          </div>
+          <div class="result-card result-card--qty">
+            <span class="result-key">数量</span>
+            <span class="result-val">{{ bulkResult.totalQuantity.toLocaleString() }}</span>
+          </div>
+          <div class="result-card result-card--existing">
+            <span class="result-key">既存スキップ</span>
+            <span class="result-val">{{ bulkResult.existingCount.toLocaleString() }}</span>
+          </div>
+          <div class="result-card result-card--skip">
+            <span class="result-key">その他スキップ</span>
+            <span class="result-val">{{ bulkResult.skippedCount.toLocaleString() }}</span>
+          </div>
+        </div>
+        <el-table :data="bulkResult.processes" size="small" class="bulk-table" max-height="320">
+          <el-table-column label="工程" min-width="150">
+            <template #default="{ row }">
+              <span
+                class="color-pill"
+                :style="pillStyle(getProcessColor(row.process_cd))"
+              >
+                <span class="pill-dot" />{{ row.process_name || row.process_cd }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="登録" width="80" align="right" prop="successCount" />
+          <el-table-column label="数量" width="110" align="right">
+            <template #default="{ row }">{{ row.quantity.toLocaleString() }}</template>
+          </el-table-column>
+          <el-table-column label="既存" width="80" align="right" prop="existingCount" />
+          <el-table-column label="スキップ" width="90" align="right" prop="skippedCount" />
+        </el-table>
+      </template>
+
+      <template #footer>
+        <template v-if="!bulkResult">
+          <el-button :disabled="bulkLoading" @click="bulkDialogVisible = false">キャンセル</el-button>
+          <el-button
+            class="btn-bulk"
+            :icon="Promotion"
+            :loading="bulkLoading"
+            :disabled="summaryTotals.count === 0"
+            @click="executeBulkCarryover"
+          >
+            一括繰越を実行
+          </el-button>
+        </template>
+        <el-button v-else type="primary" @click="bulkDialogVisible = false">閉じる</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Share,
   Collection,
-  ZoomIn,
+  Filter,
   Refresh,
-  Search,
-  Document,
   Check,
   Close,
   Calendar,
-  Setting,
-  Box,
-  Operation,
-  ScaleToOriginal,
   Location,
   Sort,
+  Promotion,
+  Right,
+  InfoFilled,
 } from '@element-plus/icons-vue'
-import { getCarryoverData, executeCarryover } from '@/api/inventoryCarryover'
+import {
+  getCarryoverData,
+  executeCarryover,
+  getCarryoverSummary,
+  executeCarryoverAll,
+  type CarryoverSummaryPayload,
+  type CarryoverProcessSummary,
+  type CarryoverExecuteAllResult,
+} from '@/api/inventoryCarryover'
 import { fetchProcesses } from '@/api/master/processMaster'
 import InventoryCarryoverHistory from './components/InventoryCarryoverHistory.vue'
+import { getProcessColor, type ColorToken } from './components/inventoryColors'
 import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
 import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
 
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
-
+const { canEdit } = useInventoryOperationPermission()
 
 // 响应式数据
 const activeTab = ref('carryover')
@@ -379,7 +530,7 @@ const filterParams = reactive({
 })
 
 // 工程选项
-const processOptions = ref<Array<{ value: string; label: string }>>([])
+const processOptions = ref<Array<{ value: string; label: string; name: string }>>([])
 const processLoading = ref(false)
 
 // 排序状态管理
@@ -387,6 +538,62 @@ const sortConfig = ref({
   prop: '',
   order: '' as 'ascending' | 'descending' | '',
 })
+
+// 工程別サマリー・一括繰越
+const summary = ref<CarryoverSummaryPayload | null>(null)
+const summaryLoading = ref(false)
+const bulkDialogVisible = ref(false)
+const bulkLoading = ref(false)
+const bulkResult = ref<CarryoverExecuteAllResult | null>(null)
+const skipExisting = ref(true)
+
+const summaryTotals = computed(() => {
+  const list = summary.value?.processes ?? []
+  return list.reduce(
+    (acc, p) => ({
+      count: acc.count + p.count,
+      qty: acc.qty + p.total_quantity,
+      carried: acc.carried + p.carried_count,
+    }),
+    { count: 0, qty: 0, carried: 0 },
+  )
+})
+
+const summaryPendingCount = computed(() =>
+  (summary.value?.processes ?? []).reduce(
+    (s, p) => s + Math.max(p.count - p.carried_count, 0),
+    0,
+  ),
+)
+
+const currentProcessLabel = computed(() => {
+  const opt = processOptions.value.find((o) => o.value === filterParams.process_cd)
+  return opt ? opt.label : filterParams.process_cd
+})
+
+const pillStyle = (c: ColorToken) => ({
+  color: c.color,
+  background: c.bg,
+  borderColor: c.border,
+})
+
+const ITEM_PILL_COLORS: Record<string, ColorToken> = {
+  材料: { color: '#d97706', bg: '#d9770614', border: '#d9770640' },
+  部品: { color: '#059669', bg: '#05966914', border: '#05966940' },
+  製品: { color: '#4f46e5', bg: '#4f46e514', border: '#4f46e540' },
+}
+const itemPillStyle = (item: string) =>
+  pillStyle(ITEM_PILL_COLORS[item] ?? { color: '#64748b', bg: '#64748b14', border: '#64748b40' })
+
+const getStatus = (p: CarryoverProcessSummary) => {
+  if (p.count === 0) return { key: 'none', label: '対象なし' }
+  if (p.carried_count >= p.count) return { key: 'done', label: '繰越済' }
+  if (p.carried_count > 0) return { key: 'partial', label: '一部繰越' }
+  return { key: 'pending', label: '未繰越' }
+}
+
+const getCarriedRatio = (p: CarryoverProcessSummary) =>
+  p.count > 0 ? Math.min(100, Math.round((p.carried_count / p.count) * 100)) : 0
 
 // 加载工程数据
 const loadProcessOptions = async () => {
@@ -400,6 +607,7 @@ const loadProcessOptions = async () => {
     if (response && response.list && Array.isArray(response.list)) {
       processOptions.value = response.list.map((process: any) => ({
         value: process.process_cd,
+        name: process.process_name,
         label: `${process.process_cd} - ${process.process_name}`,
       }))
     } else {
@@ -414,29 +622,21 @@ const loadProcessOptions = async () => {
   }
 }
 
-// 动态背景粒子样式
-const getParticleStyle = (_index: number) => {
-  const size = Math.random() * 4 + 2
-  const duration = Math.random() * 20 + 10
-  const delay = Math.random() * 5
-  return {
-    width: `${size}px`,
-    height: `${size}px`,
-    animationDuration: `${duration}s`,
-    animationDelay: `${delay}s`,
-    left: `${Math.random() * 100}%`,
-    top: `${Math.random() * 100}%`,
+const loadSummary = async () => {
+  if (!filterParams.month) {
+    summary.value = null
+    return
   }
-}
-
-// 获取项目标签类型
-const getItemTagType = (item: string) => {
-  const typeMap: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    材料: 'warning',
-    部品: 'success',
-    製品: 'primary',
+  summaryLoading.value = true
+  try {
+    summary.value = await getCarryoverSummary(filterParams.month)
+  } catch (error) {
+    console.error('サマリー取得エラー:', error)
+    summary.value = null
+    ElMessage.error('工程別サマリーの取得に失敗しました')
+  } finally {
+    summaryLoading.value = false
   }
-  return typeMap[item] || 'info'
 }
 
 // 格式化数字
@@ -482,16 +682,45 @@ const handleCustomSort = (prop: string) => {
   }
 }
 
-// 清除筛选条件
-const clearFilters = () => {
-  filterParams.month = ''
-  filterParams.process_cd = ''
+const resetDetail = () => {
   inventoryData.value = []
   selectedData.value = []
   carryoverPage.value = 1
   carryoverTotal.value = 0
   totalQuantitySum.value = 0
   carryoverSearched.value = false
+}
+
+// 清除筛选条件
+const clearFilters = () => {
+  filterParams.month = ''
+  filterParams.process_cd = ''
+  summary.value = null
+  resetDetail()
+}
+
+// 月・工程の変更で自動検索
+const handleMonthChange = async () => {
+  if (!filterParams.month) {
+    summary.value = null
+    resetDetail()
+    return
+  }
+  loadSummary()
+  if (filterParams.process_cd) await handleSearch()
+}
+
+const handleProcessChange = async () => {
+  if (!filterParams.process_cd) {
+    resetDetail()
+    return
+  }
+  if (filterParams.month) await handleSearch()
+}
+
+const selectProcessFromTile = async (processCd: string) => {
+  filterParams.process_cd = processCd
+  await handleSearch()
 }
 
 /** 検索条件に一致する全行を API で取得（ページングを跨ぐ） */
@@ -543,9 +772,6 @@ const loadCarryoverPage = async (page: number, resetSelection = false) => {
     carryoverSearched.value = true
     if (resetSelection) {
       selectedData.value = []
-    }
-    if (payload.total === 0) {
-      ElMessage.info('指定条件のデータが見つかりませんでした')
     }
   } catch (error) {
     console.error('データ取得エラー:', error)
@@ -650,8 +876,6 @@ const handleCarryover = async () => {
       selectedData: selectedData.value,
     })
 
-    console.log('Carryover Response:', response) // デバッグログ追加
-
     // responseは拦截器によって処理され、成功時は直接dataが返される
     if (response && typeof response.successCount === 'number') {
       const skipped = response.skippedCount ?? 0
@@ -660,10 +884,9 @@ const handleCarryover = async () => {
         msg += `（${skipped} 件スキップ：製品CDなしまたは数量0以下）`
       }
       ElMessage.success(msg)
-      // 刷新数据
-      await handleSearch()
+      await Promise.all([handleSearch(), loadSummary()])
     } else {
-      console.error('Carryover Response Error:', response) // デバッグログ追加
+      console.error('Carryover Response Error:', response)
       ElMessage.error('繰越処理に失敗しました')
     }
   } catch (error: any) {
@@ -676,17 +899,48 @@ const handleCarryover = async () => {
   }
 }
 
+// 全工程一括繰越
+const openBulkDialog = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+  if (!filterParams.month) {
+    ElMessage.warning('棚卸月を選択してください')
+    return
+  }
+  bulkResult.value = null
+  skipExisting.value = true
+  await loadSummary()
+  if (!summary.value) return
+  bulkDialogVisible.value = true
+}
+
+const executeBulkCarryover = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+  bulkLoading.value = true
+  try {
+    const res = await executeCarryoverAll({
+      month: filterParams.month,
+      skip_existing: skipExisting.value,
+    })
+    bulkResult.value = res
+    ElMessage.success(`全工程一括繰越が完了しました（${res.successCount.toLocaleString()} 件登録）`)
+    const tasks: Promise<unknown>[] = [loadSummary()]
+    if (filterParams.process_cd) tasks.push(handleSearch())
+    await Promise.all(tasks)
+  } catch (error) {
+    console.error('一括繰越エラー:', error)
+    ElMessage.error('一括繰越に失敗しました')
+  } finally {
+    bulkLoading.value = false
+  }
+}
+
 // 获取下个月
 const getNextMonth = (month: string) => {
   if (!month) return ''
-  const date = new Date(month + '-01')
-  date.setMonth(date.getMonth() + 1)
-  return date.toISOString().slice(0, 7)
-}
-
-// 处理选项卡变化
-const handleTabChange = (tabName: string | number) => {
-  console.log('タブ切り替え:', tabName)
+  const [y, m] = month.split('-').map(Number)
+  const ny = m === 12 ? y + 1 : y
+  const nm = m === 12 ? 1 : m + 1
+  return `${ny}-${String(nm).padStart(2, '0')}`
 }
 
 // 刷新历史数据
@@ -696,259 +950,139 @@ const refreshHistoryData = () => {
 
 // 组件挂载
 onMounted(() => {
-  console.log('棚卸データ繰越管理ページがロードされました')
   loadProcessOptions()
 })
 </script>
 
 <style lang="scss" scoped>
 .inventory-carryover-management {
-  --icm-accent: #4f46e5;
-  --icm-accent2: #7c3aed;
-  --icm-surface: rgba(255, 255, 255, 0.92);
-  --icm-border: rgba(15, 23, 42, 0.08);
+  --icm-surface: rgba(255, 255, 255, 0.94);
+  --icm-border: rgba(15, 23, 42, 0.07);
   --icm-text: #0f172a;
   --icm-muted: #64748b;
-  --icm-radius: 10px;
 
   position: relative;
   min-height: 100%;
-  background: linear-gradient(160deg, #f1f5f9 0%, #e8eef5 45%, #f8fafc 100%);
-  overflow-x: hidden;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 50%, #eef2f7 100%);
 }
 
-.dynamic-background {
-  position: absolute;
+.page-ambient {
+  position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
-
-  .gradient-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(48px);
-    opacity: 0.45;
-    animation: icm-float 22s ease-in-out infinite;
-
-    &.orb-1 {
-      width: 220px;
-      height: 220px;
-      top: -8%;
-      left: -6%;
-      background: radial-gradient(circle, rgba(79, 70, 229, 0.12), transparent 70%);
-    }
-
-    &.orb-2 {
-      width: 160px;
-      height: 160px;
-      top: 35%;
-      right: -4%;
-      animation-delay: -7s;
-      background: radial-gradient(circle, rgba(124, 58, 237, 0.1), transparent 70%);
-    }
-
-    &.orb-3 {
-      width: 120px;
-      height: 120px;
-      bottom: -4%;
-      left: 35%;
-      animation-delay: -12s;
-      background: radial-gradient(circle, rgba(14, 165, 233, 0.08), transparent 70%);
-    }
-  }
-
-  .floating-particles .particle {
-    position: absolute;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(79, 70, 229, 0.12), transparent);
-    animation: icm-drift 18s ease-in-out infinite;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    opacity: 0.35;
-    background-image:
-      linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
-    background-size: 24px 24px;
-    mask-image: linear-gradient(180deg, black 0%, transparent 85%);
-  }
-}
-
-@keyframes icm-float {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(8px, -12px) scale(1.03);
-  }
-}
-
-@keyframes icm-drift {
-  0%,
-  100% {
-    transform: translate(0, 0);
-    opacity: 0.35;
-  }
-  50% {
-    transform: translate(6px, -10px);
-    opacity: 0.55;
-  }
+  background:
+    radial-gradient(ellipse 60% 45% at 8% -8%, rgba(124, 58, 237, 0.1), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 95% 10%, rgba(79, 70, 229, 0.1), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 60% 110%, rgba(16, 185, 129, 0.06), transparent 60%);
 }
 
 .page-shell {
   position: relative;
   z-index: 1;
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 0.5rem 0.75rem 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.page-header {
-  margin-bottom: 0.5rem;
+/* ===== ヘッダー ===== */
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(120deg, #6d28d9 0%, #4f46e5 45%, #0284c7 100%);
+  box-shadow: 0 10px 30px -12px rgba(79, 70, 229, 0.55);
 
-  .header-main {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    padding: 0.45rem 0.65rem;
-    background: var(--icm-surface);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--icm-border);
-    border-radius: var(--icm-radius);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  }
-
-  .header-icon {
-    flex-shrink: 0;
-    width: 38px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9px;
-    background: linear-gradient(135deg, var(--icm-accent), var(--icm-accent2));
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
-
-    .el-icon {
-      font-size: 1.15rem;
-      color: #fff;
-    }
-  }
-
-  .header-text {
-    min-width: 0;
-    flex: 1;
-  }
-
-  .page-title {
-    margin: 0;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    font-size: 1.05rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--icm-text);
-    line-height: 1.25;
-  }
-
-  .title-badge {
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    background: rgba(79, 70, 229, 0.1);
-    color: var(--icm-accent);
-    vertical-align: middle;
-  }
-
-  .page-description {
-    margin: 0.15rem 0 0;
-    font-size: 0.75rem;
-    color: var(--icm-muted);
-    line-height: 1.35;
+  &::after {
+    content: '';
+    position: absolute;
+    right: -60px;
+    top: -80px;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
+    pointer-events: none;
   }
 }
 
-.tabs-container {
-  margin-bottom: 0.45rem;
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
 
-  :deep(.modern-tabs) {
-    .el-tabs__header {
-      margin: 0;
-      background: var(--icm-surface);
-      backdrop-filter: blur(12px);
-      border: 1px solid var(--icm-border);
-      border-radius: var(--icm-radius);
-      padding: 0.2rem;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-    }
+.hero-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
 
-    .el-tabs__nav-wrap::after {
-      display: none;
-    }
+.hero-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
 
-    .el-tabs__item {
-      border-radius: 7px;
-      margin: 0 0.1rem;
-      padding: 0 0.35rem !important;
-      height: 34px;
-      line-height: 34px;
-      font-size: 0.8rem;
-      font-weight: 500;
-      color: var(--icm-muted);
-      transition:
-        color 0.15s ease,
-        background 0.15s ease;
+.hero-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
 
-      &.is-active {
-        color: #fff;
-        font-weight: 600;
-        background: linear-gradient(135deg, var(--icm-accent), var(--icm-accent2));
-        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.22);
-      }
+.hero-tabs {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
 
-      &:hover:not(.is-active) {
-        color: var(--icm-accent);
-        background: rgba(79, 70, 229, 0.06);
-      }
+.hero-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 
-      .tab-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0 0.4rem;
-      }
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+  }
 
-      .tab-icon {
-        width: 18px;
-        height: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 5px;
-        background: rgba(79, 70, 229, 0.1);
-
-        .el-icon {
-          font-size: 0.85rem;
-        }
-      }
-
-      &.is-active .tab-icon {
-        background: rgba(255, 255, 255, 0.22);
-      }
-    }
-
-    .tab-text {
-      font-size: 0.8rem;
-    }
+  &.is-active {
+    color: #4338ca;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
   }
 }
 
@@ -956,504 +1090,952 @@ onMounted(() => {
 .history-content {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 12px;
 }
 
-.filter-card,
-.data-card {
-  position: relative;
-  z-index: 1;
+/* ===== パネル共通 ===== */
+.panel {
   background: var(--icm-surface);
-  backdrop-filter: blur(12px);
   border: 1px solid var(--icm-border);
-  border-radius: var(--icm-radius);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
-  transition: box-shadow 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
-  }
-
-  :deep(.el-card__body) {
-    padding: 0.55rem 0.65rem;
-  }
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(10px);
 }
 
-.filter-toolbar {
+.toolbar-panel {
+  padding: 10px 14px;
+}
+
+.toolbar-line {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem 0.75rem;
-
-  &__label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-    padding: 0.25rem 0;
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--icm-text);
-    letter-spacing: 0.02em;
-
-    .el-icon {
-      font-size: 1rem;
-      color: var(--icm-accent);
-    }
-  }
-
-  &__fields {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 0.5rem 0.75rem;
-    flex: 1;
-    min-width: 0;
-  }
-
-  &__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    flex-shrink: 0;
-  }
+  align-items: center;
+  gap: 8px 14px;
 }
 
-.filter-field {
+.panel-title {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 14px;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.panel-title-icon {
+  color: #4f46e5;
+  font-size: 16px;
+}
+
+.toolbar-field {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 140px;
-  flex: 1 1 160px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 
-  .filter-label {
-    margin: 0;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--icm-muted);
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-
-    .el-icon {
-      font-size: 0.8rem;
-      color: var(--icm-accent);
-    }
+  &--month {
+    width: 210px;
   }
 
-  .filter-control {
-    width: 100%;
+  &--process {
+    flex: 0 1 300px;
+    min-width: 220px;
   }
 }
 
-.modern-input {
-  :deep(.el-input__wrapper) {
-    border-radius: 8px;
-    min-height: 34px;
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1) inset;
+.toolbar-spacer {
+  flex: 1;
+}
 
-    &:hover {
-      box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35) inset;
-    }
+.month-hint {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px dashed rgba(100, 116, 139, 0.3);
 
-    &.is-focus {
-      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) inset;
-    }
+  &.is-ready {
+    color: #3730a3;
+    background: linear-gradient(135deg, rgba(219, 39, 119, 0.06), rgba(79, 70, 229, 0.08));
+    border: 1px solid rgba(79, 70, 229, 0.2);
+  }
+}
+
+.month-hint-icon {
+  font-size: 14px;
+  color: #6366f1;
+}
+
+.month-hint-arrow {
+  font-size: 13px;
+  color: #6366f1;
+}
+
+.month-hint-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+
+  &--from {
+    color: #be185d;
+    background: rgba(219, 39, 119, 0.1);
   }
 
+  &--to {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.12);
+  }
+}
+
+.field-label {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.field-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+
+  &--month {
+    background: #db2777;
+  }
+
+  &--process {
+    background: #2563eb;
+  }
+}
+
+.field-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
+
+  :deep(.el-input__wrapper),
   :deep(.el-select__wrapper) {
     border-radius: 8px;
-    min-height: 34px;
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1) inset;
-
-    &:hover {
-      box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35) inset;
-    }
-
-    &.is-focused {
-      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2) inset;
-    }
+    min-height: 32px;
   }
 }
 
-.btn-ghost {
-  border-radius: 8px;
+.opt-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.btn-bulk {
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  box-shadow: 0 6px 16px -6px rgba(79, 70, 229, 0.6);
+  transition: filter 0.15s ease, transform 0.15s ease;
+
+  &:hover:not(.is-disabled),
+  &:focus:not(.is-disabled) {
+    color: #fff;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  &.is-disabled,
+  &.is-disabled:hover {
+    color: #94a3b8;
+    background: #e2e8f0;
+    box-shadow: none;
+  }
+}
+
+.btn-bulk-count {
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  color: #4f46e5;
+  background: #fff;
+}
+
+/* ===== 工程別サマリー ===== */
+.summary-panel {
+  padding: 12px 14px 14px;
+}
+
+.summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.summary-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--icm-text);
+}
+
+.summary-title-bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #7c3aed, #4f46e5);
+}
+
+.summary-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 600;
-  font-size: 0.8rem;
-  padding: 7px 12px;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.summary-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stat-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  font-variant-numeric: tabular-nums;
+
+  &--indigo {
+    color: #4338ca;
+    background: rgba(79, 70, 229, 0.1);
+    border-color: rgba(79, 70, 229, 0.22);
+  }
+
+  &--emerald {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.25);
+  }
+
+  &--slate {
+    color: #475569;
+    background: rgba(100, 116, 139, 0.1);
+    border-color: rgba(100, 116, 139, 0.22);
+  }
+}
+
+.process-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.process-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 11px;
   border: 1px solid var(--icm-border);
   background: #fff;
-  color: var(--icm-muted);
+  overflow: hidden;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent);
+  }
 
   &:hover {
-    color: var(--icm-accent);
-    border-color: rgba(79, 70, 229, 0.25);
-    background: rgba(79, 70, 229, 0.04);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+
+  &.is-active {
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 8%, #fff), #fff 70%);
+    box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--accent) 65%, transparent);
+  }
+
+  &.is-empty {
+    opacity: 0.6;
   }
 }
 
-.btn-primary {
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.8rem;
-  padding: 7px 14px;
-  border: none;
-  background: linear-gradient(135deg, var(--icm-accent), var(--icm-accent2));
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 
-  &:hover {
-    filter: brightness(1.05);
+.tile-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.tile-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--icm-text);
+}
+
+.tile-status {
+  flex-shrink: 0;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+
+  &--pending {
+    color: #4338ca;
+    background: rgba(79, 70, 229, 0.12);
   }
+
+  &--partial {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.15);
+  }
+
+  &--done {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.14);
+  }
+
+  &--none {
+    color: #64748b;
+    background: rgba(100, 116, 139, 0.12);
+  }
+}
+
+.tile-metrics {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.tile-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.tile-metric-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--icm-muted);
+}
+
+.tile-metric-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--icm-text);
+  font-variant-numeric: tabular-nums;
+
+  &--qty {
+    color: var(--accent);
+  }
+}
+
+.tile-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.tile-progress-bar {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981, #059669);
+  transition: width 0.3s ease;
+}
+
+.tile-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 明細 ===== */
+.data-panel {
+  padding: 12px 14px;
 }
 
 .data-header {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.45rem;
-  margin-bottom: 0.45rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .data-title {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
 
-  &__icon {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #059669, #0d9488);
-    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
-
-    .el-icon {
-      font-size: 1rem;
-      color: #fff;
-    }
-  }
-
-  &__text {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-
-    h3 {
-      margin: 0;
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: var(--icm-text);
-    }
-  }
-
-  .data-count {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: #fff;
-    background: rgba(15, 23, 42, 0.75);
-    padding: 0.12rem 0.45rem;
-    border-radius: 999px;
+  h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--icm-text);
   }
 }
 
-.carryover-table-footer {
-  display: flex;
-  flex-wrap: wrap;
+.data-title-bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.process-chip {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
-  padding-top: 0.45rem;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
 
-  .carryover-sum-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-  }
+.process-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 
-  .carryover-sum-label {
-    font-weight: 600;
-    color: var(--icm-muted);
-  }
+.data-count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #334155;
+}
 
-  .carryover-sum-value {
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: #047857;
-    font-variant-numeric: tabular-nums;
-  }
-
-  :deep(.el-pagination) {
-    justify-content: flex-end;
-    margin: 0;
-
-    .el-pagination__total {
-      font-size: 0.75rem;
-    }
-  }
+.data-selected {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
 }
 
 .data-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  align-items: center;
+  gap: 6px;
+
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 
 .btn-carryover {
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.78rem;
-  padding: 6px 12px;
   border: none;
-  background: linear-gradient(135deg, #059669, #047857);
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.28);
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 4px 12px -4px rgba(5, 150, 105, 0.55);
 
-  &:hover:not(:disabled) {
+  &:hover:not(.is-disabled),
+  &:focus:not(.is-disabled) {
+    color: #fff;
+    background: linear-gradient(135deg, #10b981, #059669);
     filter: brightness(1.06);
   }
 
-  &:disabled {
-    background: #e2e8f0;
+  &.is-disabled,
+  &.is-disabled:hover {
     color: #94a3b8;
+    background: #e2e8f0;
     box-shadow: none;
   }
 }
 
-.table-container {
-  margin: 0 -0.15rem;
+.data-table {
+  --el-table-row-hover-bg-color: rgba(79, 70, 229, 0.05);
+  --el-table-border-color: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 
-  :deep(.modern-table) {
-    --el-table-header-bg-color: #f8fafc;
-    --el-table-row-hover-bg-color: #f0fdf4;
+  :deep(.el-table__header th.el-table__cell) {
+    background: linear-gradient(180deg, #f8fafc, #f1f5f9) !important;
+    color: #475569;
+    font-weight: 700;
+    font-size: 11.5px;
+    padding: 8px 6px;
+  }
 
-    border-radius: 8px;
-    overflow: hidden;
-    font-size: 0.78rem;
+  :deep(.el-table__row--striped td.el-table__cell) {
+    background: #fafbfd;
+  }
 
-    .el-table__header th {
-      padding: 6px 4px !important;
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--icm-text);
-      border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
-    }
-
-    .el-table__body td {
-      padding: 5px 4px !important;
-      border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
-    }
-
-    tr:hover > td {
-      transform: none;
-    }
-
-    .table-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.25rem;
-      width: 100%;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-      min-width: 0;
-
-      .el-icon {
-        flex-shrink: 0;
-        font-size: 0.85rem;
-        color: var(--icm-accent);
-      }
-
-      span {
-        font-weight: 700;
-        font-size: 0.72rem;
-      }
-    }
-
-    .sort-icon {
-      flex-shrink: 0;
-      font-size: 0.75rem;
-      color: #94a3b8;
-      cursor: pointer;
-      transition: color 0.15s ease;
-
-      &:hover {
-        color: var(--icm-accent);
-      }
-
-      &.sort-active {
-        color: var(--icm-accent);
-      }
-
-      &.sort-asc {
-        color: #059669;
-      }
-
-      &.sort-desc {
-        color: #dc2626;
-      }
-    }
-
-    .table-header-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      margin: 0 auto;
-      border-radius: 5px;
-      background: linear-gradient(135deg, var(--icm-accent), var(--icm-accent2));
-
-      .el-icon {
-        color: #fff;
-        font-size: 0.75rem;
-      }
-    }
-
-    .product-code {
-      font-family: ui-monospace, 'Cascadia Code', monospace;
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: #1e40af;
-      background: #e0e7ff;
-      padding: 0.1rem 0.3rem;
-      border-radius: 4px;
-    }
-
-    .product-name {
-      font-size: 0.78rem;
-      font-weight: 500;
-      color: var(--icm-text);
-      line-height: 1.35;
-    }
-
-    .item-tag {
-      font-weight: 600;
-      border-radius: 4px;
-    }
-
-    .quantity-value {
-      font-weight: 700;
-      font-size: 0.8rem;
-      color: #047857;
-      background: #d1fae5;
-      padding: 0.12rem 0.35rem;
-      border-radius: 4px;
-      display: inline-block;
-    }
-
-    .unit-value {
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: var(--icm-muted);
-      background: #f1f5f9;
-      padding: 0.08rem 0.28rem;
-      border-radius: 4px;
-    }
-
-    .location-tag {
-      font-weight: 600;
-      border-radius: 4px;
-    }
+  :deep(.el-table__cell) {
+    padding: 6px 6px;
+    font-size: 12px;
   }
 }
 
-.empty-state {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  padding: 1rem 0.75rem;
-  background: var(--icm-surface);
-  border: 1px solid var(--icm-border);
-  border-radius: var(--icm-radius);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+.sortable-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
 
-  :deep(.el-empty__description) {
-    margin-top: 0.35rem;
+.sort-icon {
+  font-size: 12px;
+  color: #94a3b8;
+
+  &.sort-asc {
+    color: #059669;
   }
 
-  .empty-icon {
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 0.35rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: #f1f5f9;
+  &.sort-desc {
+    color: #dc2626;
+  }
+}
 
-    .el-icon {
-      font-size: 1.5rem;
-      color: #94a3b8;
-    }
+.product-code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #3730a3;
+  background: #eef2ff;
+  padding: 1px 6px;
+  border-radius: 5px;
+}
+
+.product-name {
+  font-weight: 500;
+  color: var(--icm-text);
+}
+
+.color-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.quantity-value {
+  display: inline-block;
+  min-width: 56px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-value {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--icm-muted);
+  background: #f1f5f9;
+}
+
+.location-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+
+  :deep(.el-pagination) {
+    --el-color-primary: #4f46e5;
+  }
+}
+
+.sum-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.sum-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--icm-muted);
+}
+
+.sum-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #047857;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 空・ガイド ===== */
+.empty-panel {
+  padding: 16px;
+}
+
+.guide-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border-style: dashed;
+  border-color: rgba(79, 70, 229, 0.25);
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.8), rgba(255, 255, 255, 0.9));
+}
+
+.guide-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.12);
+}
+
+.guide-text {
+  h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--icm-text);
   }
 
-  .empty-description {
-    h3 {
-      margin: 0 0 0.25rem;
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--icm-text);
-    }
+  p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--icm-muted);
+    line-height: 1.6;
+  }
+}
 
-    p {
-      margin: 0;
-      font-size: 0.78rem;
-      color: var(--icm-muted);
-    }
+/* ===== レスポンシブ ===== */
+@media (max-width: 900px) {
+  .panel-title {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  .toolbar-spacer {
+    display: none;
   }
 }
 
 @media (max-width: 768px) {
   .page-shell {
-    padding: 0.4rem 0.5rem 0.65rem;
+    padding: 8px;
   }
 
-  .filter-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-
-    &__actions {
-      justify-content: stretch;
-
-      .el-button {
-        flex: 1;
-      }
-    }
-  }
-
-  .filter-field {
+  .toolbar-field,
+  .toolbar-field--month,
+  .toolbar-field--process {
     flex: 1 1 100%;
-    min-width: 0;
+    width: auto;
   }
 
   .data-header {
     flex-direction: column;
     align-items: stretch;
   }
+}
+</style>
 
-  .data-actions {
-    justify-content: stretch;
+<style lang="scss">
+.carryover-option-popper {
+  .opt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
 
-    .el-button {
-      flex: 1;
-      min-width: 0;
+  .opt-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .opt-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .opt-meta {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: #94a3b8;
+  }
+}
+
+.bulk-dialog {
+  border-radius: 14px;
+  overflow: hidden;
+
+  .el-dialog__header {
+    padding: 14px 18px;
+    margin: 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  }
+
+  .el-dialog__title {
+    font-weight: 700;
+  }
+
+  .bulk-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #3730a3;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(79, 70, 229, 0.08));
+    border: 1px solid rgba(79, 70, 229, 0.2);
+  }
+
+  .bulk-table {
+    border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .bulk-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .bulk-total {
+    font-size: 12px;
+    color: #475569;
+
+    strong {
+      color: #4338ca;
+    }
+  }
+
+  .bulk-result-head {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .result-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+
+    &--success {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.25);
+    }
+
+    &--qty {
+      color: #4338ca;
+      background: rgba(79, 70, 229, 0.08);
+      border-color: rgba(79, 70, 229, 0.2);
+    }
+
+    &--existing {
+      color: #b45309;
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.25);
+    }
+
+    &--skip {
+      color: #475569;
+      background: rgba(100, 116, 139, 0.08);
+      border-color: rgba(100, 116, 139, 0.2);
+    }
+  }
+
+  .result-key {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.85;
+  }
+
+  .result-val {
+    font-size: 1.2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .color-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
+  .pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .tile-status {
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 18px;
+
+    &--pending {
+      color: #4338ca;
+      background: rgba(79, 70, 229, 0.12);
+    }
+
+    &--partial {
+      color: #b45309;
+      background: rgba(245, 158, 11, 0.15);
+    }
+
+    &--done {
+      color: #047857;
+      background: rgba(16, 185, 129, 0.14);
+    }
+
+    &--none {
+      color: #64748b;
+      background: rgba(100, 116, 139, 0.12);
+    }
+  }
+
+  .btn-bulk {
+    border: none;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+
+    &:hover:not(.is-disabled),
+    &:focus:not(.is-disabled) {
+      color: #fff;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      filter: brightness(1.08);
+    }
+
+    &.is-disabled {
+      color: #94a3b8;
+      background: #e2e8f0;
     }
   }
 }
 </style>
-

@@ -32,7 +32,7 @@ export async function calculatePartStock(params?: {
     /** 同期期間内の part_stock 行数 */
     sync_window_row_count?: number
     usage_period?: {
-      /** クリア・ローリングの実効同期期間（initial>0 最遅日～表内最大日） */
+      /** 実効同期期間（部品ごとの initial>0 最遅日のうち最も早い日～表内最大日） */
       start_date: string
       end_date: string
       calculation_start_date?: string
@@ -40,6 +40,10 @@ export async function calculatePartStock(params?: {
       /** 使用数・使用計画集計に使ったクエリ区間 */
       usage_map_query_start?: string
       usage_map_query_end?: string
+      usage_plan_query_start?: string
+      usage_plan_query_end?: string
+      /** 在庫推移が使用計画で減算を始める日（実績使用数の最終日の翌日） */
+      trend_switch_date?: string | null
     } | null
   }
 }> {

@@ -2768,9 +2768,8 @@ const handleStockCalculation = async () => {
       const sync_window_row_count = d?.sync_window_row_count ?? 0
       const up = d?.usage_period
       const periodLine =
-        up?.start_date && up?.end_date
-          ? `\n同期期間: ${up.start_date} ～ ${up.end_date}`
-          : ''
+        (up?.start_date && up?.end_date ? `\n同期期間: ${up.start_date} ～ ${up.end_date}` : '') +
+        (up?.trend_switch_date ? `\n在庫推移の使用計画切替日: ${up.trend_switch_date}` : '')
 
       ElMessage.success(
         `在庫計算が完了しました。${periodLine}\n使用数集計キー数(受払×BOM): ${usage_lookup_key_count}件 / 同期期間内 part_stock 行: ${sync_window_row_count}件\n使用数を更新した行: ${usage_synced}件\n使用計画を同期した行: ${usage_plan_synced}件\n部品別計算: ${calculated_count}件\n現在庫・在庫推移を更新した行: ${updated_count}件`,

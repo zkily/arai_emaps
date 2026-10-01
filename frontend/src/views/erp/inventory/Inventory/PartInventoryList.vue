@@ -1,13 +1,7 @@
 <template>
-  <div class="inventory-list-page">
-    <div class="page-bg">
-      <div class="bg-gradient"></div>
-      <div class="bg-orb bg-orb-1"></div>
-      <div class="bg-orb bg-orb-2"></div>
-      <div class="bg-orb bg-orb-3"></div>
-    </div>
-
+  <div class="inventory-list-page piq-modern">
     <div class="page-header glass animate-in">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /></div>
       <div class="header-left">
         <div class="header-icon header-icon--part">
           <el-icon size="24"><Files /></el-icon>
@@ -28,7 +22,7 @@
       <div
         v-for="(item, i) in statCards"
         :key="item.key"
-        class="stat-card"
+        :class="['stat-card', `stat-card--${item.key}`]"
         :style="{ '--i': i }"
       >
         <span class="stat-label">{{ item.label }}</span>
@@ -514,59 +508,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.page-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.bg-gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #334155 100%);
-}
-
-.bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.35;
-  animation: orbFloat 18s ease-in-out infinite;
-}
-
-.bg-orb-1 {
-  width: 420px;
-  height: 420px;
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
-  top: -120px;
-  right: -80px;
-}
-
-.bg-orb-2 {
-  width: 320px;
-  height: 320px;
-  background: linear-gradient(135deg, #d97706, #f97316);
-  bottom: 10%;
-  left: -100px;
-  animation-delay: -6s;
-}
-
-.bg-orb-3 {
-  width: 240px;
-  height: 240px;
-  background: linear-gradient(135deg, #fb923c, #c2410c);
-  bottom: -60px;
-  right: 20%;
-  animation-delay: -12s;
-}
-
-@keyframes orbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(20px, -30px) scale(1.05); }
-  66% { transform: translate(-15px, 20px) scale(0.98); }
-}
-
 .glass {
   position: relative;
   z-index: 1;
@@ -926,4 +867,358 @@ onMounted(() => {
 .num-positive { color: #1e293b; }
 .num-zero { color: #64748b; }
 .num-negative { color: #dc2626; font-weight: 600; }
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（部品在庫照会 / オレンジ系）
+ * ============================================================ */
+.piq-modern {
+  --hero-shadow:
+    0 18px 36px -18px rgba(154, 52, 18, 0.6),
+    0 4px 12px -6px rgba(234, 88, 12, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --card-shadow:
+    0 10px 24px -18px rgba(194, 65, 12, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(160deg, #fff7ed 0%, #fffbf5 42%, #f8fafc 100%);
+}
+
+/* ルート遷移中に backdrop-filter があると背景が描画されないことがあるため不透明カードにする */
+.piq-modern .glass {
+  background: #fff;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid #fde4cf;
+  box-shadow: var(--card-shadow);
+}
+
+/* ---------- ヘッダー ---------- */
+.piq-modern .page-header {
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #7c2d12 0%, #c2410c 34%, #ea580c 66%, #fb923c 100%);
+  box-shadow: var(--hero-shadow);
+}
+.piq-modern .page-header:hover {
+  transform: none;
+  box-shadow: var(--hero-shadow);
+}
+.piq-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.piq-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.piq-modern .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.piq-modern .orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -110px;
+  left: 24%;
+  background: radial-gradient(circle, rgba(253, 230, 138, 0.42) 0%, rgba(253, 230, 138, 0) 70%);
+}
+.piq-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+}
+.piq-modern .header-icon--part {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(124, 45, 18, 0.5),
+    0 10px 18px -8px rgba(67, 20, 7, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.piq-modern .header-icon--part:hover {
+  transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(-1px);
+  box-shadow:
+    0 4px 0 rgba(124, 45, 18, 0.5),
+    0 12px 20px -8px rgba(67, 20, 7, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.piq-modern .header-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.piq-modern .header-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(67, 20, 7, 0.3);
+}
+.piq-modern .header-meta {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-left: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 0 rgba(124, 45, 18, 0.35);
+}
+
+/* CSV：白のキーキャップ */
+.piq-modern .btn-glass {
+  height: 30px;
+  padding: 0 14px !important;
+  border-radius: 9px !important;
+  color: #c2410c !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow:
+    0 3px 0 #9a3412,
+    0 10px 18px -8px rgba(67, 20, 7, 0.55) !important;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease !important;
+}
+.piq-modern .btn-glass:hover {
+  transform: translateY(-2px);
+  background: #fff !important;
+  border-color: #fff !important;
+  box-shadow:
+    0 5px 0 #9a3412,
+    0 14px 22px -8px rgba(67, 20, 7, 0.6) !important;
+}
+.piq-modern .btn-glass:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #9a3412 !important;
+}
+
+/* ---------- 集計カード（色分け・キーキャップ） ---------- */
+.piq-modern .stat-cards {
+  gap: 10px;
+  padding: 12px 14px;
+}
+.piq-modern .stat-card {
+  --sc: #ea580c;
+  --sc-rgb: 234, 88, 12;
+  --sc-ink: #c2410c;
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 120px;
+  align-items: flex-start;
+  min-width: 120px;
+  padding: 11px 14px 9px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(var(--sc-rgb), 0.09) 0%, #fff 72%);
+  border: 1px solid rgba(var(--sc-rgb), 0.25);
+  box-shadow:
+    0 3px 0 rgba(var(--sc-rgb), 0.35),
+    0 10px 18px -12px rgba(var(--sc-rgb), 0.6);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.piq-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.3) 100%);
+}
+.piq-modern .stat-card:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(var(--sc-rgb), 0.12) 0%, #fff 72%);
+  border-color: rgba(var(--sc-rgb), 0.45);
+  box-shadow:
+    0 5px 0 rgba(var(--sc-rgb), 0.4),
+    0 14px 22px -12px rgba(var(--sc-rgb), 0.65);
+}
+.piq-modern .stat-label {
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sc-ink);
+  text-transform: none;
+}
+.piq-modern .stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.piq-modern .stat-card .stat-value.num-negative {
+  color: #dc2626;
+  text-shadow: none;
+}
+.piq-modern .stat-card--current_stock {
+  --sc: #ea580c;
+  --sc-rgb: 234, 88, 12;
+  --sc-ink: #c2410c;
+}
+.piq-modern .stat-card--planned_usage {
+  --sc: #e11d48;
+  --sc-rgb: 225, 29, 72;
+  --sc-ink: #be123c;
+}
+.piq-modern .stat-card--manual_usage {
+  --sc: #7c3aed;
+  --sc-rgb: 124, 58, 237;
+  --sc-ink: #6d28d9;
+}
+.piq-modern .stat-card--usage_plan_qty {
+  --sc: #0284c7;
+  --sc-rgb: 2, 132, 199;
+  --sc-ink: #0369a1;
+}
+.piq-modern .stat-card--order_quantity {
+  --sc: #059669;
+  --sc-rgb: 5, 150, 105;
+  --sc-ink: #047857;
+}
+
+/* ---------- ツールバー ---------- */
+.piq-modern .toolbar {
+  gap: 14px 18px;
+  padding: 10px 14px;
+}
+.piq-modern .toolbar-label {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a3412;
+  background: #ffedd5;
+  box-shadow: inset 0 0 0 1px #fed7aa;
+}
+.piq-modern .toolbar :deep(.el-date-editor),
+.piq-modern .toolbar :deep(.el-select) {
+  --el-fill-color-blank: #f8fafc;
+  --el-border-color: #e2e8f0;
+  --el-text-color-regular: #1e293b;
+}
+.piq-modern .toolbar :deep(.el-input__wrapper),
+.piq-modern .toolbar :deep(.el-select__wrapper) {
+  border: none;
+  border-radius: 8px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+.piq-modern .toolbar :deep(.el-input__wrapper:hover),
+.piq-modern .toolbar :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #fdba74 inset;
+}
+.piq-modern .toolbar :deep(.el-input__wrapper.is-focus),
+.piq-modern .toolbar :deep(.el-input__wrapper.is-active),
+.piq-modern .toolbar :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #ea580c inset,
+    0 0 0 3px rgba(234, 88, 12, 0.15);
+}
+
+/* 前日・今日・翌日：セグメント */
+.piq-modern .date-quick {
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: #fff7ed;
+  box-shadow: inset 0 0 0 1px #fed7aa;
+}
+.piq-modern .date-quick-btn {
+  min-width: 52px !important;
+  height: 24px;
+  border-radius: 7px !important;
+  color: #9a3412 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+.piq-modern .date-quick-btn + .date-quick-btn {
+  margin-left: 0;
+}
+.piq-modern .date-quick-btn:hover {
+  transform: none;
+  color: #7c2d12 !important;
+  background: #ffedd5 !important;
+  border-color: transparent !important;
+}
+.piq-modern .date-quick-btn--active,
+.piq-modern .date-quick-btn--active:hover {
+  color: #fff !important;
+  background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%) !important;
+  box-shadow:
+    0 2px 0 #9a3412,
+    0 6px 12px -6px rgba(234, 88, 12, 0.7) !important;
+}
+
+/* ---------- テーブル ---------- */
+.piq-modern .table-wrap {
+  padding: 10px 12px;
+}
+.piq-modern .table-wrap:hover {
+  box-shadow: var(--card-shadow);
+}
+.piq-modern .data-table {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #f1e4d8;
+}
+.piq-modern .data-table :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+  color: #9a3412 !important;
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 #fdba74;
+}
+.piq-modern .data-table :deep(.el-table__body tr:hover > td) {
+  background: #fff7ed !important;
+}
+.piq-modern .data-table :deep(.el-table__body tr:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 #ea580c;
+}
+.piq-modern .data-table :deep(.el-table__body td .cell) {
+  font-variant-numeric: tabular-nums;
+}
+.piq-modern .data-table :deep(.el-table__footer td) {
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
+  color: #7c2d12 !important;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border-top: 2px solid #fdba74 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piq-modern .animate-in,
+  .piq-modern .stat-card {
+    animation: none;
+    opacity: 1;
+  }
+  .piq-modern .stat-card:hover,
+  .piq-modern .btn-glass:hover {
+    transform: none;
+  }
+}
 </style>

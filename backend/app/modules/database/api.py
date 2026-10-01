@@ -25,7 +25,7 @@ from app.core.datetime_utils import now_jst, JST
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
-from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, ProductRouteStep, Destination
+from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, ProductRouteStep, Destination, Process
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.shipping.shortage_print_handwriting import fetch_handwriting_product_rows
 from app.modules.shipping.long_stay_uninspected_api import fetch_long_stay_uninspected_rows
@@ -1690,6 +1690,253 @@ async def execute_stocktake_carryover(
     return {
         "data": {"successCount": success, "skippedCount": skipped},
         "message": f"{success} 件の在庫履歴（初期）を登録しました（{skipped} 件スキップ）",
+    }
+
+
+# 同一在庫列を共有する工程CD（KT10/KT15）は優先順で 1 つだけ一括繰越の対象にする
+_BULK_CARRYOVER_SHARED_COLUMN_PRIORITY = ("KT15", "KT10")
+
+
+async def _bulk_carryover_targets(db: AsyncSession) -> list[tuple[str, str, str]]:
+    """一括繰越対象の (process_cd, process_name, inventory_column) 一覧。"""
+    name_map: dict[str, str] = {}
+    try:
+        res = await db.execute(select(Process.process_cd, Process.process_name))
+        for r in res.all():
+            if r.process_cd:
+                name_map[str(r.process_cd).strip()] = r.process_name or ""
+    except Exception as e:
+        await db.rollback()
+        logger.warning("工程マスタ取得に失敗（一括繰越は全マッピングを対象）: %s", e)
+
+    col_to_pcs: dict[str, list[str]] = defaultdict(list)
+    for pc, col in PROCESS_INVENTORY_MAPPING.items():
+        col_to_pcs[col].append(pc)
+
+    targets: list[tuple[str, str, str]] = []
+    for col, pcs in col_to_pcs.items():
+        chosen = pcs[0]
+        if len(pcs) > 1:
+            in_master = [p for p in pcs if p in name_map]
+            candidates = in_master or pcs
+            chosen = next(
+                (p for p in _BULK_CARRYOVER_SHARED_COLUMN_PRIORITY if p in candidates),
+                candidates[0],
+            )
+        targets.append((chosen, name_map.get(chosen, ""), col))
+    targets.sort(key=lambda t: t[0])
+    return targets
+
+
+async def _existing_carryover_keys(
+    db: AsyncSession, target_d: date
+) -> set[tuple[str, str]]:
+    """翌月1日付けで登録済みの棚卸繰越（初期）の (process_cd, target_cd)。"""
+    res = await db.execute(
+        select(StockTransactionLog.process_cd, StockTransactionLog.target_cd).where(
+            StockTransactionLog.transaction_type == "初期",
+            StockTransactionLog.source_file == "production_summarys",
+            func.date(StockTransactionLog.transaction_time) == target_d,
+        )
+    )
+    return {
+        ((r.process_cd or "").strip(), (r.target_cd or "").strip()) for r in res.all()
+    }
+
+
+@router.get("/stocktake-carryover-summary")
+async def get_stocktake_carryover_summary(
+    month: str = Query(..., description="対象月 YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """対象月末日の全工程の繰越対象件数・数量と、翌月1日付けで繰越済みの件数。"""
+    y, mo = _parse_year_month(month)
+    last_d = _last_day_of_month(y, mo)
+    target_d = _first_day_of_next_month(y, mo)
+
+    try:
+        targets = await _bulk_carryover_targets(db)
+        existing = await _existing_carryover_keys(db, target_d)
+        carried_by_pc: dict[str, int] = defaultdict(int)
+        for pc, _cd in existing:
+            carried_by_pc[pc] += 1
+
+        out: list[dict] = []
+        for pc, pname, col in targets:
+            inv_col = getattr(ProductionSummary, col, None)
+            if inv_col is None:
+                continue
+            stmt = (
+                select(func.count(), func.coalesce(func.sum(inv_col), 0))
+                .select_from(ProductionSummary)
+                .where(
+                    ProductionSummary.date == last_d,
+                    ProductionSummary.product_cd.isnot(None),
+                    ProductionSummary.product_cd != "",
+                    func.coalesce(inv_col, 0) > 0,
+                )
+            )
+            cnt, qty = (await db.execute(stmt)).one()
+            out.append(
+                {
+                    "process_cd": pc,
+                    "process_name": pname,
+                    "inventory_column": col,
+                    "count": int(cnt or 0),
+                    "total_quantity": int(qty or 0),
+                    "carried_count": carried_by_pc.get(pc, 0),
+                }
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("stocktake-carryover-summary error: %s", e)
+        raise HTTPException(
+            status_code=500, detail=f"棚卸繰越サマリー取得エラー: {str(e)}"
+        ) from e
+
+    return {
+        "data": {
+            "month": month,
+            "as_of_date": last_d.isoformat(),
+            "target_date": target_d.isoformat(),
+            "processes": out,
+        }
+    }
+
+
+class StocktakeCarryoverExecuteAllBody(BaseModel):
+    month: str
+    skip_existing: bool = True
+
+
+@router.post("/stocktake-carryover-execute-all")
+async def execute_stocktake_carryover_all(
+    body: StocktakeCarryoverExecuteAllBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("edit")),
+):
+    """
+    対象月の全工程を一括繰越。各工程の月末 *_inventory > 0 の行を
+    stock_transaction_logs（transaction_type=初期）へ登録する。
+    skip_existing=True のとき、翌月1日付けで登録済みの (工程, 製品CD) はスキップ。
+    """
+    y, mo = _parse_year_month(body.month)
+    last_d = _last_day_of_month(y, mo)
+    target_d = _first_day_of_next_month(y, mo)
+    try:
+        transaction_time = JST.localize(datetime.combine(target_d, dt_time.min))
+    except Exception:
+        transaction_time = now_jst()
+
+    op_id = getattr(current_user, "user_id", None) or getattr(current_user, "id", None)
+    op_name = getattr(current_user, "username", None) or getattr(current_user, "name", None)
+    op_id_str = str(op_id) if op_id is not None else None
+
+    try:
+        targets = await _bulk_carryover_targets(db)
+        existing = await _existing_carryover_keys(db, target_d) if body.skip_existing else set()
+
+        per_process_rows: list[tuple[str, str, list[tuple[str, int]]]] = []
+        all_cds: set[str] = set()
+        for pc, pname, col in targets:
+            inv_col = getattr(ProductionSummary, col, None)
+            if inv_col is None:
+                continue
+            res = await db.execute(
+                select(ProductionSummary.product_cd, inv_col.label("inv_qty")).where(
+                    ProductionSummary.date == last_d,
+                    ProductionSummary.product_cd.isnot(None),
+                    ProductionSummary.product_cd != "",
+                    func.coalesce(inv_col, 0) > 0,
+                )
+            )
+            rows = [((r.product_cd or "").strip(), int(r.inv_qty or 0)) for r in res.all()]
+            per_process_rows.append((pc, pname, rows))
+            all_cds.update(cd for cd, _q in rows if cd)
+
+        prod_map: dict[str, tuple[Optional[str], Optional[str]]] = {}
+        if all_cds:
+            pr = await db.execute(
+                select(Product.product_cd, Product.product_type, Product.location_cd).where(
+                    Product.product_cd.in_(list(all_cds))
+                )
+            )
+            for r in pr.all():
+                pkey = (r.product_cd or "").strip()
+                if pkey:
+                    prod_map[pkey] = (r.product_type, r.location_cd)
+
+        results: list[dict] = []
+        total_success = total_skipped = total_existing = total_qty = 0
+        for pc, pname, rows in per_process_rows:
+            success = skipped = already = qty_sum = 0
+            for pcd, qty in rows:
+                if not pcd or qty <= 0:
+                    skipped += 1
+                    continue
+                if (pc, pcd) in existing:
+                    already += 1
+                    continue
+                prod = prod_map.get(pcd)
+                product_type = (prod[0] if prod else None) or ""
+                product_loc = prod[1] if prod else None
+                stock_type = _stock_type_for_stocktake_carryover(product_type, pc)
+                db.add(
+                    StockTransactionLog(
+                        stock_type=stock_type,
+                        transaction_type="初期",
+                        target_cd=pcd,
+                        location_cd=_location_cd_for_stocktake_carryover(
+                            stock_type, pc, product_loc
+                        ),
+                        process_cd=pc,
+                        quantity=Decimal(qty),
+                        unit="本",
+                        transaction_time=transaction_time,
+                        source_file="production_summarys",
+                        operator_id=op_id_str,
+                        operator_name=op_name,
+                    )
+                )
+                success += 1
+                qty_sum += qty
+            results.append(
+                {
+                    "process_cd": pc,
+                    "process_name": pname,
+                    "successCount": success,
+                    "skippedCount": skipped,
+                    "existingCount": already,
+                    "quantity": qty_sum,
+                }
+            )
+            total_success += success
+            total_skipped += skipped
+            total_existing += already
+            total_qty += qty_sum
+
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.exception("stocktake-carryover-execute-all error: %s", e)
+        raise HTTPException(status_code=500, detail=f"一括繰越エラー: {str(e)}") from e
+
+    return {
+        "data": {
+            "successCount": total_success,
+            "skippedCount": total_skipped,
+            "existingCount": total_existing,
+            "totalQuantity": total_qty,
+            "processes": results,
+        },
+        "message": (
+            f"全工程一括繰越：{total_success} 件登録"
+            f"（既存スキップ {total_existing} 件 / その他スキップ {total_skipped} 件）"
+        ),
     }
 
 

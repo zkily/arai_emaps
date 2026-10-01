@@ -24,7 +24,7 @@
               {{ t('orderDailyManage.changedBadge', { n: dailyChangedRows.size }) }}
             </span>
           </div>
-          <div class="dmm-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+          <div class="dmm-stats">
             <span class="dmm-stat dmm-stat--count">
               <strong>{{ dailyOrdersList.length }}</strong>
               <em>{{ t('orderDailyBatchEdit.statTotal') }}</em>
@@ -229,33 +229,6 @@ const confirmedBoxesTotal = computed(() =>
 const confirmedUnitsTotal = computed(() =>
   dailyOrdersList.value.reduce((sum, r) => sum + (Number(r.confirmed_units) || 0), 0),
 )
-
-// ヘッダー統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.dmm-stat')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.dmm-stat').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.dmm-stat').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 
 const confirmedBoxesInputs = ref<(HTMLInputElement | undefined)[]>([])
 const confirmedUnitsInputs = ref<(HTMLInputElement | undefined)[]>([])
@@ -977,12 +950,11 @@ onMounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-/* 統計カード */
+/* 統計カード（ぼやけ防止のため不透明・3D変形/文字影なし） */
 .dmm-stats {
   display: flex;
   gap: 8px;
   margin-left: auto;
-  perspective: 600px;
 }
 
 .dmm-stat {
@@ -990,25 +962,14 @@ onMounted(() => {
   overflow: hidden;
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 5px 10px 4px;
-  border-radius: 10px;
-  color: #fff;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  gap: 6px;
+  padding: 5px 11px 4px;
+  border-radius: 9px;
+  background: #fff;
+  border: 1px solid var(--sc-soft);
   box-shadow:
-    0 3px 0 rgba(30, 27, 75, 0.45),
-    0 10px 18px -10px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform-style: preserve-3d;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition:
-    transform 0.18s ease,
-    background 0.2s ease;
-}
-
-.dmm-stat:hover {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12));
+    0 2px 0 var(--sc-edge),
+    0 6px 12px -8px rgba(15, 23, 42, 0.55);
 }
 
 .dmm-stat::before {
@@ -1017,53 +978,43 @@ onMounted(() => {
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 3px;
   background: var(--sc);
-  box-shadow: 0 0 8px var(--sc);
-}
-
-.dmm-stat::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.28), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-.dmm-stat:hover::after {
-  opacity: 1;
 }
 
 .dmm-stat strong {
   display: block;
   font-size: 15px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.15;
+  color: #0f172a;
   font-variant-numeric: tabular-nums;
-  transform: translateZ(12px);
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.45);
 }
 
 .dmm-stat em {
   font-style: normal;
-  font-size: 10px;
-  font-weight: 600;
-  opacity: 0.88;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sc-edge);
   white-space: nowrap;
 }
 
 .dmm-stat--count {
-  --sc: #a5b4fc;
+  --sc: #6366f1;
+  --sc-edge: #4338ca;
+  --sc-soft: #c7d2fe;
 }
 
 .dmm-stat--boxes {
-  --sc: #67e8f9;
+  --sc: #06b6d4;
+  --sc-edge: #0e7490;
+  --sc-soft: #a5f3fc;
 }
 
 .dmm-stat--units {
-  --sc: #6ee7b7;
+  --sc: #10b981;
+  --sc-edge: #047857;
+  --sc-soft: #a7f3d0;
 }
 
 /* ヘッダーボタン（キーキャップ） */
@@ -1101,14 +1052,45 @@ onMounted(() => {
   box-shadow: none;
 }
 
+/* 一括保存：不透明のキーキャップ（無効時も文字がはっきり読めるよう半透明にしない） */
 .dmm-hero .dm-btn-save {
-  --k-edge: #047857;
-  --k-glow: rgba(16, 185, 129, 0.55);
-  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+  --k-edge: #065f46;
+  --k-glow: rgba(5, 150, 105, 0.5);
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border: 1px solid #047857;
 }
 
 .dmm-hero .dm-btn-save:hover:not(:disabled) {
-  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
+  color: #fff;
+  filter: none;
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  border-color: #059669;
+}
+
+.dmm-hero .dm-btn-save:focus:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+}
+
+.dmm-hero .dm-btn-save:disabled,
+.dmm-hero .dm-btn-save:disabled:hover {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 0 #94a3b8;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.dmm-hero .dm-btn-save.is-loading {
+  color: #fff;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-color: #047857;
 }
 
 .dmm-hero .dm-btn-close:hover {
@@ -1292,6 +1274,13 @@ onMounted(() => {
   box-shadow: inset 0 0 0 1px rgba(204, 0, 0, 0.22);
 }
 
+/* 確定箱数・確定本数の入力値：太字・純黒 */
+.dmm-table .compact-input :deep(.el-input__inner) {
+  font-weight: 700;
+  color: #000;
+  -webkit-text-fill-color: #000;
+}
+
 .dmm-table :deep(.el-input__wrapper.is-focus) {
   box-shadow:
     0 0 0 1px #0891b2 inset,
@@ -1310,10 +1299,6 @@ onMounted(() => {
   .dmm-hero .fx-sheen,
   .dmm-hero .dm-title-icon {
     animation: none;
-  }
-
-  .dmm-stat {
-    transform: none;
   }
 }
 

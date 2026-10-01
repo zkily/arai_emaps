@@ -86,6 +86,67 @@ export async function executeCarryover(params: {
   return res?.data ?? { successCount: 0, skippedCount: 0 }
 }
 
+export interface CarryoverProcessSummary {
+  process_cd: string
+  process_name: string
+  inventory_column: string
+  count: number
+  total_quantity: number
+  carried_count: number
+}
+
+export interface CarryoverSummaryPayload {
+  month: string
+  as_of_date: string
+  target_date: string
+  processes: CarryoverProcessSummary[]
+}
+
+/** 対象月の全工程の繰越対象件数・数量・繰越済み件数 */
+export async function getCarryoverSummary(month: string): Promise<CarryoverSummaryPayload> {
+  const res = (await request.get(`${BASE}/stocktake-carryover-summary`, {
+    params: { month },
+  })) as unknown as { data?: CarryoverSummaryPayload }
+  return (
+    res?.data ?? { month, as_of_date: '', target_date: '', processes: [] }
+  )
+}
+
+export interface CarryoverExecuteAllResult {
+  successCount: number
+  skippedCount: number
+  existingCount: number
+  totalQuantity: number
+  processes: Array<{
+    process_cd: string
+    process_name: string
+    successCount: number
+    skippedCount: number
+    existingCount: number
+    quantity: number
+  }>
+}
+
+/** 対象月の全工程を一括繰越（既定で繰越済みはスキップ） */
+export async function executeCarryoverAll(params: {
+  month: string
+  skip_existing?: boolean
+}): Promise<CarryoverExecuteAllResult> {
+  const res = (await request.post(`${BASE}/stocktake-carryover-execute-all`, {
+    month: params.month,
+    skip_existing: params.skip_existing ?? true,
+  })) as unknown as { data?: CarryoverExecuteAllResult }
+  return (
+    res?.data ?? {
+      successCount: 0,
+      skippedCount: 0,
+      existingCount: 0,
+      totalQuantity: 0,
+      processes: [],
+    }
+  )
+}
+
 export async function getCarryoverHistory(params: {
   page?: number
   pageSize?: number

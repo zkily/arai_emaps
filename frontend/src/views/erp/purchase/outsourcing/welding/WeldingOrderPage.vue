@@ -997,11 +997,15 @@
       width="650px"
       :close-on-click-modal="false"
       :show-close="true"
-      class="print-confirm-dialog"
+      class="print-confirm-dialog pcd-modern"
     >
       <template #header>
-        <div class="dialog-header-with-button">
-          <span class="dialog-title">注文書印刷確認</span>
+        <div class="dialog-header-with-button pcd-hero">
+          <div class="pcd-hero-fx" aria-hidden="true"><span class="pcd-orb pcd-orb--a" /><span class="pcd-orb pcd-orb--b" /><span class="pcd-grid" /></div>
+          <div class="pcd-hero-left">
+            <span class="pcd-hero-icon"><el-icon><Printer /></el-icon></span>
+            <span class="dialog-title">注文書印刷確認</span>
+          </div>
           <el-button type="primary" @click="confirmPrint" class="confirm-btn-header" size="small">
             <el-icon><Printer /></el-icon>
             印刷実行
@@ -1010,7 +1014,7 @@
       </template>
       <div class="print-confirm-content-compact">
         <div class="form-sections-compact">
-          <div class="form-section-compact">
+          <div class="form-section-compact pcd-sec pcd-sec--to">
             <div class="section-header-compact">
               <el-icon class="section-icon"><User /></el-icon>
               <span class="section-title">受注先情報</span>
@@ -1028,7 +1032,7 @@
             </div>
           </div>
 
-          <div class="form-section-compact">
+          <div class="form-section-compact pcd-sec pcd-sec--approve">
             <div class="section-header-compact">
               <el-icon class="section-icon"><EditPen /></el-icon>
               <span class="section-title">承認・発行情報</span>
@@ -1073,7 +1077,7 @@
             </div>
           </div>
 
-          <div class="form-section-compact">
+          <div class="form-section-compact pcd-sec pcd-sec--note">
             <div class="section-header-compact">
               <el-icon class="section-icon"><Box /></el-icon>
               <span class="section-title">備考・注意事項</span>
@@ -5735,6 +5739,300 @@ onMounted(async () => {
   .header-stats {
     width: 100%;
     flex-wrap: wrap;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（注文書印刷確認ダイアログ / violet・sky・amber）
+ * ============================================================ */
+:global(.el-dialog.pcd-modern) {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -16px rgba(46, 16, 101, 0.45),
+    0 0 0 1px rgba(124, 58, 237, 0.12);
+}
+:global(.el-dialog.pcd-modern .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+  background: none;
+}
+:global(.el-dialog.pcd-modern .el-dialog__body) {
+  padding: 0;
+  background: linear-gradient(180deg, #faf5ff 0%, #f8fafc 100%);
+}
+:global(.el-dialog.pcd-modern .el-dialog__headerbtn) {
+  top: 16px;
+  right: 14px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+:global(.el-dialog.pcd-modern .el-dialog__headerbtn:hover) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+:global(.el-dialog.pcd-modern .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+  font-size: 15px;
+}
+
+.pcd-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 56px 14px 18px;
+  background: linear-gradient(125deg, #2e1065 0%, #5b21b6 36%, #7c3aed 70%, #a78bfa 100%);
+}
+.pcd-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.pcd-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.pcd-orb--a {
+  width: 180px;
+  height: 180px;
+  top: -100px;
+  right: 14%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.pcd-orb--b {
+  width: 150px;
+  height: 150px;
+  bottom: -95px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.38) 0%, rgba(244, 114, 182, 0) 70%);
+}
+.pcd-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+  -webkit-mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
+}
+.pcd-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.pcd-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(46, 16, 101, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.pcd-hero .dialog-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(46, 16, 101, 0.4);
+  white-space: nowrap;
+}
+
+/* 印刷実行：エメラルドのキーキャップ */
+.pcd-hero .confirm-btn-header,
+.pcd-hero .confirm-btn-header:hover,
+.pcd-hero .confirm-btn-header:focus {
+  color: #fff;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.pcd-hero .confirm-btn-header {
+  margin-left: auto;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    0 3px 0 #065f46,
+    0 10px 18px -8px rgba(5, 150, 105, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+.pcd-hero .confirm-btn-header:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 #065f46,
+    0 14px 22px -8px rgba(5, 150, 105, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.pcd-hero .confirm-btn-header:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #065f46;
+}
+
+/* セクション色分け（受注先＝sky / 承認・発行＝violet / 備考＝amber） */
+.pcd-sec--to {
+  --sc: #0ea5e9;
+  --sc-rgb: 14, 165, 233;
+}
+.pcd-sec--approve {
+  --sc: #8b5cf6;
+  --sc-rgb: 139, 92, 246;
+}
+.pcd-sec--note {
+  --sc: #f59e0b;
+  --sc-rgb: 245, 158, 11;
+}
+.print-confirm-content-compact {
+  padding: 12px 14px 14px;
+}
+.print-confirm-content-compact .form-sections-compact {
+  gap: 10px;
+}
+.print-confirm-content-compact .pcd-sec {
+  position: relative;
+  border-radius: 11px;
+  border: 1px solid rgba(var(--sc-rgb), 0.22);
+  box-shadow:
+    0 8px 18px -12px rgba(var(--sc-rgb), 0.55),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+.print-confirm-content-compact .pcd-sec::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.25) 100%);
+}
+.print-confirm-content-compact .pcd-sec:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--sc-rgb), 0.4);
+}
+.print-confirm-content-compact .pcd-sec:focus-within {
+  border-color: rgba(var(--sc-rgb), 0.55);
+  box-shadow:
+    0 0 0 3px rgba(var(--sc-rgb), 0.1),
+    0 10px 22px -12px rgba(var(--sc-rgb), 0.6);
+}
+.pcd-sec .section-header-compact {
+  gap: 8px;
+  padding: 9px 12px 7px;
+  font-size: 12px;
+  color: #1e293b;
+  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.12) 0%, rgba(var(--sc-rgb), 0.02) 100%);
+  border-bottom-color: rgba(var(--sc-rgb), 0.16);
+}
+.pcd-sec .section-icon {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(var(--sc-rgb), 0.7) 0%, var(--sc) 100%);
+  box-shadow:
+    0 2px 0 rgba(15, 23, 42, 0.18),
+    0 4px 8px -3px rgba(var(--sc-rgb), 0.65);
+}
+.pcd-sec .section-title {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.pcd-sec .form-fields-compact {
+  gap: 8px;
+  padding: 10px 12px;
+}
+.pcd-sec .field-label {
+  font-weight: 600;
+  color: #475569;
+}
+.pcd-sec :deep(.el-input__wrapper),
+.pcd-sec :deep(.el-select__wrapper) {
+  min-height: 28px;
+  border: none;
+  border-radius: 8px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #dfe3f0 inset;
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+.pcd-sec :deep(.el-input__wrapper:hover),
+.pcd-sec :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
+}
+.pcd-sec :deep(.el-input__wrapper.is-focus),
+.pcd-sec :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px var(--sc) inset,
+    0 0 0 3px rgba(var(--sc-rgb), 0.15);
+}
+.pcd-sec :deep(.el-textarea__inner) {
+  border: none;
+  border-radius: 8px;
+  font-size: 11px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #dfe3f0 inset;
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+.pcd-sec :deep(.el-textarea__inner:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
+}
+.pcd-sec :deep(.el-textarea__inner:focus) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px var(--sc) inset,
+    0 0 0 3px rgba(var(--sc-rgb), 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print-confirm-content-compact .pcd-sec:hover,
+  .pcd-hero .confirm-btn-header:hover {
+    transform: none;
   }
 }
 </style>
