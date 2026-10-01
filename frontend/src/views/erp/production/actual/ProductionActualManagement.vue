@@ -1,6 +1,11 @@
 <template>
-  <div class="production-actual-management">
+  <div class="production-actual-management pam-modern">
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="page-title">
         <div class="title-icon">
           <el-icon><TrendCharts /></el-icon>
@@ -23,7 +28,7 @@
       >
         <el-row :gutter="12" class="search-row">
           <el-col :span="6">
-            <el-form-item label="製品名">
+            <el-form-item label="製品名" class="pam-f pam-f--prod">
               <el-select
                 v-model="searchForm.target_name"
                 placeholder="製品名を選択"
@@ -41,7 +46,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="6">
-            <el-form-item label="設備">
+            <el-form-item label="設備" class="pam-f pam-f--mach">
               <el-select
                 v-model="searchForm.machine_name"
                 placeholder="設備名を選択"
@@ -59,7 +64,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="生産日">
+            <el-form-item label="生産日" class="pam-f pam-f--date">
               <div class="date-input-group">
                 <el-date-picker
                   v-model="dateRange"
@@ -156,7 +161,7 @@
               size="small"
               :icon="Printer"
               @click="handlePrintTable"
-              class="print-table-btn"
+              class="print-table-btn pam-btn--log"
             >
               取引ログ印刷
             </el-button>
@@ -165,7 +170,7 @@
               size="small"
               :icon="Printer"
               @click="handlePrintMatrixTable"
-              class="print-table-btn"
+              class="print-table-btn pam-btn--matrix"
             >
               日別マトリクス印刷
             </el-button>
@@ -297,32 +302,32 @@
             size="small"
             :icon="Printer"
             @click="handlePrintCharts"
-            class="print-btn"
+            class="print-btn pam-btn--chart"
           >
             印刷
           </el-button>
         </div>
       </template>
       <div class="charts-grid">
-        <div class="chart-item">
+        <div class="chart-item chart-item--daily">
           <div class="chart-item-header">
             <span class="chart-item-title">日別生産量推移</span>
           </div>
           <div ref="dailyTrendChartRef" class="chart-container" style="height: 220px"></div>
         </div>
-        <div class="chart-item">
+        <div class="chart-item chart-item--process">
           <div class="chart-item-header">
             <span class="chart-item-title">工程別生産量</span>
           </div>
           <div ref="processChartRef" class="chart-container" style="height: 220px"></div>
         </div>
-        <div class="chart-item">
+        <div class="chart-item chart-item--type">
           <div class="chart-item-header">
             <span class="chart-item-title">取引タイプ分布</span>
           </div>
           <div ref="typeChartRef" class="chart-container" style="height: 220px"></div>
         </div>
-        <div class="chart-item">
+        <div class="chart-item chart-item--product">
           <div class="chart-item-header">
             <span class="chart-item-title">製品生産量TOP10</span>
           </div>
@@ -337,8 +342,17 @@
       title="取引ログ編集"
       width="480px"
       :close-on-click-modal="false"
-      class="edit-dialog"
+      class="edit-dialog pam-edit-dialog"
     >
+      <template #header>
+        <div class="pam-dlg-hero">
+          <span class="pam-dlg-hero-icon"><el-icon><Edit /></el-icon></span>
+          <div class="pam-dlg-hero-text">
+            <span class="pam-dlg-hero-title">取引ログ編集</span>
+            <span v-if="editForm.target_name" class="pam-dlg-hero-sub">{{ editForm.target_name }}</span>
+          </div>
+        </div>
+      </template>
       <div class="edit-dialog-content">
         <el-form ref="editFormRef" :model="editForm" :rules="editFormRules" label-width="90px">
           <div class="form-grid">
@@ -4079,5 +4093,641 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 .fade-slide-leave-to {
   opacity: 0;
   transform: translateY(8px);
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（生産実績管理 / ロイヤルブルー・シアン系）
+ * ============================================================ */
+.production-actual-management.pam-modern {
+  --pm-card-shadow:
+    0 10px 24px -18px rgba(29, 78, 216, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+
+  /* ---------- ヘッダー ---------- */
+  .page-header {
+    isolation: isolate;
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 34%, #2563eb 64%, #06b6d4 100%);
+    backdrop-filter: none;
+    box-shadow:
+      0 18px 36px -18px rgba(29, 78, 216, 0.6),
+      0 4px 12px -6px rgba(6, 182, 212, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+    &::before {
+      display: none;
+    }
+
+    &:hover {
+      transform: none;
+    }
+
+    .page-header-fx {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .fx-orb {
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .orb-a {
+      width: 220px;
+      height: 220px;
+      top: -110px;
+      right: 30%;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+    }
+
+    .orb-b {
+      width: 180px;
+      height: 180px;
+      bottom: -110px;
+      left: 22%;
+      background: radial-gradient(circle, rgba(165, 243, 252, 0.42) 0%, rgba(165, 243, 252, 0) 70%);
+    }
+
+    .fx-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+      background-size: 22px 22px;
+      -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+      mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+    }
+
+    .page-title {
+      .title-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        box-shadow:
+          0 3px 0 rgba(30, 58, 138, 0.55),
+          0 10px 18px -8px rgba(23, 37, 84, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.4);
+        transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+
+        &:hover {
+          transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+        }
+      }
+
+      h1 {
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #fff;
+        text-shadow: 0 2px 6px rgba(23, 37, 84, 0.3);
+      }
+
+      p {
+        color: rgba(255, 255, 255, 0.9);
+      }
+    }
+
+    .action-btn {
+      height: 30px;
+      font-weight: 700;
+      color: #1d4ed8;
+      background: #fff;
+      border: 1px solid #fff;
+      box-shadow:
+        0 3px 0 #1e3a8a,
+        0 10px 18px -10px rgba(23, 37, 84, 0.7);
+      transition:
+        transform 0.12s ease,
+        box-shadow 0.12s ease;
+
+      &:hover {
+        color: #1d4ed8;
+        border-color: #fff;
+        transform: translateY(-2px);
+        box-shadow:
+          0 5px 0 #1e3a8a,
+          0 14px 22px -10px rgba(23, 37, 84, 0.7);
+      }
+
+      &:active {
+        transform: translateY(2px);
+        box-shadow: 0 1px 0 #1e3a8a;
+      }
+    }
+  }
+
+  /* ---------- カード共通（検索＝blue / 工程＝indigo / 一覧＝sky / チャート＝emerald） ---------- */
+  .search-card,
+  .process-card,
+  .table-card,
+  .chart-card {
+    --sc: #2563eb;
+    --sc-soft: #dbeafe;
+    --sc-ink: #1e3a8a;
+    position: relative;
+    border: 1px solid #dbe4f3;
+    background: #fff;
+    box-shadow: var(--pm-card-shadow);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto;
+      height: 3px;
+      z-index: 1;
+      background: var(--sc);
+    }
+
+    &:hover {
+      transform: none;
+      box-shadow: var(--pm-card-shadow);
+    }
+
+    :deep(.el-card__header) {
+      background: linear-gradient(90deg, var(--sc-soft) 0%, #fff 70%);
+      border-bottom: 1px solid #e2e8f0;
+    }
+  }
+
+  .process-card {
+    --sc: #4f46e5;
+    --sc-soft: #e0e7ff;
+    --sc-ink: #3730a3;
+  }
+
+  .table-card {
+    --sc: #0284c7;
+    --sc-soft: #e0f2fe;
+    --sc-ink: #075985;
+  }
+
+  .chart-card {
+    --sc: #059669;
+    --sc-soft: #d1fae5;
+    --sc-ink: #065f46;
+  }
+
+  .process-card .process-card-header .title,
+  .table-card .table-header .table-title,
+  .chart-card .chart-header .chart-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--sc-ink);
+
+    .el-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      font-size: 13px;
+      color: #fff;
+      background: linear-gradient(150deg, color-mix(in srgb, var(--sc) 70%, #fff), var(--sc));
+      box-shadow: 0 2px 0 var(--sc-ink);
+    }
+  }
+
+  /* ---------- 検索（製品名＝indigo / 設備＝amber / 生産日＝sky） ---------- */
+  .search-card {
+    .pam-f--prod {
+      --fc: #4f46e5;
+      --fc-rgb: 79, 70, 229;
+      --fc-ink: #3730a3;
+    }
+
+    .pam-f--mach {
+      --fc: #d97706;
+      --fc-rgb: 217, 119, 6;
+      --fc-ink: #92400e;
+    }
+
+    .pam-f--date {
+      --fc: #0284c7;
+      --fc-rgb: 2, 132, 199;
+      --fc-ink: #075985;
+    }
+
+    .search-form .pam-f {
+      :deep(.el-form-item__label) {
+        font-weight: 800;
+        color: var(--fc-ink);
+
+        &::before {
+          content: '';
+          width: 7px;
+          height: 7px;
+          margin: auto 6px auto 0;
+          border-radius: 50%;
+          background: var(--fc);
+          box-shadow: 0 0 0 3px rgba(var(--fc-rgb), 0.15);
+        }
+      }
+
+      :deep(.el-input__wrapper),
+      :deep(.el-select__wrapper) {
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 0 0 1px #e2e8f0 inset;
+        transition: box-shadow 0.15s ease;
+
+        &:hover {
+          box-shadow: 0 0 0 1px rgba(var(--fc-rgb), 0.55) inset;
+        }
+      }
+
+      :deep(.el-input__wrapper.is-focus),
+      :deep(.el-range-editor.is-active),
+      :deep(.el-select__wrapper.is-focused) {
+        box-shadow:
+          0 0 0 1px var(--fc) inset,
+          0 0 0 3px rgba(var(--fc-rgb), 0.15);
+      }
+
+      :deep(.el-range__icon) {
+        color: var(--fc);
+      }
+    }
+
+    .date-input-group .quick-buttons .date-btn {
+      &.today {
+        background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+        box-shadow: 0 2px 0 #075985;
+
+        &:hover {
+          background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+          box-shadow: 0 3px 0 #075985;
+        }
+
+        &:active {
+          transform: translateY(1px);
+          box-shadow: 0 1px 0 #075985;
+        }
+      }
+    }
+  }
+
+  /* ---------- 工程タブ・統計 ---------- */
+  .process-card {
+    .process-card-header .record-hint {
+      font-weight: 800;
+      color: #3730a3;
+      background: #fff;
+      border-color: #c7d2fe;
+      box-shadow: 0 2px 0 #c7d2fe;
+    }
+
+    .process-tabs :deep(.el-tabs__item.is-active) {
+      background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+      box-shadow: 0 2px 0 #3730a3;
+    }
+
+    .stats-grid .stat-card {
+      --se: #1e40af;
+      background: #fff;
+      border-color: #e2e8f0;
+      box-shadow:
+        0 3px 0 var(--se),
+        0 10px 18px -12px rgba(15, 23, 42, 0.35);
+      transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        border-color: #e2e8f0;
+        box-shadow:
+          0 5px 0 var(--se),
+          0 14px 22px -12px rgba(15, 23, 42, 0.4);
+      }
+
+      &:has(.stat-icon.success) {
+        --se: #047857;
+      }
+
+      &:has(.stat-icon.warning) {
+        --se: #b45309;
+      }
+
+      &:has(.stat-icon.info) {
+        --se: #0e7490;
+      }
+
+      &:has(.stat-icon.neutral) {
+        --se: #475569;
+      }
+
+      .stat-icon {
+        box-shadow: 0 2px 0 var(--se);
+
+        &:hover {
+          transform: none;
+        }
+      }
+
+      .stat-label {
+        font-weight: 700;
+        color: var(--se);
+      }
+
+      .stat-value {
+        font-weight: 800;
+      }
+    }
+  }
+
+  /* ---------- 印刷ボタン（取引ログ＝sky / マトリクス＝violet / チャート＝emerald） ---------- */
+  .table-card .table-header .print-table-btn,
+  .chart-card .chart-header .print-btn {
+    --b1: #38bdf8;
+    --b2: #0284c7;
+    --be: #075985;
+    font-weight: 700;
+    background: linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
+    box-shadow: 0 2px 0 var(--be);
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease;
+
+    &:hover {
+      background: linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 0 var(--be);
+    }
+
+    &:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 var(--be);
+    }
+
+    &.pam-btn--matrix {
+      --b1: #a78bfa;
+      --b2: #7c3aed;
+      --be: #5b21b6;
+    }
+
+    &.pam-btn--chart {
+      --b1: #34d399;
+      --b2: #059669;
+      --be: #065f46;
+    }
+  }
+
+  .table-card .table-header .el-tag {
+    color: #075985;
+    background: #fff;
+    border-color: #bae6fd;
+    box-shadow: 0 2px 0 #bae6fd;
+  }
+
+  /* ---------- テーブル ---------- */
+  .table-card {
+    .data-table {
+      :deep(.el-table__header) th {
+        background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+        color: #1e3a8a;
+        font-weight: 800;
+        border-bottom-color: #bfdbfe;
+
+        &::after {
+          background: #60a5fa;
+          opacity: 1;
+        }
+      }
+
+      :deep(.el-tag:hover) {
+        transform: none;
+      }
+    }
+
+    .pagination-wrapper :deep(.el-pagination) .el-pager li.is-active {
+      background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+      box-shadow: 0 2px 0 #075985;
+    }
+  }
+
+  /* ---------- チャート（日別＝blue / 工程＝indigo / タイプ＝amber / 製品＝emerald） ---------- */
+  .chart-card .charts-grid .chart-item {
+    --cc: #2563eb;
+    border-color: #e2e8f0;
+    border-top: 3px solid var(--cc);
+
+    &:hover {
+      transform: none;
+      border-color: color-mix(in srgb, var(--cc) 35%, #fff);
+      border-top-color: var(--cc);
+    }
+
+    &.chart-item--process {
+      --cc: #4f46e5;
+    }
+
+    &.chart-item--type {
+      --cc: #d97706;
+    }
+
+    &.chart-item--product {
+      --cc: #059669;
+    }
+
+    .chart-item-header {
+      &::before {
+        background: var(--cc);
+        box-shadow: none;
+      }
+
+      &::after {
+        background: linear-gradient(90deg, var(--cc), transparent);
+      }
+
+      .chart-item-title {
+        font-weight: 800;
+        color: color-mix(in srgb, var(--cc) 70%, #0f172a);
+      }
+    }
+  }
+}
+
+/* ---------- 取引ログ編集ダイアログ（ブルー） ---------- */
+:global(.el-dialog.pam-edit-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 60px -20px rgba(30, 58, 138, 0.45),
+    0 8px 18px rgba(15, 23, 42, 0.1);
+}
+
+:global(.el-dialog.pam-edit-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+:global(.el-dialog.pam-edit-dialog .el-dialog__headerbtn) {
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+:global(.el-dialog.pam-edit-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+
+:global(.el-dialog.pam-edit-dialog .el-dialog__body) {
+  padding: 14px 18px 4px;
+}
+
+:global(.el-dialog.pam-edit-dialog .el-dialog__footer) {
+  padding: 0;
+}
+
+.pam-dlg-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 52px 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 45%, #0891b2 100%);
+}
+
+.pam-dlg-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 3px 0 rgba(30, 58, 138, 0.55);
+}
+
+.pam-dlg-hero-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pam-dlg-hero-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.pam-dlg-hero-sub {
+  overflow: hidden;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.edit-dialog-content {
+  .form-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 0;
+  }
+
+  :deep(.el-form-item__label) {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+  }
+
+  .readonly-field :deep(.el-input__wrapper) {
+    border-radius: 8px;
+    background: #f8fafc;
+    box-shadow: 0 0 0 1px #e2e8f0 inset;
+  }
+
+  .readonly-field :deep(.el-input__inner) {
+    font-weight: 600;
+    color: #1e293b;
+    -webkit-text-fill-color: #1e293b;
+  }
+
+  .editable-field :deep(.el-form-item__label) {
+    color: #1d4ed8;
+  }
+
+  .editable-field :deep(.el-input__wrapper) {
+    border-radius: 8px;
+    box-shadow: 0 0 0 1px #60a5fa inset;
+  }
+
+  .editable-field :deep(.el-input__wrapper.is-focus) {
+    box-shadow:
+      0 0 0 1px #2563eb inset,
+      0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  .editable-field :deep(.el-input__inner) {
+    font-size: 15px;
+    font-weight: 800;
+    color: #000;
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 18px 14px;
+  border-top: 1px solid #eef2f7;
+  background: #f8fafc;
+
+  .el-button {
+    min-width: 84px;
+    height: 30px;
+    border-radius: 8px;
+    font-weight: 700;
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  .el-button:not(.save-btn) {
+    color: #475569;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 2px 0 #cbd5e1;
+  }
+
+  .save-btn {
+    color: #fff;
+    background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+    border: 1px solid #1d4ed8;
+    box-shadow: 0 2px 0 #1e3a8a;
+  }
+
+  .el-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .el-button:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .production-actual-management.pam-modern .page-header .action-btn,
+  .production-actual-management.pam-modern .process-card .stats-grid .stat-card,
+  .dialog-footer .el-button {
+    transition: none;
+    transform: none !important;
+  }
 }
 </style>

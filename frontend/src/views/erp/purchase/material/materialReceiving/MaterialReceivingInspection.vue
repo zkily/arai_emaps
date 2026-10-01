@@ -1,7 +1,12 @@
 <template>
-  <div class="inspection-container">
+  <div class="inspection-container mri-modern">
     <!-- 页面头部 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -20,7 +25,7 @@
       <el-tabs v-model="activeTab" class="modern-tabs" @tab-change="handleTabChange">
         <el-tab-pane label="検品履歴" name="history">
           <template #label>
-            <span class="tab-label">
+            <span class="tab-label tab-label--history">
               <el-icon><Document /></el-icon>
               検品履歴
             </span>
@@ -28,7 +33,7 @@
         </el-tab-pane>
         <el-tab-pane label="品質基準設定" name="standards">
           <template #label>
-            <span class="tab-label">
+            <span class="tab-label tab-label--standards">
               <el-icon><Setting /></el-icon>
               品質基準設定
             </span>
@@ -53,6 +58,7 @@
                   collapse-tags
                   collapse-tags-tooltip
                   size="small"
+                  class="mri-f mri-f--sup"
                   style="width: 180px"
                   @change="handleSupplierFilter"
                 >
@@ -71,13 +77,16 @@
                   end-placeholder="終了日"
                   format="YYYY/MM/DD"
                   value-format="YYYY-MM-DD"
+                  :shortcuts="monthShortcuts"
                   @change="filterHistory"
                   size="small"
-                  style="width: 220px"
+                  class="mri-f mri-f--date"
+                  style="width: 240px"
                 />
                 <el-button
                   type="primary"
                   size="small"
+                  class="mri-btn mri-btn--print"
                   @click="printInspectionHistory"
                   :icon="Printer"
                 >
@@ -177,6 +186,7 @@
                   clearable
                   filterable
                   size="small"
+                  class="mri-f mri-f--mat"
                   style="width: 220px"
                   @change="handleMaterialNameFilter"
                 >
@@ -511,6 +521,22 @@ const activeTab = ref('history')
 const loading = ref(false)
 const saving = ref(false)
 const historyDateRange = ref<string[]>([])
+
+// 期間ピッカーの月単位ショートカット（offset: 当月からの月数、span: 遡る月数）
+const getMonthRange = (offset: number, span = 1): [Date, Date] => {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + offset
+  return [new Date(y, m - span + 1, 1), new Date(y, m + 1, 0)]
+}
+const monthShortcuts = [
+  { text: '前月', value: () => getMonthRange(-1) },
+  { text: '今月', value: () => getMonthRange(0) },
+  { text: '来月', value: () => getMonthRange(1) },
+  { text: '過去3ヶ月', value: () => getMonthRange(0, 3) },
+  { text: '過去6ヶ月', value: () => getMonthRange(0, 6) },
+  { text: '今年', value: () => getMonthRange(11 - new Date().getMonth(), 12) },
+]
 const inspectionDetailVisible = ref(false)
 const selectedInspectionDetail = ref<any>(null)
 
@@ -2318,6 +2344,271 @@ onMounted((): void => {
 
   .modern-table {
     font-size: 0.8125rem;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（材料受入検品管理 / インディゴ・バイオレット系）
+ * ============================================================ */
+.mri-modern {
+  --mi-shadow:
+    0 18px 36px -18px rgba(67, 56, 202, 0.6),
+    0 4px 12px -6px rgba(124, 58, 237, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --mc-shadow:
+    0 10px 24px -18px rgba(67, 56, 202, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(160deg, #eef2ff 0%, #f5f3ff 42%, #f8fafc 100%);
+}
+
+/* ---------- ヘッダー ---------- */
+.mri-modern .page-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 34%, #6366f1 68%, #8b5cf6 100%);
+  box-shadow: var(--mi-shadow);
+}
+.mri-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.mri-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.mri-modern .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  right: 30%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.mri-modern .orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -110px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(196, 181, 253, 0.45) 0%, rgba(196, 181, 253, 0) 70%);
+}
+.mri-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+}
+.mri-modern .main-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+}
+.mri-modern .title-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 22px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(49, 46, 129, 0.55),
+    0 10px 18px -8px rgba(30, 27, 75, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.mri-modern .subtitle {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ---------- タブ（検品履歴＝sky / 品質基準設定＝amber） ---------- */
+.mri-modern .modern-tabs {
+  padding: 6px 14px 0;
+  border: 1px solid #e0e7ff;
+  box-shadow: var(--mc-shadow);
+}
+.mri-modern .tab-label--history {
+  --tc: #0284c7;
+  --tc-edge: #075985;
+}
+.mri-modern .tab-label--standards {
+  --tc: #d97706;
+  --tc-edge: #92400e;
+}
+.mri-modern .tab-label .el-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--tc) 70%, #fff), var(--tc));
+  box-shadow: 0 2px 0 var(--tc-edge);
+}
+.mri-modern :deep(.el-tabs__item.is-active) {
+  color: #4338ca;
+  font-weight: 800;
+}
+.mri-modern :deep(.el-tabs__active-bar) {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 3px;
+}
+
+/* ---------- カード（検品履歴＝sky / 品質基準設定＝amber） ---------- */
+.mri-modern .history-card,
+.mri-modern .standards-card {
+  --sc: #0284c7;
+  --sc-soft: #e0f2fe;
+  --sc-ink: #075985;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  background: #fff;
+  box-shadow: var(--mc-shadow);
+  animation: none;
+}
+.mri-modern .standards-card {
+  --sc: #d97706;
+  --sc-soft: #fef3c7;
+  --sc-ink: #92400e;
+}
+.mri-modern .history-card::before,
+.mri-modern .standards-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--sc);
+}
+.mri-modern .history-card :deep(.el-card__header),
+.mri-modern .standards-card :deep(.el-card__header) {
+  padding: 10px 14px;
+  background: linear-gradient(90deg, var(--sc-soft) 0%, #fff 70%);
+  border-bottom: 1px solid #e2e8f0;
+}
+.mri-modern .card-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--sc-ink);
+}
+
+/* 検索項目（色分け：仕入先＝violet / 期間＝sky / 材料名＝amber） */
+.mri-modern .mri-f--sup {
+  --fc: #7c3aed;
+  --fc-rgb: 124, 58, 237;
+}
+.mri-modern .mri-f--date {
+  --fc: #0284c7;
+  --fc-rgb: 2, 132, 199;
+}
+.mri-modern .mri-f--mat {
+  --fc: #d97706;
+  --fc-rgb: 217, 119, 6;
+}
+.mri-modern .mri-f :deep(.el-select__wrapper),
+.mri-modern .mri-f.el-range-editor {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+.mri-modern .mri-f :deep(.el-select__wrapper:hover),
+.mri-modern .mri-f.el-range-editor:hover {
+  box-shadow: 0 0 0 1px rgba(var(--fc-rgb), 0.55) inset;
+}
+.mri-modern .mri-f :deep(.el-select__wrapper.is-focused),
+.mri-modern .mri-f.el-range-editor.is-active {
+  box-shadow:
+    0 0 0 1px var(--fc) inset,
+    0 0 0 3px rgba(var(--fc-rgb), 0.15);
+}
+.mri-modern .mri-f.el-range-editor :deep(.el-range__icon) {
+  color: var(--fc);
+}
+
+/* 印刷ボタン（violet キーキャップ） */
+.mri-modern .mri-btn--print {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+  border: 1px solid #6d28d9;
+  box-shadow: 0 2px 0 #5b21b6;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.mri-modern .mri-btn--print:hover,
+.mri-modern .mri-btn--print:focus {
+  color: #fff;
+  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+  border-color: #6d28d9;
+}
+.mri-modern .mri-btn--print:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 #5b21b6;
+}
+.mri-modern .mri-btn--print:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #5b21b6;
+}
+
+/* ---------- テーブル ---------- */
+.mri-modern .modern-table :deep(.el-table__header th.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  color: #3730a3 !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 -2px 0 #a5b4fc;
+}
+.mri-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #eef2ff !important;
+}
+.mri-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+.mri-modern .modern-table :deep(.el-table__body td .cell) {
+  font-variant-numeric: tabular-nums;
+}
+.mri-modern .material-name {
+  font-weight: 700;
+  color: #4338ca;
+}
+.mri-modern .inspector-name {
+  font-weight: 600;
+  color: #047857;
+}
+.mri-modern .pagination-container {
+  margin: 4px -12px -12px;
+  padding: 8px 0;
+  background: linear-gradient(180deg, #f5f3ff 0%, #f8fafc 100%);
+  border-top: 1px solid #e0e7ff;
+}
+.mri-modern .pagination-container :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 800;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  box-shadow: 0 2px 0 #4338ca;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mri-modern .mri-btn--print:hover,
+  .mri-modern .mri-btn--print:active {
+    transform: none;
   }
 }
 </style>

@@ -1,7 +1,8 @@
 <template>
-  <div class="material-logs-container">
+  <div class="material-logs-container mrh-modern">
     <!-- 页面标题 -->
     <div class="page-header">
+      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /></div>
       <div class="header-content">
         <div class="title-section">
           <div class="title-icon">
@@ -43,10 +44,11 @@
           <span>検索・フィルター</span>
         </div>
         <div class="search-actions">
-          <el-button size="small" @click="clearFilters" icon="Refresh"> クリア </el-button>
-          <el-button size="small" @click="showColumnSettings" icon="Setting"> 列設定 </el-button>
+          <el-button size="small" class="mrh-btn mrh-btn--clear" @click="clearFilters" icon="Refresh"> クリア </el-button>
+          <el-button size="small" class="mrh-btn mrh-btn--cols" @click="showColumnSettings" icon="Setting"> 列設定 </el-button>
           <el-button
             size="small"
+            class="mrh-btn mrh-btn--print"
             @click="handlePrint"
             :loading="printLoading"
             :disabled="printLoading || !totalCount"
@@ -57,6 +59,7 @@
           <el-button
             type="primary"
             size="small"
+            class="mrh-btn mrh-btn--import"
             @click="importCSVData"
             :loading="importLoading"
             icon="Upload"
@@ -68,7 +71,7 @@
 
       <div class="search-content">
         <div class="search-grid">
-          <div class="search-item">
+          <div class="search-item mrh-f mrh-f--kw">
             <div class="search-label">
               <el-icon><Search /></el-icon>
               <span>材料名、仕入先、製造番号で検索</span>
@@ -86,7 +89,7 @@
             </el-input>
           </div>
 
-          <div class="search-item">
+          <div class="search-item mrh-f mrh-f--date">
             <div class="search-label">
               <el-icon><Calendar /></el-icon>
               <span>期間</span>
@@ -105,7 +108,7 @@
             />
           </div>
 
-          <div class="search-item">
+          <div class="search-item mrh-f mrh-f--sup">
             <div class="search-label">
               <el-icon><Operation /></el-icon>
               <span>仕入先</span>
@@ -129,7 +132,7 @@
             </el-select>
           </div>
 
-          <div class="search-item">
+          <div class="search-item mrh-f mrh-f--sort">
             <div class="search-label">
               <el-icon><Sort /></el-icon>
               <span>並び順</span>
@@ -1513,5 +1516,345 @@ onMounted(() => {
 :deep(.el-tag) {
   border-radius: 6px;
   font-weight: 500;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（材料受入履歴 / ティール・シアン系）
+ * ============================================================ */
+.mrh-modern {
+  --mh-shadow:
+    0 18px 36px -18px rgba(15, 118, 110, 0.6),
+    0 4px 12px -6px rgba(8, 145, 178, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --mc-shadow:
+    0 10px 24px -18px rgba(15, 118, 110, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(160deg, #ecfeff 0%, #f0fdfa 42%, #f8fafc 100%);
+}
+
+/* ---------- ヘッダー ---------- */
+.mrh-modern .page-header {
+  isolation: isolate;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #134e4a 0%, #0f766e 34%, #0891b2 68%, #22d3ee 100%);
+  box-shadow: var(--mh-shadow);
+}
+.mrh-modern .page-header::before {
+  display: none;
+}
+.mrh-modern .page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.mrh-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.mrh-modern .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  right: 30%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.mrh-modern .orb-b {
+  width: 180px;
+  height: 180px;
+  bottom: -110px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(165, 243, 252, 0.42) 0%, rgba(165, 243, 252, 0) 70%);
+}
+.mrh-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
+}
+.mrh-modern .title-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(19, 78, 74, 0.55),
+    0 10px 18px -8px rgba(4, 47, 46, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.mrh-modern .title-icon .el-icon {
+  color: #fff !important;
+}
+.mrh-modern .title-text h1 {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 2px 6px rgba(4, 47, 46, 0.3);
+}
+.mrh-modern .title-text p {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* 統計カード：不透明の白キーキャップ（色分け） */
+.mrh-modern .stat-card {
+  --sc: #7c3aed;
+  --sc-edge: #5b21b6;
+  --sc-soft: #ddd6fe;
+  min-width: 110px;
+  padding: 7px 12px 7px 8px;
+  border-radius: 11px;
+  color: #0f172a;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: #fff;
+  border: 1px solid var(--sc-soft);
+  box-shadow:
+    0 3px 0 var(--sc-edge),
+    0 10px 18px -10px rgba(4, 47, 46, 0.6);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.mrh-modern .stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--sc-edge),
+    0 14px 22px -10px rgba(4, 47, 46, 0.6);
+}
+.mrh-modern .stat-card:nth-child(2) {
+  --sc: #0284c7;
+  --sc-edge: #075985;
+  --sc-soft: #bae6fd;
+}
+.mrh-modern .stat-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--sc) 70%, #fff), var(--sc));
+  box-shadow: 0 2px 0 var(--sc-edge);
+}
+.mrh-modern .stat-number {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.mrh-modern .stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sc-edge);
+  opacity: 1;
+}
+
+/* ---------- 検索パネル ---------- */
+.mrh-modern .search-panel,
+.mrh-modern .table-panel {
+  border-radius: 12px;
+  border: 1px solid #ccecea;
+  box-shadow: var(--mc-shadow);
+}
+.mrh-modern .search-header,
+.mrh-modern .table-header {
+  background: linear-gradient(90deg, #ccfbf1 0%, #ecfeff 60%, #fff 100%);
+  border-bottom: 1px solid #b2ebe4;
+}
+.mrh-modern .search-title,
+.mrh-modern .table-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #115e59;
+}
+.mrh-modern .search-title .el-icon,
+.mrh-modern .table-title .el-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: #fff;
+  background: linear-gradient(150deg, #2dd4bf, #0d9488);
+  box-shadow: 0 2px 0 #115e59;
+}
+.mrh-modern .table-title :deep(.el-tag) {
+  font-weight: 800;
+  color: #0f766e;
+  background: #fff;
+  border-color: #99f6e4;
+  box-shadow: 0 2px 0 #99f6e4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 操作ボタン（色分けキーキャップ） */
+.mrh-modern .mrh-btn {
+  --b-bg: #fff;
+  --b-fg: #475569;
+  --b-bd: #cbd5e1;
+  --b-edge: #cbd5e1;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  color: var(--b-fg);
+  background: var(--b-bg);
+  border: 1px solid var(--b-bd);
+  box-shadow: 0 2px 0 var(--b-edge);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+.mrh-modern .mrh-btn:not(.is-disabled):hover,
+.mrh-modern .mrh-btn:not(.is-disabled):focus {
+  color: var(--b-fg);
+  background: var(--b-bg);
+  border-color: var(--b-bd);
+}
+.mrh-modern .mrh-btn:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow: 0 3px 0 var(--b-edge);
+}
+.mrh-modern .mrh-btn:not(.is-disabled):active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--b-edge);
+}
+.mrh-modern .mrh-btn.is-disabled {
+  transform: none;
+  box-shadow: none;
+}
+.mrh-modern .mrh-btn--cols {
+  --b-bg: #eef2ff;
+  --b-fg: #4338ca;
+  --b-bd: #c7d2fe;
+  --b-edge: #a5b4fc;
+}
+.mrh-modern .mrh-btn--print {
+  --b-bg: #f5f3ff;
+  --b-fg: #6d28d9;
+  --b-bd: #ddd6fe;
+  --b-edge: #c4b5fd;
+}
+.mrh-modern .mrh-btn--import {
+  --b-bg: linear-gradient(180deg, #14b8a6 0%, #0d9488 100%);
+  --b-fg: #fff;
+  --b-bd: #0f766e;
+  --b-edge: #115e59;
+}
+
+/* 検索項目（色分け：キーワード＝teal / 期間＝sky / 仕入先＝violet / 並び順＝amber） */
+.mrh-modern .mrh-f--kw {
+  --fc: #0d9488;
+  --fc-rgb: 13, 148, 136;
+  --fc-ink: #115e59;
+}
+.mrh-modern .mrh-f--date {
+  --fc: #0284c7;
+  --fc-rgb: 2, 132, 199;
+  --fc-ink: #075985;
+}
+.mrh-modern .mrh-f--sup {
+  --fc: #7c3aed;
+  --fc-rgb: 124, 58, 237;
+  --fc-ink: #5b21b6;
+}
+.mrh-modern .mrh-f--sort {
+  --fc: #d97706;
+  --fc-rgb: 217, 119, 6;
+  --fc-ink: #92400e;
+}
+.mrh-modern .search-item.mrh-f {
+  border-radius: 10px;
+  border: 1px solid rgba(var(--fc-rgb), 0.2);
+  background: linear-gradient(180deg, rgba(var(--fc-rgb), 0.06) 0%, #fff 70%);
+  box-shadow: inset 3px 0 0 var(--fc);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.mrh-modern .search-item.mrh-f:focus-within {
+  border-color: rgba(var(--fc-rgb), 0.5);
+  box-shadow:
+    inset 3px 0 0 var(--fc),
+    0 0 0 3px rgba(var(--fc-rgb), 0.1);
+}
+.mrh-modern .mrh-f .search-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fc-ink);
+}
+.mrh-modern .mrh-f .search-label .el-icon {
+  color: var(--fc);
+}
+.mrh-modern .mrh-f :deep(.el-input__wrapper),
+.mrh-modern .mrh-f :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+.mrh-modern .mrh-f :deep(.el-input__wrapper:hover),
+.mrh-modern .mrh-f :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(var(--fc-rgb), 0.55) inset;
+}
+.mrh-modern .mrh-f :deep(.el-input__wrapper.is-focus),
+.mrh-modern .mrh-f :deep(.el-input__wrapper.is-active),
+.mrh-modern .mrh-f :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--fc) inset,
+    0 0 0 3px rgba(var(--fc-rgb), 0.15);
+}
+
+/* ---------- テーブル ---------- */
+.mrh-modern .modern-table :deep(.el-table__header th.el-table__cell) {
+  background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+  color: #115e59 !important;
+  font-weight: 700 !important;
+  box-shadow: inset 0 -2px 0 #5eead4;
+}
+.mrh-modern .modern-table :deep(.el-table__row:hover) {
+  transform: none;
+  box-shadow: none;
+}
+.mrh-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #f0fdfa !important;
+}
+.mrh-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #0d9488;
+}
+.mrh-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell) {
+  background: #ccfbf1 !important;
+}
+.mrh-modern .modern-table :deep(.el-table__body td .cell) {
+  font-variant-numeric: tabular-nums;
+}
+.mrh-modern .pagination-section {
+  background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 100%);
+  border-top-color: #ccecea;
+}
+.mrh-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 800;
+  background: linear-gradient(180deg, #2dd4bf 0%, #0d9488 100%);
+  box-shadow: 0 2px 0 #115e59;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mrh-modern .stat-card:hover,
+  .mrh-modern .mrh-btn:not(.is-disabled):hover {
+    transform: none;
+  }
 }
 </style>

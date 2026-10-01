@@ -1,10 +1,18 @@
 <template>
-  <div class="pmp-page">
+  <div class="pmp-page pmp-modern">
     <!-- ツールバー（コンパクト・立体） -->
     <header class="pmp-toolbar">
+      <div class="pmp-toolbar-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="pmp-toolbar__brand">
-        <h1 class="pmp-toolbar__title">工程別設備別計画</h1>
-        <span class="pmp-toolbar__period">{{ periodLabel }}</span>
+        <span class="pmp-toolbar__icon"><el-icon><DataAnalysis /></el-icon></span>
+        <div class="pmp-toolbar__brand-text">
+          <h1 class="pmp-toolbar__title">工程別設備別計画</h1>
+          <span class="pmp-toolbar__period">{{ periodLabel }}</span>
+        </div>
       </div>
 
       <div class="pmp-toolbar__body">
@@ -100,7 +108,11 @@
           >
             <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
-          <el-button size="small" class="pmp-toolbar__btn" @click="adjustDrawerVisible = true">
+          <el-button
+          size="small"
+          class="pmp-toolbar__btn pmp-toolbar__btn--adjust"
+          @click="adjustDrawerVisible = true"
+        >
             計画調整
           </el-button>
         </div>
@@ -560,6 +572,12 @@
       class="pmp-drill-dialog"
       append-to-body
     >
+      <template #header>
+        <div class="pmp-drill-hero">
+          <span class="pmp-drill-hero__icon"><el-icon><Histogram /></el-icon></span>
+          <span class="pmp-drill-hero__title">{{ drillTitle }}</span>
+        </div>
+      </template>
       <div v-if="drillData" class="pmp-drill-summary">
         <span>計画 <b>{{ fmt(drillData.total.plan) }}</b></span>
         <span>実績 <b>{{ fmt(drillData.total.actual) }}</b></span>
@@ -622,6 +640,7 @@
       v-model="adjustDrawerVisible"
       title="計画調整（試算）"
       size="480px"
+      class="pmp-adj-drawer-shell"
       :close-on-click-modal="false"
     >
       <div class="pmp-adj-drawer">
@@ -720,6 +739,7 @@ import {
   WarningFilled,
   Top,
   Bottom,
+  DataAnalysis,
 } from '@element-plus/icons-vue'
 import echarts from '@/utils/echarts'
 import type { EChartsOption } from '@/utils/echarts'
@@ -3482,6 +3502,487 @@ onBeforeUnmount(() => {
   :deep(.pmp-table--daily td.pmp-daily-col--day .cell),
   :deep(.pmp-table--daily td.pmp-daily-col--day .pmp-daily-cell) {
     font-size: 12px;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（工程別設備別計画 / ネイビー・エメラルド系）
+ * ============================================================ */
+.pmp-modern {
+  background: linear-gradient(160deg, #eff6ff 0%, #ecfdf5 45%, #f8fafc 100%);
+}
+
+/* ---------- ツールバー（ヒーロー） ---------- */
+.pmp-modern .pmp-toolbar {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #0c1f4a 0%, #1e40af 38%, #0e7490 72%, #059669 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(30, 64, 175, 0.6),
+    0 4px 12px -6px rgba(5, 150, 105, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.pmp-modern .pmp-toolbar-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.pmp-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.pmp-modern .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -120px;
+  left: 120px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.pmp-modern .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -130px;
+  right: 18%;
+  background: radial-gradient(circle, rgba(167, 243, 208, 0.4) 0%, rgba(167, 243, 208, 0) 70%);
+}
+.pmp-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
+  mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
+}
+.pmp-modern .pmp-toolbar__brand {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 14px 2px 4px;
+  border-right-color: rgba(255, 255, 255, 0.22);
+}
+.pmp-modern .pmp-toolbar__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(12, 31, 74, 0.6),
+    0 10px 18px -8px rgba(12, 31, 74, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+  flex-shrink: 0;
+}
+.pmp-modern .pmp-toolbar__brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.pmp-modern .pmp-toolbar__title {
+  padding-left: 0;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(12, 31, 74, 0.35);
+}
+.pmp-modern .pmp-toolbar__title::before {
+  display: none;
+}
+.pmp-modern .pmp-toolbar__period {
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+}
+
+/* ストリップ：不透明の白キーキャップ（条件＝sky / 表示＝indigo / 計画＝amber） */
+.pmp-modern .pmp-toolbar__strip {
+  --st: #0284c7;
+  --st-rgb: 2, 132, 199;
+  background: #fff;
+  border-color: #fff;
+  box-shadow:
+    0 2px 0 rgba(12, 31, 74, 0.45),
+    0 8px 16px -10px rgba(12, 31, 74, 0.6);
+}
+.pmp-modern .pmp-toolbar__strip--view {
+  --st: #4f46e5;
+  --st-rgb: 79, 70, 229;
+}
+.pmp-modern .pmp-toolbar__strip--plan-adj {
+  --st: #d97706;
+  --st-rgb: 217, 119, 6;
+}
+.pmp-modern .pmp-toolbar__strip-label {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--st);
+  background: rgba(var(--st-rgb), 0.1);
+  box-shadow: inset 0 0 0 1px rgba(var(--st-rgb), 0.25);
+}
+.pmp-modern :deep(.pmp-toolbar__strip .el-input__wrapper),
+.pmp-modern :deep(.pmp-toolbar__strip .el-select__wrapper) {
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+.pmp-modern :deep(.pmp-toolbar__strip .el-input__wrapper:hover),
+.pmp-modern :deep(.pmp-toolbar__strip .el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(var(--st-rgb), 0.55) inset;
+}
+.pmp-modern :deep(.pmp-toolbar__strip .el-input__wrapper.is-focus),
+.pmp-modern :deep(.pmp-toolbar__strip .el-range-editor.is-active),
+.pmp-modern :deep(.pmp-toolbar__strip .el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--st) inset,
+    0 0 0 3px rgba(var(--st-rgb), 0.15);
+}
+.pmp-modern :deep(.pmp-toolbar__strip .el-range__icon) {
+  color: var(--st);
+}
+.pmp-modern
+  :deep(.pmp-toolbar__view .el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(180deg, #818cf8 0%, #4f46e5 100%);
+  border-color: #4338ca !important;
+  box-shadow: 0 2px 0 #3730a3;
+}
+.pmp-modern
+  :deep(.pmp-toolbar__plan-mode .el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  color: #fff;
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  border-color: #b45309;
+  box-shadow: 0 2px 0 #92400e;
+}
+
+/* ボタン（更新＝blue / 印刷＝amber / Excel＝emerald / 計画調整＝orange） */
+.pmp-toolbar__btn.pmp-toolbar__btn--primary,
+.pmp-toolbar__btn.pmp-toolbar__btn--print,
+.pmp-toolbar__btn.pmp-toolbar__btn--excel,
+.pmp-toolbar__btn.pmp-toolbar__btn--adjust {
+  --b-bg: #fff;
+  --b-fg: #475569;
+  --b-bd: #cbd5e1;
+  --b-edge: #94a3b8;
+  font-weight: 700;
+  color: var(--b-fg) !important;
+  background: var(--b-bg) !important;
+  border: 1px solid var(--b-bd) !important;
+  border-radius: 7px;
+  box-shadow: 0 2px 0 var(--b-edge) !important;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--primary {
+  --b-bg: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  --b-fg: #fff;
+  --b-bd: #1d4ed8;
+  --b-edge: #1e3a8a;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--print {
+  --b-bg: #fffbeb;
+  --b-fg: #b45309;
+  --b-bd: #fcd34d;
+  --b-edge: #f59e0b;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--excel {
+  --b-bg: #ecfdf5;
+  --b-fg: #047857;
+  --b-bd: #6ee7b7;
+  --b-edge: #10b981;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--adjust {
+  --b-bg: #fff7ed;
+  --b-fg: #c2410c;
+  --b-bd: #fdba74;
+  --b-edge: #f97316;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--primary:not(.is-disabled):hover,
+.pmp-toolbar__btn.pmp-toolbar__btn--print:not(.is-disabled):hover,
+.pmp-toolbar__btn.pmp-toolbar__btn--excel:not(.is-disabled):hover,
+.pmp-toolbar__btn.pmp-toolbar__btn--adjust:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 var(--b-edge) !important;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--primary:not(.is-disabled):active,
+.pmp-toolbar__btn.pmp-toolbar__btn--print:not(.is-disabled):active,
+.pmp-toolbar__btn.pmp-toolbar__btn--excel:not(.is-disabled):active,
+.pmp-toolbar__btn.pmp-toolbar__btn--adjust:not(.is-disabled):active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--b-edge) !important;
+}
+.pmp-toolbar__btn.pmp-toolbar__btn--primary.is-disabled,
+.pmp-toolbar__btn.pmp-toolbar__btn--print.is-disabled,
+.pmp-toolbar__btn.pmp-toolbar__btn--excel.is-disabled,
+.pmp-toolbar__btn.pmp-toolbar__btn--adjust.is-disabled {
+  opacity: 1;
+  color: #94a3b8 !important;
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 概要カード：白キーキャップ ---------- */
+.pmp-modern .pmp-card {
+  --pmp-edge: #1d4ed8;
+  background: #fff;
+  border-color: color-mix(in srgb, var(--pmp-accent) 30%, #fff);
+  box-shadow:
+    0 3px 0 var(--pmp-edge),
+    0 10px 18px -12px rgba(15, 23, 42, 0.35);
+}
+.pmp-modern .pmp-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 5px 0 var(--pmp-edge),
+    0 14px 22px -12px rgba(15, 23, 42, 0.4);
+}
+.pmp-modern .pmp-card::after {
+  display: none;
+}
+.pmp-modern .pmp-card--actual,
+.pmp-modern .pmp-card--up {
+  --pmp-edge: #15803d;
+}
+.pmp-modern .pmp-card--down {
+  --pmp-edge: #b91c1c;
+}
+.pmp-modern .pmp-card--rate {
+  --pmp-edge: #6d28d9;
+}
+.pmp-modern .pmp-card--defect {
+  --pmp-edge: #b45309;
+}
+.pmp-modern .pmp-card__icon {
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--pmp-accent) 65%, #fff), var(--pmp-accent));
+  border: none;
+  box-shadow: 0 2px 0 var(--pmp-edge);
+}
+.pmp-modern .pmp-card__label {
+  font-size: 11px;
+  color: var(--pmp-edge);
+}
+.pmp-modern .pmp-card__value {
+  font-size: 19px;
+  color: #0f172a;
+}
+
+/* ---------- パネル（対比集計＝indigo / 日別明細＝sky / 達成率＝violet） ---------- */
+.pmp-modern .pmp-panel {
+  --pc: #4f46e5;
+  --pc-soft: #e0e7ff;
+  --pc-ink: #3730a3;
+  background: #fff;
+  border-color: #dbe4f3;
+  border-top: 3px solid var(--pc);
+  box-shadow: 0 10px 24px -18px rgba(30, 64, 175, 0.45), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.pmp-modern .pmp-panel--daily {
+  --pc: #0284c7;
+  --pc-soft: #e0f2fe;
+  --pc-ink: #075985;
+}
+.pmp-modern .pmp-panel--trend {
+  --pc: #7c3aed;
+  --pc-soft: #ede9fe;
+  --pc-ink: #5b21b6;
+}
+.pmp-modern .pmp-panel__head {
+  background: linear-gradient(90deg, var(--pc-soft) 0%, #fff 70%);
+  border-bottom-color: #e2e8f0;
+  box-shadow: none;
+}
+.pmp-modern .pmp-panel__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--pc-ink);
+}
+.pmp-modern .pmp-panel__title::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc) 20%, transparent);
+}
+.pmp-modern .pmp-panel__label {
+  color: var(--pc-ink);
+}
+.pmp-modern
+  :deep(.pmp-panel__seg .el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: var(--pc);
+  border-color: var(--pc) !important;
+  box-shadow: 0 2px 0 var(--pc-ink);
+}
+
+/* テーブル見出し（パネル色に合わせる） */
+.pmp-modern :deep(.pmp-table--summary th.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  box-shadow: inset 0 -2px 0 #a5b4fc;
+}
+.pmp-modern :deep(.pmp-table--summary th.pmp-summary-col--head .cell) {
+  color: #3730a3;
+}
+.pmp-modern :deep(.pmp-table--daily th.el-table__cell) {
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+  box-shadow: inset 0 -2px 0 #7dd3fc;
+}
+.pmp-modern :deep(.pmp-table--daily th.pmp-daily-col--head .cell),
+.pmp-modern :deep(.pmp-table--daily .pmp-daycol-group > .cell) {
+  color: #075985;
+}
+.pmp-modern :deep(.pmp-trend-table th.el-table__cell) {
+  color: #5b21b6;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+}
+.pmp-modern :deep(.pmp-table .el-table__row:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--pc);
+}
+
+/* トレンド KPI・カード */
+.pmp-modern .pmp-trend-kpi {
+  background: #fff;
+  box-shadow: 0 2px 0 #e2e8f0;
+}
+.pmp-modern .pmp-trend-chart-card,
+.pmp-modern .pmp-trend-table-card {
+  background: #fff;
+}
+.pmp-modern .pmp-trend-chart-card__head,
+.pmp-modern .pmp-trend-table-card__head {
+  color: #5b21b6;
+  background: linear-gradient(90deg, #f5f3ff 0%, #fff 100%);
+}
+
+/* ---------- 製品別明細ダイアログ（append-to-body のため global） ---------- */
+:global(.el-dialog.pmp-drill-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 60px -20px rgba(30, 64, 175, 0.45),
+    0 8px 18px rgba(15, 23, 42, 0.1);
+}
+:global(.el-dialog.pmp-drill-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+:global(.el-dialog.pmp-drill-dialog .el-dialog__headerbtn) {
+  top: 12px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+:global(.el-dialog.pmp-drill-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+:global(.el-dialog.pmp-drill-dialog .el-dialog__body) {
+  padding: 12px 16px 8px;
+}
+:global(.el-dialog.pmp-drill-dialog .el-dialog__footer) {
+  padding: 10px 16px 12px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+.pmp-drill-hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 52px 12px 16px;
+  color: #fff;
+  background: linear-gradient(125deg, #0c1f4a 0%, #1e40af 45%, #0e7490 100%);
+}
+.pmp-drill-hero__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 16px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 3px 0 rgba(12, 31, 74, 0.55);
+}
+.pmp-drill-hero__title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pmp-drill-summary span {
+  background: #fff;
+  border-color: #dbe4f3;
+  box-shadow: 0 2px 0 #dbe4f3;
+}
+.pmp-drill-summary b {
+  font-weight: 800;
+  color: #0f172a;
+}
+.pmp-drill-table :deep(th.el-table__cell) {
+  font-weight: 700;
+  color: #1e3a8a;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: inset 0 -2px 0 #93c5fd;
+}
+.pmp-drill-table :deep(.el-table__row:hover > td.el-table__cell) {
+  background: #eff6ff !important;
+}
+
+/* ---------- 計画調整ドロワー（amber） ---------- */
+:global(.el-drawer.pmp-adj-drawer-shell .el-drawer__header) {
+  margin-bottom: 0;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #9a3412 0%, #ea580c 55%, #f59e0b 100%);
+}
+:global(.el-drawer.pmp-adj-drawer-shell .el-drawer__title) {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+:global(.el-drawer.pmp-adj-drawer-shell .el-drawer__close-btn) {
+  color: #fff;
+}
+:global(.el-drawer.pmp-adj-drawer-shell .el-drawer__body) {
+  padding-top: 14px;
+}
+.pmp-adj-hint {
+  padding: 8px 10px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pmp-modern .pmp-card:hover,
+  .pmp-toolbar__btn:hover,
+  .pmp-toolbar__btn:active {
+    transform: none !important;
   }
 }
 </style>
