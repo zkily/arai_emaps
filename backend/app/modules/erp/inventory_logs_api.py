@@ -354,6 +354,64 @@ class InventoryLogCreate(BaseModel):
     process_name: Optional[str] = None
 
 
+@router.get("/options")
+async def get_inventory_log_options(
+    item: Optional[str] = Query(None),
+    processCd: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """一覧画面の工程・製品名プルダウン用の選択肢（製品名は工程で絞り込み可能）。"""
+    base_conditions: List[str] = []
+    params: Dict[str, Any] = {}
+    if item:
+        base_conditions.append(_sql_eq_col_bind_unicode_ci("i.item", "item"))
+        params["item"] = item
+
+    process_where = f"WHERE {' AND '.join(base_conditions)}" if base_conditions else ""
+
+    product_conditions = list(base_conditions)
+    if processCd:
+        product_conditions.append(_sql_eq_col_bind_unicode_ci("i.process_cd", "opt_process_cd"))
+        params["opt_process_cd"] = processCd
+    product_where = f"WHERE {' AND '.join(product_conditions)}" if product_conditions else ""
+
+    process_sql = f"""
+      SELECT
+        i.process_cd,
+        MAX({SQL_EXPR_PROCESS_NAME}) as process_name,
+        COUNT(*) as cnt
+      FROM inventory_logs i
+      LEFT JOIN processes p ON i.process_cd COLLATE utf8mb4_unicode_ci = p.process_cd COLLATE utf8mb4_unicode_ci
+      {process_where}
+      GROUP BY i.process_cd
+      ORDER BY i.process_cd
+    """
+    product_sql = f"""
+      SELECT
+        i.product_name,
+        MIN(i.product_cd) as product_cd,
+        COUNT(*) as cnt
+      FROM inventory_logs i
+      {product_where}
+      GROUP BY i.product_name
+      ORDER BY i.product_name
+      LIMIT 5000
+    """
+    try:
+        proc_res = await db.execute(text(process_sql), params)
+        processes = [_serialize_log_mapping_row(r) for r in proc_res.mappings().all()]
+        prod_res = await db.execute(text(product_sql), params)
+        products = [_serialize_log_mapping_row(r) for r in prod_res.mappings().all()]
+    except SQLAlchemyError as e:
+        await db.rollback()
+        if _is_missing_inventory_logs_table(e):
+            return {"success": True, "data": {"processes": [], "products": []}}
+        raise
+
+    return {"success": True, "data": {"processes": processes, "products": products}}
+
+
 @router.get("")
 async def get_inventory_logs(
     item: Optional[str] = Query(None),
@@ -361,6 +419,8 @@ async def get_inventory_logs(
     dateRange: Optional[List[str]] = Query(None),
     monthPicker: Optional[str] = Query(None),
     stageType: Optional[str] = Query(None),
+    processCd: Optional[str] = Query(None),
+    productName: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=500),
     sortBy: str = Query("log_date"),
@@ -384,6 +444,14 @@ async def get_inventory_logs(
             + ")"
         )
         params["kw"] = f"%{keyword}%"
+
+    if processCd:
+        conditions.append(_sql_eq_col_bind_unicode_ci("i.process_cd", "process_cd"))
+        params["process_cd"] = processCd
+
+    if productName:
+        conditions.append(_sql_eq_col_bind_unicode_ci("i.product_name", "product_name"))
+        params["product_name"] = productName
 
     if dateRange and len(dateRange) == 2 and all(dateRange):
         conditions.append("i.log_date BETWEEN :date_a AND :date_b")

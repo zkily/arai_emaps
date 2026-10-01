@@ -30,10 +30,24 @@ export interface InventoryFilters {
   monthPicker?: string
   item?: string
   stageType?: string
+  processCd?: string
+  productName?: string
   page?: number
   pageSize?: number
   sortBy?: string
   sortOrder?: string
+}
+
+export interface InventoryProcessOption {
+  process_cd: string
+  process_name: string
+  cnt: number
+}
+
+export interface InventoryProductOption {
+  product_name: string
+  product_cd: string
+  cnt: number
 }
 
 function toQueryParams(filters: InventoryFilters) {
@@ -43,6 +57,8 @@ function toQueryParams(filters: InventoryFilters) {
     dateRange: filters.dateRange,
     monthPicker: filters.monthPicker,
     stageType: filters.stageType,
+    processCd: filters.processCd || undefined,
+    productName: filters.productName || undefined,
     page: filters.page ?? 1,
     pageSize: filters.pageSize ?? 20,
     sortBy: filters.sortBy ?? 'log_date',
@@ -104,6 +120,12 @@ function filterRows(items: InventoryLog[], f: InventoryFilters): InventoryLog[] 
   }
   if (f.item) {
     out = out.filter((r) => r.item === f.item)
+  }
+  if (f.processCd) {
+    out = out.filter((r) => r.process_cd === f.processCd)
+  }
+  if (f.productName) {
+    out = out.filter((r) => r.product_name === f.productName)
   }
   if (f.stageType && f.stageType !== 'all') {
     const pc = STAGE_TYPE_TO_PROCESS_CD[f.stageType]
@@ -198,6 +220,51 @@ export async function getInventoryLogs(filters: InventoryFilters) {
       list,
       total: filtered.length,
       totalQuantity,
+    }
+  }
+}
+
+/** 一覧画面の工程・製品名プルダウン選択肢（processCd 指定で製品名を絞り込み） */
+export async function getInventoryLogOptions(params: {
+  item?: string
+  processCd?: string
+}): Promise<{ processes: InventoryProcessOption[]; products: InventoryProductOption[] }> {
+  try {
+    const res: any = await request.get('/api/erp/inventory-logs/options', {
+      params: {
+        item: params.item || undefined,
+        processCd: params.processCd || undefined,
+      },
+    })
+    const data = res?.data ?? res
+    return {
+      processes: Array.isArray(data?.processes) ? data.processes : [],
+      products: Array.isArray(data?.products) ? data.products : [],
+    }
+  } catch {
+    const all = loadAll()
+    const procMap = new Map<string, InventoryProcessOption>()
+    const prodMap = new Map<string, InventoryProductOption>()
+    for (const r of all) {
+      if (params.item && r.item !== params.item) continue
+      const pc = r.process_cd || ''
+      const p = procMap.get(pc) ?? { process_cd: pc, process_name: r.process_name || pc, cnt: 0 }
+      p.cnt += 1
+      procMap.set(pc, p)
+      if (params.processCd && pc !== params.processCd) continue
+      const q = prodMap.get(r.product_name) ?? {
+        product_name: r.product_name,
+        product_cd: r.product_cd,
+        cnt: 0,
+      }
+      q.cnt += 1
+      prodMap.set(r.product_name, q)
+    }
+    return {
+      processes: [...procMap.values()].sort((a, b) => a.process_cd.localeCompare(b.process_cd)),
+      products: [...prodMap.values()].sort((a, b) =>
+        a.product_name.localeCompare(b.product_name, 'ja'),
+      ),
     }
   }
 }

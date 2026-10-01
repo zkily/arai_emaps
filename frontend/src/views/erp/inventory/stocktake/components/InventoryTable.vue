@@ -2,23 +2,26 @@
   <div class="inventory-table">
     <el-table
       :data="data"
-      border
       stripe
       size="small"
       highlight-current-row
       class="data-table"
       v-loading="loading"
-      element-loading-spinner="el-icon-loading"
-      element-loading-background="rgba(0, 0, 0, 0.8)"
+      element-loading-background="rgba(255, 255, 255, 0.7)"
       :default-sort="currentSort"
+      :cell-style="getCellStyle"
       table-layout="auto"
       @sort-change="handleSortChange"
     >
+      <template #empty>
+        <el-empty description="該当する棚卸データがありません" :image-size="80" />
+      </template>
+
       <el-table-column label="項目" prop="item" width="100" align="center">
         <template #default="scope">
-          <el-tag :type="getItemTypeColor(scope.row.item)" effect="light" class="item-type-tag">
+          <span class="color-pill item-type-tag" :style="pillStyle(getItemColor(scope.row.item))">
             {{ scope.row.item }}
-          </el-tag>
+          </span>
         </template>
       </el-table-column>
 
@@ -46,11 +49,16 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="工程名" prop="process_name" width="90" align="center">
+      <el-table-column label="工程名" prop="process_name" min-width="100" align="center">
         <template #default="scope">
-          <el-tag :type="getProcessTypeColor(scope.row.process_cd)" size="small">
+          <span
+            class="color-pill process-pill"
+            :style="pillStyle(getProcessColor(scope.row.process_cd))"
+            :title="scope.row.process_cd"
+          >
+            <span class="pill-dot" />
             {{ scope.row.process_name || scope.row.process_cd }}
-          </el-tag>
+          </span>
         </template>
       </el-table-column>
 
@@ -92,7 +100,7 @@
       >
         <template #default="scope">
           <div class="total-quantity-cell" :class="getQuantityClass(scope.row)">
-            {{ scope.row.quantity }}
+            {{ Number(scope.row.quantity ?? 0).toLocaleString() }}
           </div>
         </template>
       </el-table-column>
@@ -149,6 +157,7 @@
 import { computed } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { getItemColor, getProcessColor, type ColorToken } from './inventoryColors'
 
 // 定义props
 interface Props {
@@ -231,37 +240,15 @@ const formatLogTime = (val: unknown) => {
 // 格式化日期时间
 const formatDateTime = (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss')
 
-// 获取項目类型颜色
-const getItemTypeColor = (type: string): 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
-  switch (type) {
-    case '材料棚卸':
-      return 'success'
-    case '部品棚卸':
-      return 'warning'
-    case '製品棚卸':
-      return 'primary'
-    default:
-      return 'info'
-  }
-}
+const pillStyle = (c: ColorToken) => ({
+  color: c.color,
+  background: c.bg,
+  borderColor: c.border,
+})
 
-// 获取工程CD颜色
-const getProcessTypeColor = (
-  processCd: string,
-): 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
-  switch (processCd) {
-    case '13':
-      return 'success'
-    case '14':
-      return 'warning'
-    case '15':
-      return 'primary'
-    case '16':
-      return 'danger'
-    default:
-      return 'info'
-  }
-}
+// 行左端に項目色のライン
+const getCellStyle = ({ row, columnIndex }: { row: any; columnIndex: number }) =>
+  columnIndex === 0 ? { boxShadow: `inset 3px 0 0 ${getItemColor(row.item).color}` } : {}
 
 // 获取数量样式类
 const getQuantityClass = (row: any): string => {
@@ -292,48 +279,61 @@ const handleDelete = (row: any) => {
 }
 
 .data-table {
-  border-radius: 8px;
+  --el-table-row-hover-bg-color: rgba(79, 70, 229, 0.05);
+  --el-table-current-row-bg-color: rgba(79, 70, 229, 0.08);
+  --el-table-border-color: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.data-table :deep(.el-table__header) {
-  background: #f8fafc;
-}
-
-.data-table :deep(.el-table__header th) {
-  background: transparent !important;
-  color: #334155;
-  font-weight: 600;
+.data-table :deep(.el-table__header th.el-table__cell) {
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9) !important;
+  color: #475569;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
   border-bottom: 1px solid rgba(15, 23, 42, 0.1);
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 8px 8px;
 }
 
-.data-table :deep(.el-table__row) {
-  transition: background-color 0.15s ease;
-}
-
-.data-table :deep(.el-table__row:hover) {
-  background-color: rgba(14, 165, 233, 0.06);
+.data-table :deep(.el-table__row--striped td.el-table__cell) {
+  background: #fafbfd;
 }
 
 .data-table :deep(.el-table__cell) {
-  padding: 5px 8px;
+  padding: 6px 8px;
   font-size: 12px;
   line-height: 1.35;
 }
 
 .data-table :deep(.el-table__body .el-table__row) {
-  height: 34px;
+  height: 36px;
+}
+
+.color-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .item-type-tag {
-  font-weight: 600;
-  border-radius: 5px;
-  padding: 2px 6px;
-  font-size: 11px;
+  border-radius: 6px;
 }
 
 .product-cd,
@@ -360,20 +360,28 @@ const handleDelete = (row: any) => {
 }
 
 .total-quantity-cell {
+  display: inline-block;
+  min-width: 48px;
+  padding: 1px 8px;
+  border-radius: 6px;
   font-weight: 700;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .total-quantity-cell.normal-stock {
-  color: #67c23a;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .total-quantity-cell.low-stock {
-  color: #e6a23c;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
 }
 
 .total-quantity-cell.out-of-stock {
-  color: #f56c6c;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .remarks-cell {
@@ -403,7 +411,7 @@ const handleDelete = (row: any) => {
 }
 
 .pagination-wrapper {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   justify-content: flex-end;
   padding: 2px 0 0;
@@ -411,6 +419,7 @@ const handleDelete = (row: any) => {
 
 .custom-pagination {
   font-size: 12px;
+  --el-color-primary: #4f46e5;
 }
 
 .custom-pagination :deep(.el-pagination__jump) {

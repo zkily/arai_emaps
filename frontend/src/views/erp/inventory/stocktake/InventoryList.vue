@@ -2,242 +2,352 @@
   <div class="inventory-container">
     <div class="page-ambient" aria-hidden="true" />
 
-    <header class="page-toolbar">
-      <div class="toolbar-inner">
-        <div class="toolbar-brand">
-          <div class="brand-icon">
-            <el-icon :size="20"><Box /></el-icon>
+    <!-- ヘッダー -->
+    <header class="page-hero">
+      <div class="hero-inner">
+        <div class="hero-brand">
+          <div class="hero-icon">
+            <el-icon :size="22"><Box /></el-icon>
           </div>
-          <div class="brand-text">
-            <h1 class="toolbar-title">棚卸リスト一覧</h1>
-            <p class="toolbar-sub">材料・部品・ステー（工程別）・製品</p>
+          <div class="hero-text">
+            <h1 class="hero-title">棚卸リスト一覧</h1>
+            <p class="hero-sub">材料・部品・ステー（工程別）・製品の棚卸データを一元管理</p>
           </div>
         </div>
-        <el-button
-          type="primary"
-          size="small"
-          @click="handleImport"
-          :loading="loading"
-          :icon="DocumentAdd"
-        >
-          棚卸データ取込
-        </el-button>
+        <div class="hero-actions">
+          <el-button class="hero-btn hero-btn--ghost" :icon="Refresh" @click="handleSearch">
+            再読込
+          </el-button>
+          <el-button
+            class="hero-btn hero-btn--solid"
+            :loading="loading"
+            :icon="DocumentAdd"
+            @click="handleImport"
+          >
+            棚卸データ取込
+          </el-button>
+        </div>
       </div>
     </header>
 
     <div class="content-container">
-      <el-card class="filter-card" shadow="never">
-        <template #header>
-          <div class="filter-toolbar">
-            <el-icon class="filter-toolbar-icon"><Search /></el-icon>
-            <span class="filter-toolbar-title">検索条件</span>
+      <!-- KPI カード -->
+      <section class="kpi-grid">
+        <button
+          v-for="card in kpiCards"
+          :key="card.key"
+          type="button"
+          class="kpi-card"
+          :class="{ 'is-active': activeTab === card.key }"
+          :style="{ '--accent': card.color }"
+          @click="activeTab = card.key"
+        >
+          <div class="kpi-icon">
+            <el-icon :size="16"><component :is="card.icon" /></el-icon>
           </div>
-        </template>
+          <span class="kpi-label">{{ card.label }}</span>
+          <span class="kpi-metric">
+            <span class="kpi-metric-key">件数</span>
+            <span class="kpi-value">{{ card.total.toLocaleString() }}</span>
+          </span>
+          <span class="kpi-sep" />
+          <span class="kpi-metric">
+            <span class="kpi-metric-key">数量</span>
+            <span class="kpi-value kpi-value--qty">{{ card.qty.toLocaleString() }}</span>
+          </span>
+        </button>
+      </section>
 
-        <el-form :inline="true" :model="filters" size="small" class="filter-form" @submit.prevent>
-          <div class="filter-row">
-            <el-form-item label="キーワード" class="filter-item">
-              <el-input
-                v-model="filters.keyword"
-                placeholder="製品名で検索"
-                clearable
-                class="filter-input"
-                :prefix-icon="Search"
-              />
-            </el-form-item>
-
-            <el-form-item label="日付範囲" class="filter-item">
-              <el-date-picker
-                v-model="filters.dateRange"
-                type="daterange"
-                range-separator="～"
-                start-placeholder="開始日"
-                end-placeholder="終了日"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                class="filter-date-picker"
-              />
-            </el-form-item>
-
-            <el-form-item label="月選択" class="filter-item">
-              <el-date-picker
-                v-model="filters.monthPicker"
-                type="month"
-                placeholder="月を選択"
-                format="YYYY-MM"
-                value-format="YYYY-MM"
-                class="filter-month-picker"
-                @change="handleMonthChange"
-              />
-            </el-form-item>
-
-            <div class="filter-actions">
-              <el-button type="primary" size="small" :icon="Search" @click="handleSearch">
-                検索
-              </el-button>
-              <el-button size="small" :icon="RefreshLeft" @click="resetFilters"> リセット </el-button>
-            </div>
+      <!-- 検索条件 -->
+      <section class="panel filter-panel">
+        <div class="filter-line">
+          <div class="panel-title">
+            <el-icon class="panel-title-icon"><Filter /></el-icon>
+            <span>検索条件</span>
+            <span v-if="activeChips.length" class="panel-badge">{{ activeChips.length }}</span>
           </div>
-        </el-form>
-      </el-card>
 
-      <!-- Tab切换区域 -->
-      <el-card class="tab-card" shadow="never">
-        <el-tabs v-model="activeTab" type="card" @tab-click="handleTabClick" class="custom-tabs">
-          <!-- 全て -->
-          <el-tab-pane label="全て" name="all">
-            <div class="tab-content">
-              <div class="tab-header tab-header--row">
-                <h3 class="tab-heading">全て</h3>
-                <div class="tab-stats">
-                  <span class="stat-pill">{{ pagination.total }} 件</span>
-                  <span class="stat-pill stat-pill--qty"
-                    >計 {{ inventoryTotalQuantity.toLocaleString() }}</span
-                  >
+          <div class="filter-field filter-field--process">
+            <label class="field-label">
+              <span class="field-dot field-dot--process" />工程
+            </label>
+            <el-select
+              v-model="filters.processCd"
+              placeholder="すべての工程"
+              filterable
+              clearable
+              size="small"
+              class="field-control"
+              popper-class="inventory-option-popper"
+              :loading="optionsLoading"
+              @change="handleProcessChange"
+            >
+              <template #prefix>
+                <span
+                  v-if="filters.processCd"
+                  class="opt-dot"
+                  :style="{ background: getProcessColor(filters.processCd).color }"
+                />
+              </template>
+              <el-option
+                v-for="p in processOptions"
+                :key="p.process_cd"
+                :label="p.process_name || p.process_cd"
+                :value="p.process_cd"
+              >
+                <div class="opt-row">
+                  <span class="opt-dot" :style="{ background: getProcessColor(p.process_cd).color }" />
+                  <span class="opt-name">{{ p.process_name || p.process_cd }}</span>
+                  <span class="opt-meta">{{ p.process_cd }} · {{ p.cnt.toLocaleString() }}件</span>
                 </div>
-              </div>
-              <inventory-table
-                :data="inventoryList"
-                :loading="loading"
-                :pagination="pagination"
-                :sort-by="sortBy"
-                :sort-order="sortOrder"
-                :deleting-id="deletingId"
-                @page-change="handlePageChange"
-                @size-change="handleSizeChange"
-                @sort="handleSort"
-                @delete="handleDeleteRecord"
-              />
-            </div>
-          </el-tab-pane>
+              </el-option>
+            </el-select>
+          </div>
 
-          <!-- 材料 -->
-          <el-tab-pane label="材料" name="material">
-            <div class="tab-content">
-              <div class="tab-header tab-header--row">
-                <h3 class="tab-heading">材料</h3>
-                <div class="tab-stats">
-                  <span class="stat-pill">{{ materialPagination.total }} 件</span>
-                  <span class="stat-pill stat-pill--qty"
-                    >計 {{ materialTotalQuantity.toLocaleString() }}</span
-                  >
+          <div class="filter-field filter-field--product">
+            <label class="field-label">
+              <span class="field-dot field-dot--product" />製品名
+            </label>
+            <el-select-v2
+              v-model="filters.productName"
+              :options="productOptions"
+              :props="productSelectProps"
+              placeholder="すべての製品"
+              filterable
+              clearable
+              size="small"
+              class="field-control"
+              popper-class="inventory-option-popper"
+              :loading="productOptionsLoading"
+              @change="handleProductChange"
+            >
+              <template #default="{ item }">
+                <div class="opt-row">
+                  <span class="opt-name">{{ item.product_name }}</span>
+                  <span class="opt-meta">{{ item.product_cd }} · {{ item.cnt }}件</span>
                 </div>
-              </div>
-              <inventory-table
-                :data="materialList"
-                :loading="materialLoading"
-                :pagination="materialPagination"
-                :sort-by="sortBy"
-                :sort-order="sortOrder"
-                :deleting-id="deletingId"
-                @page-change="handleMaterialPageChange"
-                @size-change="handleMaterialSizeChange"
-                @sort="handleSort"
-                @delete="handleDeleteRecord"
-              />
-            </div>
-          </el-tab-pane>
+              </template>
+            </el-select-v2>
+          </div>
 
-          <!-- 部品 -->
-          <el-tab-pane label="部品" name="component">
-            <div class="tab-content">
-              <div class="tab-header tab-header--row">
-                <h3 class="tab-heading">部品</h3>
-                <div class="tab-stats">
-                  <span class="stat-pill">{{ componentPagination.total }} 件</span>
-                  <span class="stat-pill stat-pill--qty"
-                    >計 {{ componentTotalQuantity.toLocaleString() }}</span
-                  >
-                </div>
-              </div>
-              <inventory-table
-                :data="componentList"
-                :loading="componentLoading"
-                :pagination="componentPagination"
-                :sort-by="sortBy"
-                :sort-order="sortOrder"
-                :deleting-id="deletingId"
-                @page-change="handleComponentPageChange"
-                @size-change="handleComponentSizeChange"
-                @sort="handleSort"
-                @delete="handleDeleteRecord"
-              />
-            </div>
-          </el-tab-pane>
+          <div class="filter-field filter-field--keyword">
+            <label class="field-label"><span class="field-dot field-dot--keyword" />キーワード</label>
+            <el-input
+              v-model="filters.keyword"
+              placeholder="製品CD・製品名"
+              clearable
+              size="small"
+              class="field-control"
+              :prefix-icon="Search"
+              @keyup.enter="handleSearch"
+            />
+          </div>
 
-          <!-- ステー -->
-          <el-tab-pane label="ステー" name="stage">
-            <div class="tab-content">
-              <div class="tab-header">
-                <div class="tab-header-top tab-header--row">
-                  <h3 class="tab-heading">ステー</h3>
-                  <div class="tab-stats">
-                    <span class="stat-pill">{{ stagePagination.total }} 件</span>
-                    <span class="stat-pill stat-pill--qty"
-                      >計 {{ stageTotalQuantity.toLocaleString() }}</span
-                    >
-                  </div>
-                </div>
-                <div class="stage-subtabs">
-                  <el-radio-group
-                    v-model="activeStageTab"
-                    @change="handleStageTabChange"
-                    size="small"
-                  >
-                    <el-radio-button value="all">全て</el-radio-button>
-                    <el-radio-button value="cutting">切断</el-radio-button>
-                    <el-radio-button value="surface">面取</el-radio-button>
-                    <el-radio-button value="sw">SW</el-radio-button>
-                    <el-radio-button value="forming">成型</el-radio-button>
-                    <el-radio-button value="plating">メッキ</el-radio-button>
-                    <el-radio-button value="welding">溶接</el-radio-button>
-                    <el-radio-button value="inspection">検査</el-radio-button>
-                    <el-radio-button value="warehouse">倉庫</el-radio-button>
-                    <el-radio-button value="outsource_plating">外注メッキ</el-radio-button>
-                    <el-radio-button value="outsource_welding">外注溶接</el-radio-button>
-                    <el-radio-button value="pre_welding_inspection">溶接前検査</el-radio-button>
-                    <el-radio-button value="pre_outsource_inspection">外注検査前</el-radio-button>
-                    <el-radio-button value="pre_outsource_delivery">外注支給前</el-radio-button>
-                  </el-radio-group>
-                </div>
-              </div>
-              <inventory-table
-                :data="stageList"
-                :loading="stageLoading"
-                :pagination="stagePagination"
-                :sort-by="sortBy"
-                :sort-order="sortOrder"
-                :deleting-id="deletingId"
-                @page-change="handleStagePageChange"
-                @size-change="handleStageSizeChange"
-                @sort="handleSort"
-                @delete="handleDeleteRecord"
-              />
-            </div>
+          <div class="filter-field filter-field--date">
+            <label class="field-label"><span class="field-dot field-dot--date" />日付範囲</label>
+            <el-date-picker
+              v-model="filters.dateRange"
+              type="daterange"
+              range-separator="～"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              size="small"
+              class="field-control"
+            />
+          </div>
+
+          <div class="filter-field filter-field--month">
+            <label class="field-label"><span class="field-dot field-dot--month" />月選択</label>
+            <el-date-picker
+              v-model="filters.monthPicker"
+              type="month"
+              placeholder="月を選択"
+              format="YYYY-MM"
+              value-format="YYYY-MM"
+              size="small"
+              class="field-control"
+              @change="handleMonthChange"
+            />
+          </div>
+
+          <div class="filter-actions">
+            <el-button size="small" :icon="RefreshLeft" @click="resetFilters">リセット</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">
+              検索
+            </el-button>
+          </div>
+        </div>
+
+        <transition name="fade">
+          <div v-if="activeChips.length" class="chip-row">
+            <span class="chip-row-label">適用中：</span>
+            <span
+              v-for="chip in activeChips"
+              :key="chip.key"
+              class="filter-chip"
+              :style="{ '--chip': chip.color }"
+            >
+              <span class="filter-chip-key">{{ chip.label }}</span>
+              <span class="filter-chip-val">{{ chip.value }}</span>
+              <el-icon class="filter-chip-close" @click="removeChip(chip.key)"><Close /></el-icon>
+            </span>
+          </div>
+        </transition>
+      </section>
+
+      <!-- タブ -->
+      <section class="panel tab-panel">
+        <el-tabs v-model="activeTab" class="custom-tabs">
+          <el-tab-pane v-for="card in kpiCards" :key="card.key" :name="card.key">
+            <template #label>
+              <span class="tab-label" :style="{ '--accent': card.color }">
+                <span class="tab-dot" />
+                {{ card.label }}
+                <span class="tab-count">{{ card.total.toLocaleString() }}</span>
+              </span>
+            </template>
           </el-tab-pane>
         </el-tabs>
-      </el-card>
+
+        <div class="tab-content" :style="{ '--accent': currentCard.color }">
+          <div class="tab-header">
+            <div class="tab-header-top">
+              <h3 class="tab-heading">
+                <span class="tab-heading-bar" />
+                {{ currentCard.label }}
+              </h3>
+              <div class="tab-stats">
+                <span class="stat-pill">{{ currentCard.total.toLocaleString() }} 件</span>
+                <span class="stat-pill stat-pill--qty">
+                  計 {{ currentCard.qty.toLocaleString() }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="activeTab === 'stage'" class="stage-subtabs">
+              <button
+                v-for="s in STAGE_TABS"
+                :key="s.value"
+                type="button"
+                class="stage-chip"
+                :class="{ 'is-active': activeStageTab === s.value }"
+                :style="{ '--chip': s.cd ? getProcessColor(s.cd).color : '#4f46e5' }"
+                @click="handleStageTabChange(s.value)"
+              >
+                <span class="stage-chip-dot" />
+                {{ s.label }}
+              </button>
+            </div>
+          </div>
+
+          <inventory-table
+            v-if="activeTab === 'all'"
+            :data="inventoryList"
+            :loading="loading"
+            :pagination="pagination"
+            :sort-by="sortBy"
+            :sort-order="sortOrder"
+            :deleting-id="deletingId"
+            @page-change="handlePageChange"
+            @size-change="handleSizeChange"
+            @sort="handleSort"
+            @delete="handleDeleteRecord"
+          />
+          <inventory-table
+            v-else-if="activeTab === 'material'"
+            :data="materialList"
+            :loading="materialLoading"
+            :pagination="materialPagination"
+            :sort-by="sortBy"
+            :sort-order="sortOrder"
+            :deleting-id="deletingId"
+            @page-change="handleMaterialPageChange"
+            @size-change="handleMaterialSizeChange"
+            @sort="handleSort"
+            @delete="handleDeleteRecord"
+          />
+          <inventory-table
+            v-else-if="activeTab === 'component'"
+            :data="componentList"
+            :loading="componentLoading"
+            :pagination="componentPagination"
+            :sort-by="sortBy"
+            :sort-order="sortOrder"
+            :deleting-id="deletingId"
+            @page-change="handleComponentPageChange"
+            @size-change="handleComponentSizeChange"
+            @sort="handleSort"
+            @delete="handleDeleteRecord"
+          />
+          <inventory-table
+            v-else
+            :data="stageList"
+            :loading="stageLoading"
+            :pagination="stagePagination"
+            :sort-by="sortBy"
+            :sort-order="sortOrder"
+            :deleting-id="deletingId"
+            @page-change="handleStagePageChange"
+            @size-change="handleStageSizeChange"
+            @sort="handleSort"
+            @delete="handleDeleteRecord"
+          />
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
   getInventoryLogs,
+  getInventoryLogOptions,
   importInventoryCSV,
   deleteInventoryLog,
   type InventoryLog,
+  type InventoryProcessOption,
+  type InventoryProductOption,
 } from '@/api/inventory'
 
-// ✅ Element Plus 图标组件
-import { Box, DocumentAdd, Search, RefreshLeft } from '@element-plus/icons-vue'
+import {
+  Box,
+  DocumentAdd,
+  Search,
+  RefreshLeft,
+  Refresh,
+  Filter,
+  Close,
+  Grid,
+  Coin,
+  SetUp,
+} from '@element-plus/icons-vue'
 
-// 导入表格组件
 import InventoryTable from './components/InventoryTable.vue'
+import { ITEM_COLORS, getProcessColor } from './components/inventoryColors'
+
+// ステー子タブ（cd は配色用の工程CD）
+const STAGE_TABS: { value: string; label: string; cd?: string }[] = [
+  { value: 'all', label: '全て' },
+  { value: 'cutting', label: '切断', cd: 'KT01' },
+  { value: 'surface', label: '面取', cd: 'KT02' },
+  { value: 'sw', label: 'SW', cd: 'KT03' },
+  { value: 'forming', label: '成型', cd: 'KT04' },
+  { value: 'plating', label: 'メッキ', cd: 'KT05' },
+  { value: 'welding', label: '溶接', cd: 'KT07' },
+  { value: 'inspection', label: '検査', cd: 'KT09' },
+  { value: 'warehouse', label: '倉庫', cd: 'KT13' },
+  { value: 'outsource_plating', label: '外注メッキ', cd: 'KT06' },
+  { value: 'outsource_welding', label: '外注溶接', cd: 'KT08' },
+  { value: 'pre_welding_inspection', label: '溶接前検査', cd: 'KT11' },
+  { value: 'pre_outsource_inspection', label: '外注検査前', cd: 'KT10' },
+  { value: 'pre_outsource_delivery', label: '外注支給前', cd: 'KT10' },
+]
 
 // Tab状态
 const activeTab = ref('all')
@@ -288,11 +398,21 @@ const stagePagination = ref({
 })
 
 // 筛选条件
-const filters = ref({
+const createDefaultFilters = () => ({
   keyword: '',
   dateRange: [] as string[],
   monthPicker: '',
+  processCd: '' as string | undefined,
+  productName: '' as string | undefined,
 })
+const filters = ref(createDefaultFilters())
+
+// 下拉选项
+const processOptions = ref<InventoryProcessOption[]>([])
+const productOptions = ref<InventoryProductOption[]>([])
+const optionsLoading = ref(false)
+const productOptionsLoading = ref(false)
+const productSelectProps = { value: 'product_name', label: 'product_name' }
 
 // 排序条件
 const sortBy = ref('log_date')
@@ -307,11 +427,111 @@ interface ApiError {
   message?: string
 }
 
+const kpiCards = computed(() => [
+  {
+    key: 'all',
+    label: '全て',
+    icon: Grid,
+    color: '#0284c7',
+    total: pagination.value.total,
+    qty: inventoryTotalQuantity.value,
+  },
+  {
+    key: 'material',
+    label: '材料',
+    icon: Coin,
+    color: ITEM_COLORS['材料棚卸'].color,
+    total: materialPagination.value.total,
+    qty: materialTotalQuantity.value,
+  },
+  {
+    key: 'component',
+    label: '部品',
+    icon: SetUp,
+    color: ITEM_COLORS['部品棚卸'].color,
+    total: componentPagination.value.total,
+    qty: componentTotalQuantity.value,
+  },
+  {
+    key: 'stage',
+    label: 'ステー',
+    icon: Box,
+    color: ITEM_COLORS['製品棚卸'].color,
+    total: stagePagination.value.total,
+    qty: stageTotalQuantity.value,
+  },
+])
+
+const currentCard = computed(
+  () => kpiCards.value.find((c) => c.key === activeTab.value) ?? kpiCards.value[0],
+)
+
+// 适用中的筛选条件标签
+const activeChips = computed(() => {
+  const f = filters.value
+  const chips: { key: string; label: string; value: string; color: string }[] = []
+  if (f.processCd) {
+    const p = processOptions.value.find((o) => o.process_cd === f.processCd)
+    chips.push({
+      key: 'processCd',
+      label: '工程',
+      value: p?.process_name || f.processCd,
+      color: getProcessColor(f.processCd).color,
+    })
+  }
+  if (f.productName) {
+    chips.push({ key: 'productName', label: '製品名', value: f.productName, color: '#4f46e5' })
+  }
+  if (f.keyword) {
+    chips.push({ key: 'keyword', label: 'キーワード', value: f.keyword, color: '#0891b2' })
+  }
+  if (f.monthPicker) {
+    chips.push({ key: 'month', label: '月', value: f.monthPicker, color: '#db2777' })
+  } else if (f.dateRange?.length === 2) {
+    chips.push({
+      key: 'dateRange',
+      label: '期間',
+      value: `${f.dateRange[0]} ～ ${f.dateRange[1]}`,
+      color: '#ea580c',
+    })
+  }
+  return chips
+})
+
 // 格式化日期
 const formatDate = (val: string) => dayjs(val).format('YYYY-MM-DD')
 
 // 格式化时间
 const formatTime = (val: string) => dayjs(val, 'HH:mm:ss').format('HH:mm')
+
+// 获取工程・製品名下拉选项
+const loadProcessOptions = async () => {
+  optionsLoading.value = true
+  try {
+    const res = await getInventoryLogOptions({})
+    processOptions.value = res.processes
+  } finally {
+    optionsLoading.value = false
+  }
+}
+
+const loadProductOptions = async () => {
+  productOptionsLoading.value = true
+  try {
+    const res = await getInventoryLogOptions({ processCd: filters.value.processCd || undefined })
+    productOptions.value = res.products
+    if (
+      filters.value.productName &&
+      !res.products.some((p) => p.product_name === filters.value.productName)
+    ) {
+      filters.value.productName = ''
+    }
+  } finally {
+    productOptionsLoading.value = false
+  }
+}
+
+const reloadOptions = () => Promise.all([loadProcessOptions(), loadProductOptions()])
 
 // 获取所有数据
 const fetchInventory = async () => {
@@ -454,26 +674,33 @@ const fetchStage = async () => {
 const refreshAllTabs = () =>
   Promise.all([fetchInventory(), fetchMaterial(), fetchComponent(), fetchStage()])
 
-// Tab切换处理
-const handleTabClick = (tab: any) => {
-  switch (tab.name) {
+const resetAllPages = () => {
+  pagination.value.page = 1
+  materialPagination.value.page = 1
+  componentPagination.value.page = 1
+  stagePagination.value.page = 1
+}
+
+// Tab切换时刷新当前Tab
+const fetchByTab = (name: string) => {
+  switch (name) {
     case 'all':
-      fetchInventory()
-      break
+      return fetchInventory()
     case 'material':
-      fetchMaterial()
-      break
+      return fetchMaterial()
     case 'component':
-      fetchComponent()
-      break
+      return fetchComponent()
     case 'stage':
-      fetchStage()
-      break
+      return fetchStage()
   }
 }
 
+watch(activeTab, (name) => fetchByTab(name))
+
 // ステー子Tab切换处理
-const handleStageTabChange = () => {
+const handleStageTabChange = (value: string) => {
+  if (activeStageTab.value === value) return
+  activeStageTab.value = value
   stagePagination.value.page = 1
   fetchStage()
 }
@@ -484,28 +711,15 @@ const handleSort = (field: string, order: 'asc' | 'desc' | null) => {
   // Element Plus 第三次点击会回到 null，这里回退为降序，避免状态不明确
   sortOrder.value = order ?? 'desc'
 
-  // 重置所有分页到第一页
-  pagination.value.page = 1
-  materialPagination.value.page = 1
-  componentPagination.value.page = 1
-  stagePagination.value.page = 1
-
-  // 重新获取数据
+  resetAllPages()
   refreshAllTabs()
 }
 
 // 月份选择处理
 const handleMonthChange = (month: string) => {
   if (month) {
-    const year = parseInt(month.split('-')[0])
-    const monthNum = parseInt(month.split('-')[1])
-
-    // 设置该月的第一天
-    const startDate = dayjs(`${year}-${monthNum.toString().padStart(2, '0')}-01`)
-
-    // 设置该月的最后一天
+    const startDate = dayjs(`${month}-01`)
     const endDate = startDate.endOf('month')
-
     filters.value.dateRange = [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
   } else {
     // 如果清空月份选择，也清空日期范围
@@ -515,28 +729,44 @@ const handleMonthChange = (month: string) => {
 
 // 搜索处理
 const handleSearch = async () => {
-  pagination.value.page = 1
-  materialPagination.value.page = 1
-  componentPagination.value.page = 1
-  stagePagination.value.page = 1
-
+  resetAllPages()
   await refreshAllTabs()
+}
+
+// 工程变更：联动刷新製品名候选后检索
+const handleProcessChange = async () => {
+  await loadProductOptions()
+  await handleSearch()
+}
+
+const handleProductChange = () => handleSearch()
+
+const removeChip = async (key: string) => {
+  switch (key) {
+    case 'processCd':
+      filters.value.processCd = ''
+      await loadProductOptions()
+      break
+    case 'productName':
+      filters.value.productName = ''
+      break
+    case 'keyword':
+      filters.value.keyword = ''
+      break
+    case 'month':
+    case 'dateRange':
+      filters.value.monthPicker = ''
+      filters.value.dateRange = []
+      break
+  }
+  await handleSearch()
 }
 
 // 重置筛选
 const resetFilters = async () => {
-  filters.value = {
-    keyword: '',
-    dateRange: [] as string[],
-    monthPicker: '',
-  }
-
-  pagination.value.page = 1
-  materialPagination.value.page = 1
-  componentPagination.value.page = 1
-  stagePagination.value.page = 1
-
-  await refreshAllTabs()
+  filters.value = createDefaultFilters()
+  resetAllPages()
+  await Promise.all([refreshAllTabs(), loadProductOptions()])
 }
 
 // 数据导入
@@ -572,7 +802,7 @@ const handleImport = async () => {
       ElMessage.success('✅ ' + (response.message ?? 'CSV取込が完了しました'))
     }
 
-    await refreshAllTabs()
+    await Promise.all([refreshAllTabs(), reloadOptions()])
   } catch (err: unknown) {
     const apiError = err as ApiError
     const msg = apiError?.response?.data?.message || apiError?.message || 'CSV取込に失敗しました'
@@ -663,22 +893,22 @@ const handleStageSizeChange = (newSize: number) => {
 
 // 组件挂载时初始化数据
 onMounted(async () => {
-  await refreshAllTabs()
+  await Promise.all([refreshAllTabs(), reloadOptions()])
 })
 </script>
 
 <style scoped>
 .inventory-container {
-  --il-surface: rgba(255, 255, 255, 0.92);
-  --il-border: rgba(15, 23, 42, 0.08);
-  --il-accent: #0ea5e9;
+  --il-surface: rgba(255, 255, 255, 0.94);
+  --il-border: rgba(15, 23, 42, 0.07);
   --il-muted: #64748b;
+  --il-text: #0f172a;
   position: relative;
   z-index: 0;
-  padding: 10px 12px 14px;
+  padding: 12px 14px 18px;
   box-sizing: border-box;
   min-height: 100vh;
-  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e8edf3 100%);
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 50%, #eef2f7 100%);
 }
 
 .page-ambient {
@@ -687,234 +917,480 @@ onMounted(async () => {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 70% 50% at 12% -10%, rgba(14, 165, 233, 0.12), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 92% 20%, rgba(99, 102, 241, 0.08), transparent 50%);
+    radial-gradient(ellipse 60% 45% at 8% -8%, rgba(79, 70, 229, 0.1), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 95% 10%, rgba(14, 165, 233, 0.1), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 60% 110%, rgba(16, 185, 129, 0.06), transparent 60%);
 }
 
-.page-toolbar,
+.page-hero,
 .content-container {
   position: relative;
   z-index: 1;
+  width: 100%;
 }
 
-.page-toolbar {
-  margin-bottom: 10px;
+/* ===== ヘッダー ===== */
+.page-hero {
+  margin-bottom: 12px;
 }
 
-.toolbar-inner {
+.hero-inner {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  background: var(--il-surface);
-  border: 1px solid var(--il-border);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
-  backdrop-filter: blur(10px);
+  padding: 14px 18px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(120deg, #4338ca 0%, #4f46e5 35%, #0284c7 100%);
+  box-shadow: 0 10px 30px -12px rgba(67, 56, 202, 0.55);
 }
 
-.toolbar-brand {
+.hero-inner::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.hero-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
-.brand-icon {
+.hero-icon {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  background: linear-gradient(145deg, #0ea5e9, #0284c7);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(6px);
 }
 
-.brand-text {
-  min-width: 0;
-}
-
-.toolbar-title {
+.hero-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: 1.25;
-  color: #0f172a;
 }
 
-.toolbar-sub {
-  margin: 2px 0 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--il-muted);
-  line-height: 1.3;
+.hero-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.hero-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.hero-btn {
+  border-radius: 9px;
+  font-weight: 600;
+  height: 32px;
+}
+
+.hero-btn--ghost {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.hero-btn--ghost:hover,
+.hero-btn--ghost:focus {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.hero-btn--solid {
+  color: #4338ca;
+  background: #fff;
+  border-color: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+.hero-btn--solid:hover,
+.hero-btn--solid:focus {
+  color: #3730a3;
+  background: #eef2ff;
+  border-color: #eef2ff;
 }
 
 .content-container {
-  max-width: 1400px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.filter-card,
-.tab-card {
-  background: var(--il-surface);
-  border: 1px solid var(--il-border);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: box-shadow 0.2s ease;
+/* ===== KPI ===== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.filter-card:hover,
-.tab-card:hover {
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-}
-
-.filter-card :deep(.el-card__header) {
-  padding: 9px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.62));
-}
-
-.filter-card :deep(.el-card__body) {
-  padding: 10px 12px 9px;
-}
-
-.filter-toolbar {
+.kpi-card {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  min-height: 18px;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 14px;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  background: var(--il-surface);
+  border: 1px solid var(--il-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
-.filter-toolbar-icon {
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.kpi-card.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 9%, #fff) 0%,
+    #fff 70%
+  );
+  box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.kpi-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.kpi-card.is-active .kpi-icon {
+  color: #fff;
+  background: var(--accent);
+}
+
+.kpi-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--il-text);
+  margin-right: auto;
+}
+
+.kpi-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.kpi-metric-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--il-muted);
+}
+
+.kpi-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--il-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-value--qty {
+  color: var(--accent);
+}
+
+.kpi-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(15, 23, 42, 0.1);
+}
+
+/* ===== パネル共通 ===== */
+.panel {
+  background: var(--il-surface);
+  border: 1px solid var(--il-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+.filter-panel {
+  padding: 10px 14px;
+}
+
+.filter-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.panel-title {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 14px;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.panel-title-icon {
+  color: #4f46e5;
   font-size: 16px;
-  color: var(--il-accent);
+}
+
+.panel-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.filter-toolbar-title {
-  display: inline-flex;
-  align-items: center;
-  line-height: 1;
-}
-
-.filter-form {
-  padding: 0;
-}
-
-.filter-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  flex-wrap: wrap;
-}
-
-.filter-item {
-  margin-bottom: 0;
-  flex-shrink: 0;
-}
-
-.filter-item :deep(.el-form-item__label) {
+  border-radius: 9px;
   font-size: 11px;
-  color: var(--il-muted);
-  font-weight: 600;
-  line-height: 1.25;
-  padding-bottom: 0;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.filter-item :deep(.el-form-item) {
-  margin-bottom: 0;
-  align-items: center;
-}
-
-.filter-item :deep(.el-form-item__content) {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-}
-
-.filter-input,
-.filter-date-picker,
-.filter-month-picker {
-  width: 160px;
-}
-
-.filter-input :deep(.el-input__wrapper),
-.filter-date-picker :deep(.el-input__wrapper),
-.filter-month-picker :deep(.el-input__wrapper) {
-  min-height: 30px;
+  color: #fff;
+  background: #4f46e5;
 }
 
 .filter-actions {
+  flex-shrink: 0;
   display: flex;
   gap: 6px;
-  align-items: center;
   margin-left: auto;
+}
+
+.filter-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.filter-field--process {
+  flex: 1 1 170px;
+  max-width: 240px;
+}
+
+.filter-field--product {
+  flex: 2 1 240px;
+  max-width: 420px;
+}
+
+.filter-field--keyword {
+  flex: 1 1 170px;
+  max-width: 240px;
+}
+
+.filter-field--date {
+  flex: 0 0 auto;
+  width: 290px;
+}
+
+.filter-field--month {
+  flex: 0 0 auto;
+  width: 170px;
+}
+
+.field-label {
   flex-shrink: 0;
-  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
 }
 
-.tab-card :deep(.el-card__body) {
-  padding: 10px;
+.field-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.custom-tabs {
-  border: none;
-  background: transparent;
+.field-dot--process {
+  background: #2563eb;
+}
+.field-dot--product {
+  background: #4f46e5;
+}
+.field-dot--keyword {
+  background: #0891b2;
+}
+.field-dot--date {
+  background: #ea580c;
+}
+.field-dot--month {
+  background: #db2777;
+}
+
+.field-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
+}
+
+.field-control :deep(.el-input__wrapper),
+.field-control :deep(.el-select__wrapper),
+:deep(.field-control.el-range-editor) {
+  border-radius: 8px;
+  min-height: 32px;
+}
+
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.opt-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.opt-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opt-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.chip-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(15, 23, 42, 0.1);
+}
+
+.chip-row-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--il-muted);
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--chip);
+  background: color-mix(in srgb, var(--chip) 9%, #fff);
+  border: 1px solid color-mix(in srgb, var(--chip) 28%, transparent);
+}
+
+.filter-chip-key {
+  font-weight: 700;
+}
+
+.filter-chip-val {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+}
+
+.filter-chip-close {
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  transition: background 0.15s ease;
+}
+
+.filter-chip-close:hover {
+  background: color-mix(in srgb, var(--chip) 18%, transparent);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ===== タブ ===== */
+.tab-panel {
+  padding: 10px 12px 12px;
 }
 
 .custom-tabs :deep(.el-tabs__header) {
-  margin: 0 0 8px;
-  padding: 3px;
-  background: rgba(241, 245, 249, 0.85);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 8px;
+  margin: 0 0 10px;
 }
 
-.custom-tabs :deep(.el-tabs__nav-wrap) {
-  padding: 0;
-}
-
-.custom-tabs :deep(.el-tabs__item) {
-  border: none;
-  color: var(--il-muted);
-  font-weight: 600;
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-  margin: 0 1px;
-  line-height: 1.35;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.custom-tabs :deep(.el-tabs__item:hover) {
-  color: #0284c7;
-  background: rgba(14, 165, 233, 0.08);
-}
-
-.custom-tabs :deep(.el-tabs__item.is-active) {
-  color: #fff;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+.custom-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: rgba(15, 23, 42, 0.08);
 }
 
 .custom-tabs :deep(.el-tabs__active-bar) {
@@ -922,50 +1398,101 @@ onMounted(async () => {
 }
 
 .custom-tabs :deep(.el-tabs__content) {
-  padding: 0;
-  margin-top: 0;
+  display: none;
+}
+
+.custom-tabs :deep(.el-tabs__item) {
+  height: 38px;
+  padding: 0 14px !important;
+  font-weight: 600;
+  color: var(--il-muted);
+}
+
+.tab-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+
+.tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.tab-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--il-muted);
+  background: rgba(100, 116, 139, 0.1);
+  font-variant-numeric: tabular-nums;
+}
+
+.custom-tabs :deep(.el-tabs__item:hover) .tab-label,
+.custom-tabs :deep(.el-tabs__item.is-active) .tab-label {
+  color: var(--accent);
+}
+
+.custom-tabs :deep(.el-tabs__item.is-active) .tab-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent);
+}
+
+.custom-tabs :deep(.el-tabs__item.is-active) .tab-dot {
+  opacity: 1;
+}
+
+.custom-tabs :deep(.el-tabs__item.is-active) .tab-count {
+  color: #fff;
+  background: var(--accent);
 }
 
 .tab-content {
   min-height: 240px;
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 8px;
-  padding: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .tab-header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.15);
-}
-
-.tab-header--row {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
 .tab-header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .tab-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  color: var(--il-text);
+}
+
+.tab-heading-bar {
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .tab-stats {
@@ -978,80 +1505,85 @@ onMounted(async () => {
 .stat-pill {
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 6px;
-  line-height: 1.35;
-  color: #0369a1;
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  padding: 3px 10px;
+  border-radius: 999px;
+  line-height: 1.4;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-pill--qty {
   color: #047857;
   background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.22);
+  border-color: rgba(16, 185, 129, 0.25);
 }
 
 .stage-subtabs {
-  padding: 4px 0 0;
-  width: 100%;
-}
-
-.stage-subtabs :deep(.el-radio-group) {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  justify-content: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.05);
 }
 
-.stage-subtabs :deep(.el-radio-button__inner) {
-  border-radius: 6px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: #fff;
-  color: #475569;
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font: inherit;
   font-size: 11px;
-  padding: 3px 8px;
   font-weight: 600;
-  line-height: 1.35;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  line-height: 1.4;
+  cursor: pointer;
+  border-radius: 999px;
+  color: #475569;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-.stage-subtabs :deep(.el-radio-button__inner:hover) {
-  color: var(--il-accent);
-  border-color: rgba(14, 165, 233, 0.45);
-  background: rgba(14, 165, 233, 0.06);
+.stage-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chip);
 }
 
-.stage-subtabs :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  border-color: transparent;
+.stage-chip:hover {
+  color: var(--chip);
+  border-color: color-mix(in srgb, var(--chip) 45%, transparent);
+  background: color-mix(in srgb, var(--chip) 6%, #fff);
+}
+
+.stage-chip.is-active {
   color: #fff;
-  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2);
+  border-color: transparent;
+  background: var(--chip);
+  box-shadow: 0 4px 10px -4px color-mix(in srgb, var(--chip) 70%, transparent);
 }
 
-@media (max-width: 1200px) {
-  .content-container {
-    padding: 0 4px;
+.stage-chip.is-active .stage-chip-dot {
+  background: #fff;
+}
+
+/* ===== レスポンシブ ===== */
+@media (max-width: 1100px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .filter-row {
-    gap: 6px;
-  }
-
-  .filter-input,
-  .filter-date-picker,
-  .filter-month-picker {
-    width: 150px;
-  }
-
-  .filter-actions {
-    margin-left: 0;
-    margin-top: 4px;
-  }
-
-  .stage-subtabs :deep(.el-radio-button__inner) {
-    font-size: 10px;
-    padding: 3px 6px;
+  .panel-title {
+    border-right: none;
+    padding-right: 0;
   }
 }
 
@@ -1060,85 +1592,89 @@ onMounted(async () => {
     padding: 8px;
   }
 
-  .toolbar-inner {
-    align-items: flex-start;
+  .hero-inner {
+    padding: 12px 14px;
   }
 
-  .toolbar-title {
-    font-size: 1rem;
+  .hero-title {
+    font-size: 1.05rem;
   }
 
-  .custom-tabs :deep(.el-tabs__content) {
-    padding: 0;
+  .filter-field,
+  .filter-field--date,
+  .filter-field--month {
+    flex: 1 1 100%;
+    width: auto;
+    max-width: none;
   }
 
-  .tab-content {
-    padding: 8px;
+  .field-label {
+    width: 72px;
   }
 
-  .tab-header--row {
-    align-items: flex-start;
-  }
-
-  .stage-subtabs :deep(.el-radio-group) {
-    overflow-x: auto;
+  .stage-subtabs {
     flex-wrap: nowrap;
-    padding-bottom: 4px;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  .stage-subtabs :deep(.el-radio-button__inner) {
+  .stage-chip {
     white-space: nowrap;
-  }
-
-  .filter-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-input,
-  .filter-date-picker,
-  .filter-month-picker {
-    width: 100%;
-  }
-
-  .filter-actions {
-    justify-content: flex-start;
-    margin-left: 0;
   }
 }
 
 @media (max-width: 480px) {
-  .inventory-container {
-    padding: 6px;
+  .kpi-grid {
+    grid-template-columns: 1fr;
   }
 
-  .brand-icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  .toolbar-sub {
-    font-size: 10px;
-  }
-
-  .filter-actions {
+  .hero-actions {
     width: 100%;
-    gap: 4px;
   }
 
-  .custom-tabs :deep(.el-tabs__item) {
-    padding: 5px 8px;
-    font-size: 11px;
+  .hero-btn {
+    flex: 1;
   }
 
-  .tab-heading {
-    font-size: 12px;
+  .kpi-card {
+    flex-wrap: wrap;
   }
+}
+</style>
 
-  .stat-pill {
-    font-size: 10px;
-    padding: 2px 6px;
-  }
+<style>
+.inventory-option-popper .el-select-dropdown__item,
+.inventory-option-popper .el-select-dropdown__option-item {
+  display: flex;
+  align-items: center;
+}
+
+.inventory-option-popper .opt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.inventory-option-popper .opt-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.inventory-option-popper .opt-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-option-popper .opt-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #94a3b8;
 }
 </style>
