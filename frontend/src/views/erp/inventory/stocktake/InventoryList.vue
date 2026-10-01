@@ -139,7 +139,8 @@
               size="small"
               class="field-control"
               :prefix-icon="Search"
-              @keyup.enter="handleSearch"
+              @input="handleKeywordInput"
+              @keyup.enter="searchNow"
             />
           </div>
 
@@ -155,6 +156,7 @@
               value-format="YYYY-MM-DD"
               size="small"
               class="field-control"
+              @change="handleDateRangeChange"
             />
           </div>
 
@@ -174,9 +176,6 @@
 
           <div class="filter-actions">
             <el-button size="small" :icon="RefreshLeft" @click="resetFilters">リセット</el-button>
-            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">
-              検索
-            </el-button>
           </div>
         </div>
 
@@ -301,7 +300,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -725,6 +724,14 @@ const handleMonthChange = (month: string) => {
     // 如果清空月份选择，也清空日期范围
     filters.value.dateRange = []
   }
+  handleSearch()
+}
+
+// 手动修改日期范围时清除月选择，避免两个条件冲突
+const handleDateRangeChange = (range: string[] | null) => {
+  filters.value.dateRange = range ?? []
+  filters.value.monthPicker = ''
+  handleSearch()
 }
 
 // 搜索处理
@@ -732,6 +739,27 @@ const handleSearch = async () => {
   resetAllPages()
   await refreshAllTabs()
 }
+
+// 关键词输入防抖自动检索
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+const clearKeywordTimer = () => {
+  if (keywordTimer) {
+    clearTimeout(keywordTimer)
+    keywordTimer = null
+  }
+}
+const handleKeywordInput = () => {
+  clearKeywordTimer()
+  keywordTimer = setTimeout(() => {
+    keywordTimer = null
+    handleSearch()
+  }, 400)
+}
+const searchNow = () => {
+  clearKeywordTimer()
+  handleSearch()
+}
+onBeforeUnmount(clearKeywordTimer)
 
 // 工程变更：联动刷新製品名候选后检索
 const handleProcessChange = async () => {
@@ -742,6 +770,7 @@ const handleProcessChange = async () => {
 const handleProductChange = () => handleSearch()
 
 const removeChip = async (key: string) => {
+  clearKeywordTimer()
   switch (key) {
     case 'processCd':
       filters.value.processCd = ''
@@ -764,6 +793,7 @@ const removeChip = async (key: string) => {
 
 // 重置筛选
 const resetFilters = async () => {
+  clearKeywordTimer()
   filters.value = createDefaultFilters()
   resetAllPages()
   await Promise.all([refreshAllTabs(), loadProductOptions()])
