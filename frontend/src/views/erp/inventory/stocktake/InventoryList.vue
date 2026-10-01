@@ -38,22 +38,27 @@
           :key="card.key"
           type="button"
           class="kpi-card"
-          :class="{ 'is-active': activeTab === card.key }"
+          :class="{ 'is-active': activeTab === card.key, 'is-filtered': card.filtered }"
           :style="{ '--accent': card.color }"
           @click="activeTab = card.key"
         >
           <div class="kpi-icon">
             <el-icon :size="16"><component :is="card.icon" /></el-icon>
           </div>
-          <span class="kpi-label">{{ card.label }}</span>
+          <span class="kpi-label">
+            {{ card.label }}
+            <span v-if="card.filtered" class="kpi-flag">絞込</span>
+          </span>
           <span class="kpi-metric">
             <span class="kpi-metric-key">件数</span>
             <span class="kpi-value">{{ card.total.toLocaleString() }}</span>
+            <span v-if="card.filtered" class="kpi-base">/ {{ card.baseTotal.toLocaleString() }}</span>
           </span>
           <span class="kpi-sep" />
           <span class="kpi-metric">
             <span class="kpi-metric-key">数量</span>
             <span class="kpi-value kpi-value--qty">{{ card.qty.toLocaleString() }}</span>
+            <span v-if="card.filtered" class="kpi-base">/ {{ card.baseQty.toLocaleString() }}</span>
           </span>
         </button>
       </section>
@@ -426,40 +431,92 @@ interface ApiError {
   message?: string
 }
 
-const kpiCards = computed(() => [
-  {
-    key: 'all',
-    label: '全て',
-    icon: Grid,
-    color: '#0284c7',
-    total: pagination.value.total,
-    qty: inventoryTotalQuantity.value,
-  },
-  {
-    key: 'material',
-    label: '材料',
-    icon: Coin,
-    color: ITEM_COLORS['材料棚卸'].color,
-    total: materialPagination.value.total,
-    qty: materialTotalQuantity.value,
-  },
-  {
-    key: 'component',
-    label: '部品',
-    icon: SetUp,
-    color: ITEM_COLORS['部品棚卸'].color,
-    total: componentPagination.value.total,
-    qty: componentTotalQuantity.value,
-  },
-  {
-    key: 'stage',
-    label: 'ステー',
-    icon: Box,
-    color: ITEM_COLORS['製品棚卸'].color,
-    total: stagePagination.value.total,
-    qty: stageTotalQuantity.value,
-  },
-])
+// 筛选前的全体件数・数量（KPI 对比用）
+type KpiKey = 'all' | 'material' | 'component' | 'stage'
+const baseTotals = ref<Record<KpiKey, { total: number; qty: number }>>({
+  all: { total: 0, qty: 0 },
+  material: { total: 0, qty: 0 },
+  component: { total: 0, qty: 0 },
+  stage: { total: 0, qty: 0 },
+})
+
+const stageBaseParams = () =>
+  activeStageTab.value === 'all'
+    ? { item: '製品棚卸' }
+    : { stageType: activeStageTab.value }
+
+const fetchBaseTotal = async (key: KpiKey, params: Record<string, string>) => {
+  try {
+    const res = await getInventoryLogs({ ...params, page: 1, pageSize: 1 })
+    baseTotals.value[key] = {
+      total: Number(res?.total ?? 0),
+      qty: Number(res?.totalQuantity ?? 0),
+    }
+  } catch {
+    baseTotals.value[key] = { total: 0, qty: 0 }
+  }
+}
+
+const fetchBaseTotals = () =>
+  Promise.all([
+    fetchBaseTotal('all', {}),
+    fetchBaseTotal('material', { item: '材料棚卸' }),
+    fetchBaseTotal('component', { item: '部品棚卸' }),
+    fetchBaseTotal('stage', stageBaseParams()),
+  ])
+
+const kpiCards = computed(() => {
+  const filtered = activeChips.value.length > 0
+  const stageLabel = STAGE_TABS.find((s) => s.value === activeStageTab.value)
+  const base = baseTotals.value
+  return [
+    {
+      key: 'all',
+      label: '全て',
+      icon: Grid,
+      color: '#0284c7',
+      total: pagination.value.total,
+      qty: inventoryTotalQuantity.value,
+      baseTotal: base.all.total,
+      baseQty: base.all.qty,
+      filtered,
+    },
+    {
+      key: 'material',
+      label: '材料',
+      icon: Coin,
+      color: ITEM_COLORS['材料棚卸'].color,
+      total: materialPagination.value.total,
+      qty: materialTotalQuantity.value,
+      baseTotal: base.material.total,
+      baseQty: base.material.qty,
+      filtered,
+    },
+    {
+      key: 'component',
+      label: '部品',
+      icon: SetUp,
+      color: ITEM_COLORS['部品棚卸'].color,
+      total: componentPagination.value.total,
+      qty: componentTotalQuantity.value,
+      baseTotal: base.component.total,
+      baseQty: base.component.qty,
+      filtered,
+    },
+    {
+      key: 'stage',
+      label:
+        activeStageTab.value !== 'all' && stageLabel ? `ステー・${stageLabel.label}` : 'ステー',
+      icon: Box,
+      color: ITEM_COLORS['製品棚卸'].color,
+      total: stagePagination.value.total,
+      qty: stageTotalQuantity.value,
+      baseTotal: base.stage.total,
+      baseQty: base.stage.qty,
+      filtered,
+    },
+  ]
+})
 
 const currentCard = computed(
   () => kpiCards.value.find((c) => c.key === activeTab.value) ?? kpiCards.value[0],
@@ -702,6 +759,7 @@ const handleStageTabChange = (value: string) => {
   activeStageTab.value = value
   stagePagination.value.page = 1
   fetchStage()
+  fetchBaseTotal('stage', stageBaseParams())
 }
 
 // 排序处理（服务端全量排序）
@@ -832,7 +890,7 @@ const handleImport = async () => {
       ElMessage.success('✅ ' + (response.message ?? 'CSV取込が完了しました'))
     }
 
-    await Promise.all([refreshAllTabs(), reloadOptions()])
+    await Promise.all([refreshAllTabs(), reloadOptions(), fetchBaseTotals()])
   } catch (err: unknown) {
     const apiError = err as ApiError
     const msg = apiError?.response?.data?.message || apiError?.message || 'CSV取込に失敗しました'
@@ -863,7 +921,7 @@ const handleDeleteRecord = async (record: InventoryLog) => {
     deletingId.value = record.id
     await deleteInventoryLog(record.id)
     ElMessage.success('✅ 棚卸データを削除しました')
-    await refreshAllTabs()
+    await Promise.all([refreshAllTabs(), fetchBaseTotals()])
   } catch (err: unknown) {
     const apiError = err as ApiError
     const msg = apiError?.response?.data?.message || apiError?.message || '削除に失敗しました'
@@ -923,7 +981,7 @@ const handleStageSizeChange = (newSize: number) => {
 
 // 组件挂载时初始化数据
 onMounted(async () => {
-  await Promise.all([refreshAllTabs(), reloadOptions()])
+  await Promise.all([refreshAllTabs(), reloadOptions(), fetchBaseTotals()])
 })
 </script>
 
@@ -1081,8 +1139,9 @@ onMounted(async () => {
 .kpi-card {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   min-width: 0;
   padding: 8px 14px;
   white-space: nowrap;
@@ -1144,10 +1203,43 @@ onMounted(async () => {
 }
 
 .kpi-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 13px;
   font-weight: 700;
   color: var(--il-text);
   margin-right: auto;
+}
+
+.kpi-flag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.kpi-card.is-filtered::before {
+  width: 4px;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--accent) 0 6px,
+    color-mix(in srgb, var(--accent) 35%, transparent) 6px 10px
+  );
+}
+
+.kpi-base {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-metric {
