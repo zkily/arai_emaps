@@ -11,7 +11,6 @@
           </div>
           <div class="hero-title-text">
             <h1 class="toolbar-title">日受注管理</h1>
-            <p v-if="lastFetchedText" class="hero-meta">更新: {{ lastFetchedText }}</p>
           </div>
         </div>
         <div class="hero-actions">
@@ -29,16 +28,17 @@
           </el-button>
         </div>
       </div>
-      <div class="date-quick-row">
-        <span class="dq-label">期間</span>
-        <el-button-group class="date-quick-btns">
-          <el-button size="small" @click="applyQuickRange('today')">今日</el-button>
-          <el-button size="small" @click="applyQuickRange('week')">今週</el-button>
-          <el-button size="small" @click="applyQuickRange('month')">今月</el-button>
-          <el-button size="small" @click="applyQuickRange('lastMonth')">先月</el-button>
-        </el-button-group>
-      </div>
       <div class="filter-inline">
+        <div class="fi-group fi-quick">
+          <span class="dq-label">期間</span>
+          <el-button-group class="date-quick-btns">
+            <el-button size="small" @click="applyQuickRange('today')">今日</el-button>
+            <el-button size="small" @click="applyQuickRange('week')">今週</el-button>
+            <el-button size="small" @click="applyQuickRange('month')">今月</el-button>
+            <el-button size="small" @click="applyQuickRange('lastMonth')">先月</el-button>
+          </el-button-group>
+        </div>
+        <div class="fi-sep"></div>
         <div class="fi-group">
           <el-icon class="fi-icon"><Calendar /></el-icon>
           <el-date-picker
@@ -58,7 +58,7 @@
             <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} | ${d.name}`" :value="d.cd" />
           </el-select>
         </div>
-        <div class="fi-group">
+        <div class="fi-group fi-group--grow">
           <el-select v-model="filters.keyword" placeholder="製品" clearable filterable class="fi-product">
             <el-option
               v-for="p in productOptions"
@@ -209,19 +209,21 @@
       :show-close="false"
     >
       <template #header>
-        <div class="dialog-header-custom">
+        <div class="dialog-header-custom odd-hero" :class="{ 'odd-hero--edit': editId }">
+          <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
           <div class="dialog-header-left">
-            <span class="dialog-header-add-btn" title="新規追加">
-              <el-icon><Plus /></el-icon>
+            <span class="dialog-header-add-btn" :title="editId ? '編集' : '新規追加'">
+              <el-icon><EditPen v-if="editId" /><Plus v-else /></el-icon>
             </span>
-            <span class="dialog-header-title">{{ editId ? '日別受注編集' : '新規受注追加(試作品・補給品等)' }}</span>
+            <span class="dialog-header-title">{{ editId ? '日別受注編集' : '新規受注追加' }}</span>
+            <span v-if="!editId" class="odd-badge">試作品・補給品等</span>
           </div>
           <el-icon class="dialog-header-close" @click="dialogVisible = false"><Close /></el-icon>
         </div>
       </template>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="modern-form compact-form" size="default">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="modern-form compact-form odd-modern" size="default">
         <!-- 日付情報セクション -->
-        <div class="form-section compact-section">
+        <div class="form-section compact-section odd-sec odd-sec--date">
           <div class="section-header compact-header">
             <el-icon class="section-icon"><Calendar /></el-icon>
             <span class="section-title">日付情報</span>
@@ -258,7 +260,7 @@
         </div>
 
         <!-- 基本情報セクション -->
-        <div class="form-section compact-section">
+        <div class="form-section compact-section odd-sec odd-sec--basic">
           <div class="section-header compact-header">
             <el-icon class="section-icon"><Document /></el-icon>
             <span class="section-title">基本情報</span>
@@ -320,7 +322,7 @@
         </div>
 
         <!-- 数量情報セクション -->
-        <div class="form-section compact-section">
+        <div class="form-section compact-section odd-sec odd-sec--qty">
           <div class="section-header compact-header">
             <el-icon class="section-icon"><Box /></el-icon>
             <span class="section-title">数量情報</span>
@@ -376,7 +378,7 @@
       </el-form>
       
       <template #footer>
-        <div class="dialog-footer-compact">
+        <div class="dialog-footer-compact odd-footer" :class="{ 'odd-footer--edit': editId }">
           <el-button @click="dialogVisible = false" class="btn-cancel" size="default">
             <el-icon><Close /></el-icon>
             <span>キャンセル</span>
@@ -396,7 +398,7 @@ import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Download } from '@element-plus/icons-vue'
+import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Download, EditPen } from '@element-plus/icons-vue'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
 import {
@@ -468,20 +470,6 @@ function applyRouteQuery() {
 
 /** フィルタ後の全件（KPI・CSV 用） */
 const fullList = ref<OrderDailyItem[]>([])
-const lastFetchedAt = ref<Date | null>(null)
-
-const lastFetchedText = computed(() => {
-  if (!lastFetchedAt.value) return ''
-  return lastFetchedAt.value.toLocaleString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-})
 
 const summaryStats = computed(() => {
   const rows = fullList.value
@@ -764,7 +752,6 @@ async function loadList() {
     if (filters.destination_cd) params.destination_cd = filters.destination_cd
     const allData = await fetchOrderDailyList(params)
     fullList.value = allData
-    lastFetchedAt.value = new Date()
     applyPagination()
   } catch {
     fullList.value = []
@@ -1191,14 +1178,6 @@ onUnmounted(() => {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
-.hero-meta {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.82);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
 .hero-actions {
   display: flex;
   gap: 8px;
@@ -1206,31 +1185,43 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.date-quick-row {
-  display: flex;
+.dq-label {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  white-space: nowrap;
 }
 
-.dq-label {
-  font-size: 12px;
-  color: rgba(255,255,255,0.85);
-  font-weight: 500;
+/* 期間クイック：白いフィルタバー内のセグメント */
+.date-quick-btns {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: #eef2ff;
+  box-shadow: inset 0 1px 2px rgba(67, 56, 202, 0.12);
 }
 
 .date-quick-btns :deep(.el-button) {
-  --el-button-bg-color: rgba(255, 255, 255, 0.14);
-  --el-button-border-color: rgba(255, 255, 255, 0.32);
-  --el-button-text-color: #fff;
-  --el-button-hover-bg-color: rgba(255, 255, 255, 0.26);
-  --el-button-hover-border-color: rgba(255, 255, 255, 0.48);
-  --el-button-hover-text-color: #fff;
-  border-radius: 8px;
-  font-weight: 600;
+  --el-button-bg-color: transparent;
+  --el-button-border-color: transparent;
+  --el-button-text-color: #4338ca;
+  --el-button-hover-bg-color: #fff;
+  --el-button-hover-border-color: transparent;
+  --el-button-hover-text-color: #4f46e5;
+  --el-button-active-bg-color: #e0e7ff;
+  --el-button-active-border-color: transparent;
+  height: 26px;
+  padding: 0 11px;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 7px !important;
+  font-weight: 700;
 }
 
 .filter-inline {
@@ -1383,17 +1374,22 @@ onUnmounted(() => {
 }
 
 .fi-date-range {
-  width: 280px;
+  width: 260px;
 }
 
 .fi-dest {
-  width: 195px;
+  width: 190px;
   min-width: 150px;
 }
 
+.fi-group--grow {
+  flex: 1 1 280px;
+  min-width: 260px;
+}
+
 .fi-product {
-  width: 380px;
-  min-width: 320px;
+  width: 100%;
+  min-width: 0;
 }
 
 .fi-sep {
@@ -2027,15 +2023,6 @@ onUnmounted(() => {
   text-shadow: 0 2px 10px rgba(15, 23, 42, 0.3);
 }
 
-.od-modern .hero-meta {
-  display: inline-block;
-  margin-top: 3px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-}
-
 /* ツールバーボタン：3D キーキャップ */
 .od-modern .tb-btn {
   --edge: rgba(15, 23, 42, 0.35);
@@ -2093,7 +2080,9 @@ onUnmounted(() => {
 .od-modern .date-quick-btns :deep(.el-button:hover) {
   z-index: 1;
   transform: translateY(-1px);
-  box-shadow: 0 6px 12px -6px rgba(15, 23, 42, 0.5);
+  box-shadow:
+    0 2px 0 #c7d2fe,
+    0 6px 12px -6px rgba(79, 70, 229, 0.45);
 }
 
 .od-modern .date-quick-btns :deep(.el-button:active) {
@@ -2478,6 +2467,395 @@ onUnmounted(() => {
   .od-modern .hero-icon-wrap,
   .od-modern .kpi-card {
     animation: none;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（新規受注追加ダイアログ / 新規＝indigo・編集＝amber）
+ * ============================================================ */
+.odd-hero {
+  --m1: #1e1b4b;
+  --m2: #4338ca;
+  --m3: #7c3aed;
+  --m4: #a855f7;
+  position: relative;
+  overflow: hidden;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, var(--m1) 0%, var(--m2) 38%, var(--m3) 74%, var(--m4) 100%);
+}
+
+.odd-hero--edit {
+  --m1: #451a03;
+  --m2: #b45309;
+  --m3: #f59e0b;
+  --m4: #fbbf24;
+}
+
+.odd-hero > :not(.page-header-fx) {
+  position: relative;
+  z-index: 1;
+}
+
+.odd-hero .page-header-fx {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.odd-hero .fx-orb {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  animation: oddOrbFloat 11s ease-in-out infinite alternate;
+}
+
+.odd-hero .orb-a {
+  top: -70px;
+  right: 18%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0%, transparent 70%);
+}
+
+.odd-hero .orb-b {
+  bottom: -90px;
+  left: 8%;
+  background: radial-gradient(circle, var(--m4) 0%, transparent 70%);
+  animation-delay: -5.5s;
+}
+
+.odd-hero .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 120% at 70% 50%, #000 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 120% at 70% 50%, #000 0%, transparent 75%);
+}
+
+.odd-hero .fx-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: oddSheen 7s ease-in-out infinite;
+}
+
+.odd-hero .dialog-header-add-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 3px 0 rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  cursor: default;
+  animation: odIconFloat 4.5s ease-in-out infinite;
+}
+
+.odd-hero .dialog-header-add-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.odd-hero .dialog-header-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.odd-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.2);
+  white-space: nowrap;
+}
+
+.odd-hero .dialog-header-close {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.odd-hero .dialog-header-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+@keyframes oddOrbFloat {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(18px, 10px) scale(1.12);
+  }
+}
+
+@keyframes oddSheen {
+  0%,
+  55% {
+    left: -40%;
+  }
+  100% {
+    left: 130%;
+  }
+}
+
+/* フォーム本体：セクション色分け（日付＝sky / 基本＝indigo / 数量＝emerald） */
+.odd-modern {
+  padding: 4px 2px 2px;
+  background: linear-gradient(180deg, #f8faff 0%, #f1f5f9 100%);
+}
+
+.odd-sec--date {
+  --sc: #0ea5e9;
+  --sc-rgb: 14, 165, 233;
+}
+.odd-sec--basic {
+  --sc: #6366f1;
+  --sc-rgb: 99, 102, 241;
+}
+.odd-sec--qty {
+  --sc: #10b981;
+  --sc-rgb: 16, 185, 129;
+}
+
+.odd-modern .odd-sec {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--sc-rgb), 0.22);
+  box-shadow:
+    0 8px 18px -12px rgba(var(--sc-rgb), 0.55),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.odd-modern .odd-sec::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.25) 100%);
+}
+
+.odd-modern .odd-sec:hover {
+  transform: translateY(-1px);
+}
+
+.odd-modern .odd-sec:focus-within {
+  border-color: rgba(var(--sc-rgb), 0.5);
+  box-shadow:
+    0 0 0 3px rgba(var(--sc-rgb), 0.1),
+    0 10px 22px -12px rgba(var(--sc-rgb), 0.6);
+}
+
+.odd-modern .compact-header {
+  padding: 10px 12px 7px;
+  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.1) 0%, rgba(var(--sc-rgb), 0.02) 100%);
+  border-bottom-color: rgba(var(--sc-rgb), 0.15);
+}
+
+.odd-modern .section-icon {
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(var(--sc-rgb), 0.7) 0%, var(--sc) 100%);
+  box-shadow:
+    0 2px 0 rgba(15, 23, 42, 0.18),
+    0 4px 8px -3px rgba(var(--sc-rgb), 0.65);
+}
+
+.odd-modern .section-title {
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.02em;
+}
+
+.odd-modern .compact-item :deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #475569;
+}
+
+.odd-modern .odd-sec :deep(.el-input__wrapper),
+.odd-modern .odd-sec :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #dfe3f0 inset;
+  transition:
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.odd-modern .odd-sec :deep(.el-input__wrapper:hover),
+.odd-modern .odd-sec :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
+}
+
+.odd-modern .odd-sec :deep(.el-input__wrapper.is-focus),
+.odd-modern .odd-sec :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px var(--sc) inset,
+    0 0 0 3px rgba(var(--sc-rgb), 0.15);
+}
+
+/* 確定本数：自動計算の数値表示（高さは入数・箱数の入力欄と揃える） */
+.odd-modern .calculated-row {
+  margin-top: 14px;
+}
+
+.odd-modern .calculated-row :deep(.el-input__wrapper) {
+  min-height: 0;
+  height: var(--el-component-size, 32px);
+}
+
+.odd-modern .calculated-field :deep(.el-input__wrapper) {
+  border: none;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  box-shadow: 0 0 0 1px #6ee7b7 inset;
+}
+
+.odd-modern .calculated-field :deep(.el-input__inner) {
+  font-size: 16px;
+  font-weight: 800;
+  color: #047857;
+  font-variant-numeric: tabular-nums;
+}
+
+.odd-modern .unit-suffix {
+  font-weight: 700;
+  color: #059669;
+}
+
+.odd-modern .compact-tip {
+  border-left: none;
+  border-radius: 8px;
+  color: #1d4ed8;
+  background: linear-gradient(90deg, #eff6ff 0%, #f0f9ff 100%);
+  box-shadow: inset 3px 0 0 #3b82f6;
+}
+
+/* フッター：キーキャップ（保存はモード色） */
+.odd-footer {
+  --m2: #4f46e5;
+  --m3: #7c3aed;
+  --m-edge: #312e81;
+  --m-glow: rgba(99, 102, 241, 0.55);
+  background: #f8fafc;
+  border-top-color: #e2e8f0;
+}
+
+.odd-footer--edit {
+  --m2: #d97706;
+  --m3: #f59e0b;
+  --m-edge: #92400e;
+  --m-glow: rgba(245, 158, 11, 0.55);
+}
+
+.odd-footer .btn-cancel,
+.odd-footer .btn-save {
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.odd-footer .btn-cancel {
+  border-color: #cbd5e1;
+  color: #334155;
+  font-weight: 600;
+  box-shadow:
+    0 3px 0 #cbd5e1,
+    inset 0 1px 0 #fff;
+}
+
+.odd-footer .btn-cancel:hover {
+  transform: translateY(-2px);
+  background: #fff;
+  box-shadow:
+    0 5px 0 #cbd5e1,
+    0 10px 16px -8px rgba(15, 23, 42, 0.25),
+    inset 0 1px 0 #fff;
+}
+
+.odd-footer .btn-save,
+.odd-footer .btn-save:hover,
+.odd-footer .btn-save:focus {
+  font-weight: 700;
+  opacity: 1;
+  background: linear-gradient(180deg, var(--m3) 0%, var(--m2) 100%);
+}
+
+.odd-footer .btn-save {
+  box-shadow:
+    0 3px 0 var(--m-edge),
+    0 10px 18px -8px var(--m-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.odd-footer .btn-save:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 5px 0 var(--m-edge),
+    0 14px 22px -8px var(--m-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.odd-footer .btn-cancel:active,
+.odd-footer .btn-save:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #cbd5e1;
+}
+
+.odd-footer .btn-save:active {
+  box-shadow: 0 1px 0 var(--m-edge);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .odd-hero .fx-orb,
+  .odd-hero .fx-sheen,
+  .odd-hero .dialog-header-add-btn {
+    animation: none;
+  }
+  .odd-modern .odd-sec:hover,
+  .odd-footer .btn-cancel:hover,
+  .odd-footer .btn-save:hover {
+    transform: none;
   }
 }
 </style>

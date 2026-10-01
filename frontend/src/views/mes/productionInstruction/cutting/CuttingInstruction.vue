@@ -15943,7 +15943,8 @@ onUnmounted(() => {
 }
 
 /* ── ページヘッダー ── */
-.page-header {
+/* 非 scoped のため、他ページの .page-header へ漏れないようコンテナで限定する */
+.cutting-instruction-container .page-header {
   margin-bottom: 10px !important;
   padding: 12px 16px !important;
   border-radius: var(--radius-card) !important;
@@ -15955,7 +15956,7 @@ onUnmounted(() => {
     0 10px 28px -12px rgba(37, 99, 235, 0.28),
     0 4px 10px rgba(15, 23, 42, 0.05) !important;
 }
-.header-title h1 {
+.cutting-instruction-container .header-title h1 {
   font-size: 18px !important;
   letter-spacing: -0.04em !important;
   font-weight: 800 !important;
@@ -15963,17 +15964,17 @@ onUnmounted(() => {
   display: flex !important;
   align-items: center !important;
 }
-.header-right .header-pill-btn.el-button {
+.cutting-instruction-container .header-right .header-pill-btn.el-button {
   height: 30px !important;
   padding: 0 13px !important;
   font-size: 11px !important;
 }
-.header-right .header-pill-btn--report.el-button {
+.cutting-instruction-container .header-right .header-pill-btn--report.el-button {
   padding: 0 12px 0 10px !important;
 }
-.header-pill-btn__icon { font-size: 13px !important; margin-right: 4px !important; }
-.header-title .header-desc { font-size: 11px !important; margin: 4px 0 0 32px !important; color: #64748b !important; }
-.page-header-badge { font-size: 9px !important; padding: 2px 6px !important; margin-bottom: 4px !important; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff !important; border-radius: 6px !important; font-weight: 700 !important; }
+.cutting-instruction-container .header-pill-btn__icon { font-size: 13px !important; margin-right: 4px !important; }
+.cutting-instruction-container .header-title .header-desc { font-size: 11px !important; margin: 4px 0 0 32px !important; color: #64748b !important; }
+.cutting-instruction-container .page-header-badge { font-size: 9px !important; padding: 2px 6px !important; margin-bottom: 4px !important; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff !important; border-radius: 6px !important; font-weight: 700 !important; }
 
 /* ── カード padding compact ── */
 .plan-section .section-card :deep(.el-card__header) { padding: 10px 14px !important; }

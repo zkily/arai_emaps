@@ -5,7 +5,6 @@
         <div class="fx-orb orb-a" />
         <div class="fx-orb orb-b" />
         <div class="fx-grid" />
-        <div class="fx-sheen" />
       </div>
       <div class="header-content">
         <div class="title-section">
@@ -16,16 +15,6 @@
             <div class="title-copy">
               <span class="title-text">生産データ管理</span>
               <p class="subtitle">受注・実績・在庫を一元管理</p>
-              <div class="header-chips">
-                <span v-if="dateRange" class="header-chip">
-                  <el-icon><Calendar /></el-icon>
-                  {{ dateRange[0] }} ～ {{ dateRange[1] }}
-                </span>
-                <span class="header-chip">
-                  <el-icon><Document /></el-icon>
-                  {{ total.toLocaleString() }}件
-                </span>
-              </div>
             </div>
           </h2>
         </div>
@@ -524,7 +513,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.id"
               prop="id"
               label="ID"
-              :width="columnDefinitions.id?.width ?? 80"
+              :width="headerFitWidth('ID', columnDefinitions.id?.width ?? 80)"
               fixed="left"
               align="center"
             />
@@ -532,7 +521,7 @@
               v-if="activeTableTab === 'custom' ? visibleColumns.date : true"
               prop="date"
               label="日付"
-              :width="columnDefinitions.date?.width ?? 90"
+              :width="headerFitWidth('日付', columnDefinitions.date?.width ?? 90, true)"
               fixed="left"
               align="center"
               sortable="custom"
@@ -546,7 +535,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.day_of_week"
               prop="day_of_week"
               label="曜日"
-              :width="columnDefinitions.day_of_week?.width ?? 60"
+              :width="headerFitWidth('曜日', columnDefinitions.day_of_week?.width ?? 60)"
               fixed="left"
               align="center"
             >
@@ -560,7 +549,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.route_cd"
               prop="route_cd"
               label="工程グループ"
-              :width="columnDefinitions.route_cd?.width ?? 120"
+              :width="headerFitWidth('工程グループ', columnDefinitions.route_cd?.width ?? 120)"
               fixed="left"
               align="center"
             />
@@ -568,7 +557,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.product_cd"
               prop="product_cd"
               label="製品CD"
-              :width="columnDefinitions.product_cd?.width ?? 90"
+              :width="headerFitWidth('製品CD', columnDefinitions.product_cd?.width ?? 90)"
               fixed="left"
               align="center"
             />
@@ -576,7 +565,7 @@
               v-if="activeTableTab === 'custom' ? visibleColumns.product_name : true"
               prop="product_name"
               label="製品名"
-              :width="columnDefinitions.product_name?.width ?? 110"
+              :width="headerFitWidth('製品名', columnDefinitions.product_name?.width ?? 110, true)"
               fixed="left"
               show-overflow-tooltip
               sortable="custom"
@@ -590,7 +579,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.order_quantity"
               prop="order_quantity"
               label="受注数"
-              :width="columnDefinitions.order_quantity?.width ?? 70"
+              :width="headerFitWidth('受注数', columnDefinitions.order_quantity?.width ?? 70)"
               align="center"
             >
               <template #default="{ row }">
@@ -605,7 +594,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.forecast_quantity"
               prop="forecast_quantity"
               label="内示数"
-              :width="columnDefinitions.forecast_quantity?.width ?? 70"
+              :width="headerFitWidth('内示数', columnDefinitions.forecast_quantity?.width ?? 70)"
               align="center"
             >
               <template #default="{ row }">
@@ -620,7 +609,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.safety_stock"
               prop="safety_stock"
               label="安全在庫"
-              :width="columnDefinitions.safety_stock?.width ?? 90"
+              :width="headerFitWidth('安全在庫', columnDefinitions.safety_stock?.width ?? 90)"
               align="center"
             >
               <template #default="{ row }">
@@ -636,7 +625,7 @@
                 v-if="activeTableTab === 'custom' ? visibleColumns[col.prop] : true"
                 :prop="col.prop"
                 :label="col.label"
-                :width="col.width || 90"
+                :width="headerFitWidth(col.label, col.width || 90)"
                 align="center"
               >
                 <template #default="{ row }">
@@ -2420,7 +2409,6 @@ import {
   InfoFilled,
   Loading,
   DocumentCopy,
-  Document,
   RefreshRight,
   WarningFilled,
   Delete,
@@ -2524,21 +2512,26 @@ const createShortcutRange = (days: number) => {
   start.setDate(start.getDate() - (days - 1))
   return [start, end]
 }
+const createFutureShortcutRange = (days: number) => {
+  const start = new Date()
+  const end = new Date(start)
+  end.setDate(end.getDate() + (days - 1))
+  return [start, end]
+}
 const getMonthRange = (year: number, month: number) => {
   return [new Date(year, month, 1), new Date(year, month + 1, 0)]
 }
+const getMonthRangeFromNow = (offset: number) => {
+  const now = new Date()
+  return getMonthRange(now.getFullYear(), now.getMonth() + offset)
+}
 
 const datePickerShortcuts: Array<{ text: string; value: () => Date[] }> = [
-  { text: '過去7日', value: () => createShortcutRange(7) },
-  { text: '過去14日', value: () => createShortcutRange(14) },
-  { text: '過去30日', value: () => createShortcutRange(30) },
-  {
-    text: '今月',
-    value: () => {
-      const now = new Date()
-      return getMonthRange(now.getFullYear(), now.getMonth())
-    },
-  },
+  { text: '前月', value: () => getMonthRangeFromNow(-1) },
+  { text: '今月', value: () => getMonthRangeFromNow(0) },
+  { text: '来月', value: () => getMonthRangeFromNow(1) },
+  { text: '過去60日', value: () => createShortcutRange(60) },
+  { text: '将来90日', value: () => createFutureShortcutRange(90) },
 ]
 
 const loading = ref(false)
@@ -3068,6 +3061,34 @@ const getWeekdayType = (dayOfWeek: string) => {
   if (dayOfWeek === '土') return 'primary'
   if (dayOfWeek === '日') return 'danger'
   return 'info'
+}
+/**
+ * 表頭ラベルが省略されない列幅と基準幅の大きい方。
+ * 表頭は 12px 太字・letter-spacing 0.02em、th と .cell の左右 padding 各 8px、ソートアイコン 24px。
+ */
+const headerTextWidthCache = new Map<string, number>()
+let headerMeasureCtx: CanvasRenderingContext2D | null = null
+const measureHeaderText = (label: string) => {
+  const cached = headerTextWidthCache.get(label)
+  if (cached != null) return cached
+  if (!headerMeasureCtx) {
+    headerMeasureCtx = document.createElement('canvas').getContext('2d')
+    if (headerMeasureCtx) {
+      headerMeasureCtx.font = `700 12px ${getComputedStyle(document.body).fontFamily}`
+    }
+  }
+  let width = 0
+  if (headerMeasureCtx) {
+    width = headerMeasureCtx.measureText(label).width
+  } else {
+    for (const ch of label) width += ch.charCodeAt(0) > 0xff ? 12 : 7.5
+  }
+  width += label.length * 12 * 0.02
+  headerTextWidthCache.set(label, width)
+  return width
+}
+const headerFitWidth = (label: string, base: number, sortable = false) => {
+  return Math.max(base, Math.ceil(measureHeaderText(label) + 32 + 6 + (sortable ? 24 : 0)))
 }
 const headerCellStyle = {
   background: '#ecfdf5',
@@ -9341,9 +9362,12 @@ onUnmounted(() => {
  * ============================================================ */
 
 /* ---------- ヘッダー ---------- */
+/* ルート遷移（opacity/transform）中に backdrop-filter があると背景が描画されないことがあるため無効化 */
 .pd-modern .page-header {
   position: relative;
   isolation: isolate;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   background: linear-gradient(135deg, #047857 0%, #059669 28%, #10b981 64%, #2dd4bf 100%);
   box-shadow:
     0 18px 36px -18px rgba(4, 120, 87, 0.55),
@@ -9365,7 +9389,6 @@ onUnmounted(() => {
   position: absolute;
   border-radius: 50%;
   filter: blur(4px);
-  animation: pdOrbFloat 11s ease-in-out infinite;
 }
 .pd-modern .fx-orb.orb-a {
   width: 240px;
@@ -9380,8 +9403,6 @@ onUnmounted(() => {
   bottom: -120px;
   left: 18%;
   background: radial-gradient(circle, rgba(165, 243, 252, 0.4) 0%, rgba(165, 243, 252, 0) 70%);
-  animation-delay: -5s;
-  animation-duration: 14s;
 }
 .pd-modern .fx-grid {
   position: absolute;
@@ -9393,24 +9414,9 @@ onUnmounted(() => {
   -webkit-mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
   mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
 }
-.pd-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.2) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: pdSheen 7s ease-in-out infinite;
-}
 .pd-modern .header-content {
   position: relative;
   z-index: 1;
-}
-.pd-modern .title {
-  perspective: 600px;
 }
 .pd-modern .title-icon {
   width: 46px;
@@ -9422,8 +9428,6 @@ onUnmounted(() => {
     0 10px 20px -8px rgba(2, 44, 34, 0.55),
     0 2px 0 rgba(255, 255, 255, 0.35) inset,
     0 -3px 0 rgba(4, 120, 87, 0.35) inset;
-  transform-style: preserve-3d;
-  animation: pdIconFloat 5.5s ease-in-out infinite;
 }
 .pd-modern .title-icon .el-icon {
   filter: drop-shadow(0 2px 3px rgba(2, 44, 34, 0.35));
@@ -9433,33 +9437,6 @@ onUnmounted(() => {
   letter-spacing: 0.05em;
   text-shadow: 0 2px 6px rgba(2, 44, 34, 0.25);
 }
-.pd-modern .header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-.pd-modern .header-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-  padding: 0 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  box-shadow: 0 4px 10px -6px rgba(2, 44, 34, 0.45);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-.pd-modern .header-chip .el-icon {
-  font-size: 12px;
-}
-
 /* ---------- ヘッダー操作ボタン（3Dキーキャップ） ---------- */
 .pd-modern .header-actions :deep(.el-button) {
   --edge: rgba(15, 23, 42, 0.35);
@@ -9756,6 +9733,9 @@ onUnmounted(() => {
 .pd-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell .cell) {
   color: #065f46;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  word-break: keep-all;
+  text-overflow: clip;
 }
 .pd-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
   box-shadow: inset 4px 0 0 #10b981;
@@ -9766,6 +9746,7 @@ onUnmounted(() => {
 }
 .pd-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell .cell) {
   color: #065f46;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -9805,33 +9786,6 @@ onUnmounted(() => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes pdSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
-@keyframes pdOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-@keyframes pdIconFloat {
-  0%,
-  100% {
-    transform: rotateX(0deg) rotateY(0deg) translateY(0);
-  }
-  50% {
-    transform: rotateX(10deg) rotateY(-14deg) translateY(-3px);
-  }
-}
 @keyframes pdDotPulse {
   0%,
   100% {
@@ -9843,9 +9797,6 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pd-modern .fx-orb,
-  .pd-modern .fx-sheen,
-  .pd-modern .title-icon,
   .pd-modern .summary-table-tabs :deep(.el-tabs__item.is-active .tab-dot) {
     animation: none;
   }

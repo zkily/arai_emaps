@@ -32,34 +32,6 @@
               <span class="summary-text">{{ t('orderDailyBatchEdit.changesCount', { n: changedRows.size }) }}</span>
             </div>
           </div>
-          <!-- 情報カードエリア -->
-          <div class="info-section">
-            <div class="stats-cards" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
-              <div class="stat-card stat-card--confirmed">
-                <div class="stat-icon confirmed">
-                  <el-icon>
-                    <Check />
-                  </el-icon>
-                </div>
-                <div class="stat-content">
-                  <span class="stat-number">{{ confirmedUnitsTotal.toLocaleString() }}</span>
-                  <span class="stat-label">{{ t('orderDailyBatchEdit.colConfirmedUnits') }}</span>
-                </div>
-              </div>
-
-              <div class="stat-card stat-card--forecast">
-                <div class="stat-icon forecast">
-                  <el-icon>
-                    <Refresh />
-                  </el-icon>
-                </div>
-                <div class="stat-content">
-                  <span class="stat-number">{{ forecastUnitsTotal.toLocaleString() }}</span>
-                  <span class="stat-label">{{ t('orderDailyBatchEdit.colForecastUnits') }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="header-actions">
             <el-button
               :disabled="saving || orderDailyList.length === 0"
@@ -126,8 +98,8 @@
       }"
     >
       <!-- <el-table-column label="納入先CD" prop="destination_cd" width="90" align="center" /> -->
-      <el-table-column :label="t('orderDailyBatchEdit.colDestinationName')" prop="destination_name" width="146" />
-      <el-table-column :label="t('orderDailyBatchEdit.colProductName')" prop="product_name" width="142" />
+      <el-table-column :label="t('orderDailyBatchEdit.colDestinationName')" prop="destination_name" width="170" />
+      <el-table-column :label="t('orderDailyBatchEdit.colProductName')" prop="product_name" width="118" />
       <el-table-column :label="t('orderDailyBatchEdit.colProductType')" prop="product_type" width="90" align="center" />
       <el-table-column :label="t('orderDailyBatchEdit.colUnitPerBox')" prop="unit_per_box" width="55" align="center" />
 
@@ -258,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchDailyOrdersByMonthlyOrderId, batchUpdateDailyOrders } from '@/api/order/order'
 import { ElMessage } from 'element-plus'
@@ -439,39 +411,6 @@ const emit = defineEmits<{
 const orderDailyList = ref<OrderDaily[]>([])
 const changedRows = ref<Set<number>>(new Set())
 
-const confirmedUnitsTotal = computed(() =>
-  orderDailyList.value.reduce((sum, r) => sum + (Number(r.confirmed_units) || 0), 0),
-)
-const forecastUnitsTotal = computed(() =>
-  orderDailyList.value.reduce((sum, r) => sum + (Number(r.forecast_units) || 0), 0),
-)
-
-// ヘッダー統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 const loading = ref(false)
 const saving = ref(false)
 
@@ -1835,12 +1774,24 @@ const handlePrint = () => {
 }
 
 .dbe-hero .save-summary-header {
-  background: linear-gradient(160deg, rgba(251, 191, 36, 0.4), rgba(251, 191, 36, 0.18));
-  border-color: rgba(253, 230, 138, 0.55);
+  padding: 3px 10px;
+  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #fbbf24;
+  backdrop-filter: none;
   box-shadow:
     0 2px 0 rgba(120, 53, 15, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
   animation: dbeBlink 2.2s ease-in-out infinite;
+}
+
+.dbe-hero .save-summary-header .summary-icon {
+  color: #d97706;
+}
+
+.dbe-hero .save-summary-header .summary-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #78350f;
 }
 
 @keyframes dbeBlink {
@@ -1976,28 +1927,31 @@ const handlePrint = () => {
   box-shadow: none;
 }
 
+/* 印刷＝紫 / 内示本数更新＝琥珀 / 一括保存＝緑（無効時は元の半透明スタイルに戻す） */
+.dbe-hero .de-btn-print:not(:disabled),
 .dbe-hero .de-btn-print:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
+  --k-edge: #5b21b6;
+  --k-glow: rgba(139, 92, 246, 0.55);
+  color: #fff;
+  border-color: transparent;
+  backdrop-filter: none;
+  background: linear-gradient(180deg, #a78bfa 0%, #8b5cf6 45%, #7c3aed 100%);
 }
 
-.dbe-hero .de-btn-forecast {
-  --k-edge: #0f766e;
-  --k-glow: rgba(20, 184, 166, 0.55);
-  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 45%, #0d9488 100%);
-}
-
+.dbe-hero .de-btn-forecast:not(:disabled),
 .dbe-hero .de-btn-forecast:hover:not(:disabled) {
-  background: linear-gradient(180deg, #2dd4bf 0%, #14b8a6 45%, #0d9488 100%);
+  --k-edge: #b45309;
+  --k-glow: rgba(245, 158, 11, 0.55);
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+  text-shadow: 0 1px 1px rgba(120, 53, 15, 0.35);
 }
 
-.dbe-hero .de-btn-save {
+.dbe-hero .de-btn-save:not(:disabled),
+.dbe-hero .de-btn-save:hover:not(:disabled) {
   --k-edge: #047857;
   --k-glow: rgba(16, 185, 129, 0.55);
-  background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
-}
-
-.dbe-hero .de-btn-save:hover:not(:disabled) {
   background: linear-gradient(180deg, #34d399 0%, #10b981 45%, #059669 100%);
 }
 

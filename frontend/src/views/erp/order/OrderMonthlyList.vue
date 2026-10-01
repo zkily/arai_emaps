@@ -12,16 +12,6 @@
           </div>
           <div class="toolbar-text">
             <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
-            <div class="toolbar-meta">
-              <span class="toolbar-chip chip-period">
-                <el-icon><Calendar /></el-icon>
-                {{ filters.year ? `${filters.year}年` : '—' }}{{ filters.month ? ` ${filters.month}月` : '' }}
-              </span>
-              <span class="toolbar-chip chip-count">
-                <el-icon><Document /></el-icon>
-                {{ pagination.total.toLocaleString() }}件
-              </span>
-            </div>
           </div>
         </div>
       </div>
