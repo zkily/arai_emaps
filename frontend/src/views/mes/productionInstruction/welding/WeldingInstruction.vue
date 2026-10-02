@@ -15,16 +15,8 @@
             <h1 class="page-title">溶接指示書発行管理</h1>
           </div>
           <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
-          <div class="header-chips">
-            <span v-if="planSelectedDate" class="header-chip">
-              <el-icon><Calendar /></el-icon>
-              生産日 {{ planSelectedDate }}
-            </span>
+          <div v-if="planSearchForm.machineName" class="header-chips">
             <span class="header-chip">
-              <el-icon><List /></el-icon>
-              計画 {{ planData.length }}件
-            </span>
-            <span v-if="planSearchForm.machineName" class="header-chip">
               <el-icon><Monitor /></el-icon>
               {{ planSearchForm.machineName }}
             </span>
@@ -525,8 +517,6 @@ import {
   Printer,
   Memo,
   Delete,
-  Calendar,
-  List,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchWorkingDays } from '@/api/erp/budget'

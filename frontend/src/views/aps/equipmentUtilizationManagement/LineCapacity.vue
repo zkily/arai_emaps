@@ -471,7 +471,7 @@ const LINE_CAPACITY_PROCESS_ORDER = ['KT01', 'KT02', 'KT04', 'KT07'] as const
 const LINE_CAPACITY_PROCESS_SET = new Set<string>(LINE_CAPACITY_PROCESS_ORDER)
 const WELDING_PROCESS_CD = 'KT07'
 
-type ShiftPresetKey = '4h' | '8h' | '9h' | '10h' | '12h' | '16h' | '20h' | '22h' | '24h'
+type ShiftPresetKey = '2h' | '8h' | '9h' | '10h' | '12h' | '14h' | '16h' | '20h' | '22h' | '24h'
 
 interface ShiftPresetButton {
   key: ShiftPresetKey
@@ -481,39 +481,49 @@ interface ShiftPresetButton {
   title: string
 }
 
-/** 22H：成型・溶接（溶接SP 含む）共通（昼帯 13:00–翌00:00、早番 01:00–08:00） */
+/** 22H：成型・溶接（溶接SP 含む）共通（昼 08:00–21:00、夜 21:00–08:00） */
 const SHIFT_PRESET_22H_BUTTON: ShiftPresetButton = {
   key: '22h',
   label: '22H',
   btnType: '',
   btnClass: 'lcap-preset--22h',
-  title: '稼働 08:00–12:00 / 13:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  title:
+    '稼働 08:00–21:00 / 21:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:00 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10 / 17:00–17:10 / 06:00–06:10 / 19:00–19:10（金曜は 16:30–17:00 も休憩）',
 }
 
 const FORMING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
   {
-    key: '4h',
-    label: '4H',
+    key: '2h',
+    label: '2H',
     btnType: 'info',
-    title: '稼働 08:00–12:00、休憩 10:00–10:10',
+    title: '稼働 15:10–17:00（金曜は 16:30–17:00 も休憩）',
   },
   {
     key: '8h',
     label: '8H',
     btnType: 'success',
-    title: '稼働 08:00–12:00 / 13:00–17:00、休憩 10:00–10:10 / 15:00–15:10',
+    title: '稼働 08:00–17:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:10（金曜は 16:30–17:00 も休憩）',
+  },
+  {
+    key: '14h',
+    label: '14H',
+    btnType: 'primary',
+    title:
+      '稼働 08:00–12:00 / 15:00–17:00 / 21:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10（金曜は 16:30–17:00 も休憩）',
   },
   {
     key: '16h',
     label: '16H',
     btnType: 'primary',
-    title: '稼働 08:00–12:00 / 13:00–17:00 / 21:00–00:00 / 01:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+    title:
+      '稼働 08:00–17:00 / 21:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:00 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10（金曜は 16:30–17:00 も休憩）',
   },
   {
     key: '20h',
     label: '20H',
     btnType: 'warning',
-    title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+    title:
+      '稼働 08:00–19:00 / 21:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:00 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10 / 17:00–17:10 / 06:00–06:10（金曜は 16:30–17:00 も休憩）',
   },
   SHIFT_PRESET_22H_BUTTON,
   {
@@ -521,7 +531,8 @@ const FORMING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     label: '24H',
     btnType: '',
     btnClass: 'lcap-preset--24h',
-    title: '稼働 08:00–08:00（当日08:00〜翌08:00／保存時は 08:00–00:00 と 00:00–08:00 の2行）、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+    title:
+      '稼働 08:00–21:00 / 21:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 23:00–23:10 / 04:00–04:10 / 17:00–17:10 / 06:00–06:10 / 19:00–19:10（金曜は 16:30–17:00 も休憩）',
   },
 ]
 
@@ -530,7 +541,7 @@ const WELDING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     key: '8h',
     label: '8H',
     btnType: 'success',
-    title: '稼働 08:00–12:00 / 13:00–17:00、休憩 10:00–10:10 / 15:00–15:10',
+    title: '稼働 08:00–17:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:10（金曜は 16:30–17:00 も休憩）',
   },
   {
     key: '9h',
@@ -554,13 +565,15 @@ const WELDING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     key: '16h',
     label: '16H',
     btnType: 'primary',
-    title: '稼働 08:00–12:00 / 13:00–17:00 / 21:00–00:00 / 01:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+    title:
+      '稼働 08:00–17:00 / 21:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:00 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10（金曜は 16:30–17:00 も休憩）',
   },
   {
     key: '20h',
     label: '20H',
     btnType: 'warning',
-    title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+    title:
+      '稼働 08:00–19:00 / 21:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 12:00–13:00 / 23:00–23:10 / 01:00–02:00 / 04:00–04:10 / 17:00–17:10 / 06:00–06:10（金曜は 16:30–17:00 も休憩）',
   },
   SHIFT_PRESET_22H_BUTTON,
 ]
@@ -773,56 +786,100 @@ onMounted(async () => {
   }
 })
 
-const STANDARD_SHIFT_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '01:00:00', end_time: '06:00:00', is_rest: false, slot_type: 'work' },
-]
-
-/** 20H：昼直＋残業2h＋夜跨ぎ＋早番 */
-const SHIFT_20H_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '17:00:00', end_time: '19:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '21:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
-]
-
-/** 22H プリセット（昼帯 13:00–翌00:00、早番 01:00–08:00） */
-const SHIFT_22H_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '13:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '01:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
-]
-
-/** 24H（カレンダー日あたり）：08:00〜翌08:00 を API 都合で夜跨ぎ2行に分割（全日稼働） */
-const SHIFT_24H_DAY_WORK_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '00:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '00:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
-]
-
-/** 4H：午前帯のみ＋10分休憩 */
-const SHIFT_4H_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
-]
-
-/** 8H：昼間2直＋各直10分休憩 */
-const SHIFT_8H_SLOTS: EditSlot[] = [
-  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
-  { start_time: '13:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+/** 16H：昼 08:00–17:00、夜 21:00–06:00（夜帯は 1 行。終了 < 開始は当日深夜〜翌朝） */
+const SHIFT_16H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '06:00:00', is_rest: false, slot_type: 'work' },
   { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
   { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '12:00:00', end_time: '13:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '23:00:00', end_time: '23:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '01:00:00', end_time: '02:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
-/** 溶接 8H の休憩（9H/10H/12H は 17:00 休憩を追加） */
+/** 20H：昼 08:00–19:00、夜 21:00–08:00 */
+const SHIFT_20H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '19:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '12:00:00', end_time: '13:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '23:00:00', end_time: '23:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '01:00:00', end_time: '02:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '06:00:00', end_time: '06:10:00', is_rest: true, slot_type: 'rest' },
+]
+
+/** 22H：昼 08:00–21:00、夜 21:00–08:00 */
+const SHIFT_22H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '21:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '12:00:00', end_time: '13:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '23:00:00', end_time: '23:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '01:00:00', end_time: '02:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '06:00:00', end_time: '06:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '19:00:00', end_time: '19:10:00', is_rest: true, slot_type: 'rest' },
+]
+
+/** 24H：08:00〜翌08:00（昼 08:00–21:00、夜 21:00–08:00）。昼休憩・深夜食事なし */
+const SHIFT_24H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '21:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '08:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '23:00:00', end_time: '23:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '06:00:00', end_time: '06:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '19:00:00', end_time: '19:10:00', is_rest: true, slot_type: 'rest' },
+]
+
+/** 2H：午後短時間 */
+const SHIFT_2H_SLOTS: EditSlot[] = [
+  { start_time: '15:10:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+]
+
+/** 14H：午前・午後・夜。午後開始と同時に 15:00–15:10 休憩 */
+const SHIFT_14H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '15:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '21:00:00', end_time: '06:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '23:00:00', end_time: '23:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '01:00:00', end_time: '02:00:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
+]
+
+/** 8H：08:00–17:00。昼休憩は 12:00–13:10 */
+const SHIFT_8H_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '17:00:00', is_rest: false, slot_type: 'work' },
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
+  { start_time: '12:00:00', end_time: '13:10:00', is_rest: true, slot_type: 'rest' },
+]
+
+/** 金曜のみ追加する休憩（2H / 8H / 14H / 16H / 20H / 22H / 24H） */
+const FRIDAY_BREAK_SLOT: EditSlot = {
+  start_time: '16:30:00',
+  end_time: '17:00:00',
+  is_rest: true,
+  slot_type: 'rest',
+}
+
+/** 溶接 9H/10H/12H の短い休憩 */
 const WELDING_DAY_BREAK_SLOTS: EditSlot[] = [
   { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
   { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
 ]
 
-/** 溶接 9H/10H/12H の休憩（8H + 17:00） */
+/** 溶接 9H/10H/12H の休憩（上記 + 17:00） */
 const WELDING_EXTENDED_BREAK_SLOTS: EditSlot[] = [
   ...WELDING_DAY_BREAK_SLOTS,
   { start_time: '17:00:00', end_time: '17:10:00', is_rest: true, slot_type: 'rest' },
@@ -846,54 +903,46 @@ const SHIFT_12H_WELDING_WORK_SLOTS: EditSlot[] = [
   { start_time: '13:00:00', end_time: '21:00:00', is_rest: false, slot_type: 'work' },
 ]
 
-/** 毎日固定の短い休憩（16H・20H・22H・24H のプリセットで使用） */
-const FIXED_DAILY_BREAK_SLOTS: EditSlot[] = [
-  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true, slot_type: 'rest' },
-  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true, slot_type: 'rest' },
-  { start_time: '01:00:00', end_time: '01:10:00', is_rest: true, slot_type: 'rest' },
-  { start_time: '04:00:00', end_time: '04:10:00', is_rest: true, slot_type: 'rest' },
-]
+function isFridayWorkDate(workDate: string): boolean {
+  return new Date(workDate).getDay() === 5
+}
 
-function applyStandardShift(day: DayEdit) {
-  day.editSlots = [
-    ...STANDARD_SHIFT_SLOTS.map(s => ({ ...s })),
-    ...FIXED_DAILY_BREAK_SLOTS.map(s => ({ ...s })),
-  ]
+/** プリセット適用。withFridayBreak のとき金曜だけ 16:30–17:00 を休憩に足す */
+function applyPresetSlots(day: DayEdit, slots: readonly EditSlot[], withFridayBreak = false) {
+  const next = slots.map(s => ({ ...s }))
+  if (withFridayBreak && isFridayWorkDate(day.work_date)) {
+    next.push({ ...FRIDAY_BREAK_SLOT })
+  }
+  day.editSlots = next
   collapseSlotsEditor(day)
+}
+
+function apply16HShift(day: DayEdit) {
+  applyPresetSlots(day, SHIFT_16H_SLOTS, true)
 }
 
 function apply20HShift(day: DayEdit) {
-  day.editSlots = [
-    ...SHIFT_20H_WORK_SLOTS.map(s => ({ ...s })),
-    ...FIXED_DAILY_BREAK_SLOTS.map(s => ({ ...s })),
-  ]
-  collapseSlotsEditor(day)
+  applyPresetSlots(day, SHIFT_20H_SLOTS, true)
 }
 
 function apply22HShift(day: DayEdit) {
-  day.editSlots = [
-    ...SHIFT_22H_WORK_SLOTS.map(s => ({ ...s })),
-    ...FIXED_DAILY_BREAK_SLOTS.map(s => ({ ...s })),
-  ]
-  collapseSlotsEditor(day)
+  applyPresetSlots(day, SHIFT_22H_SLOTS, true)
 }
 
 function apply24HCalendarShift(day: DayEdit) {
-  day.editSlots = [
-    ...SHIFT_24H_DAY_WORK_SLOTS.map(s => ({ ...s })),
-    ...FIXED_DAILY_BREAK_SLOTS.map(s => ({ ...s })),
-  ]
-  collapseSlotsEditor(day)
+  applyPresetSlots(day, SHIFT_24H_SLOTS, true)
 }
 
-function apply4HShift(day: DayEdit) {
-  day.editSlots = SHIFT_4H_SLOTS.map(s => ({ ...s }))
-  collapseSlotsEditor(day)
+function apply2HShift(day: DayEdit) {
+  applyPresetSlots(day, SHIFT_2H_SLOTS, true)
+}
+
+function apply14HShift(day: DayEdit) {
+  applyPresetSlots(day, SHIFT_14H_SLOTS, true)
 }
 
 function apply8HShift(day: DayEdit) {
-  day.editSlots = SHIFT_8H_SLOTS.map(s => ({ ...s }))
-  collapseSlotsEditor(day)
+  applyPresetSlots(day, SHIFT_8H_SLOTS, true)
 }
 
 function applyWeldingDayShift(day: DayEdit, workSlots: EditSlot[], breakSlots: EditSlot[]) {
@@ -917,12 +966,13 @@ function apply12HShift(day: DayEdit) {
 }
 
 const SHIFT_PRESET_RUNNERS: Record<ShiftPresetKey, (d: DayEdit) => void> = {
-  '4h': apply4HShift,
+  '2h': apply2HShift,
   '8h': apply8HShift,
   '9h': apply9HShift,
   '10h': apply10HShift,
   '12h': apply12HShift,
-  '16h': applyStandardShift,
+  '14h': apply14HShift,
+  '16h': apply16HShift,
   '20h': apply20HShift,
   '22h': apply22HShift,
   '24h': apply24HCalendarShift,
@@ -1455,7 +1505,7 @@ function isWeekend(d: string): boolean {
   box-sizing: border-box;
 }
 
-/* 22H：琥珀（20H の警告橙と差別化）／24H：プライマリ青（4H の info と差別化） */
+/* 22H：琥珀（20H の警告橙と差別化）／24H：プライマリ青（2H の info と差別化） */
 .lcap-preset--22h.el-button.is-plain {
   --el-button-bg-color: transparent;
   --el-button-border-color: #d97706;

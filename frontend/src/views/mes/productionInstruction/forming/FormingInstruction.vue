@@ -15,20 +15,10 @@
             <h1 class="page-title">成型指示書発行管理</h1>
           </div>
           <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
-          <div class="header-chips">
-            <span v-if="planSelectedDate" class="header-chip">
-              <el-icon><Calendar /></el-icon>
-              生産日 {{ planSelectedDate }}
-            </span>
-            <span class="header-chip">
-              <el-icon><List /></el-icon>
-              計画 {{ planData.length }}件
-            </span>
-          </div>
         </div>
         <div class="page-header-actions">
-          <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
-            <div class="header-stat-item">
+          <div class="header-stats">
+            <div class="header-stat-item header-stat-item--total">
               <div class="stat-icon total-icon">
                 <el-icon><TrendCharts /></el-icon>
               </div>
@@ -37,7 +27,7 @@
                 <div class="stat-label">計画生産数</div>
               </div>
             </div>
-            <div class="header-stat-item">
+            <div class="header-stat-item header-stat-item--machine">
               <div class="stat-icon machine-icon">
                 <el-icon><Monitor /></el-icon>
               </div>
@@ -386,7 +376,7 @@
     <el-dialog
       v-model="setupSchedulePreviewVisible"
       title="段取予定プレビュー（編集可）"
-      width="75%"
+      width="96%"
       top="2vh"
       :close-on-click-modal="false"
       destroy-on-close
@@ -411,12 +401,7 @@
           class="setup-preview-table"
           stripe
         >
-          <el-table-column label="生産残数" width="92" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.totalPlanQuantity" size="small" type="number" placeholder="" class="setup-preview-input" />
-            </template>
-          </el-table-column>
-          <el-table-column prop="line" label="ライン" width="70" show-overflow-tooltip />
+          <el-table-column prop="line" label="ライン" width="52" show-overflow-tooltip />
           <el-table-column label="予定稼働(H)" width="92" align="center">
             <template #default="{ row }">
               <div class="planned-hours-chip" :class="plannedHoursLevelClass(row.plannedWorkingHours)">
@@ -424,7 +409,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="操業度(進捗)" width="72" align="center" class-name="op-progress-col">
+          <el-table-column label="操業度" width="52" align="center" class-name="op-progress-col">
             <template #default="{ row }">
               <el-input
                 v-model="row.operationVariance"
@@ -460,15 +445,48 @@
               <span v-if="hasNextProduct(row.nextProductName)" class="next-arrow-indicator">→</span>
             </template>
           </el-table-column>
-          <el-table-column label="次生産品種" width="130" align="center">
+          <el-table-column
+            align="center"
+            label-class-name="next-date-group-header"
+          >
+            <template #header>
+              <span>{{ setupSchedulePreviewMeta?.nextDate1Label || '' }}</span>
+              <span v-if="setupSchedulePreviewMeta?.nextDate1Label" class="next-date-from-note">(前日15時から)</span>
+            </template>
+            <el-table-column label="次生産品種" width="152" align="center">
+              <template #default="{ row }">
+                <el-input v-model="row.nextProductName" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked setup-preview-stacked-left" />
+              </template>
+            </el-table-column>
+            <el-table-column label="計画数" width="64" align="center">
+              <template #default="{ row }">
+                <el-input v-model="row.nextQuantity" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked" />
+              </template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="" width="42" align="center" class-name="preview-arrow-col" label-class-name="preview-arrow-col">
             <template #default="{ row }">
-              <el-input v-model="row.nextProductName" size="small" placeholder="" class="setup-preview-input" />
+              <span v-if="hasNextProduct(row.next2ProductName)" class="next-arrow-indicator">→</span>
             </template>
           </el-table-column>
-          <el-table-column label="次品種計画数" width="92" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.nextQuantity" size="small" type="number" placeholder="" class="setup-preview-input" />
+          <el-table-column
+            align="center"
+            label-class-name="next-date-group-header"
+          >
+            <template #header>
+              <span>{{ setupSchedulePreviewMeta?.nextDate2Label || '' }}</span>
+              <span v-if="setupSchedulePreviewMeta?.nextDate2Label" class="next-date-from-note">(前日15時から)</span>
             </template>
+            <el-table-column label="次生産品種" width="152" align="center">
+              <template #default="{ row }">
+                <el-input v-model="row.next2ProductName" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked setup-preview-stacked-left" />
+              </template>
+            </el-table-column>
+            <el-table-column label="計画数" width="64" align="center">
+              <template #default="{ row }">
+                <el-input v-model="row.next2Quantity" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked" />
+              </template>
+            </el-table-column>
           </el-table-column>
           <el-table-column label="備考" min-width="200" align="center">
             <template #default="{ row }">
@@ -807,8 +825,6 @@ import {
   Printer,
   Memo,
   Delete,
-  Calendar,
-  List,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { getProductList } from '@/api/master/productMaster'
@@ -927,35 +943,6 @@ const planStats = ref<PlanHeaderStats>({
   machineCount: 0,
 })
 
-// ヘッダー統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.header-stat-item')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.header-stat-item').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement)
-    .querySelectorAll<HTMLElement>('.header-stat-item')
-    .forEach((el) => {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    })
-}
-
 // 計画ページネーション
 const planPagination = reactive({
   currentPage: 1,
@@ -1010,7 +997,13 @@ const printPreviewContent = ref('')
 const printingSetupSchedule = ref(false)
 // 段取予定プレビュー（編集してから印刷）
 const setupSchedulePreviewVisible = ref(false)
-const setupSchedulePreviewMeta = ref<{ productionDate: string; totalQuantity: number; currentDateTime: string } | null>(null)
+const setupSchedulePreviewMeta = ref<{
+  productionDate: string
+  totalQuantity: number
+  currentDateTime: string
+  nextDate1Label: string
+  nextDate2Label: string
+} | null>(null)
 const setupSchedulePreviewTableRows = ref<any[]>([])
 
 // 設備運行時間設定
@@ -1949,8 +1942,15 @@ const calculateSmartDateRange = async () => {
       return { startDate: '', endDate: '' }
     }
 
-    // 获取基准日期（搜索条件的开始日期）
-    const baseDate = new Date(planSearchForm.dateRange[0])
+    // 按本地日历解析，避免 YYYY-MM-DD 被当成 UTC 后跨日
+    const baseParts = String(planSearchForm.dateRange[0]).split('-').map(Number)
+    const baseDate = new Date(baseParts[0], (baseParts[1] || 1) - 1, baseParts[2] || 1)
+    const toYmd = (date: Date) => {
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      return `${y}-${m}-${d}`
+    }
     const dates = []
 
     // 智能计算日期范围
@@ -1970,34 +1970,12 @@ const calculateSmartDateRange = async () => {
     // 当天
     dates.push(new Date(baseDate))
 
-    // 计算后续日期 - 特殊处理星期五和星期六
-    if (baseDayOfWeek === 5) {
-      // 如果基准日是星期五，添加下周一和下周二
-      const nextMonday = new Date(baseDate)
-      nextMonday.setDate(baseDate.getDate() + 3) // 周五 + 3天 = 周一
-      dates.push(nextMonday)
-
-      const nextTuesday = new Date(baseDate)
-      nextTuesday.setDate(baseDate.getDate() + 4) // 周五 + 4天 = 周二
-      dates.push(nextTuesday)
-    } else if (baseDayOfWeek === 6) {
-      // 如果基准日是星期六，添加下周一、下周二、下周三
-      const nextMonday = new Date(baseDate)
-      nextMonday.setDate(baseDate.getDate() + 2) // 周六 + 2天 = 周一
-      dates.push(nextMonday)
-
-      const nextTuesday = new Date(baseDate)
-      nextTuesday.setDate(baseDate.getDate() + 3) // 周六 + 3天 = 周二
-      dates.push(nextTuesday)
-
-      const nextWednesday = new Date(baseDate)
-      nextWednesday.setDate(baseDate.getDate() + 4) // 周六 + 4天 = 周三
-      dates.push(nextWednesday)
-    } else {
-      // 其他情况正常加1天
-      const nextDate = new Date(baseDate)
-      nextDate.setDate(baseDate.getDate() + 1)
-      dates.push(nextDate)
+    // 向后看 4 个日历日（含周六日）。
+    // 次生産日、次々生産日会在周六日有计划时停在当天，否则顺延，查询范围必须覆盖到可能落到的工作日。
+    for (let offset = 1; offset <= 4; offset++) {
+      const future = new Date(baseDate)
+      future.setDate(baseDate.getDate() + offset)
+      dates.push(future)
     }
 
     // 智能过滤日期：避开星期六日，除非有生产计划
@@ -2006,7 +1984,7 @@ const calculateSmartDateRange = async () => {
     for (const date of dates) {
       const dayOfWeek = date.getDay()
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6 // 0=周日, 6=周六
-      const dateStr = date.toISOString().split('T')[0]
+      const dateStr = toYmd(date)
 
       if (!isWeekend) {
         // 工作日直接加入
@@ -3070,6 +3048,8 @@ const openSetupSchedulePreview = async () => {
       productionDate: data.productionDate,
       totalQuantity: data.totalQuantity,
       currentDateTime: data.currentDateTime,
+      nextDate1Label: data.nextDate1Label,
+      nextDate2Label: data.nextDate2Label,
     }
     setupSchedulePreviewTableRows.value = JSON.parse(JSON.stringify(data.tableRows))
     setupSchedulePreviewVisible.value = true
@@ -3106,7 +3086,101 @@ const plannedHoursLevelClass = (v: unknown): string => {
 
 const hasNextProduct = (name: unknown): boolean => {
   const s = (name ?? '').toString().trim()
-  return s !== ''
+  return s !== '' && s !== '生産停止' && s !== '生产停止'
+}
+
+const isSameRealProduct = (leftName: unknown, rightName: unknown): boolean => {
+  const left = (leftName ?? '').toString().trim()
+  const right = (rightName ?? '').toString().trim()
+  return hasNextProduct(left) && hasNextProduct(right) && left === right
+}
+
+const stripStopMark = (name: unknown): string =>
+  String(name ?? '')
+    .replace(/（生産停止）$/, '')
+    .trim()
+
+/**
+ * 下一日、下下日共用：取当天品种；当天是生産停止且后一天品种与基准不同时，
+ * 残生産時間 < 2 显示后一天品种并标明生産停止、計画数留空，否则显示生産停止。
+ * 与基准产品相同时不显示。
+ */
+const judgeNextVarietyDisplay = (
+  dateProduct: { name: string; quantity: number | '' },
+  followingName: string,
+  baselineName: string,
+  remainingLessThan2: boolean,
+): { name: string; quantity: number | '' } => {
+  const baseline = baselineName.trim()
+  const following = followingName.trim()
+  const dateIsStop = !hasNextProduct(dateProduct.name)
+  const followingDiffers = hasNextProduct(following) && following !== baseline
+  let name = dateProduct.name
+  let quantity = dateProduct.quantity
+  if (dateIsStop && followingDiffers) {
+    if (remainingLessThan2) {
+      name = `${following}（生産停止）`
+      quantity = ''
+    } else {
+      name = '生産停止'
+      quantity = ''
+    }
+  }
+  if (isSameRealProduct(baseline, stripStopMark(name))) {
+    return { name: '', quantity: '' }
+  }
+  return { name, quantity }
+}
+
+type VarietyDisplay = { name: string; quantity: number | string | '' }
+
+const blankQuantityIfNoVariety = (display: VarietyDisplay): VarietyDisplay => {
+  const name = String(display.name || '').trim()
+  if (!name || name === '生産停止' || name === '生产停止') {
+    return { name, quantity: '' }
+  }
+  return display
+}
+
+/** 下一日、下下日共用。基准日产品相同且没有其他品种时不显示品名和計画数；两个及以上品种都显示。 */
+const resolveVarietyColumn = (
+  dateIndex: Map<string, any[]>,
+  ymd: string,
+  followingName: string,
+  baselineNames: string[],
+  remainingLessThan2: boolean,
+  forceShowAll = false,
+): VarietyDisplay => {
+  const lookup = lookupScheduleProductOnDate(dateIndex, ymd)
+  const primaryBaseline = baselineNames.length > 0 ? baselineNames[baselineNames.length - 1] : ''
+  let display: VarietyDisplay = judgeNextVarietyDisplay(
+    lookup,
+    followingName,
+    primaryBaseline,
+    remainingLessThan2,
+  )
+  const groups = listProductGroupsOnDate(dateIndex, ymd)
+  if (groups.length >= 2) {
+    display = {
+        name: groups
+          .map((group, index) => {
+            if (index === 0) return `現：${group.name}`
+            if (index === groups.length - 1) return `次：${group.name}`
+            return group.name
+          })
+          .join('\n'),
+        quantity: groups.map((group) => group.quantity).join('\n'),
+    }
+  } else if (forceShowAll && groups.length === 1) {
+    display = { name: groups[0].name, quantity: groups[0].quantity }
+  } else if (
+    !forceShowAll &&
+    groups.length === 1 &&
+    baselineNames.some((name) => isSameRealProduct(groups[0].name, name))
+  ) {
+    display = { name: '', quantity: '' }
+  }
+  return blankQuantityIfNoVariety(display)
 }
 
 /** プレビューダイアログから印刷（編集後のデータで印刷） */
@@ -4508,6 +4582,109 @@ async function loadUtilizationDiffHoursByLineNameForMonth(
   return out
 }
 
+const SCHEDULE_WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土'] as const
+
+const addCalendarDays = (ymd: string, days: number): string => {
+  const normalized = JapanDateUtils.normalizeDate(String(ymd || '')).replace(/\//g, '-')
+  const [year, month, day] = normalized.split('-').map(Number)
+  const date = new Date(year, (month || 1) - 1, day || 1)
+  date.setDate(date.getDate() + days)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const formatScheduleHeaderDate = (ymd: string): string => {
+  const normalized = JapanDateUtils.normalizeDate(String(ymd || '')).replace(/\//g, '-')
+  const parts = normalized.split('-')
+  const weekday = SCHEDULE_WEEKDAY_JA[JapanDateUtils.getDayOfWeek(normalized)] || ''
+  return `${parts[1]}/${parts[2]}(${weekday})`
+}
+
+const hasProductionOnDate = (data: any[], ymd: string): boolean => {
+  const target = JapanDateUtils.normalizeDate(String(ymd || '')).replace(/\//g, '-')
+  return data.some((item) => {
+    const itemDate = JapanDateUtils.normalizeDate(String(item?.plan_date || '')).replace(/\//g, '-')
+    if (itemDate !== target) return false
+    const name = String(item?.product_name || '').trim()
+    const qty = parseInt(item?.quantity, 10) || 0
+    return name !== '' && qty > 0
+  })
+}
+
+/**
+ * 指定日的下一个段取表日期。
+ * 平日直接采用；星期六、星期日只有当天存在生产计划时才采用，否则继续往后找。
+ */
+const resolveNextScheduleDate = (afterYmd: string, data: any[]): string => {
+  let cursor = addCalendarDays(afterYmd, 1)
+  for (let i = 0; i < 14; i++) {
+    const dayOfWeek = JapanDateUtils.getDayOfWeek(cursor)
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+    if (!isWeekend || hasProductionOnDate(data, cursor)) {
+      return cursor
+    }
+    cursor = addCalendarDays(cursor, 1)
+  }
+  return cursor
+}
+
+const productsForMachineDate = (dateIndex: Map<string, any[]>, ymd: string): any[] => {
+  const target = JapanDateUtils.normalizeDate(String(ymd || '')).replace(/\//g, '-')
+  for (const [key, rows] of dateIndex) {
+    const normalized = JapanDateUtils.normalizeDate(String(key || '')).replace(/\//g, '-')
+    if (normalized === target) return rows || []
+  }
+  return []
+}
+
+/**
+ * 指定设备在指定日期的次生産品種与計画数。
+ * 同一品種は順位が違っても合算。同一日に複数品種がある場合只显示生産順位靠后的那一个。
+ * 无计划时显示生産停止。
+ */
+const lookupScheduleProductOnDate = (
+  dateIndex: Map<string, any[]>,
+  ymd: string,
+): { name: string; quantity: number | '' } => {
+  const products = productsForMachineDate(dateIndex, ymd).filter((item) => {
+    const name = String(item?.product_name || '').trim()
+    const qty = parseInt(item?.quantity, 10) || 0
+    return name !== '' && qty > 0
+  })
+  if (products.length === 0) {
+    return { name: '生産停止', quantity: '' }
+  }
+  const groups: { name: string; quantity: number }[] = []
+  for (const item of products) {
+    const name = String(item?.product_name || '').trim()
+    const qty = parseInt(item?.quantity, 10) || 0
+    const existing = groups.find((group) => group.name === name)
+    if (existing) existing.quantity += qty
+    else groups.push({ name, quantity: qty })
+  }
+  const last = groups[groups.length - 1]
+  return { name: last.name, quantity: last.quantity }
+}
+
+/** 指定日期的品种列表（同一品种计划数合计，按生産順位）。 */
+const listProductGroupsOnDate = (
+  dateIndex: Map<string, any[]>,
+  ymd: string,
+): { name: string; quantity: number }[] => {
+  const groups: { name: string; quantity: number }[] = []
+  for (const item of productsForMachineDate(dateIndex, ymd)) {
+    const name = String(item?.product_name || '').trim()
+    const qty = parseInt(item?.quantity, 10) || 0
+    if (!name || qty <= 0) continue
+    const existing = groups.find((group) => group.name === name)
+    if (existing) existing.quantity += qty
+    else groups.push({ name, quantity: qty })
+  }
+  return groups
+}
+
 // ==================== 主函数 ====================
 
 // 生成段取予定表打印内容
@@ -4658,6 +4835,21 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
   // 将生产日期转换为 YYYY-MM-DD 格式用于比较
   const filterDateForTotal = productionDate.replace(/\//g, '-')
+
+  // 次生産日：生産日的下一天。周六日只有有生产计划时才显示当天，否则顺延。
+  // 次々生産日：在次生産日上再用同一规则取下一天。表头和字段都按这两个日期取值。
+  const nextScheduleDate1 = resolveNextScheduleDate(filterDateForTotal, planData)
+  const nextScheduleDate2 = resolveNextScheduleDate(nextScheduleDate1, planData)
+  const nextScheduleDate3 = resolveNextScheduleDate(nextScheduleDate2, planData)
+  const nextDate1Label = formatScheduleHeaderDate(nextScheduleDate1)
+  const nextDate2Label = formatScheduleHeaderDate(nextScheduleDate2)
+  formingDevLog('段取表次生産日:', {
+    productionDate: filterDateForTotal,
+    nextScheduleDate1,
+    nextScheduleDate2,
+    nextDate1Label,
+    nextDate2Label,
+  })
 
   // 读取予定稼働(H)：line_capacities.available_hours（work_date = 生産日）
   const plannedWorkHoursMap = new Map<string, number>()
@@ -5290,28 +5482,6 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
     formingDevLog(`最终次生産品種: '${finalNextProductName}'`)
 
-    // 判断次生産見込数：如果和指定生产日是同一天，显示数据；如果不是同一天，不显示数据；如果是星期日，不显示数据
-    let finalNextQuantity: number | '' = ''
-    if (isSameProduct || isNextDateSunday) {
-      finalNextQuantity = ''
-    } else if (nextProduct && (nextProduct as any).plan_date) {
-      // 获取下一个产品的生产日期
-      const nextProductPlanDate = JapanDateUtils.normalizeDate((nextProduct as any).plan_date)
-      // 如果和指定生产日是同一天，显示数据
-      if (nextProductPlanDate === filterDate) {
-        finalNextQuantity = nextQuantity || ''
-      } else {
-        // 如果不是同一天，不显示数据
-        finalNextQuantity = ''
-      }
-    } else if (nextValidDate && nextValidDate === filterDate) {
-      // 如果有效日期和指定生产日是同一天，显示数据
-      finalNextQuantity = nextQuantity || ''
-    } else {
-      // 其他情况，不显示数据
-      finalNextQuantity = ''
-    }
-
     // 如果生産品種是'生産停止'，根据次生産品種的情况调整段取予測時間
     // 注意：如果時間後段取有数据，已经计算出了setupPredictedTime，优先使用计算出的时间
     // 注意：如果满足特殊条件（生产停止+次生产品种有数据），setupPredictedTime已经在上面设置为下一日15:00，这里不再覆盖
@@ -5438,6 +5608,48 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
     const plannedWorkingHours = plannedWorkHoursMap.get(machineName)
 
+    // 下一日、下下日各自按同一套规则判断，不把下一日的品种直接写进下下日
+    const nextNextDayProduct = lookupScheduleProductOnDate(dateIndex, nextScheduleDate2)
+    const dayAfterNext2Product = lookupScheduleProductOnDate(dateIndex, nextScheduleDate3)
+    const todayProductName = (isProductionStop ? '生産停止' : currentProductName).trim()
+    const remainingHours = Number(finalSetupAfterHours)
+    const remainingLessThan2 =
+      finalSetupAfterHours !== '' &&
+      finalSetupAfterHours !== null &&
+      Number.isFinite(remainingHours) &&
+      remainingHours < 2
+
+    const nextDayGroups = listProductGroupsOnDate(dateIndex, nextScheduleDate1)
+    const day1Baseline = hasNextProduct(todayProductName) ? [todayProductName] : []
+    const day1SaturdayWithPlan =
+      JapanDateUtils.isSaturday(nextScheduleDate1) && nextDayGroups.length > 0
+    const day1Display = resolveVarietyColumn(
+      dateIndex,
+      nextScheduleDate1,
+      nextNextDayProduct.name,
+      day1Baseline,
+      remainingLessThan2,
+      day1SaturdayWithPlan,
+    )
+    // 下下日与下一日用同一套判断，基准是下一日当天的品种
+    const day2Baseline = nextDayGroups.map((group) => group.name)
+    const day2Display = resolveVarietyColumn(
+      dateIndex,
+      nextScheduleDate2,
+      dayAfterNext2Product.name,
+      day2Baseline,
+      remainingLessThan2,
+    )
+
+    const displayNextProductName = day1Display.name
+    const displayNextQuantity = day1Display.quantity
+    const next2ProductName = day2Display.name
+    const next2Quantity = day2Display.quantity
+
+    formingDevLog(
+      `[次生産日] 设备 ${machineName}: 残生産時間=${finalSetupAfterHours}, 下一日=${displayNextProductName}, 下下日=${next2ProductName}`,
+    )
+
     // 行データを返却
     return {
       workTime: workTime || '',
@@ -5458,8 +5670,10 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       planQuantity: isProductionStop ? '' : aggregatedCurrentDayPlanQuantity,
       setupAfterHours: finalSetupAfterHours,
       setupPredictedTime: finalSetupPredictedTime,
-      nextProductName: finalNextProductName,
-      nextQuantity: finalNextQuantity,
+      nextProductName: displayNextProductName,
+      nextQuantity: displayNextQuantity,
+      next2ProductName,
+      next2Quantity,
       remarks: remarksText,
     }
   })
@@ -5496,7 +5710,14 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
   }
 
-  return { tableRows, productionDate, totalQuantity, currentDateTime }
+  return {
+    tableRows,
+    productionDate,
+    totalQuantity,
+    currentDateTime,
+    nextDate1Label,
+    nextDate2Label,
+  }
 }
 
 /** 段取予定表の印刷用HTMLをデータから生成（プレビュー編集後の印刷に使用） */
@@ -5505,8 +5726,38 @@ const buildSetupSchedulePrintHtml = (data: {
   productionDate: string
   totalQuantity: number
   currentDateTime: string
+  nextDate1Label?: string
+  nextDate2Label?: string
 }) => {
   const { tableRows, productionDate, totalQuantity, currentDateTime } = data
+  const nextDate1Label = data.nextDate1Label || ''
+  const nextDate2Label = data.nextDate2Label || ''
+  const formatPrintLines = (value: unknown) => {
+    return String(value ?? '')
+      .split(/\n/)
+      .map((line) =>
+        line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;'),
+      )
+      .join('<br>')
+  }
+  const formatPrintQuantity = (value: unknown) => {
+    if (value == null || value === '') return ''
+    const text = String(value)
+    if (text.includes('\n') || text.includes('/')) {
+      return text
+        .split(/\n|\//)
+        .map((part) => {
+          const n = Number(part.trim())
+          return Number.isNaN(n) ? part.trim() : n.toLocaleString('ja-JP')
+        })
+        .join('<br>')
+    }
+    const n = Number(value)
+    return Number.isNaN(n) ? '' : n.toLocaleString('ja-JP')
+  }
   return `
     <!DOCTYPE html>
     <html>
@@ -5677,13 +5928,13 @@ const buildSetupSchedulePrintHtml = (data: {
           border-top: 2px solid #000 !important;
         }
 
-        /* 表头第一列的左边框 */
-        .main-table thead tr th:first-child {
+        /* 表头第一列的左边框（仅第一行；第二行开头是日期下的次生産品種） */
+        .main-table thead tr:first-child th:first-child {
           border-left: 2px solid #000 !important;
         }
 
-        /* 表头最后一列的右边框 */
-        .main-table thead tr th:last-child {
+        /* 表头最后一列的右边框（仅第一行；第二行末尾是下下日的次生産品種） */
+        .main-table thead tr:first-child th:last-child {
           border-right: 2px solid #000 !important;
         }
 
@@ -5756,6 +6007,37 @@ const buildSetupSchedulePrintHtml = (data: {
           color: #e00 !important;
         }
 
+        .main-table th.next-date-header {
+          color: #c00 !important;
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          white-space: nowrap;
+          background-color: #f4f4f4;
+          letter-spacing: 0.02em;
+        }
+
+        .main-table th.next-date-header .next-date-from-note {
+          color: #c00 !important;
+          font-size: 8px !important;
+          font-weight: 500 !important;
+          letter-spacing: 0;
+          margin-left: 2px;
+        }
+
+        .main-table th.next-field-header {
+          font-size: 9px !important;
+          white-space: nowrap;
+        }
+
+        .main-table th.next-qty-header,
+        .main-table td.next-qty-cell {
+          width: 5.5ch;
+          max-width: 6ch;
+          padding-left: 1px;
+          padding-right: 2px;
+          white-space: nowrap;
+        }
+
         .numeric-cell {
           text-align: right;
           padding-right: 8px;
@@ -5788,9 +6070,9 @@ const buildSetupSchedulePrintHtml = (data: {
 
         /* 操業度(進捗)：显示约3个字符宽 */
         .main-table .op-progress-col {
-          width: 7ch;
-          min-width: 7ch;
-          max-width: 7ch;
+          width: 4ch;
+          min-width: 4ch;
+          max-width: 5ch;
         }
 
         .main-table .planned-hours {
@@ -5815,6 +6097,15 @@ const buildSetupSchedulePrintHtml = (data: {
         }
         .main-table .planned-hours-very-high {
           background: #cfeecf;
+        }
+        .main-table td.stacked-cell {
+          white-space: normal;
+          line-height: 1.25;
+          vertical-align: middle;
+        }
+        .main-table td.stacked-name {
+          text-align: left !important;
+          padding-left: 4px;
         }
         .main-table .next-arrow-cell {
           text-align: center;
@@ -5850,22 +6141,24 @@ const buildSetupSchedulePrintHtml = (data: {
         <table class="main-table">
           <thead>
             <tr>
-              <th colspan="1" class="bold-border-col" style="width: 8%; border-bottom: none;"><span class="reference-date-red">${currentDateTime.split(' ')[0]}</span>までの実績(算出)</th>
-              <th rowspan="2" class="blank-col" style="width: 3%;"> </th>
-              <th rowspan="2" class="line-col" style="width: 7%;">ライン</th>
-              <th rowspan="2" style="width: 8%;">予定稼働(H)</th>
-              <th rowspan="2" style="width: 7%;">操業度(進捗)</th>
-              <th rowspan="2" style="width: 12%;">生産品種</th>
-              <th rowspan="2" style="width: 7%;">能率(本/h)</th>
-              <th rowspan="2" class="plan-quantity-header" style="width: 7%;">当日計画数</th>
-              <th rowspan="2" style="width: 6%;">残生産時間</th>
-              <th rowspan="2" class="blank-col" style="width: 6%;"> </th>
-              <th rowspan="2" style="width: 9%;">次生産品種</th>
-              <th rowspan="2" style="width: 8%;">次品種計画数</th>
-              <th rowspan="2" style="width: 15%;">備考</th>
+              <th rowspan="2" class="line-col" style="width: 5%;">ライン</th>
+              <th rowspan="2" style="width: 6%;">予定稼働(H)</th>
+              <th rowspan="2" style="width: 4%;">操業度</th>
+              <th rowspan="2" style="width: 10%;">生産品種</th>
+              <th rowspan="2" style="width: 6%;">能率(本/h)</th>
+              <th rowspan="2" class="plan-quantity-header" style="width: 6%;">当日計画数</th>
+              <th rowspan="2" style="width: 5%;">残生産時間</th>
+              <th rowspan="2" class="blank-col" style="width: 2%;"> </th>
+              <th colspan="2" class="next-date-header">${nextDate1Label}${nextDate1Label ? '<span class="next-date-from-note">(前日15時から)</span>' : ''}</th>
+              <th rowspan="2" class="blank-col" style="width: 2%;"> </th>
+              <th colspan="2" class="next-date-header">${nextDate2Label}${nextDate2Label ? '<span class="next-date-from-note">(前日15時から)</span>' : ''}</th>
+              <th rowspan="2" style="width: 12%;">備考</th>
             </tr>
             <tr>
-              <th class="bold-border-col reference-col" style="width: 8%;">生産残数(参考)</th>
+              <th class="next-field-header" style="width: 10%;">次生産品種</th>
+              <th class="next-field-header next-qty-header" style="width: 4%;">計画数</th>
+              <th class="next-field-header" style="width: 10%;">次生産品種</th>
+              <th class="next-field-header next-qty-header" style="width: 4%;">計画数</th>
             </tr>
           </thead>
           <tbody>
@@ -5873,8 +6166,6 @@ const buildSetupSchedulePrintHtml = (data: {
               .map((row) => {
                 return `
               <tr>
-                <td class="numeric-cell bold-border-col">${row.totalPlanQuantity ? row.totalPlanQuantity.toLocaleString('ja-JP') : ''}</td>
-                <td class="blank-col"> </td>
                 <td class="line-col">${row.line}</td>
                 <td class="${(() => { const n = Number(row.plannedWorkingHours); if (!Number.isFinite(n)) return 'planned-hours planned-hours-empty'; if (n === 0) return 'planned-hours planned-hours-empty'; if (n < 8) return 'planned-hours planned-hours-low'; if (n < 16) return 'planned-hours planned-hours-mid'; if (n < 22.5) return 'planned-hours planned-hours-high'; return 'planned-hours planned-hours-very-high'; })()}">${(() => { const v = Number(row.plannedWorkingHours); return Number.isFinite(v) && v !== 0 ? v.toFixed(1) : ''; })()}</td>
                 <td class="op-progress-col ${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : String(Math.round(n)); })()}</td>
@@ -5882,9 +6173,12 @@ const buildSetupSchedulePrintHtml = (data: {
                 <td class="numeric-cell">${row.efficiency || ''}</td>
                 <td class="numeric-cell plan-quantity-cell">${row.planQuantity ? row.planQuantity.toLocaleString('ja-JP') : ''}</td>
                 <td class="numeric-cell">${row.setupAfterHours || ''}</td>
-                <td class="next-arrow-cell">${row.nextProductName && String(row.nextProductName).trim() !== '' ? '&rarr;' : ''}</td>
-                <td>${row.nextProductName || ''}</td>
-                <td class="numeric-cell">${(() => { const v = row.nextQuantity; if (v == null || v === '') return ''; const n = Number(v); return isNaN(n) ? '' : n.toLocaleString('ja-JP'); })()}</td>
+                <td class="next-arrow-cell">${hasNextProduct(row.nextProductName) ? '&rarr;' : ''}</td>
+                <td class="stacked-cell stacked-name">${formatPrintLines(row.nextProductName)}</td>
+                <td class="numeric-cell stacked-cell next-qty-cell">${formatPrintQuantity(row.nextQuantity)}</td>
+                <td class="next-arrow-cell">${hasNextProduct(row.next2ProductName) ? '&rarr;' : ''}</td>
+                <td class="stacked-cell stacked-name">${formatPrintLines(row.next2ProductName)}</td>
+                <td class="numeric-cell stacked-cell next-qty-cell">${formatPrintQuantity(row.next2Quantity)}</td>
                 <td>${row.remarks || ''}</td>
               </tr>
             `
@@ -7799,6 +8093,29 @@ onUnmounted(() => {
   border-top: none !important;
   border-bottom: none !important;
 }
+.setup-schedule-preview-dialog :deep(.setup-preview-stacked .el-textarea__inner) {
+  text-align: center;
+  line-height: 1.3;
+  min-height: 24px;
+  padding: 2px 6px;
+  color: #000;
+}
+.setup-schedule-preview-dialog :deep(.setup-preview-stacked-left .el-textarea__inner) {
+  text-align: left;
+}
+.setup-schedule-preview-dialog :deep(.next-date-group-header) {
+  color: #c00 !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.setup-schedule-preview-dialog :deep(.next-date-from-note) {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+  margin-left: 2px;
+}
 .setup-schedule-preview-dialog .setup-preview-footer {
   display: flex;
   align-items: center;
@@ -9410,109 +9727,106 @@ onUnmounted(() => {
   color: rgba(224, 242, 254, 0.88);
 }
 
-.mi-modern .header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.mi-modern .header-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  backdrop-filter: blur(6px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
 .mi-modern .header-stats {
   gap: 8px;
-  perspective: 700px;
 }
 
+/* 「データ更新」ボタンと同じ外観（白→淡色グラデ＋下エッジ影）。ぼかし・文字影なし */
 .molding-instruction-container.mi-modern .header-stat-item {
-  position: relative;
-  overflow: hidden;
-  padding: 6px 12px;
-  min-width: 132px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 10px 22px -12px rgba(2, 6, 23, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transform-style: preserve-3d;
+  gap: 6px;
+  height: 34px;
+  padding: 5px 14px;
+  min-width: 128px;
+  border-radius: 10px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.8);
   transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease;
-}
-
-.molding-instruction-container.mi-modern .header-stat-item::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at var(--mx, 50%) var(--my, 50%),
-    rgba(255, 255, 255, 0.32) 0%,
-    transparent 60%
-  );
-  opacity: 0;
-  transition: opacity 0.25s ease;
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item:hover {
-  box-shadow:
-    0 16px 28px -12px rgba(2, 6, 23, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
 }
 
-.molding-instruction-container.mi-modern .header-stat-item:hover::after {
-  opacity: 1;
+.molding-instruction-container.mi-modern .header-stat-item--total {
+  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
+  box-shadow:
+    0 3px 0 #7dd3fc,
+    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item--total:hover {
+  box-shadow:
+    0 5px 0 #7dd3fc,
+    0 14px 22px -8px rgba(2, 6, 23, 0.6);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item.header-stat-item--total .stat-value {
+  color: #075985;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item.header-stat-item--total .stat-label {
+  color: #0c4a6e;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item--machine {
+  background: linear-gradient(180deg, #ffffff 0%, #ede9fe 100%);
+  box-shadow:
+    0 3px 0 #c4b5fd,
+    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item--machine:hover {
+  box-shadow:
+    0 5px 0 #c4b5fd,
+    0 14px 22px -8px rgba(2, 6, 23, 0.6);
+}
+
+.molding-instruction-container.mi-modern .header-stat-item.header-stat-item--machine .stat-value {
+  color: #4c1d95;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item.header-stat-item--machine .stat-label {
+  color: #5b21b6;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item .stat-icon {
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
-  border-radius: 8px;
-  transform: translateZ(18px);
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  border-radius: 4px;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item .total-icon {
-  background: linear-gradient(145deg, #38bdf8 0%, #0284c7 100%);
-  box-shadow:
-    0 3px 0 #075985,
-    0 8px 14px -6px rgba(14, 165, 233, 0.7);
+  background: #0284c7;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item .machine-icon {
-  background: linear-gradient(145deg, #a78bfa 0%, #6d28d9 100%);
-  box-shadow:
-    0 3px 0 #4c1d95,
-    0 8px 14px -6px rgba(139, 92, 246, 0.7);
+  background: #6d28d9;
+}
+
+.molding-instruction-container.mi-modern .header-stat-item .stat-content {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item .stat-value {
-  font-size: 15px;
+  font-size: 18px;
+  line-height: 1;
+  margin-bottom:0;
   font-weight: 800;
-  color: #fff;
+  color: #0f172a;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 6px rgba(2, 6, 23, 0.3);
 }
 
 .molding-instruction-container.mi-modern .header-stat-item .stat-label {
-  font-size: 10px;
-  color: rgba(224, 242, 254, 0.85);
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
 }
 
 .molding-instruction-container.mi-modern .action-btn.refresh-btn {
@@ -9750,11 +10064,6 @@ onUnmounted(() => {
   .molding-instruction-container.mi-modern .title-icon,
   .mi-modern .plan-qty-chart-title-row > .el-icon {
     animation: none;
-  }
-
-  .molding-instruction-container.mi-modern .header-stat-item {
-    transform: none;
-    transition: none;
   }
 }
 </style>

@@ -147,6 +147,11 @@
       <h1>設備稼働時間表</h1>
       <div>{{ printRangeText }}</div>
       <div>出力日時：{{ printNowText }}</div>
+      <div class="print-band-key">
+        <span v-for="band in HOUR_BANDS" :key="band.label" class="print-band-key__item">
+          <i :style="{ background: band.bg }" />{{ band.label }}
+        </span>
+      </div>
     </div>
 
     <div v-loading="loading" class="plan-card result-card result-card--panel">
@@ -163,8 +168,9 @@
       <div v-if="matrixRows.length > 0" class="matrix-legend no-print">
         <span class="lg-item"><i class="lg-sw lg-sw--empty" />平日0h</span>
         <span class="lg-item"><i class="lg-sw lg-sw--weekend" />土日</span>
-        <span class="lg-item"><i class="lg-sw lg-sw--mid" />20〜22h</span>
-        <span class="lg-item"><i class="lg-sw lg-sw--high" />23h超</span>
+        <span v-for="band in HOUR_BANDS" :key="band.label" class="lg-item">
+          <i class="lg-sw" :style="{ background: band.bg }" />{{ band.label }}
+        </span>
         <span class="lg-item"><i class="lg-sw lg-sw--tech" />技術使用</span>
         <span class="lg-item"><i class="lg-sw lg-sw--maint" />保全</span>
         <span class="lg-item"><i class="lg-sw lg-sw--mixed" />技術・保全</span>
@@ -193,6 +199,7 @@
                 :key="`${row.lineId}-${d}`"
                 class="cell"
                 :class="cellClasses(row.dailyHours[d], d, row.dailyOccupancy[d])"
+                :style="hoursCellStyle(row.dailyHours[d])"
                 :title="occupancyCellTitle(d, row.dailyHours[d] || 0, row.dailyOccupancy[d])"
               >
                 <div class="cell-main">{{ formatHours(row.dailyHours[d] || 0) }}</div>
@@ -333,15 +340,49 @@ function formatDate(d: string) {
   return dayjs(d).format('MM/DD')
 }
 
-/** 稼働時間表示：小数部が 0.1 を超える場合は整数部に +1（それ以外は整数部のまま） */
+/** 取整後の表示を名目時間へ寄せる（画面・設備稼働時間表印刷・成型ライン稼働予定時間表で共通） */
+const DISPLAY_HOURS_ALIAS: Record<number, number> = {
+  13: 14,
+  15: 16,
+  19: 20,
+  21: 22,
+  23: 24,
+}
+
+/** 稼働時間表示：小数部が 0.1 を超える場合は整数部に +1。その後 13/15/19/21/23 は +1 */
 function formatHours(v: number) {
   const n = Number(v || 0)
   if (!Number.isFinite(n)) return '-'
   if (n === 0) return ''
   const intPart = Math.floor(n)
   const frac = n - intPart
-  const display = frac > 0.1 ? intPart + 1 : intPart
+  let display = frac > 0.1 ? intPart + 1 : intPart
+  display = DISPLAY_HOURS_ALIAS[display] ?? display
   return String(display)
+}
+
+/** 17h 以上だけ背景色。16 以下は無地。大きいほど濃い淡黄、いずれも薄色で数字は黒のまま */
+const HOUR_BANDS: { max: number; label: string; bg: string }[] = [
+  { max: 20, label: '17～20h', bg: '#fff7cc' },
+  { max: 22, label: '21～22h', bg: '#ffef99' },
+  { max: 24, label: '23h～', bg: '#ffe066' },
+]
+
+function displayedHourNumber(v: number): number {
+  const n = Number(formatHours(v))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function hourBand(rawHours: number) {
+  const h = displayedHourNumber(rawHours)
+  if (h <= 16) return null
+  return HOUR_BANDS.find((b) => h <= b.max) ?? HOUR_BANDS[HOUR_BANDS.length - 1]
+}
+
+function hoursCellStyle(rawHours: number | undefined): Record<string, string> | undefined {
+  const band = hourBand(Number(rawHours || 0))
+  if (!band) return undefined
+  return { backgroundColor: band.bg }
 }
 
 async function applyThisMonthRange() {
@@ -382,8 +423,7 @@ function cellClasses(
     'is-weekend': weekend,
   }
   if (!h && !weekend) classes['is-weekday-empty'] = true
-  if (h > 23) classes['is-high-hours'] = true
-  else if (h >= 20 && h <= 22) classes['is-mid-hours'] = true
+  if (hourBand(h)) classes['is-hband'] = true
   if (occ === 'tech') classes['is-tech-occ'] = true
   else if (occ === 'maintenance') classes['is-maint-occ'] = true
   else if (occ === 'mixed') classes['is-mixed-occ'] = true
@@ -530,16 +570,15 @@ async function handlePrint() {
         const classes = ['num']
         if (isWeekend(d)) classes.push('is-weekend')
         else if (!rawHours) classes.push('is-weekday-empty')
-        if (rawHours > 23) {
-          classes.push('is-high-hours')
-        } else if (rawHours >= 20 && rawHours <= 22) {
-          classes.push('is-mid-hours')
-        }
+        const band = hourBand(rawHours)
         const occ = row.dailyOccupancy?.[d] || ''
         if (occ === 'tech') classes.push('is-tech-occ')
         else if (occ === 'maintenance') classes.push('is-maint-occ')
         else if (occ === 'mixed') classes.push('is-mixed-occ')
-        return `<td class="${classes.join(' ')}">${escHtml(formatHours(rawHours))}</td>`
+        const style = band
+          ? ` style="background-color:${band.bg};color:#0f172a;font-weight:700"`
+          : ''
+        return `<td class="${classes.join(' ')}"${style}>${escHtml(formatHours(rawHours))}</td>`
       })
       .join('')
     return `<tr><td>${escHtml(row.lineLabel)}</td>${cells}</tr>`
@@ -564,12 +603,10 @@ async function handlePrint() {
       .num { text-align: right; }
       th.is-weekend { color: #dc2626; background-color: #ffecec; }
       td.is-weekend { background-color: #fff5f5; }
-      td.is-weekday-empty { background-color: #e5e7eb; }
-      td.is-mid-hours { background-color: #fff7d6; }
-      td.is-high-hours { background-color: #f4c98a; }
-      td.is-tech-occ { box-shadow: inset 0 0 0 2px #f5a623aa; background: #fff4e5; }
-      td.is-maint-occ { box-shadow: inset 0 0 0 2px #64748baa; background: #eef2ff; }
-      td.is-mixed-occ { box-shadow: inset 0 0 0 2px #ea580caa; background: #ffedd5; }
+      td.is-weekday-empty { background-color: #e5e7eb; color: #64748b; }
+      td.is-tech-occ { box-shadow: inset 0 0 0 2px #f5a623; }
+      td.is-maint-occ { box-shadow: inset 0 0 0 2px #64748b; }
+      td.is-mixed-occ { box-shadow: inset 0 0 0 2px #ea580c; }
       thead { display: table-header-group; }
       tr { page-break-inside: avoid; }
       .print-summary { margin-top: 10px; border-top: 1px solid #cbd5e1; padding-top: 8px; }
@@ -839,24 +876,19 @@ onMounted(async () => {
 .date-col.is-weekend .wd-hd {
   color: var(--el-color-danger);
 }
-/* 印刷プレビューと同じ高稼働の段階色 */
-.cell.is-mid-hours {
-  background: #fff7d6 !important;
-}
-.cell.is-high-hours {
-  background: #f4c98a !important;
+/* 稼働時間の背景は inline style。文字色は濃い色に固定して薄色背景でも読めるようにする */
+.cell.is-hband,
+.cell.is-hband .cell-main {
+  color: #0f172a;
 }
 .cell.is-tech-occ {
-  box-shadow: inset 0 0 0 2px #f5a623aa;
-  background: linear-gradient(180deg, #fff4e5 0%, transparent 55%);
+  box-shadow: inset 0 0 0 2px #f5a623;
 }
 .cell.is-maint-occ {
-  box-shadow: inset 0 0 0 2px #64748baa;
-  background: linear-gradient(180deg, #eef2ff 0%, transparent 55%);
+  box-shadow: inset 0 0 0 2px #64748b;
 }
 .cell.is-mixed-occ {
-  box-shadow: inset 0 0 0 2px #ea580caa;
-  background: linear-gradient(180deg, #ffedd5 0%, transparent 55%);
+  box-shadow: inset 0 0 0 2px #ea580c;
 }
 
 .cell-main {
@@ -878,9 +910,35 @@ onMounted(async () => {
   display: none;
 }
 
+.print-band-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #0f172a;
+}
+.print-band-key__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.print-band-key__item i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.25);
+}
+
 @media print {
   .no-print {
     display: none !important;
+  }
+  .matrix-table,
+  .matrix-table td,
+  .matrix-table th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .print-only {
     display: block;
@@ -1219,12 +1277,6 @@ onMounted(async () => {
   .cm-modern .lg-sw--weekend {
     background: #fff5f5;
     border-color: #fca5a5;
-  }
-  .cm-modern .lg-sw--mid {
-    background: #fff7d6;
-  }
-  .cm-modern .lg-sw--high {
-    background: #f4c98a;
   }
   .cm-modern .lg-sw--tech {
     background: #fff4e5;
