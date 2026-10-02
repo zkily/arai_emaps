@@ -15,6 +15,8 @@ export interface ProductListParams {
   route_cd?: string
   location_cd?: string
   destination_cd?: string
+  /** 工程名（部分一致）を工程ルートに含む製品のみ */
+  process_name?: string
   page?: number
   pageSize?: number
 }

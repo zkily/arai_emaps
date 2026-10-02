@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.datetime_utils import now_jst
 from app.modules.auth.models import User
 from app.modules.erp.bulk_disposal_retention_models import BulkDisposalRetentionRecord
-from app.modules.system.settings_models import EmailSendLog, NotificationSetting
+from app.modules.system.settings_models import (
+    EmailSendLog,
+    NotificationRecipient,
+    NotificationSetting,
+)
 from app.services.email_service import (
     DEFAULT_BULK_EMAIL_INTERVAL_SEC,
     is_smtp_rate_limit_message,
@@ -251,6 +255,71 @@ async def _resolve_user_emails(db: AsyncSession, user_ids: list[int]) -> list[di
     return list(recipients.values())
 
 
+async def _get_saved_recipient_rows(db: AsyncSession) -> list[NotificationRecipient]:
+    result = await db.execute(
+        select(NotificationRecipient).where(
+            NotificationRecipient.event_code == EVENT_CODE,
+            NotificationRecipient.recipient_type == "user",
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def get_saved_notify_user_ids(db: AsyncSession) -> list[int]:
+    """保存済み通知先（notification_recipients / recipient_type=user）のユーザー ID"""
+    rows = await _get_saved_recipient_rows(db)
+    ids: list[int] = []
+    for row in rows:
+        if row.is_active and row.user_id and row.user_id not in ids:
+            ids.append(row.user_id)
+    return ids
+
+
+async def save_bulk_disposal_retention_notify_recipients(
+    db: AsyncSession,
+    *,
+    user_ids: list[int],
+) -> dict:
+    """通知先ユーザーを保存（ユーザー種別の受信者のみ置換。email/role/line は保持）"""
+    wanted = list(dict.fromkeys(uid for uid in user_ids if uid))
+    if wanted:
+        result = await db.execute(select(User).where(User.id.in_(wanted)))
+        users_by_id = {u.id: u for u in result.scalars().all()}
+        wanted = [uid for uid in wanted if uid in users_by_id]
+    else:
+        users_by_id = {}
+
+    rows = await _get_saved_recipient_rows(db)
+    existing: dict[int, NotificationRecipient] = {}
+    for row in rows:
+        if row.user_id in wanted and row.user_id not in existing:
+            row.is_active = True
+            existing[row.user_id] = row
+        else:
+            await db.delete(row)
+
+    for uid in wanted:
+        if uid in existing:
+            continue
+        user = users_by_id[uid]
+        db.add(
+            NotificationRecipient(
+                event_code=EVENT_CODE,
+                recipient_type="user",
+                user_id=uid,
+                display_name=user.full_name or user.username,
+                is_active=True,
+            )
+        )
+
+    await db.commit()
+    return {
+        "success": True,
+        "message": f"通知先を保存しました（{len(wanted)} 名）" if wanted else "通知先をクリアしました",
+        "user_ids": wanted,
+    }
+
+
 async def get_bulk_disposal_retention_notification_preview(
     db: AsyncSession,
     *,
@@ -265,6 +334,7 @@ async def get_bulk_disposal_retention_notification_preview(
     overdue_count = sum(1 for r in rows if r.get("is_overdue"))
     template = await load_email_template(db, EVENT_CODE)
     smtp = await load_smtp_config(db)
+    saved_user_ids = await get_saved_notify_user_ids(db)
 
     return {
         "success": True,
@@ -277,6 +347,7 @@ async def get_bulk_disposal_retention_notification_preview(
         "smtp_configured": smtp is not None,
         "template_subject": template.subject if template else None,
         "can_send": email_enabled and smtp is not None and template is not None and len(rows) > 0,
+        "saved_user_ids": saved_user_ids,
     }
 
 

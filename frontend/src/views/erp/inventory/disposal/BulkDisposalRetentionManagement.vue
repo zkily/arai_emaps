@@ -610,23 +610,56 @@
         />
         <el-form label-width="100px" size="default" class="notify-form">
           <el-form-item label="通知先" required>
-            <el-select
-              v-model="notifyUserIds"
-              multiple
-              filterable
-              collapse-tags
-              collapse-tags-tooltip
-              placeholder="ユーザーを選択"
-              class="full-width"
-            >
-              <el-option
-                v-for="u in notifyUsers"
-                :key="u.id"
-                :label="`${u.full_name || u.username} (${u.email || 'メール未設定'})`"
-                :value="u.id"
-                :disabled="!u.email"
-              />
-            </el-select>
+            <div class="notify-recipient-field">
+              <el-select
+                v-model="notifyUserIds"
+                multiple
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="ユーザーを選択"
+                class="full-width"
+              >
+                <el-option
+                  v-for="u in notifyUsers"
+                  :key="u.id"
+                  :label="`${u.full_name || u.username} (${u.email || 'メール未設定'})`"
+                  :value="u.id"
+                  :disabled="!u.email"
+                />
+              </el-select>
+              <div class="notify-recipient-actions">
+                <span
+                  class="notify-saved-hint"
+                  :class="{ 'notify-saved-hint--dirty': notifyRecipientsDirty }"
+                >
+                  <template v-if="notifyRecipientsDirty">※ 通知先に未保存の変更があります</template>
+                  <template v-else-if="savedNotifyUserIds.length > 0">
+                    保存済み通知先 {{ savedNotifyUserIds.length }} 名
+                  </template>
+                  <template v-else>通知先は未保存です（保存すると次回から自動で選択されます）</template>
+                </span>
+                <el-button
+                  v-if="notifyRecipientsDirty && savedNotifyUserIds.length > 0"
+                  link
+                  type="info"
+                  size="small"
+                  @click="notifyUserIds = [...savedNotifyUserIds]"
+                >
+                  保存済みに戻す
+                </el-button>
+                <el-button
+                  type="primary"
+                  plain
+                  size="small"
+                  :loading="notifySavingRecipients"
+                  :disabled="!notifyRecipientsDirty"
+                  @click="handleSaveNotifyRecipients"
+                >
+                  通知先を保存
+                </el-button>
+              </div>
+            </div>
           </el-form-item>
         </el-form>
         <el-table
@@ -706,6 +739,7 @@ import {
   updateBulkDisposalRetention,
   deleteBulkDisposalRetention,
   previewBulkDisposalRetentionNotification,
+  saveBulkDisposalRetentionNotifyRecipients,
   sendBulkDisposalRetentionNotification,
   type BulkDisposalRetentionRecord,
   type BulkDisposalRetentionForm,
@@ -845,6 +879,13 @@ const notifySending = ref(false)
 const notifyPreview = ref<BulkDisposalRetentionNotifyPreview | null>(null)
 const notifyUsers = ref<UserListItem[]>([])
 const notifyUserIds = ref<number[]>([])
+const savedNotifyUserIds = ref<number[]>([])
+const notifySavingRecipients = ref(false)
+const notifyRecipientsDirty = computed(() => {
+  const current = [...new Set(notifyUserIds.value)].sort((a, b) => a - b)
+  const saved = [...new Set(savedNotifyUserIds.value)].sort((a, b) => a - b)
+  return current.length !== saved.length || current.some((id, i) => id !== saved[i])
+})
 
 function categoryKey(cat: string) {
   if (cat === '大量廃棄') return 'disposal'
@@ -1218,10 +1259,31 @@ async function loadNotifyPreview() {
   }
 }
 
+function selectableNotifyUserIds(ids: number[]) {
+  const selectable = new Set(notifyUsers.value.filter((u) => u.email).map((u) => u.id))
+  return ids.filter((id) => selectable.has(id))
+}
+
 async function openNotifyDialog() {
   notifyUserIds.value = []
+  savedNotifyUserIds.value = []
   notifyDialogVisible.value = true
   await Promise.all([loadNotifyUsers(), loadNotifyPreview()])
+  savedNotifyUserIds.value = selectableNotifyUserIds(notifyPreview.value?.saved_user_ids ?? [])
+  notifyUserIds.value = [...savedNotifyUserIds.value]
+}
+
+async function handleSaveNotifyRecipients() {
+  notifySavingRecipients.value = true
+  try {
+    const res = await saveBulkDisposalRetentionNotifyRecipients(notifyUserIds.value)
+    savedNotifyUserIds.value = selectableNotifyUserIds(res?.user_ids ?? [])
+    ElMessage.success(res?.message || '通知先を保存しました')
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '通知先の保存に失敗しました')
+  } finally {
+    notifySavingRecipients.value = false
+  }
 }
 
 async function handleSendNotify() {
@@ -2133,6 +2195,25 @@ onMounted(async () => {
 }
 .notify-form {
   margin-top: 4px;
+}
+.notify-recipient-field {
+  width: 100%;
+}
+.notify-recipient-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.notify-saved-hint {
+  margin-right: auto;
+  font-size: 12px;
+  color: #64748b;
+}
+.notify-saved-hint--dirty {
+  color: #d97706;
+  font-weight: 700;
 }
 .notify-table {
   margin-top: 8px;

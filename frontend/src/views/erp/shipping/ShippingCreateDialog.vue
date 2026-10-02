@@ -1144,15 +1144,18 @@
     top="0"
     :close-on-click-modal="false"
     :destroy-on-close="true"
-    class="pallet-edit-dialog pallet-edit-dialog-fullscreen"
+    class="pallet-edit-dialog pallet-edit-dialog-fullscreen ped-modern"
   >
     <template #header>
-      <div class="dialog-header pallet-dialog-header">
+      <div class="dialog-header pallet-dialog-header ped-hero">
+        <div class="ped-hero-fx" aria-hidden="true">
+          <span class="ped-orb ped-orb--a" />
+          <span class="ped-orb ped-orb--b" />
+          <span class="ped-grid" />
+        </div>
         <div class="header-left">
-          <el-icon class="header-icon" style="color: #409eff; font-size: 16px">
-            <View />
-          </el-icon>
-          <span class="header-title" style="font-size: 14px; font-weight: 500">パレットNo詳細</span>
+          <span class="ped-hero-icon"><el-icon><View /></el-icon></span>
+          <span class="header-title ped-hero-title">パレットNo詳細</span>
         </div>
         <div class="header-stats">
           <el-button
@@ -1183,7 +1186,7 @@
       </div>
     </template>
 
-    <div class="pallet-edit-content">
+    <div class="pallet-edit-content ped-body">
       <el-table
         :data="sortedPallets"
         style="width: 100%"
@@ -10624,6 +10627,250 @@ function applyChangesAndClose() {
 
   .modern-btn:hover {
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（パレットNo詳細 / スカイ・ブルー系）
+ * ============================================================ */
+:global(.el-dialog.ped-modern) {
+  overflow: hidden;
+  padding: 0;
+}
+:global(.el-dialog.ped-modern .el-dialog__header) {
+  margin: 0;
+  padding: 0;
+  border-bottom: none;
+  background: none;
+}
+:global(.el-dialog.ped-modern .el-dialog__headerbtn) {
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+:global(.el-dialog.ped-modern .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+:global(.el-dialog.ped-modern .el-dialog__body) {
+  background: linear-gradient(160deg, #f0f9ff 0%, #eff6ff 50%, #f8fafc 100%);
+}
+:global(.el-dialog.ped-modern .el-dialog__footer) {
+  display: none;
+}
+
+/* ---------- ヘッダー（ヒーロー） ---------- */
+.ped-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 10px 58px 10px 16px;
+  border-radius: 0;
+  background: linear-gradient(125deg, #0c1f4a 0%, #1d4ed8 40%, #0284c7 75%, #38bdf8 100%);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.15);
+}
+.ped-hero::before {
+  display: none;
+}
+.ped-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.ped-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.ped-orb--a {
+  width: 200px;
+  height: 200px;
+  top: -110px;
+  left: 22%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.ped-orb--b {
+  width: 180px;
+  height: 180px;
+  bottom: -120px;
+  right: 30%;
+  background: radial-gradient(circle, rgba(186, 230, 253, 0.42) 0%, rgba(186, 230, 253, 0) 70%);
+}
+.ped-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+  -webkit-mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
+  mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
+}
+.ped-hero .header-left {
+  gap: 10px;
+}
+.ped-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(12, 31, 74, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.ped-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(12, 31, 74, 0.35);
+}
+.ped-hero .header-stats {
+  gap: 8px;
+}
+
+/* 並び替え＝白キーキャップ（有効時 sky）/ 保存＝emerald キーキャップ */
+.ped-hero .glass-btn.glass-btn-sort,
+.ped-hero .glass-btn.glass-btn-save {
+  height: 30px;
+  padding: 0 14px !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease !important;
+}
+.ped-hero .glass-btn.glass-btn-sort {
+  color: #075985 !important;
+  background: #fff !important;
+  border: 1px solid #fff !important;
+  box-shadow: 0 3px 0 #0c4a6e !important;
+}
+.ped-hero .glass-btn.glass-btn-sort.glass-btn-active {
+  color: #fff !important;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%) !important;
+  border-color: #bae6fd !important;
+}
+.ped-hero .glass-btn.glass-btn-save {
+  color: #fff !important;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%) !important;
+  border: 1px solid #a7f3d0 !important;
+  box-shadow: 0 3px 0 #064e3b !important;
+}
+.ped-hero .glass-btn.glass-btn-sort:hover,
+.ped-hero .glass-btn.glass-btn-save:hover {
+  transform: translateY(-1px) !important;
+}
+.ped-hero .glass-btn.glass-btn-sort:hover {
+  box-shadow: 0 4px 0 #0c4a6e !important;
+}
+.ped-hero .glass-btn.glass-btn-save:hover {
+  box-shadow: 0 4px 0 #064e3b !important;
+}
+.ped-hero .glass-btn.glass-btn-sort:active,
+.ped-hero .glass-btn.glass-btn-save:active {
+  transform: translateY(2px) !important;
+  box-shadow: 0 1px 0 rgba(12, 31, 74, 0.6) !important;
+}
+
+/* ---------- テーブル ---------- */
+.ped-body {
+  padding: 10px 12px 12px;
+}
+.ped-body .view-pallets-minimal {
+  border: 1px solid #dbeafe;
+  border-top: 3px solid #0284c7;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px -18px rgba(2, 132, 199, 0.5);
+}
+.ped-body .view-pallets-minimal :deep(.el-table__header th) {
+  padding: 8px !important;
+  font-size: 12px;
+  font-weight: 800;
+  color: #075985;
+  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  box-shadow: inset 0 -2px 0 #7dd3fc;
+}
+.ped-body .view-pallets-minimal :deep(.el-table__row:hover td:first-child) {
+  box-shadow: inset 3px 0 0 #0284c7;
+}
+.ped-body .prefix-label {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #1e40af;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px #bfdbfe;
+}
+.ped-body .serial-input :deep(.el-input__wrapper) {
+  border-color: #93c5fd;
+  box-shadow: 0 2px 0 #dbeafe;
+}
+.ped-body .serial-input :deep(.el-input__wrapper.is-focus) {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.ped-body .serial-input :deep(.el-input__inner) {
+  font-size: 12px;
+  font-weight: 800;
+  color: #000;
+}
+.ped-body .serial-btn:hover {
+  background: #0284c7;
+}
+.ped-body .serial-btn:active {
+  background: #075985;
+}
+
+/* 操作ボタン：色分けキーキャップ、無効時は半透明にしない */
+.ped-body .view-pallets-minimal :deep(.el-button-group .el-button) {
+  border-radius: 6px;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--warning.is-plain) {
+  box-shadow: 0 2px 0 #f0c78a;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--primary.is-plain) {
+  box-shadow: 0 2px 0 #b3d8ff;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--danger.is-plain) {
+  box-shadow: 0 2px 0 #fbc4c4;
+}
+.ped-body .view-pallets-minimal :deep(.el-button-group .el-button:not(.is-disabled):hover) {
+  transform: translateY(-1px);
+}
+.ped-body .view-pallets-minimal :deep(.el-button-group .el-button:not(.is-disabled):active) {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.ped-body .view-pallets-minimal :deep(.el-button:disabled) {
+  opacity: 1;
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ped-hero .glass-btn.glass-btn-sort,
+  .ped-hero .glass-btn.glass-btn-save,
+  .ped-body .view-pallets-minimal :deep(.el-button-group .el-button) {
+    transition: none !important;
+    transform: none !important;
   }
 }
 </style>

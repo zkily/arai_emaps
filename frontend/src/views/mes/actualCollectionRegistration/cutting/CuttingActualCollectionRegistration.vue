@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { ElInput, ElInputNumber } from 'element-plus'
 import {
   ArrowLeft,
@@ -14,12 +14,14 @@ import {
   Warning,
 } from '@element-plus/icons-vue'
 import { useCuttingManualRegistration } from './useCuttingManualRegistration'
+import { useCuttingBatchRegistration, type CuttingBatchRow } from './useCuttingBatchRegistration'
 
 defineOptions({ name: 'CuttingActualCollectionRegistration' })
 
 const reg = useCuttingManualRegistration()
 const {
   productionDay,
+  canCreate,
   lineFilterName,
   loading,
   saving,
@@ -72,6 +74,79 @@ const {
   isRowMesInProgress,
   init,
 } = reg
+
+const {
+  batchLoading,
+  batchSaving,
+  batchLoadedDay,
+  batchLineFilter,
+  batchLineOptions,
+  visibleBatchRows,
+  selectedBatchRows,
+  batchRegisteredCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  isBatchRowRegistered,
+  toggleAllVisible,
+  loadBatch,
+  onBatchTimeInput,
+  onBatchTimeBlur,
+  onBatchQtyInput,
+  batchVariance,
+  batchWorkMin,
+  submitBatch,
+} = useCuttingBatchRegistration({
+  productionDay,
+  registeredRows: reg.rows,
+  canCreate,
+  onSaved: loadRows,
+})
+
+const entryMode = ref<'single' | 'batch'>('single')
+
+watch(entryMode, (mode) => {
+  if (mode !== 'batch') return
+  if (isEdit.value) resetForm()
+  if (batchLoadedDay.value !== productionDay.value) void loadBatch()
+})
+
+watch(productionDay, () => {
+  if (entryMode.value === 'batch') void loadBatch()
+})
+
+function onEditRow(row: Parameters<typeof loadRowIntoForm>[0]): void {
+  entryMode.value = 'single'
+  loadRowIntoForm(row)
+}
+
+function batchRowClass({ row }: { row: CuttingBatchRow }): string {
+  if (row.error) return 'car-batch__row--error'
+  if (isBatchRowRegistered(row)) return 'car-batch__row--registered'
+  return row.selected ? 'car-batch__row--selected' : ''
+}
+
+function formatBatchWorkMin(row: CuttingBatchRow): string {
+  const m = batchWorkMin(row)
+  if (m == null) return '—'
+  return m < 0 ? '超過' : formatMinutesLabel(m)
+}
+
+/** 生産=0, 開始=1, 終了=2, 休憩=3, 停止=4 */
+const BATCH_NAV_LAST_COL = 4
+const batchTableWrapRef = ref<HTMLElement | null>(null)
+
+function onBatchNavKeydown(e: KeyboardEvent): void {
+  if (e.key !== 'Enter' || e.isComposing) return
+  const host = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-bnav]')
+  const wrap = batchTableWrapRef.value
+  if (!host || !wrap) return
+  e.preventDefault()
+  const [r, c] = String(host.dataset.bnav).split('-').map(Number)
+  const next = c >= BATCH_NAV_LAST_COL ? `${r + 1}-1` : `${r}-${c + 1}`
+  const input = wrap.querySelector<HTMLInputElement>(`[data-bnav="${next}"] input`)
+  input?.focus()
+  input?.select()
+}
 
 const lineSelected = computed(() => Boolean(form.value.productionLine?.trim()))
 
@@ -134,18 +209,16 @@ onMounted(() => {
 
 
 <template>
-  <div class="iar">
-    <div class="iar__bg" aria-hidden="true">
-      <div class="iar__orb iar__orb--1" />
-      <div class="iar__orb iar__orb--2" />
-      <div class="iar__orb iar__orb--3" />
-    </div>
-
+  <div class="iar car-modern">
     <header class="iar-hero iar-rise">
+      <div class="car-hero-fx" aria-hidden="true">
+        <span class="fx-orb orb-a" />
+        <span class="fx-orb orb-b" />
+        <span class="fx-grid" />
+      </div>
       <div class="iar-hero__main">
         <div class="iar-hero__icon">
           <el-icon :size="22"><DataLine /></el-icon>
-          <span class="iar-hero__glow" />
         </div>
         <div>
           <div class="iar-hero__eyebrow">MES · 実績収集登録</div>
@@ -169,13 +242,214 @@ onMounted(() => {
           <span class="iar-panel__dot" />
           <span class="iar-panel__title">{{ isEdit ? `編集中 #${editingRowId}` : '実績入力' }}</span>
           <el-tag v-if="isEdit" type="warning" size="small" effect="dark" round>編集</el-tag>
+          <el-radio-group v-model="entryMode" class="car-mode-switch">
+            <el-radio-button value="single">個別入力</el-radio-button>
+            <el-radio-button value="batch">指示から一括入力</el-radio-button>
+          </el-radio-group>
         </div>
-        <div v-if="timeSummary.shiftMin != null" class="iar-panel__badge iar-panel__badge--live">
+        <div
+          v-if="entryMode === 'single' && timeSummary.shiftMin != null"
+          class="iar-panel__badge iar-panel__badge--live"
+        >
           作業 {{ formatMinutesLabel(timeSummary.workMin ?? 0) }}
         </div>
       </div>
 
-      <div class="iar-form">
+      <div v-show="entryMode === 'batch'" class="car-batch">
+        <div class="car-batch__toolbar">
+          <div class="car-batch__date">
+            <span class="car-batch__label">生産日</span>
+            <el-date-picker
+              v-model="form.productionDay"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
+              :clearable="false"
+              class="car-batch__date-picker"
+              @change="onProductionDayChange"
+            />
+            <el-button circle :icon="ArrowLeft" title="前日" aria-label="前日" @click="shiftProductionDay(-1)" />
+            <el-button class="car-batch__today" @click="goProductionDayToday">今日</el-button>
+            <el-button circle :icon="ArrowRight" title="翌日" aria-label="翌日" @click="shiftProductionDay(1)" />
+          </div>
+          <el-select
+            v-model="batchLineFilter"
+            clearable
+            value-on-clear=""
+            placeholder="ライン（全て）"
+            class="car-batch__line"
+          >
+            <el-option v-for="l in batchLineOptions" :key="l" :label="l" :value="l" />
+          </el-select>
+          <el-button type="primary" :icon="Refresh" :loading="batchLoading" class="car-batch__load" @click="loadBatch">
+            指示を読込
+          </el-button>
+          <div class="car-batch__stats">
+            <span class="car-batch__stat">生産完了 <b>{{ visibleBatchRows.length }}</b> 件</span>
+            <span class="car-batch__stat car-batch__stat--done">登録済 <b>{{ batchRegisteredCount }}</b> 件</span>
+            <span class="car-batch__stat car-batch__stat--sel">選択 <b>{{ selectedBatchRows.length }}</b> 件</span>
+          </div>
+        </div>
+
+        <div ref="batchTableWrapRef" class="car-batch__table-wrap" @keydown="onBatchNavKeydown">
+          <el-table
+            v-loading="batchLoading"
+            :data="visibleBatchRows"
+            row-key="key"
+            border
+            max-height="560"
+            class="car-batch__table"
+            :row-class-name="batchRowClass"
+            empty-text="生産完了の切断指示がありません（生産日を選んで「指示を読込」）"
+          >
+            <el-table-column width="48" align="center" header-align="center">
+              <template #header>
+                <el-checkbox
+                  :model-value="allVisibleSelected"
+                  :indeterminate="someVisibleSelected"
+                  @change="toggleAllVisible"
+                />
+              </template>
+              <template #default="{ row }">
+                <el-checkbox v-model="row.selected" />
+              </template>
+            </el-table-column>
+            <el-table-column prop="line" label="ライン" width="110" show-overflow-tooltip />
+            <el-table-column prop="productCd" label="CD" width="96" show-overflow-tooltip />
+            <el-table-column prop="productName" label="製品名" min-width="150" show-overflow-tooltip />
+            <el-table-column label="計画" width="72" align="right" header-align="right">
+              <template #default="{ row }">
+                <span class="car-batch__num">{{ row.plannedQty ?? '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="生産" width="96" align="center" header-align="center" class-name="cb-col cb-col--qty">
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-0`">
+                  <el-input
+                    :model-value="row.actualQty == null ? '' : String(row.actualQty)"
+                    inputmode="numeric"
+                    class="car-batch__qty"
+                    @update:model-value="(v: string) => onBatchQtyInput(row, v)"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="差異" width="68" align="right" header-align="right">
+              <template #default="{ row }">
+                <span class="car-batch__num car-batch__num--var">{{ batchVariance(row) ?? '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="開始" width="96" align="center" header-align="center" class-name="cb-col cb-col--start">
+              <template #header>
+                <div class="cb-th">
+                  <span>開始</span>
+                  <small>0800 → 08:00</small>
+                </div>
+              </template>
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-1`">
+                  <el-input
+                    :model-value="row.startedText"
+                    inputmode="numeric"
+                    maxlength="5"
+                    placeholder="08:30"
+                    class="car-batch__time"
+                    @update:model-value="(v: string) => onBatchTimeInput(row, 'startedText', v)"
+                    @blur="onBatchTimeBlur(row, 'startedText')"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="終了" width="96" align="center" header-align="center" class-name="cb-col cb-col--end">
+              <template #header>
+                <div class="cb-th">
+                  <span>終了</span>
+                  <small>1700 → 17:00</small>
+                </div>
+              </template>
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-2`">
+                  <el-input
+                    :model-value="row.endedText"
+                    inputmode="numeric"
+                    maxlength="5"
+                    placeholder="17:00"
+                    class="car-batch__time"
+                    @update:model-value="(v: string) => onBatchTimeInput(row, 'endedText', v)"
+                    @blur="onBatchTimeBlur(row, 'endedText')"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="休憩(分)" width="88" align="center" header-align="center" class-name="cb-col cb-col--break">
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-3`">
+                  <el-input-number
+                    v-model="row.breakMin"
+                    :min="0"
+                    :max="999"
+                    :controls="false"
+                    class="car-batch__min"
+                    @change="row.error = ''"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="停止(分)" width="88" align="center" header-align="center" class-name="cb-col cb-col--stop">
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-4`">
+                  <el-input-number
+                    v-model="row.stopMin"
+                    :min="0"
+                    :max="999"
+                    :controls="false"
+                    class="car-batch__min"
+                    @change="row.error = ''"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="作業" width="96" align="center" header-align="center">
+              <template #default="{ row }">
+                <span
+                  class="car-batch__work"
+                  :class="{ 'car-batch__work--alert': (batchWorkMin(row) ?? 0) < 0 }"
+                >
+                  {{ formatBatchWorkMin(row) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="備考" min-width="120">
+              <template #default="{ row }">
+                <el-input v-model="row.remarks" maxlength="500" placeholder="任意" class="car-batch__remarks" />
+              </template>
+            </el-table-column>
+            <el-table-column label="状態" width="128" align="center" header-align="center" fixed="right">
+              <template #default="{ row }">
+                <span v-if="row.error" class="car-batch__error">{{ row.error }}</span>
+                <el-tag v-else-if="isBatchRowRegistered(row)" type="success" effect="dark" round>登録済</el-tag>
+                <el-tag v-else type="info" effect="plain" round>未登録</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <div class="car-batch__footer">
+          <span class="car-batch__tip">Enter キーで 開始 → 終了 → 休憩 → 停止 → 次の行の開始 へ移動します</span>
+          <el-button
+            v-if="canCreate"
+            type="primary"
+            class="iar-btn-save car-batch__submit"
+            :loading="batchSaving"
+            :disabled="!selectedBatchRows.length"
+            @click="submitBatch"
+          >
+            選択行を一括登録（{{ selectedBatchRows.length }}件）
+          </el-button>
+        </div>
+      </div>
+
+      <div v-show="entryMode === 'single'" class="iar-form">
         <div class="iar-form__row iar-form__row--triple">
           <div class="iar-field iar-field--c1">
             <label class="iar-field__label"><span class="iar-step iar-step--1">①</span>生産日</label>
@@ -307,6 +581,7 @@ onMounted(() => {
           <label class="iar-field__label iar-time__heading">
             <span class="iar-step iar-step--5">⑤</span>生産時間
             <el-icon class="iar-time__icon"><Clock /></el-icon>
+            <span class="iar-time__hint">開始・終了は 4 桁で入力（例：0800 → 08:00）</span>
           </label>
           <div class="iar-time__grid">
             <div class="iar-time__cell iar-time__cell--start">
@@ -460,7 +735,16 @@ onMounted(() => {
               :value="u.line_name"
             />
           </el-select>
-          <el-button size="small" round :icon="Refresh" :loading="loading" @click="loadRows">更新</el-button>
+          <el-button
+            size="small"
+            round
+            class="car-btn-refresh"
+            :icon="Refresh"
+            :loading="loading"
+            @click="loadRows"
+          >
+            更新
+          </el-button>
         </div>
       </div>
 
@@ -475,7 +759,7 @@ onMounted(() => {
           empty-text="データがありません"
           highlight-current-row
           :row-class-name="({ row }) => (row.id === editingRowId ? 'iar-table__row--active' : '')"
-          @row-click="(row) => canEditRow(row) && loadRowIntoForm(row)"
+          @row-click="(row) => canEditRow(row) && onEditRow(row)"
         >
                     <el-table-column label="生産日" width="102" align="center" header-align="center">
             <template #default="{ row }">
@@ -556,7 +840,7 @@ onMounted(() => {
                   type="primary"
                   link
                   :icon="Edit"
-                  @click.stop="loadRowIntoForm(row)"
+                  @click.stop="onEditRow(row)"
                 />
                 <el-button
                   v-if="canDeleteRow(row)"
@@ -1987,6 +2271,750 @@ onMounted(() => {
   margin: 0;
   font-size: 11px;
   color: #94a3b8;
+}
+
+/* ============================================================
+ * 页面美化：現代UI・3D動効・色分け（切断実績収集登録 / スチール・シアン系）
+ * ============================================================ */
+.car-modern {
+  background: linear-gradient(160deg, #f0f9ff 0%, #ecfeff 45%, #f8fafc 100%);
+}
+
+/* 入場・常時ループのアニメーションは表示速度優先で停止 */
+.car-modern .iar-rise,
+.car-modern .iar-form__below:not(.iar-form__below--locked),
+.car-modern .iar-panel--form .iar-panel__dot,
+.car-modern .iar-panel__badge--live,
+.car-modern .iar-form__lock-hint--pulse {
+  animation: none;
+}
+
+/* ---------- ヒーロー ---------- */
+.car-modern .iar-hero {
+  isolation: isolate;
+  overflow: hidden;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #0f172a 0%, #1e3a5f 32%, #0369a1 66%, #06b6d4 100%);
+  backdrop-filter: none;
+  box-shadow:
+    0 18px 36px -18px rgba(3, 105, 161, 0.6),
+    0 4px 12px -6px rgba(6, 182, 212, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.car-modern .car-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.car-modern .fx-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+.car-modern .orb-a {
+  width: 220px;
+  height: 220px;
+  top: -110px;
+  left: 30%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 70%);
+}
+.car-modern .orb-b {
+  width: 200px;
+  height: 200px;
+  bottom: -130px;
+  right: 12%;
+  background: radial-gradient(circle, rgba(165, 243, 252, 0.4) 0%, rgba(165, 243, 252, 0) 70%);
+}
+.car-modern .fx-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at 12% 50%, #000 0%, transparent 65%);
+  mask-image: radial-gradient(ellipse at 12% 50%, #000 0%, transparent 65%);
+}
+.car-modern .iar-hero__icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 3px 0 rgba(15, 23, 42, 0.55),
+    0 10px 18px -8px rgba(15, 23, 42, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+}
+.car-modern .iar-hero__eyebrow {
+  color: rgba(255, 255, 255, 0.82);
+}
+.car-modern .iar-hero__title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+}
+.car-modern .iar-chip {
+  font-weight: 700;
+  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.35);
+}
+.car-modern .iar-chip:hover {
+  transform: none;
+  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.35);
+}
+
+/* ---------- パネル（入力＝steel / 一覧＝teal / 編集中＝amber） ---------- */
+.car-modern .iar-panel {
+  --pc: #0369a1;
+  --pc-soft: #e0f2fe;
+  background: #fff;
+  border: 1px solid #dbe7f0;
+  border-top: 3px solid var(--pc);
+  backdrop-filter: none;
+  box-shadow: 0 10px 24px -18px rgba(3, 105, 161, 0.45), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.car-modern .iar-panel:hover {
+  box-shadow: 0 10px 24px -18px rgba(3, 105, 161, 0.45), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.car-modern .iar-panel--table {
+  --pc: #0d9488;
+  --pc-soft: #ccfbf1;
+}
+.car-modern .iar-panel--edit {
+  --pc: #d97706;
+  --pc-soft: #fef3c7;
+}
+.car-modern .iar-panel__head,
+.car-modern .iar-panel--form .iar-panel__head {
+  background: linear-gradient(90deg, var(--pc-soft) 0%, #fff 70%);
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+.car-modern .iar-panel__dot,
+.car-modern .iar-panel__dot--teal {
+  background: var(--pc);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc) 20%, transparent);
+}
+.car-modern .iar-panel__title {
+  font-weight: 800;
+  color: color-mix(in srgb, var(--pc) 65%, #0f172a);
+}
+.car-modern .iar-panel__date,
+.car-modern .iar-count,
+.car-modern .iar-summary {
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+.car-modern .iar-panel__date {
+  color: #334155;
+  background: #fff;
+  border-color: #e2e8f0;
+}
+.car-modern .iar-count {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+.car-modern .iar-summary--qty {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+.car-modern .iar-summary--eff {
+  color: #6d28d9;
+  background: #ede9fe;
+}
+.car-modern .iar-panel__badge--live {
+  color: #075985;
+  background: #e0f2fe;
+  border-color: #bae6fd;
+}
+
+/* ---------- 入力ブロック：文字のにじみを防ぐため移動・拡大はしない ---------- */
+.car-modern .iar-form__row--triple > .iar-field {
+  background: #fff;
+  border-color: #e2e8f0;
+  box-shadow:
+    0 2px 0 #e2e8f0,
+    0 8px 16px -12px rgba(15, 23, 42, 0.3);
+}
+.car-modern .iar-form__row--triple > .iar-field:hover,
+.car-modern .iar-qty:hover,
+.car-modern .iar-time:hover,
+.car-modern .iar-time__cell:hover,
+.car-modern .iar-time__cell:focus-within,
+.car-modern .iar-qty__cell:focus-within,
+.car-modern .iar-remarks__input :deep(.el-input__wrapper.is-focus),
+.car-modern .iar-field__label:hover .iar-step {
+  transform: none;
+}
+.car-modern .iar-form__lock-hint {
+  color: #075985;
+  background: #f0f9ff;
+  border: 1px dashed #7dd3fc;
+  box-shadow: none;
+}
+.car-modern .iar-form__lock-hint .el-icon {
+  color: #0284c7;
+}
+.car-modern .iar-form__below--locked {
+  opacity: 0.55;
+  filter: none;
+}
+.car-modern .iar-date-nav__today {
+  color: #fff;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  border: 1px solid #0369a1;
+  box-shadow: 0 2px 0 #075985;
+}
+.car-modern .iar-date-nav__today:hover {
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 #075985;
+}
+.car-modern .iar-date-nav__today:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 #075985;
+}
+
+/* 保存ボタン：無効時も半透明にせずくっきり表示 */
+.car-modern .iar-btn-save.is-disabled,
+.car-modern .iar-btn-save:disabled {
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  filter: none;
+  text-shadow: none;
+  box-shadow: 0 2px 0 #cbd5e1 !important;
+}
+
+/* ---------- 一覧 ---------- */
+.car-modern .car-btn-refresh {
+  font-weight: 600;
+  color: #fff;
+  background: #0d9488;
+  border: 1px solid #0d9488;
+}
+.car-modern .car-btn-refresh:hover,
+.car-modern .car-btn-refresh:focus {
+  color: #fff;
+  background: #14b8a6;
+  border-color: #14b8a6;
+}
+.car-modern .iar-table :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%) !important;
+  color: #115e59;
+  font-weight: 800;
+  box-shadow: inset 0 -2px 0 #5eead4;
+}
+.car-modern .iar-table :deep(.el-table__row:hover > td) {
+  background: #f0fdfa !important;
+}
+.car-modern .iar-table :deep(.el-table__row:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 #0d9488;
+}
+
+/* ---------- 実績入力：大きめの文字・細い枠線・ブロック別のアクセント色 ---------- */
+.car-modern .iar-panel--form .iar-field--c1 { --fc: #2563eb; --fc-soft: #eff6ff; }
+.car-modern .iar-panel--form .iar-field--c2 { --fc: #7c3aed; --fc-soft: #f5f3ff; }
+.car-modern .iar-panel--form .iar-field--c3 { --fc: #0d9488; --fc-soft: #f0fdfa; }
+.car-modern .iar-panel--form .iar-field--c4 { --fc: #d97706; --fc-soft: #fffbeb; }
+.car-modern .iar-panel--form .iar-field--c5 { --fc: #4f46e5; --fc-soft: #eef2ff; }
+.car-modern .iar-panel--form .iar-field--c6 { --fc: #e11d48; --fc-soft: #fff1f2; }
+.car-modern .iar-panel--form .iar-field--c7 { --fc: #475569; --fc-soft: #f8fafc; }
+.car-modern .iar-panel--form .iar-time__cell--start { --fc: #2563eb; --fc-soft: #eff6ff; }
+.car-modern .iar-panel--form .iar-time__cell--end { --fc: #7c3aed; --fc-soft: #f5f3ff; }
+.car-modern .iar-panel--form .iar-time__cell--break { --fc: #0d9488; --fc-soft: #f0fdfa; }
+.car-modern .iar-panel--form .iar-time__cell--stop { --fc: #e11d48; --fc-soft: #fff1f2; }
+
+.car-modern .iar-panel--form .iar-panel__title {
+  font-size: 16px;
+}
+.car-modern .iar-panel--form .iar-panel__badge {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+.car-modern .iar-panel--form .iar-form {
+  padding: 14px 16px 0;
+  gap: 12px;
+}
+.car-modern .iar-panel--form .iar-form__below {
+  gap: 12px;
+}
+
+/* ブロック：細いグレー枠＋左端のアクセント色 */
+.car-modern .iar-panel--form .iar-form__row--triple > .iar-field,
+.car-modern .iar-panel--form .iar-qty,
+.car-modern .iar-panel--form .iar-time,
+.car-modern .iar-panel--form .iar-variance {
+  padding: 10px 14px 12px;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid var(--fc);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.car-modern .iar-panel--form .iar-form__footer {
+  margin: 0 -16px;
+  padding: 12px 16px;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: #f8fafc;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-form__row--triple > .iar-field::before {
+  display: none;
+}
+
+/* ラベル */
+.car-modern .iar-panel--form .iar-field__label {
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.car-modern .iar-panel--form .iar-remarks__label {
+  margin-bottom: 0;
+}
+.car-modern .iar-panel--form .iar-step {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-time__icon {
+  font-size: 16px;
+  color: var(--fc);
+}
+.car-modern .iar-panel--form .iar-qty__cell-label {
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b45309;
+}
+.car-modern .iar-panel--form .iar-time__cell > span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fc);
+}
+.car-modern .iar-panel--form .iar-time__num em {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+.car-modern .iar-panel--form .iar-variance__hint {
+  font-size: 13px;
+  color: #64748b;
+}
+.car-modern .iar-panel--form .iar-time__preview {
+  font-size: 13px;
+  color: #3730a3;
+  background: #f5f7ff;
+  border: 1px solid #e0e7ff;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-form__lock-hint {
+  font-size: 14px;
+  border: 1px dashed #bae6fd;
+}
+
+/* 小セル（生産数・時間）：枠なしの淡い背景 */
+.car-modern .iar-panel--form .iar-qty__cell,
+.car-modern .iar-panel--form .iar-time__cell {
+  padding: 6px 8px 8px;
+  background: #f8fafc;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-qty__cell:focus-within,
+.car-modern .iar-panel--form .iar-time__cell:focus-within {
+  border-color: transparent;
+  background: var(--fc-soft);
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-form__row--qty-time .iar-time__grid {
+  gap: 8px;
+}
+
+/* 入力コンポーネント共通：1px グレー枠、フォーカス時のみ色付き */
+.car-modern .iar-panel--form :deep(.el-input__wrapper),
+.car-modern .iar-panel--form :deep(.el-select__wrapper) {
+  min-height: 38px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+  transition: box-shadow 0.15s ease;
+}
+.car-modern .iar-panel--form :deep(.el-input__wrapper:hover),
+.car-modern .iar-panel--form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #94a3b8 inset;
+}
+.car-modern .iar-panel--form :deep(.el-input__wrapper.is-focus),
+.car-modern .iar-panel--form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--fc, #0369a1) inset,
+    0 0 0 3px color-mix(in srgb, var(--fc, #0369a1) 14%, transparent);
+}
+.car-modern .iar-panel--form :deep(.el-input.is-disabled .el-input__wrapper),
+.car-modern .iar-panel--form :deep(.el-select__wrapper.is-disabled) {
+  background: #f1f5f9;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.car-modern .iar-panel--form :deep(.el-input__inner),
+.car-modern .iar-panel--form :deep(.el-select__selection) {
+  font-size: 15px;
+  font-weight: 500;
+  color: #0f172a;
+}
+.car-modern .iar-panel--form :deep(.el-select__placeholder:not(.is-transparent)) {
+  color: #0f172a;
+}
+.car-modern .iar-panel--form :deep(.el-input.is-disabled .el-input__inner) {
+  color: #475569;
+  -webkit-text-fill-color: #475569;
+}
+.car-modern .iar-panel--form :deep(.el-input__inner::placeholder) {
+  font-weight: 500;
+  color: #94a3b8;
+}
+.car-modern .iar-panel--form :deep(.el-input__prefix .el-icon),
+.car-modern .iar-panel--form :deep(.el-select__prefix .el-icon) {
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+/* 数量・時刻は少し大きめの数字で */
+.car-modern .iar-panel--form .iar-field__qty :deep(.el-input__wrapper),
+.car-modern .iar-panel--form .iar-time__input :deep(.el-input__wrapper),
+.car-modern .iar-panel--form .iar-time__num :deep(.el-input__wrapper) {
+  min-height: 40px;
+}
+.car-modern .iar-panel--form .iar-field__qty :deep(.el-input__inner) {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.car-modern .iar-panel--form .iar-time__input :deep(.el-input__inner),
+.car-modern .iar-panel--form .iar-time__num :deep(.el-input__inner) {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.car-modern .iar-panel--form .iar-time__num :deep(.el-input-number) {
+  width: 76px;
+  min-width: 76px;
+}
+.car-modern .iar-panel--form .iar-time__input :deep(.el-input__inner::placeholder),
+.car-modern .iar-panel--form .car-batch__time :deep(.el-input__inner::placeholder) {
+  font-weight: 400;
+  color: #cbd5e1;
+}
+.car-modern .iar-panel--form .iar-time__hint {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+.car-batch__table :deep(.cb-th) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+.car-batch__table :deep(.cb-th small) {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+/* 日付ナビ・保存/クリア */
+.car-modern .iar-panel--form .iar-date-nav :deep(.el-button.is-circle) {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-date-nav__today {
+  height: 32px;
+  min-width: 52px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0369a1;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-date-nav__today:hover {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+  transform: none;
+  box-shadow: none;
+}
+.car-modern .iar-panel--form .iar-remarks__actions :deep(.el-button) {
+  height: 38px;
+  min-width: 100px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.car-modern .iar-panel--form .iar-remarks__actions :deep(.el-button::before) {
+  display: none;
+}
+.car-modern .iar-panel--form .iar-btn-save {
+  color: #fff !important;
+  background: #0369a1 !important;
+  border: 1px solid #0369a1 !important;
+  box-shadow: none !important;
+  text-shadow: none;
+  transform: none !important;
+  filter: none !important;
+}
+.car-modern .iar-panel--form .iar-btn-save:hover:not(.is-disabled) {
+  background: #0284c7 !important;
+  border-color: #0284c7 !important;
+}
+.car-modern .iar-panel--form .iar-btn-save.is-disabled {
+  color: #94a3b8 !important;
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+.car-modern .iar-panel--form .iar-btn-clear {
+  color: #475569 !important;
+  background: #fff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+.car-modern .iar-panel--form .iar-btn-clear:hover {
+  background: #f8fafc !important;
+  border-color: #94a3b8 !important;
+}
+
+/* ---------- 入力モード切替 ---------- */
+.car-mode-switch {
+  margin-left: 12px;
+  --el-color-primary: #0369a1;
+}
+.car-mode-switch :deep(.el-radio-button__inner) {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 30px;
+}
+
+/* ---------- 指示から一括入力 ---------- */
+.car-batch {
+  --fc: #0369a1;
+  --fc-soft: #e0f2fe;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+.car-batch__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.car-batch__date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.car-batch__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.car-batch__date-picker {
+  width: 160px !important;
+}
+.car-batch__date :deep(.el-button) {
+  height: 32px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.car-batch__date :deep(.el-button.is-circle) {
+  width: 32px;
+}
+.car-batch__line {
+  width: 170px;
+}
+.car-batch__load {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  --el-button-bg-color: #0369a1;
+  --el-button-border-color: #0369a1;
+  --el-button-hover-bg-color: #0284c7;
+  --el-button-hover-border-color: #0284c7;
+}
+.car-batch__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.car-batch__stat {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #075985;
+  background: #e0f2fe;
+}
+.car-batch__stat b {
+  font-size: 15px;
+  font-weight: 700;
+}
+.car-batch__stat--done {
+  color: #15803d;
+  background: #dcfce7;
+}
+.car-batch__stat--sel {
+  color: #4338ca;
+  background: #e0e7ff;
+}
+
+.car-batch .car-batch__time {
+  width: 84px;
+}
+.car-batch .car-batch__min {
+  width: 72px;
+}
+.car-batch .car-batch__qty {
+  width: 80px;
+}
+.car-batch :deep(.car-batch__time .el-input__inner),
+.car-batch :deep(.car-batch__min .el-input__inner),
+.car-batch :deep(.car-batch__qty .el-input__inner) {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.car-batch__table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.car-batch__table {
+  width: 100%;
+  --el-table-border-color: #e2e8f0;
+}
+.car-batch__table :deep(.el-table__header th) {
+  background: #f8fafc !important;
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+.car-batch__table :deep(.el-table__body td) {
+  font-size: 15px;
+  color: #0f172a;
+}
+.car-batch__table :deep(.el-table__body td .cell) {
+  padding: 0 6px;
+}
+.car-batch__table :deep(.cb-col--qty) { --fc: #d97706; --fc-soft: #fffbeb; }
+.car-batch__table :deep(.cb-col--start) { --fc: #2563eb; --fc-soft: #eff6ff; }
+.car-batch__table :deep(.cb-col--end) { --fc: #7c3aed; --fc-soft: #f5f3ff; }
+.car-batch__table :deep(.cb-col--break) { --fc: #0d9488; --fc-soft: #f0fdfa; }
+.car-batch__table :deep(.cb-col--stop) { --fc: #e11d48; --fc-soft: #fff1f2; }
+.car-batch__table :deep(th.cb-col) {
+  color: var(--fc);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--fc) 55%, #fff);
+}
+.car-modern .iar-panel--form .car-batch__table :deep(.el-input__wrapper) {
+  min-height: 36px;
+}
+.car-batch__table :deep(.car-batch__row--selected > td) {
+  background: #f8fbff !important;
+}
+.car-batch__table :deep(.car-batch__row--registered > td) {
+  background: #f6fdf8 !important;
+  color: #64748b;
+}
+.car-batch__table :deep(.car-batch__row--error > td) {
+  background: #fef2f2 !important;
+}
+.car-batch__num {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+.car-batch__num--var {
+  color: #be123c;
+}
+.car-batch__work {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #4338ca;
+}
+.car-batch__work--alert {
+  color: #dc2626;
+}
+.car-batch__error {
+  font-size: 13px;
+  font-weight: 700;
+  color: #dc2626;
+  line-height: 1.3;
+}
+
+.car-batch__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.car-batch__tip {
+  font-size: 13px;
+  color: #64748b;
+}
+.car-batch__submit {
+  height: 38px;
+  min-width: 200px;
+  margin-left: auto;
+  padding: 0 20px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .car-modern .iar-date-nav__today,
+  .car-modern .car-btn-refresh {
+    transition: none;
+    transform: none !important;
+  }
 }
 
 </style>

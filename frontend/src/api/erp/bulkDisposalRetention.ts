@@ -78,6 +78,13 @@ export interface BulkDisposalRetentionNotifyPreview {
   smtp_configured: boolean
   template_subject?: string | null
   can_send: boolean
+  saved_user_ids?: number[]
+}
+
+export interface BulkDisposalRetentionNotifyRecipientsResult {
+  success: boolean
+  message: string
+  user_ids: number[]
 }
 
 export interface BulkDisposalRetentionNotifySendParams {
@@ -135,6 +142,12 @@ export function deleteBulkDisposalRetention(id: number) {
 
 export function previewBulkDisposalRetentionNotification(params?: { record_ids?: string }) {
   return request.get<BulkDisposalRetentionNotifyPreview>(`${BASE_URL}/notify/preview`, { params })
+}
+
+export function saveBulkDisposalRetentionNotifyRecipients(userIds: number[]) {
+  return request.put<BulkDisposalRetentionNotifyRecipientsResult>(`${BASE_URL}/notify/recipients`, {
+    user_ids: userIds,
+  })
 }
 
 export function sendBulkDisposalRetentionNotification(data: BulkDisposalRetentionNotifySendParams) {

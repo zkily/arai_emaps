@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, and_, not_
+from sqlalchemy import select, func, or_, and_, not_, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Any, Optional
 from decimal import Decimal, InvalidOperation
@@ -139,6 +139,9 @@ async def get_product_list(
     route_cd: Optional[str] = Query(None),
     location_cd: Optional[str] = Query(None),
     destination_cd: Optional[str] = Query(None, description="納入先CD（該当納入先の製品のみ）"),
+    process_name: Optional[str] = Query(
+        None, description="工程名（部分一致）を工程ルートに含む製品のみ（例: 面取）"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=10000, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
@@ -178,6 +181,23 @@ async def get_product_list(
         query = query.where(Product.location_cd == location_cd)
     if destination_cd:
         query = query.where(Product.destination_cd == destination_cd)
+    if process_name and process_name.strip():
+        # products と product_route_steps / processes の照合順序差による JOIN エラーを避けるため段階的に取得
+        proc_res = await db.execute(
+            select(Process.process_cd).where(Process.process_name.like(f"%{process_name.strip()}%"))
+        )
+        process_cds = [r[0] for r in proc_res.all() if r[0]]
+        route_pairs: list[tuple[str, str]] = []
+        if process_cds:
+            step_res = await db.execute(
+                select(ProductRouteStep.product_cd, ProductRouteStep.route_cd)
+                .where(ProductRouteStep.process_cd.in_(process_cds))
+                .distinct()
+            )
+            route_pairs = [(r[0], r[1]) for r in step_res.all() if r[0] and r[1]]
+        if not route_pairs:
+            return {"success": True, "data": {"list": [], "total": 0}}
+        query = query.where(tuple_(Product.product_cd, Product.route_cd).in_(route_pairs))
 
     count_q = select(func.count()).select_from(query.subquery())
     total_res = await db.execute(count_q)

@@ -91,6 +91,10 @@ class NotifySendBody(BaseModel):
     record_ids: Optional[list[int]] = None
 
 
+class NotifyRecipientsBody(BaseModel):
+    user_ids: list[int] = Field(default_factory=list)
+
+
 def _parse_date(value) -> date | None:
     if value is None:
         return None
@@ -283,6 +287,29 @@ async def send_bulk_disposal_retention_notification_api(
         current_user=current_user,
         record_ids=body.record_ids,
     )
+
+
+@router.get("/notify/recipients")
+async def get_bulk_disposal_retention_notify_recipients(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("export")),
+):
+    from app.services.bulk_disposal_retention_notification import get_saved_notify_user_ids
+
+    return {"user_ids": await get_saved_notify_user_ids(db)}
+
+
+@router.put("/notify/recipients")
+async def save_bulk_disposal_retention_notify_recipients_api(
+    body: NotifyRecipientsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("export")),
+):
+    from app.services.bulk_disposal_retention_notification import (
+        save_bulk_disposal_retention_notify_recipients,
+    )
+
+    return await save_bulk_disposal_retention_notify_recipients(db, user_ids=body.user_ids)
 
 
 @router.get("/overdue-summary")

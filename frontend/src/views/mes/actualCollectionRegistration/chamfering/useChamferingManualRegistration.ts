@@ -8,6 +8,7 @@ import {
   patchChamferingProductionIndicator,
   type ChamferingProductionIndicatorRow,
 } from '@/api/chamferingProductionIndicator'
+import { fetchChamferingMesMachines } from '@/api/chamferingManagement'
 import { getProductList } from '@/api/master/productMaster'
 import { formatDateTimeJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
@@ -68,7 +69,7 @@ function emptyForm(day: string, line: string): ManualRegistrationForm {
   }
 }
 
-function parseTimeInput(raw: string | undefined | null): string | null {
+export function parseTimeInput(raw: string | undefined | null): string | null {
   const s = String(raw ?? '').trim()
   if (!s) return null
   const colon = s.match(/^(\d{1,2}):(\d{1,2})$/)
@@ -93,7 +94,7 @@ function parseTimeInput(raw: string | undefined | null): string | null {
   return null
 }
 
-function sanitizeTimeDraft(raw: string | undefined | null): string {
+export function sanitizeTimeDraft(raw: string | undefined | null): string {
   const s = String(raw ?? '').replace(/[^\d:]/g, '')
   if (s.includes(':')) {
     const [h, m = ''] = s.split(':')
@@ -122,7 +123,7 @@ function combineProductionDayAndTime(day: string, time: string | null | undefine
   return Number.isFinite(out.getTime()) ? out : null
 }
 
-function resolveProductionEndDateTime(
+export function resolveProductionEndDateTime(
   day: string,
   startTime: string | null | undefined,
   endTime: string | null | undefined,
@@ -146,11 +147,11 @@ function hoursToMin(hours: number | null | undefined): number {
   return Math.round(h * 60)
 }
 
-function minToHours(min: number): number {
+export function minToHours(min: number): number {
   return Math.round((Math.max(0, min) / 60) * 1000) / 1000
 }
 
-function formatMinutesLabel(totalMin: number): string {
+export function formatMinutesLabel(totalMin: number): string {
   const m = Math.max(0, Math.round(totalMin))
   const h = Math.floor(m / 60)
   const min = m % 60
@@ -184,6 +185,7 @@ export function useChamferingManualRegistration() {
   const loadingProducts = ref(false)
   const lineOptions = ref<{ line_name: string }[]>([])
   const loadingLines = ref(false)
+  const chamferingMachineNames = ref<string[]>([])
 
   const editingRowId = ref<number | null>(null)
   const form = ref<ManualRegistrationForm>(emptyForm(getJSTToday(), ''))
@@ -330,21 +332,38 @@ export function useChamferingManualRegistration() {
     return `${Math.round(h * 10) / 10}h`
   }
 
+  async function loadChamferingMachines(): Promise<void> {
+    try {
+      const list = await fetchChamferingMesMachines()
+      chamferingMachineNames.value = (list ?? [])
+        .map((m) => (m.machine_name || m.machine_cd || '').trim())
+        .filter(Boolean)
+    } catch (e) {
+      console.error(e)
+      chamferingMachineNames.value = []
+    }
+  }
+
+  function buildLineOptions(extraNames: string[]): void {
+    const machineSet = new Set(chamferingMachineNames.value)
+    const extras = [...new Set(extraNames.map((n) => n.trim()).filter((n) => n && !machineSet.has(n)))].sort()
+    lineOptions.value = [...machineSet, ...extras].map((line_name) => ({ line_name }))
+  }
+
   async function loadLines(): Promise<void> {
     const day = productionDay.value.trim().slice(0, 10)
+    const fromRows = rows.value.map((r) => (r.production_line || '').trim()).filter(Boolean)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-      lineOptions.value = []
+      buildLineOptions(fromRows)
       return
     }
     loadingLines.value = true
     try {
       const res = await fetchChamferingProductionIndicatorLines({ start_date: day, end_date: day })
-      const fromApi = res.data ?? []
-      const fromRows = rows.value.map((r) => (r.production_line || '').trim()).filter(Boolean)
-      const set = new Set<string>([...fromApi.map((l) => l.line_name), ...fromRows])
-      lineOptions.value = [...set].sort().map((line_name) => ({ line_name }))
+      const fromApi = (res.data ?? []).map((l) => l.line_name)
+      buildLineOptions([...fromApi, ...fromRows])
     } catch {
-      lineOptions.value = []
+      buildLineOptions(fromRows)
     } finally {
       loadingLines.value = false
     }
@@ -353,12 +372,14 @@ export function useChamferingManualRegistration() {
   async function loadProducts(): Promise<void> {
     loadingProducts.value = true
     try {
-      const res = await getProductList({ page: 1, pageSize: 5000, status: 'active' })
+      const res = await getProductList({ page: 1, pageSize: 5000, status: 'active', process_name: '面取' })
       const list = res?.data?.list ?? res?.list ?? []
-      products.value = filterChamferingSelectableProducts(list).map((p) => ({
-        product_code: p.product_cd,
-        product_name: p.product_name || p.product_cd,
-      }))
+      products.value = filterChamferingSelectableProducts(list)
+        .filter((p) => (p.product_cd || '').trim().endsWith('1') && !(p.product_name || '').includes('加工'))
+        .map((p) => ({
+          product_code: p.product_cd,
+          product_name: p.product_name || p.product_cd,
+        }))
     } catch {
       products.value = []
     } finally {
@@ -472,7 +493,7 @@ export function useChamferingManualRegistration() {
     const shiftMin = hoursToMin(row.shift_hours)
     if (shiftMin > 0) {
       form.value.startedAt = '08:00:00'
-      const endMin = Math.max(0, shiftMin + hoursToMin(row.break_hours) + hoursToMin(row.setup_hours))
+      const endMin = 8 * 60 + shiftMin
       const endH = Math.floor(endMin / 60) % 24
       const endM = endMin % 60
       form.value.endedAt = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`
@@ -606,12 +627,15 @@ export function useChamferingManualRegistration() {
   async function init(): Promise<void> {
     form.value = emptyForm(productionDay.value, '')
     syncTimeTextsFromForm()
-    await loadProducts()
+    await Promise.all([loadProducts(), loadChamferingMachines()])
     await loadRows()
   }
 
   return {
     productionDay,
+    rows,
+    chamferingMachineNames,
+    canCreate,
     lineFilterName,
     loading,
     saving,
