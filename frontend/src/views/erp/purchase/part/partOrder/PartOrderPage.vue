@@ -85,6 +85,16 @@
               <el-button size="small" class="date-nav-btn" @click="setDateRange(1)">
                 <el-icon><ArrowRight /></el-icon>
               </el-button>
+              <el-button
+                size="small"
+                :class="['date-nav-btn', 'month-btn', { 'is-active': isMonthRangeActive(0) }]"
+                @click="setMonthRange(0)"
+              >今月</el-button>
+              <el-button
+                size="small"
+                :class="['date-nav-btn', 'month-btn', { 'is-active': isMonthRangeActive(1) }]"
+                @click="setMonthRange(1)"
+              >来月</el-button>
             </div>
           </div>
 
@@ -192,8 +202,12 @@
               <span>部品注文履歴</span>
             </div>
           </div>
-          <div class="table-hint" v-if="activeTab !== 'orderHistory'">
-            <kbd>Enter</kbd> 次の行　<kbd>Shift</kbd>+<kbd>Enter</kbd> 前の行
+          <div v-if="showOrderQuantityTotal" class="table-order-total">
+            <span class="table-order-total__label">注文本数 合計</span>
+            <b class="table-order-total__value">{{ orderQuantityTotal.toLocaleString('ja-JP') }}</b>
+            <span v-if="pagination.total > filteredTableData.length" class="table-order-total__note">
+              表示中 {{ filteredTableData.length }}件
+            </span>
           </div>
           <div class="table-actions" v-if="activeTab === 'order'">
             <el-badge
@@ -207,6 +221,10 @@
                 発注提案
               </el-button>
             </el-badge>
+            <el-button @click="openOrderSheetPreview" class="preview-btn">
+              <el-icon><View /></el-icon>
+              注文書プレビュー
+            </el-button>
             <el-button type="primary" @click="handlePrintOrder" class="print-btn">
               <el-icon><Printer /></el-icon>
               注文書発行
@@ -225,6 +243,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            stripe
             border
             @cell-click="handleTableCellClick"
             class="modern-table"
@@ -265,6 +284,19 @@
               </template>
             </el-table-column>
             <el-table-column
+              label="使用計画"
+              width="110"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
+                >{{ formatValue(row.usage_plan_qty) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
               label="使用数"
               width="100"
               align="center"
@@ -298,19 +330,6 @@
                   @keydown.capture="preventNumberSpinnerKeys"
                   @wheel.prevent
                 />
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="使用計画"
-              width="110"
-              align="center"
-              class-name="usage-quantity-column"
-            >
-              <template #default="{ row }">
-                <span
-                  class="usage-quantity-readonly"
-                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
-                >{{ formatValue(row.usage_plan_qty) }}</span>
               </template>
             </el-table-column>
             <el-table-column
@@ -353,6 +372,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            stripe
             border
             @cell-click="handleTableCellClick"
             class="modern-table"
@@ -395,6 +415,19 @@
               </template>
             </el-table-column>
             <el-table-column
+              label="使用計画"
+              width="110"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
+                >{{ formatValue(row.usage_plan_qty) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
               label="使用数"
               width="100"
               align="center"
@@ -431,19 +464,6 @@
               </template>
             </el-table-column>
             <el-table-column
-              label="使用計画"
-              width="110"
-              align="center"
-              class-name="usage-quantity-column"
-            >
-              <template #default="{ row }">
-                <span
-                  class="usage-quantity-readonly"
-                  :class="{ 'negative-number': isNegative(row.usage_plan_qty) }"
-                >{{ formatValue(row.usage_plan_qty) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column
               label="在庫推移"
               width="110"
               align="center"
@@ -464,6 +484,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            stripe
             border
             @cell-click="handleTableCellClick"
             class="modern-table"
@@ -489,6 +510,11 @@
               show-overflow-tooltip
             />
             <el-table-column prop="standard_spec" label="規格" width="150" show-overflow-tooltip />
+            <el-table-column prop="unit_price" label="単価" width="100" align="center">
+              <template #default="{ row }">
+                <span class="cell-unit-price">{{ formatUnitPrice(row.unit_price) }}</span>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="stock_trend"
               label="在庫推移"
@@ -563,6 +589,7 @@
           <el-table
             v-loading="loading"
             :data="filteredTableData"
+            stripe
             border
             @cell-click="handleTableCellClick"
             class="modern-table order-history-table"
@@ -627,6 +654,7 @@
           <el-table
             v-loading="loading"
             :data="initialStockData"
+            stripe
             border
             @cell-click="handleTableCellClick"
             class="modern-table"
@@ -969,6 +997,60 @@
       </template>
     </el-dialog>
 
+    <!-- 注文書プレビュー（部品×日付の二次元表を HTML のまま表示。PDF 生成なし） -->
+    <el-dialog
+      v-model="previewDialogVisible"
+      width="96vw"
+      top="2vh"
+      class="order-preview-dialog"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="opv-toolbar">
+          <span class="opv-title"><el-icon><View /></el-icon>注文書プレビュー</span>
+          <el-date-picker
+            v-model="printForm.month"
+            type="month"
+            format="YYYY年MM月"
+            value-format="YYYY-MM"
+            :clearable="false"
+            size="small"
+            style="width: 130px"
+            @change="loadPrintOrders"
+          />
+          <el-select
+            v-model="printForm.supplier"
+            size="small"
+            placeholder="仕入先"
+            filterable
+            :loading="printLoading"
+            style="width: 240px"
+            @change="onPrintSupplierChange"
+          >
+            <el-option
+              v-for="g in printSupplierGroups"
+              :key="g.supplier"
+              :label="`${g.supplier}（${g.items.length}件）`"
+              :value="g.supplier"
+            />
+          </el-select>
+          <el-radio-group v-model="previewZoom" size="small">
+            <el-radio-button v-for="z in PREVIEW_ZOOMS" :key="z" :value="z">{{ Math.round(z * 100) }}%</el-radio-button>
+          </el-radio-group>
+          <span v-if="printSheetInfo" class="opv-meta">
+            {{ printSheetInfo.parts }}品目 ／ {{ printSheetInfo.pages }}ページ ／ 合計 {{ formatCurrency(printTotals.amount) }}
+          </span>
+          <el-button type="primary" size="small" class="opv-issue" :disabled="!printItems.length" @click="openIssueFromPreview">
+            <el-icon><Printer /></el-icon>注文書発行へ
+          </el-button>
+        </div>
+      </template>
+      <div v-loading="printLoading" class="opv-body">
+        <iframe v-if="previewHtml" class="opv-frame" title="注文書プレビュー" :srcdoc="previewHtml" />
+        <div v-else-if="!printLoading" class="opv-empty">対象月・仕入先の注文がありません</div>
+      </div>
+    </el-dialog>
+
     <!-- 発注提案ダイアログ -->
     <el-dialog
       v-model="reorderDialogVisible"
@@ -1116,20 +1198,20 @@
           <div class="pcd-head__main">
             <div class="pcd-head__icon"><el-icon><DataLine /></el-icon></div>
             <div class="pcd-head__text">
-              <div class="pcd-head__eyebrow">在庫推移チャート</div>
               <h3 :id="titleId" class="pcd-head__title">{{ chartPart?.part_name || '在庫推移' }}</h3>
-              <div class="pcd-head__chips">
-                <span v-if="chartPart?.part_cd" class="pcd-chip pcd-chip--code">{{ chartPart.part_cd }}</span>
-                <span class="pcd-chip">
-                  <el-icon><Shop /></el-icon>{{ chartPart?.supplier_name || '仕入先未設定' }}
-                </span>
-                <span class="pcd-chip">
-                  <el-icon><Timer /></el-icon>LT {{ chartKpis.leadTime }} 日
-                </span>
-              </div>
+              <p class="pcd-head__desc">
+                <span>在庫推移チャート</span>
+                <span v-if="chartPart?.part_cd" class="pcd-head__code">{{ chartPart.part_cd }}</span>
+              </p>
             </div>
           </div>
           <div class="pcd-head__side">
+            <span class="pcd-chip">
+              <el-icon><Shop /></el-icon>{{ chartPart?.supplier_name || '仕入先未設定' }}
+            </span>
+            <span class="pcd-chip">
+              <el-icon><Timer /></el-icon>LT {{ chartKpis.leadTime }} 日
+            </span>
             <span
               v-if="chartDays.length"
               :class="['pcd-status', chartKpis.shortageDate ? 'is-danger' : 'is-safe']"
@@ -1288,6 +1370,7 @@ import {
   WarningFilled,
   CircleCheckFilled,
   Bell,
+  View,
 } from '@element-plus/icons-vue'
 import {
   syncPartStockFromMaster,
@@ -1378,6 +1461,11 @@ const printLoading = ref(false)
 const printOrders = ref<PartOrderItem[]>([])
 /** ダイアログを開いた時点の画面の仕入先絞り込み */
 const printSuppliers = ref<string[]>([])
+/** 画面で仕入先未選択のままプレビューを開いた場合：対象月の注文がある仕入先を自動で一覧化 */
+const printSuppliersAuto = ref(false)
+const previewDialogVisible = ref(false)
+const PREVIEW_ZOOMS = [0.75, 1, 1.25] as const
+const previewZoom = ref<number>(1)
 const tableData = ref<PartOrderItem[]>([])
 const lastSavedManualUsage = new Map<number, number>()
 const initialStockData = ref<InitialStockItem[]>([])
@@ -1536,6 +1624,15 @@ const filteredTableData = computed(() => {
     return orderHistoryData.value
   }
   return tableData.value
+})
+
+/** 注文本数列のあるタブ（部品日別在庫・注文・部品注文履歴）で表示中行の注文本数を合計 */
+const showOrderQuantityTotal = computed(() =>
+  ['stock', 'order', 'orderHistory'].includes(activeTab.value),
+)
+const orderQuantityTotal = computed(() => {
+  const rows = activeTab.value === 'orderHistory' ? orderHistoryData.value : tableData.value
+  return rows.reduce((sum, row) => sum + (Number(row.order_quantity) || 0), 0)
 })
 
 const mapPartStockRow = (item: any): PartOrderItem => {
@@ -1755,6 +1852,26 @@ const setDateRange = (days: number) => {
   refreshListForActiveTab()
 }
 
+/** 日本時間の当月を基準に、offset ヶ月後の月初～月末（今月=0・来月=1） */
+const getMonthRangeJapan = (offset: number): string[] => {
+  const [year, month] = getTodayJapanStr().split('-').map(Number)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return [fmt(new Date(year, month - 1 + offset, 1)), fmt(new Date(year, month + offset, 0))]
+}
+
+const isMonthRangeActive = (offset: number) => {
+  const [start, end] = searchForm.dateRange || []
+  const [monthStart, monthEnd] = getMonthRangeJapan(offset)
+  return start === monthStart && end === monthEnd
+}
+
+const setMonthRange = (offset: number) => {
+  searchForm.dateRange = getMonthRangeJapan(offset)
+  pagination.page = 1
+  refreshListForActiveTab()
+}
+
 // 设置日期为当月月初1号（日本时区）
 const handleSetMonthStart = () => {
   // 获取日本时区的当前日期
@@ -1958,6 +2075,12 @@ const comparePartName = (a: { part_name?: string | null }, b: { part_name?: stri
 // 格式化货币，添加日本円マーク和3位数逗号
 const formatCurrency = (num: number): string => {
   return `¥${Math.round(num).toLocaleString('ja-JP')}`
+}
+
+/** 単価は小数を含むため最大2桁まで表示（未設定・0 は空欄） */
+const formatUnitPrice = (value: unknown): string => {
+  const n = Number(value) || 0
+  return n ? `¥${n.toLocaleString('ja-JP', { maximumFractionDigits: 2 })}` : ''
 }
 
 /** 部品注文履歴テーブル合計行（表示中ページの行のみ集計） */
@@ -2836,13 +2959,13 @@ const onPrintSupplierChange = () => {
 
 const loadPrintOrders = async () => {
   const { start, end } = printPeriod.value
-  if (!start || printSuppliers.value.length === 0) return
+  if (!start || (!printSuppliersAuto.value && printSuppliers.value.length === 0)) return
   printLoading.value = true
   try {
     const res = await getPartStockList({
       start_date: start,
       end_date: end,
-      suppliers: printSuppliers.value.join(','),
+      ...(printSuppliersAuto.value ? {} : { suppliers: printSuppliers.value.join(',') }),
       order_only: true,
       page: 1,
       pageSize: 10000,
@@ -2851,6 +2974,15 @@ const loadPrintOrders = async () => {
       .filter((item) => excludePartsStatusZero(item))
       .map((item) => mapPartStockRow(item))
       .filter((row) => row.order_quantity > 0)
+    if (printSuppliersAuto.value) {
+      printSuppliers.value = [
+        ...new Set(printOrders.value.map((r) => (r.supplier_name || '').trim()).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b, 'ja'))
+      if (!printSuppliers.value.includes(printForm.supplier)) {
+        printForm.supplier = printSuppliers.value[0] ?? ''
+        onPrintSupplierChange()
+      }
+    }
   } catch (error) {
     console.error('注文データの取得に失敗:', error)
     ElMessage.error('注文データの取得に失敗しました')
@@ -2867,6 +2999,7 @@ const handlePrintOrder = async () => {
     ElMessage.warning('仕入先を選択してください（注文書は仕入先ごとに発行します）')
     return
   }
+  printSuppliersAuto.value = false
   printSuppliers.value = suppliers
   printForm.month = (searchForm.dateRange?.[0] || getTodayJapanStr()).slice(0, 7)
   printForm.supplier = suppliers[0]
@@ -3451,6 +3584,39 @@ const generatePrintHtml = (items: PartOrderItem[]) => {
     </section>`
     })
     .join('')
+}
+
+/** 注文書プレビュー：印刷と同じ HTML を画面表示用に（ページ間に余白・影） */
+const PART_ORDER_PREVIEW_CSS = `
+html, body { background: #cbd5e1; }
+body { padding: 12px 0; }
+.os-page { margin: 0 auto 12px; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.22); }
+`
+
+const previewHtml = computed(() => {
+  if (!previewDialogVisible.value || !printItems.value.length || !printForm.month) return ''
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${PART_ORDER_SHEET_STYLES}${PART_ORDER_PREVIEW_CSS}body{zoom:${previewZoom.value}}</style></head><body>${generatePrintHtml(printItems.value)}</body></html>`
+})
+
+const openOrderSheetPreview = async () => {
+  const suppliers = (searchForm.supplier ?? []).map((s) => s.trim()).filter(Boolean)
+  printSuppliersAuto.value = suppliers.length === 0
+  printSuppliers.value = suppliers
+  printForm.month = (searchForm.dateRange?.[0] || getTodayJapanStr()).slice(0, 7)
+  if (!printSuppliersAuto.value && !suppliers.includes(printForm.supplier)) {
+    printForm.supplier = suppliers[0]
+    onPrintSupplierChange()
+  }
+  printOrders.value = []
+  previewDialogVisible.value = true
+  await loadPrintOrders()
+}
+
+/** プレビュー中の対象月・仕入先のまま注文書発行ダイアログへ（再取得なし） */
+const openIssueFromPreview = () => {
+  if (!guardPurchaseOperation(canExport)) return
+  previewDialogVisible.value = false
+  printConfirmDialogVisible.value = true
 }
 
 /** html2canvas + jsPDF で画像ベースの PDF を生成（.os-page ごとに A4横1ページ） */
@@ -4048,6 +4214,28 @@ onMounted(() => {
     0 6px 14px rgba(99, 102, 241, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
+}
+
+/* 今月・来月：月初～月末を一括設定（選択中の月は塗りつぶし） */
+.date-nav-btn.month-btn {
+  padding: 0 9px;
+  font-weight: 600;
+  color: #0369a1;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.date-nav-btn.month-btn:hover {
+  color: #0284c7;
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+}
+
+.date-nav-btn.month-btn.is-active {
+  color: #ffffff;
+  font-weight: 700;
+  border-color: #0369a1;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
 }
 
 
@@ -5270,27 +5458,218 @@ onMounted(() => {
   font-weight: 700;
 }
 
-/* 表ヘッダー：キー操作ヒント */
-.table-hint {
-  margin-left: auto;
-  margin-right: 12px;
-  font-size: 11px;
-  color: #94a3b8;
-  white-space: nowrap;
+/* ============================================================
+ * 一覧テーブル：材料在庫管理と同じスタイル（罫線・ストライプ・数量列の色分け）
+ * ============================================================ */
+.modern-table {
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
 }
 
-.table-hint kbd {
-  display: inline-block;
-  padding: 0 5px;
-  margin: 0 2px;
-  font-family: inherit;
-  font-size: 10px;
-  line-height: 16px;
+.el-table.modern-table {
+  --el-table-border-color: #e2e8f0;
+  --el-table-bg-color: #ffffff;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-row-hover-bg-color: #e0f2fe;
+  --el-table-expanded-cell-bg-color: #fafbfc;
+  color: #2d3748;
+}
+
+:deep(.el-table.modern-table th.el-table__cell) {
+  background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+  color: #2d3748;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 6px;
+  border-bottom: 2px solid #cbd5e0;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+:deep(.el-table.modern-table th.el-table__cell::after) {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  opacity: 0.6;
+}
+
+:deep(.el-table.modern-table th.el-table__cell .cell) {
+  line-height: 1.3;
+}
+
+:deep(.el-table.modern-table td.el-table__cell) {
+  padding: 4px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+:deep(.el-table.modern-table .cell) {
+  padding: 2px 6px;
+  line-height: 1.3;
+  font-size: 12px;
+}
+
+:deep(.el-table.modern-table .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: #f8fafc;
+}
+
+:deep(.el-table.modern-table .el-table__body tr:hover > td.el-table__cell) {
+  background-color: #e0f2fe !important;
+}
+
+.modern-table :deep(.el-table__row:hover) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 現在在庫・使用数・注文本数：大きめ・太字・黒 */
+:deep(.el-table.modern-table td.current-stock-column .cell),
+:deep(.el-table.modern-table td.usage-quantity-column .cell),
+:deep(.el-table.modern-table td.order-quantity-column .cell) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table.modern-table td.usage-quantity-column),
+:deep(.el-table.modern-table td.usage-quantity-column .cell) {
+  background-color: #f0f9ff !important;
+}
+
+:deep(.el-table.modern-table td.order-quantity-column),
+:deep(.el-table.modern-table td.order-quantity-column .cell) {
+  background-color: #fef3c7 !important;
+}
+
+:deep(.el-table.modern-table td.usage-quantity-column .cell),
+:deep(.el-table.modern-table td.order-quantity-column .cell) {
+  padding: 4px !important;
+}
+
+/* 表内の数値入力：背景色は入力枠（wrapper）全体に塗り、内側 input は透明・枠なし */
+:deep(.el-table.modern-table .el-input-number .el-input__wrapper) {
+  min-height: 0;
+  padding: 0;
+  border-radius: 5px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.2s ease;
+}
+
+:deep(.el-table.modern-table .el-input-number .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #667eea inset,
+    0 0 0 2px rgba(102, 126, 234, 0.15);
+}
+
+:deep(.el-table.modern-table .el-input-number .el-input__inner) {
+  height: 28px;
+  line-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  border: none !important;
+  border-radius: 5px;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:deep(.el-table.modern-table td.usage-quantity-column .el-input-number .el-input__inner),
+:deep(.el-table.modern-table td.order-quantity-column .el-input-number .el-input__inner) {
+  font-size: 14px !important;
+  font-weight: bold !important;
+  color: #000000 !important;
+}
+
+:deep(.el-table.modern-table .usage-quantity-input .el-input__wrapper) {
+  background-color: #e0f2fe;
+  box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+
+:deep(.el-table.modern-table .usage-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0284c7 inset,
+    0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+:deep(.el-table.modern-table .order-quantity-input .el-input__wrapper) {
+  background-color: #fde68a;
+  box-shadow: 0 0 0 1px #f59e0b inset;
+}
+
+:deep(.el-table.modern-table .order-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #d97706 inset,
+    0 0 0 2px rgba(245, 158, 11, 0.22);
+}
+
+:deep(.el-table.modern-table .initial-stock-input.positive-stock .el-input__wrapper) {
+  background-color: #f0f9ff;
+  box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+
+:deep(.el-table.modern-table .initial-stock-input.positive-stock .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0284c7 inset,
+    0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+/* マイナス値（使用数調整の戻し・調整数）は赤字・赤枠を維持 */
+:deep(.el-table.modern-table .usage-quantity-input.is-negative .el-input__wrapper),
+:deep(.el-table.modern-table .adjustment-quantity-input.is-negative .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #f87171 inset;
+}
+
+:deep(.el-table.modern-table td.usage-quantity-column .usage-quantity-input.is-negative .el-input__inner),
+:deep(.el-table.modern-table .adjustment-quantity-input.is-negative .el-input__inner) {
+  color: #dc2626 !important;
+}
+
+/* 表ヘッダー：注文本数の合計 */
+.table-order-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 0 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(217, 119, 6, 0.08);
+}
+
+.table-order-total__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.table-order-total__value {
+  font-size: 15px;
+  font-weight: 800;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-unit-price {
   color: #475569;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-bottom-width: 2px;
-  border-radius: 4px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-order-total__note {
+  font-size: 10px;
+  color: #a16207;
+  opacity: 0.85;
 }
 
 /* 部品名セル：クリックで在庫推移グラフ */
@@ -5671,6 +6050,14 @@ onMounted(() => {
     linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
     linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 }
+.po-modern .date-nav-btn.month-btn {
+  --k-rgb: 2 132 199;
+}
+.po-modern .date-nav-btn.month-btn.is-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+}
 
 /* ---------- テーブルエリア：タブ連動アクセント ---------- */
 .po-modern .table-section {
@@ -5736,15 +6123,6 @@ onMounted(() => {
   transform: translateY(1px);
 }
 
-/* キー操作ヒント：淡いキー表示 */
-.po-modern .table-hint kbd {
-  border-bottom-width: 1px;
-  box-shadow:
-    inset 0 1px 0 #ffffff,
-    inset 0 -2px 0 rgba(15, 23, 42, 0.08);
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-}
-
 /* テーブル操作ボタン：色は --k-rgb（影・動きは共通ボタン標準） */
 .po-modern .table-actions .print-btn,
 .po-modern .table-actions .month-start-btn {
@@ -5755,19 +6133,36 @@ onMounted(() => {
   --k-rgb: 245 158 11;
   border: 1px solid #fcd34d;
 }
+.po-modern .table-actions .preview-btn {
+  --k-rgb: 14 165 233;
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #7dd3fc;
+}
+.po-modern .table-actions .preview-btn:hover,
+.po-modern .table-actions .preview-btn:focus-visible {
+  color: #075985;
+  background: #e0f2fe;
+  border-color: #0ea5e9;
+}
 .po-modern .table-actions .reorder-btn:hover,
 .po-modern .table-actions .reorder-btn:focus-visible {
   border-color: #f59e0b;
 }
 
-/* 表ヘッダー：タブ色の淡いグラデーション（列別文字色は維持） */
+/* 表ヘッダー：タブ色の淡いグラデーション＋下端アクセント線 */
 .po-modern :deep(.el-table th.el-table__cell) {
   background: linear-gradient(
     180deg,
     #ffffff 0%,
-    color-mix(in srgb, var(--po-tab) 7%, #f8fafc) 100%
+    color-mix(in srgb, var(--po-tab) 8%, #f8fafc) 100%
   );
-  border-bottom: 2px solid color-mix(in srgb, var(--po-tab) 30%, #e5e7eb);
+  color: color-mix(in srgb, var(--po-tab) 55%, #1e293b);
+  border-bottom: 2px solid color-mix(in srgb, var(--po-tab) 25%, #e2e8f0);
+}
+.po-modern :deep(.el-table th.el-table__cell::after) {
+  background: linear-gradient(90deg, var(--po-tab-2) 0%, var(--po-tab) 100%);
+  opacity: 0.75;
 }
 .po-modern .table-section :deep(.el-table .el-table__body tr:hover > td.el-table__cell:first-child) {
   box-shadow: inset 3px 0 0 var(--po-tab);
@@ -5837,24 +6232,15 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px 16px;
+  min-height: 76px;
+  padding: 14px 18px;
+  box-sizing: border-box;
   color: #fff;
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
-  box-shadow: 0 10px 26px -10px rgba(79, 70, 229, 0.55);
-}
-
-.pcd-head::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 92% -40%, rgba(255, 255, 255, 0.3) 0, transparent 40%),
-    radial-gradient(circle at 70% 150%, rgba(255, 255, 255, 0.16) 0, transparent 36%),
-    radial-gradient(circle at 4% 130%, rgba(56, 189, 248, 0.32) 0, transparent 32%);
-  pointer-events: none;
+  box-shadow: 0 10px 26px -14px rgba(79, 70, 229, 0.55);
 }
 
 .pcd-head__main,
@@ -5864,21 +6250,22 @@ onMounted(() => {
 }
 
 .pcd-head__main {
+  flex: 1;
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
 .pcd-head__icon {
   flex-shrink: 0;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  border-radius: 14px;
+  font-size: 20px;
+  border-radius: 12px;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
   border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
@@ -5887,21 +6274,18 @@ onMounted(() => {
 }
 
 .pcd-head__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
 }
 
-.pcd-head__eyebrow {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.72);
-}
-
 .pcd-head__title {
-  margin: 2px 0 8px;
+  max-width: 100%;
+  margin: 0;
   font-size: 19px;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.3;
   letter-spacing: 0.02em;
   color: #fff;
   overflow: hidden;
@@ -5909,10 +6293,28 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.pcd-head__chips {
+.pcd-head__desc {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.pcd-head__code {
+  padding: 0 7px;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 17px;
+  color: #4338ca;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .pcd-chip {
@@ -5934,18 +6336,21 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.pcd-chip--code {
-  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
-  color: #4338ca;
-  background: rgba(255, 255, 255, 0.92);
-  border-color: transparent;
-}
-
 .pcd-head__side {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
   flex-shrink: 0;
+  max-width: 60%;
+}
+
+.pcd-head__side .pcd-chip {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pcd-status {
@@ -5958,7 +6363,10 @@ onMounted(() => {
   font-weight: 700;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 6px 14px rgba(30, 27, 75, 0.22);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(30, 27, 75, 0.08),
+    0 2px 6px -1px rgba(30, 27, 75, 0.35);
 }
 
 .pcd-status__dot {
@@ -5988,12 +6396,26 @@ onMounted(() => {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.14);
-  transition: background 0.2s ease, transform 0.25s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .pcd-close:hover {
   background: rgba(255, 255, 255, 0.28);
-  transform: rotate(90deg);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.pcd-close:active {
+  transform: translateY(1px);
+}
+
+.pcd-close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
 }
 
 /* 本体 */
@@ -6073,20 +6495,44 @@ onMounted(() => {
   border: none;
   border-radius: 8px;
   background: transparent;
-  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease;
 }
 
 .pcd-month__btn .el-icon {
   font-size: 12px;
+  transition: transform 0.2s ease;
 }
 
 .pcd-month__btn:hover {
   color: #4f46e5;
   background: #eef2ff;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(79, 70, 229, 0.1);
+}
+
+.pcd-month__btn:hover:first-child .el-icon {
+  transform: translateX(-1px);
+}
+
+.pcd-month__btn:hover:last-child .el-icon {
+  transform: translateX(1px);
 }
 
 .pcd-month__btn:active {
   transform: translateY(1px);
+  box-shadow: inset 0 2px 3px rgba(79, 70, 229, 0.18);
+}
+
+.pcd-month__btn:focus-visible,
+.pcd-segment__item:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 1px;
 }
 
 .pcd-month__btn--current {
@@ -6095,10 +6541,16 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.pcd-month__btn--current.is-active {
+.pcd-month__btn--current.is-active,
+.pcd-month__btn--current.is-active:hover {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #7c3aed);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.6);
 }
 
 .pcd-segment {
@@ -6126,12 +6578,18 @@ onMounted(() => {
 
 .pcd-segment__item:hover {
   color: #4f46e5;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .pcd-segment__item.is-active {
   color: #fff;
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #7c3aed);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.6);
 }
 
 /* KPI カード */
@@ -6160,7 +6618,6 @@ onMounted(() => {
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 6px 16px rgba(15, 23, 42, 0.05);
-  transition: box-shadow 0.25s ease;
 }
 
 .pcd-kpi::before {
@@ -6183,18 +6640,7 @@ onMounted(() => {
   border-radius: 50%;
   background: var(--k-grad);
   opacity: 0.08;
-  transition: opacity 0.35s ease;
   pointer-events: none;
-}
-
-.pcd-kpi:hover {
-  box-shadow:
-    0 14px 28px var(--k-glow),
-    0 0 0 1px var(--k-soft);
-}
-
-.pcd-kpi:hover::after {
-  opacity: 0.14;
 }
 
 .pcd-kpi--violet {
@@ -6246,9 +6692,9 @@ onMounted(() => {
   border-radius: 12px;
   background: var(--k-grad);
   box-shadow:
-    0 8px 16px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 4px 10px -4px var(--k-glow);
 }
 
 .pcd-kpi__body {
@@ -6371,6 +6817,61 @@ onMounted(() => {
   .pcd-segment {
     margin-left: 0;
   }
+}
+
+/* ─────────── 注文書プレビューダイアログ ─────────── */
+.order-preview-dialog.el-dialog {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.order-preview-dialog .el-dialog__header {
+  margin: 0;
+  padding: 10px 48px 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+.order-preview-dialog .el-dialog__body {
+  padding: 0;
+}
+.opv-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.opv-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #312e81;
+}
+.opv-meta {
+  font-size: 12px;
+  color: #475569;
+}
+.opv-issue {
+  margin-left: auto;
+}
+.opv-body {
+  height: calc(96vh - 70px);
+  background: #cbd5e1;
+}
+.opv-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.opv-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 14px;
+  color: #475569;
 }
 
 /* ─────────── 注文書発行ダイアログ ─────────── */

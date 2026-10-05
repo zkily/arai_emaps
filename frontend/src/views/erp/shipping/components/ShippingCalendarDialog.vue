@@ -1,22 +1,27 @@
 <template>
   <!-- 内联模式：直接渲染在页面中（筛选区上方） -->
   <div v-if="inline" class="shipping-calendar-inline">
-    <div class="calendar-inline-header">
-      <span class="calendar-inline-title">{{ calendarTitle }}</span>
-      <span class="calendar-inline-subtitle">{{ calendarSubtitle }}</span>
-    </div>
     <div class="calendar-container">
-      <!-- 月份导航 -->
+      <!-- 标题＋月份导航（一行） -->
       <div class="month-navigation">
-        <el-button-group>
-          <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn">
-            前月
-          </el-button>
-          <el-button @click="goToCurrentMonth" class="current-month-btn">今月</el-button>
-          <el-button @click="nextMonth" :icon="ArrowRight" class="next-month-btn">来月</el-button>
-        </el-button-group>
-        <div class="current-month">{{ formatMonthFromNumbers(calendarYear, calendarMonth) }}</div>
-        <el-button type="primary" :icon="Setting" @click="showGroupManager = true">
+        <div class="calendar-heading">
+          <span class="calendar-heading__icon"><el-icon><Calendar /></el-icon></span>
+          <div class="calendar-heading__text">
+            <span class="calendar-inline-title">{{ calendarTitle }}</span>
+            <span class="calendar-inline-subtitle">{{ calendarSubtitle }}</span>
+          </div>
+        </div>
+        <div class="month-switch">
+          <el-button-group>
+            <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn">
+              前月
+            </el-button>
+            <el-button @click="goToCurrentMonth" class="current-month-btn">今月</el-button>
+            <el-button @click="nextMonth" :icon="ArrowRight" class="next-month-btn">来月</el-button>
+          </el-button-group>
+          <div class="current-month">{{ formatMonthFromNumbers(calendarYear, calendarMonth) }}</div>
+        </div>
+        <el-button type="primary" :icon="Setting" class="group-manage-btn" @click="showGroupManager = true">
           グループ管理
         </el-button>
       </div>
@@ -58,7 +63,7 @@
                   :type="getButtonType(date, groupIndex)"
                   size="small"
                   @click="handleGroupPrint(date, groupIndex)"
-                  class="group-button"
+                  class="group-button pb-btn-plain"
                   :class="{
                     'is-printed': isPrinted(date, groupIndex),
                     [`group-${groupIndex}`]: true,
@@ -108,7 +113,7 @@
         <div class="current-month">
           {{ formatMonthFromNumbers(calendarYear, calendarMonth) }}
         </div>
-        <el-button type="primary" :icon="Setting" @click="showGroupManager = true">
+        <el-button type="primary" :icon="Setting" class="group-manage-btn" @click="showGroupManager = true">
           グループ管理
         </el-button>
       </div>
@@ -162,7 +167,7 @@
                   :type="getButtonType(date, groupIndex)"
                   size="small"
                   @click="handleGroupPrint(date, groupIndex)"
-                  class="group-button"
+                  class="group-button pb-btn-plain"
                   :class="{
                     'is-printed': isPrinted(date, groupIndex),
                     [`group-${groupIndex}`]: true,
@@ -1394,43 +1399,88 @@ function handleClose() {
 </script>
 
 <style scoped>
-/* 内联模式：嵌入在报告页筛选区上方 */
+/* ===== 内联模式：各出荷帳票ページの絞り込み上部に埋め込み ===== */
 .shipping-calendar-inline {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   background: #fff;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(67, 56, 202, 0.45);
 }
 
-.calendar-inline-header {
-  padding: 14px 18px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+.calendar-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.calendar-heading__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.6);
+}
+
+.calendar-heading__text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  min-width: 0;
 }
 
 .calendar-inline-title {
-  font-weight: 700;
-  font-size: 17px;
-  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
   letter-spacing: 0.02em;
-  line-height: 1.45;
+  color: #1e1b4b;
 }
 
 .calendar-inline-subtitle {
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shipping-calendar-inline .calendar-container {
-  padding: 12px 16px;
+  padding: 0;
+  background: #fff;
 }
 
+.shipping-calendar-inline .month-navigation {
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid #e0e7ff;
+  border-radius: 0;
+  background: linear-gradient(180deg, #fbfbff 0%, #f3f4ff 100%);
+  box-shadow: none;
+}
+
+.shipping-calendar-inline .no-data-banner {
+  margin: 8px 10px 0;
+}
+
+.shipping-calendar-inline .calendar-grid {
+  margin: 8px 10px 10px;
+}
+
+/* ===== ダイアログモード ===== */
 .shipping-calendar-dialog {
   border-radius: 8px;
 }
@@ -1478,305 +1528,406 @@ function handleClose() {
   padding: 12px;
 }
 
+/* ===== 共通：カレンダー本体 ===== */
 .calendar-container {
   padding: 10px 12px;
-  background: #f1f5f9;
-  min-height: 380px;
+  background: #f8fafc;
   font-family:
-    'Helvetica Neue',
+    'Noto Sans JP',
+    'Hiragino Sans',
+    'Yu Gothic UI',
+    Meiryo,
     'Segoe UI',
     system-ui,
-    -apple-system,
     sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* 見出し・月切替・グループ管理（左／中央／右） */
 .month-navigation {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  background: #ffffff;
-  border-radius: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: #fff;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+}
+
+.month-navigation > :last-child {
+  justify-self: end;
+}
+
+.month-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .month-navigation .el-button-group .el-button {
-  padding: 8px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.prev-month-btn {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border-color: #e5e7eb;
+.prev-month-btn,
+.next-month-btn {
+  --k-rgb: 79 70 229;
+  color: #475569;
+  background: #fff;
+  border-color: #e2e8f0;
 }
 
-.prev-month-btn:hover {
-  background-color: #e5e7eb;
-  border-color: #d1d5db;
-  color: #374151;
+.prev-month-btn:hover,
+.next-month-btn:hover,
+.prev-month-btn:focus-visible,
+.next-month-btn:focus-visible {
+  color: #4338ca;
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 .current-month-btn {
-  background-color: #2563eb;
-  color: white;
-  border-color: #2563eb;
-  font-weight: 600;
+  --k-rgb: 79 70 229;
+  color: #fff;
+  border-color: #4f46e5;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 }
 
-.current-month-btn:hover {
-  background-color: #1d4ed8;
-  border-color: #1d4ed8;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-}
-
-.next-month-btn {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border-color: #e5e7eb;
-}
-
-.next-month-btn:hover {
-  background-color: #e5e7eb;
-  border-color: #d1d5db;
-  color: #374151;
+.current-month-btn:hover,
+.current-month-btn:focus-visible {
+  color: #fff;
+  border-color: #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #818cf8 0%, #8b5cf6 100%);
 }
 
 .current-month {
-  font-size: 17px;
+  min-width: 112px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #1e1b4b;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-manage-btn.el-button {
+  --k-rgb: 79 70 229;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
   font-weight: 700;
-  color: #0f172a;
-  letter-spacing: 0.02em;
+  border-color: #4f46e5;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 }
 
-.month-navigation .el-button--primary {
-  padding: 6px 12px;
-  font-size: 13px;
-  border-radius: 6px;
-  font-weight: 500;
-}
-
+/* グリッド */
 .calendar-grid {
-  background: #ffffff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: #fff;
   border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .weekday-header {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
-  border-bottom: none;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: linear-gradient(180deg, #f8faff 0%, #eef2ff 100%);
+  border-bottom: 1px solid #e0e7ff;
 }
 
 .weekday {
-  padding: 10px 6px;
+  padding: 6px 4px;
   text-align: center;
+  font-size: 12px;
   font-weight: 700;
-  color: #fff;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.1em;
+  color: #475569;
+}
+
+.weekday:first-child {
+  color: #dc2626;
+}
+
+.weekday:last-child {
+  color: #2563eb;
 }
 
 .date-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1px;
-  background: #e5e7eb;
-  padding: 1px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin-bottom: -1px;
 }
 
 .date-cell {
-  background: #ffffff;
-  min-height: 96px;
-  padding: 8px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-  transition: all 0.2s ease;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  gap: 4px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 4px 5px 5px;
+  background: #fff;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+  transition: background-color 0.15s ease;
+}
+
+.date-cell:nth-child(7n) {
+  border-right: none;
 }
 
 .date-cell.empty {
-  background: rgba(248, 250, 252, 0.5);
-  opacity: 0.4;
+  background: #f8fafc;
+}
+
+/* 列位置で日曜（1列目）・土曜（7列目）を色分け */
+.date-cell.weekend:nth-child(7n + 1):not(.today) {
+  background: #fff8f8;
+}
+
+.date-cell.weekend:nth-child(7n):not(.today) {
+  background: #f7faff;
+}
+
+.date-cell.has-data:not(.today):hover {
+  background: #fafaff;
 }
 
 .date-cell.today {
-  background: #fef3c7;
-  border: 2px solid #f59e0b;
-  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);
-  position: relative;
-  overflow: hidden;
-}
-
-.date-cell.today::before {
-  content: '今日';
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  background: #d97706;
-  color: #fff;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 700;
-  z-index: 2;
-  letter-spacing: 0.02em;
-}
-
-.date-cell.weekend:not(.today) {
-  background: #fef2f2;
-  border-left: 2px solid #ef4444;
-}
-
-.date-cell.has-data:not(.today) {
-  background: #f0fdf4;
-  border-left: 2px solid #10b981;
-}
-
-.date-cell.has-data.weekend:not(.today) {
-  background: #fff7ed;
-  border-left: 2px solid #f97316;
-}
-
-.date-cell:hover:not(.empty) {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 2px #6366f1;
 }
 
 .date-number {
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 20px;
   color: #1e293b;
-  text-align: center;
-  margin-bottom: 6px;
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 1;
-  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-cell:nth-child(7n + 1) .date-number {
+  color: #dc2626;
+}
+
+.date-cell:nth-child(7n) .date-number {
+  color: #2563eb;
+}
+
+.date-cell:not(.has-data):not(.today) .date-number {
+  opacity: 0.5;
 }
 
 .date-cell.today .date-number {
-  color: #b45309;
-  font-size: 16px;
+  color: #4338ca;
   font-weight: 800;
 }
 
-.date-cell.weekend .date-number {
-  color: #b91c1c;
+.date-cell.today .date-number::after {
+  content: '今日';
+  padding: 0 6px;
+  font-size: 10px;
   font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  border-radius: 999px;
+  background: #6366f1;
 }
 
-.date-cell.has-data .date-number {
-  color: #047857;
-  font-weight: 700;
-}
-
-.date-cell.has-data.weekend .date-number {
-  color: #c2410c;
-  font-weight: 700;
-}
-
+/* 便グループの印刷ボタン（セル幅に応じて横並び） */
 .print-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-bottom: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 3px;
 }
 
 .group-button-wrapper {
+  --g: #2563eb;
+  --g-bg: #eff6ff;
+  --g-bd: #bfdbfe;
+  --g-tx: #1e40af;
   position: relative;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  overflow: hidden;
+  min-width: 0;
 }
 
-.group-button-wrapper.is-printed {
-  background: #d1fae5;
-  border: 1px solid #10b981;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+.group-button-wrapper:nth-child(2) {
+  --g: #d97706;
+  --g-bg: #fffbeb;
+  --g-bd: #fde68a;
+  --g-tx: #92400e;
 }
 
-.group-button-wrapper.has-data:not(.is-printed) {
-  border: 1px solid transparent;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+.group-button-wrapper:nth-child(3) {
+  --g: #7c3aed;
+  --g-bg: #f5f3ff;
+  --g-bd: #ddd6fe;
+  --g-tx: #5b21b6;
 }
 
-.group-button {
+.group-button-wrapper:nth-child(4) {
+  --g: #0891b2;
+  --g-bg: #ecfeff;
+  --g-bd: #a5f3fc;
+  --g-tx: #155e75;
+}
+
+.group-button-wrapper:nth-child(5) {
+  --g: #e11d48;
+  --g-bg: #fff1f2;
+  --g-bd: #fecdd3;
+  --g-tx: #9f1239;
+}
+
+.group-button-wrapper:nth-child(n + 6) {
+  --g: #475569;
+  --g-bg: #f8fafc;
+  --g-bd: #cbd5e1;
+  --g-tx: #334155;
+}
+
+.group-button.el-button {
   width: 100%;
-  padding: 6px 8px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0 5px 0 8px;
   font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
   border-radius: 6px;
-  position: relative;
-  min-height: 32px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: all 0.2s ease;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: 1px dashed #d8dee8;
+  background: #f8fafc;
+  box-shadow: none;
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.group-button:hover:not(:disabled) {
+.group-button.el-button > :deep(span) {
+  width: 100%;
+  min-width: 0;
+}
+
+.group-button.el-button:hover {
+  color: #64748b;
+  background: #fff;
+  border-color: #cbd5e1;
+}
+
+.group-button-wrapper.has-data .group-button.el-button {
+  color: var(--g-tx);
+  border: 1px solid var(--g-bd);
+  background: var(--g-bg);
+  box-shadow:
+    inset 3px 0 0 var(--g),
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.group-button-wrapper.has-data .group-button.el-button:hover {
+  color: var(--g-tx);
+  background: #fff;
+  border-color: var(--g);
   transform: translateY(-1px);
-  filter: brightness(1.05);
+  box-shadow:
+    inset 3px 0 0 var(--g),
+    0 4px 10px -4px color-mix(in srgb, var(--g) 60%, transparent);
+}
+
+.group-button-wrapper.is-printed .group-button.el-button {
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  box-shadow:
+    inset 3px 0 0 #10b981,
+    inset 0 1px 0 #ffffff;
+}
+
+.group-button-wrapper.is-printed .group-button.el-button:hover {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #34d399;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 3px 0 0 #10b981,
+    0 4px 10px -4px rgba(16, 185, 129, 0.55);
+}
+
+.group-button.el-button:active {
+  transform: translateY(1px);
+}
+
+.group-button.el-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--g) 50%, transparent);
+  outline-offset: 1px;
 }
 
 .button-content {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   width: 100%;
+  min-width: 0;
+}
+
+/* 印刷済：便名と「済」を上下2段 */
+.group-button-wrapper.is-printed .group-button.el-button {
+  height: auto;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.group-button-wrapper.is-printed .button-content {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.group-button-wrapper.is-printed .button-text {
+  max-width: 100%;
+  line-height: 1.2;
 }
 
 .button-text {
-  font-size: 11px;
-  font-weight: 600;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #1e293b;
-  line-height: 1.3;
-}
-
-.group-button.is-printed .button-text {
-  color: #047857;
-  font-weight: 600;
 }
 
 .print-badge {
-  display: flex;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  background: #059669;
+  gap: 1px;
+  height: 15px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 800;
   color: #fff;
-  padding: 2px 5px;
   border-radius: 4px;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-top: 2px;
+  background: #10b981;
 }
 
 .print-icon {
@@ -1784,126 +1935,31 @@ function handleClose() {
 }
 
 .print-text {
-  line-height: 1.2;
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1;
 }
 
-/* 现代化按钮颜色区分系统 */
-/* 第一组 - 蓝色主题 */
-.group-button-wrapper.has-data:not(.is-printed):nth-child(1) {
-  background: #dbeafe;
-  border-color: #2563eb;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.1);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(1) .button-text {
-  color: #1e40af;
+/* 無データ月の案内（カレンダーは表示したまま） */
+.no-data-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
   font-weight: 600;
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(1)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #2563eb;
-  border-radius: 4px 4px 0 0;
-}
-
-/* 第二组 - 橙色主题 */
-.group-button-wrapper.has-data:not(.is-printed):nth-child(2) {
-  background: #fed7aa;
-  border-color: #f59e0b;
-  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.1);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(2) .button-text {
   color: #92400e;
-  font-weight: 600;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
 }
 
-.group-button-wrapper.has-data:not(.is-printed):nth-child(2)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #f59e0b;
-  border-radius: 4px 4px 0 0;
+.no-data-banner .el-icon {
+  font-size: 15px;
 }
 
-/* 第三组 - 紫色主题 */
-.group-button-wrapper.has-data:not(.is-printed):nth-child(3) {
-  background: #e9d5ff;
-  border-color: #9333ea;
-  box-shadow: 0 1px 2px rgba(147, 51, 234, 0.1);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(3) .button-text {
-  color: #6b21a8;
-  font-weight: 600;
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(3)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #9333ea;
-  border-radius: 4px 4px 0 0;
-}
-
-/* 第四组 - 绿色主题 */
-.group-button-wrapper.has-data:not(.is-printed):nth-child(4) {
-  background: #bbf7d0;
-  border-color: #10b981;
-  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.1);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(4) .button-text {
-  color: #047857;
-  font-weight: 600;
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(4)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #10b981;
-  border-radius: 4px 4px 0 0;
-}
-
-/* 第五组 - 红色主题 */
-.group-button-wrapper.has-data:not(.is-printed):nth-child(5) {
-  background: #fecaca;
-  border-color: #ef4444;
-  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.1);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(5) .button-text {
-  color: #991b1b;
-  font-weight: 600;
-}
-
-.group-button-wrapper.has-data:not(.is-printed):nth-child(5)::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #ef4444;
-  border-radius: 4px 4px 0 0;
-}
-
+/* ===== 印刷プレビュー ===== */
 .print-preview-dialog {
   border-radius: 8px;
 }
@@ -1953,26 +2009,6 @@ function handleClose() {
   padding: 40px;
   color: #6b7280;
   font-size: 16px;
-}
-
-/* 无数据时的提示条（日历仍显示，可正常切换月份） */
-.no-data-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  background: #fffbeb;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
-  color: #92400e;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.no-data-banner .el-icon {
-  font-size: 18px;
 }
 
 /* 无数据提示样式（保留供打印等场景） */
@@ -2027,11 +2063,6 @@ function handleClose() {
   font-weight: 500;
   font-size: 13px;
   padding: 8px 16px;
-  transition: all 0.2s ease;
-}
-
-.no-data-actions .el-button:hover {
-  transform: translateY(-1px);
 }
 
 .no-data-actions .el-button--primary {
@@ -2044,164 +2075,65 @@ function handleClose() {
   background: #1d4ed8;
 }
 
-/* 浮动动画 */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
 /* ========== 响应式设计 ========== */
-
-/* 平板 / 小桌面 */
-@media (max-width: 1024px) {
-  .shipping-calendar-inline .calendar-container {
-    padding: 10px 12px;
+@media (max-width: 1280px) {
+  .print-buttons {
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   }
 
-  .calendar-container {
-    min-height: 360px;
-  }
-
-  .date-cell {
-    min-height: 88px;
-    padding: 6px;
-  }
-
-  .date-number {
-    font-size: 14px;
+  .group-button.el-button {
+    padding: 0 4px 0 7px;
   }
 
   .button-text {
-    font-size: 10px;
-  }
-
-  .group-button {
-    min-height: 28px;
-    padding: 5px 6px;
     font-size: 11px;
-  }
-
-  .weekday {
-    font-size: 13px;
-    padding: 8px 4px;
   }
 }
 
-/* 手机横屏 / 小平板 */
+@media (max-width: 1024px) {
+  .calendar-inline-subtitle {
+    display: none;
+  }
+
+  .date-cell {
+    min-height: 54px;
+    padding: 3px 4px 4px;
+  }
+}
+
 @media (max-width: 768px) {
   .shipping-calendar-inline {
-    margin-bottom: 12px;
-    border-radius: 8px;
-  }
-
-  .calendar-inline-header {
-    padding: 10px 14px;
-  }
-
-  .calendar-inline-title {
-    font-size: 16px;
-  }
-
-  .calendar-inline-subtitle {
-    font-size: 12px;
-  }
-
-  .shipping-calendar-inline .calendar-container {
-    padding: 8px 10px;
-  }
-
-  .calendar-container {
-    padding: 8px;
-    min-height: 320px;
+    margin-bottom: 10px;
+    border-radius: 10px;
   }
 
   .month-navigation {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    justify-items: center;
     gap: 8px;
-    text-align: center;
-    padding: 8px 12px;
+    padding: 8px 10px;
   }
 
-  .month-navigation .el-button-group {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .month-navigation .el-button-group .el-button {
-    padding: 6px 12px;
-    font-size: 13px;
+  .month-navigation > :last-child {
+    justify-self: center;
   }
 
   .current-month {
-    font-size: 15px;
-    order: -1;
-    width: 100%;
+    font-size: 16px;
   }
 
-  .date-cell {
-    min-height: 82px;
-    padding: 6px;
-  }
-
-  .date-number {
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-
-  .group-button {
-    min-height: 30px;
-    padding: 5px 6px;
-    font-size: 11px;
-  }
-
-  .button-text {
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .print-badge {
-    font-size: 8px;
-    padding: 2px 4px;
-  }
-
-  .print-text {
-    font-size: 8px;
+  .print-buttons {
+    grid-template-columns: 1fr;
   }
 
   .weekday {
-    font-size: 12px;
-    padding: 8px 2px;
-  }
-
-  .no-data-banner {
-    font-size: 13px;
-    padding: 8px 12px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
 
   .no-data-container {
     min-height: 250px;
     padding: 16px 12px;
-  }
-
-  .no-data-icon .el-icon {
-    font-size: 40px;
-  }
-
-  .no-data-title {
-    font-size: 16px;
-  }
-
-  .no-data-description {
-    font-size: 12px;
-    margin-bottom: 16px;
   }
 
   .no-data-actions {
@@ -2216,93 +2148,27 @@ function handleClose() {
   }
 }
 
-/* 手机竖屏 */
 @media (max-width: 480px) {
-  .shipping-calendar-inline {
-    margin-bottom: 10px;
-    border-radius: 6px;
-  }
-
-  .calendar-inline-header {
-    padding: 8px 12px;
-  }
-
-  .calendar-inline-title {
-    font-size: 15px;
-  }
-
-  .calendar-inline-subtitle {
-    font-size: 11px;
-  }
-
-  .calendar-container {
-    padding: 6px 8px;
-    min-height: 280px;
-  }
-
-  .calendar-grid {
-    border-radius: 4px;
-  }
-
-  .date-grid {
-    gap: 1px;
-    padding: 1px;
-  }
-
-  .date-cell {
-    min-height: 72px;
-    padding: 4px;
-  }
-
-  .date-cell.today::before {
-    font-size: 9px;
-    padding: 1px 4px;
-  }
-
-  .date-number {
-    font-size: 13px;
-  }
-
-  .group-button {
-    min-height: 28px;
-    padding: 4px 5px;
-    font-size: 10px;
-  }
-
-  .button-text {
-    font-size: 10px;
-  }
-
-  .print-buttons {
-    gap: 3px;
-  }
-
-  .weekday {
-    font-size: 11px;
-    padding: 6px 2px;
-  }
-
-  .month-navigation .el-button-group .el-button {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .current-month {
-    font-size: 14px;
-  }
-
-  /* 超小屏：日历网格可横向滚动，避免格子过窄 */
-  .calendar-grid {
-    min-width: 320px;
-  }
-
   .shipping-calendar-inline {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   .shipping-calendar-inline .calendar-container {
-    min-width: 320px;
+    min-width: 360px;
+  }
+
+  .month-switch {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .date-number {
+    font-size: 12px;
+  }
+
+  .button-text {
+    font-size: 10px;
   }
 }
 
@@ -2323,135 +2189,5 @@ function handleClose() {
 
 .print-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
-}
-
-/* 动画效果 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.calendar-grid {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.date-cell {
-  animation: fadeInUp 0.3s ease-out;
-}
-
-.group-button-wrapper {
-  animation: slideInLeft 0.4s ease-out;
-}
-
-.group-button-wrapper:nth-child(1) {
-  animation-delay: 0.1s;
-}
-
-.group-button-wrapper:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.group-button-wrapper:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-/* 打印徽章动画 */
-@keyframes printBadgeGlow {
-  0% {
-    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.4);
-  }
-
-  100% {
-    box-shadow:
-      0 4px 12px rgba(16, 185, 129, 0.6),
-      0 0 20px rgba(16, 185, 129, 0.3);
-  }
-}
-
-@keyframes checkmark {
-  0% {
-    opacity: 0;
-    transform: scale(0.3) rotate(-45deg);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1.2) rotate(0deg);
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@keyframes buttonPrintSuccess {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.05);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.group-button-wrapper.is-printed {
-  animation: buttonPrintSuccess 0.8s ease-out;
-}
-
-/* 悬停效果 */
-.group-button-wrapper:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-}
-
-.group-button-wrapper.is-printed:hover {
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-}
-
-.group-button-wrapper.has-data:not(.is-printed):hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* 脉动效果 */
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.02);
-  }
-
-  100% {
-    transform: scale(1);
-  }
-}
-
-.group-button-wrapper.is-printed .print-badge {
-  animation: pulse 2s infinite ease-in-out;
 }
 </style>

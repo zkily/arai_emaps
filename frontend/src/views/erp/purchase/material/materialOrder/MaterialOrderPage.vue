@@ -1925,6 +1925,7 @@ import { calculateMaterialStock } from '@/api/materialStockCalculation'
 import { generateMaterialStockData } from '@/api/materialDataGeneration'
 import { updateMaterialRemarks } from '@/api/materialStockUpdate'
 import { getProductList } from '@/api/master/productMaster'
+import { getMaterialList } from '@/api/master/materialMaster'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
 
@@ -1957,6 +1958,8 @@ interface MaterialOrderItem {
   order_quantity: number // 受注数量
   order_bundle_quantity: number // 受注捆数
   bundle_weight: number // 捆重量
+  /** 注文書用：材料マスタ（materials.length） */
+  length?: number | null
 }
 
 interface SupplierOption {
@@ -3648,6 +3651,29 @@ const getMergedOrderData = async () => {
   }
 }
 
+/** 注文書の「長さ」を材料マスタ（materials.length）から material_cd で付与 */
+const attachMaterialMasterLength = async (items: MaterialOrderItem[]): Promise<MaterialOrderItem[]> => {
+  const lengthMap = new Map<string, number | null>()
+  try {
+    const res = await getMaterialList({ page: 1, pageSize: 10000 })
+    const list = res?.data?.list ?? res?.list ?? []
+    for (const m of list) {
+      if (m.material_cd) lengthMap.set(m.material_cd, m.length ?? null)
+    }
+  } catch (e) {
+    console.error('材料マスタ（長さ）の取得に失敗:', e)
+    ElMessage.warning('材料マスタの長さ取得に失敗しました（長さ欄は空欄で出力します）')
+  }
+  return items.map((item) => ({ ...item, length: lengthMap.get(item.material_cd) ?? null }))
+}
+
+const formatOrderSheetLength = (value: number | null | undefined): string => {
+  if (value == null) return ''
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)))
+}
+
 const handlePrintOrder = async () => {
   if (!guardPurchaseOperation(canExport)) return
 
@@ -3674,12 +3700,14 @@ const confirmPrint = async () => {
   if (!guardPurchaseOperation(canExport)) return
 
   try {
-    const mergedOrderItems = await getMergedOrderData()
+    const mergedRaw = await getMergedOrderData()
 
-    if (mergedOrderItems.length === 0) {
+    if (mergedRaw.length === 0) {
       ElMessage.warning('没有找到符合条件的注文数据')
       return
     }
+
+    const mergedOrderItems = await attachMaterialMasterLength(mergedRaw)
 
     const deliveryYmd = getNonyuDateYmdForPdf()
     if (!deliveryYmd) {
@@ -3779,10 +3807,8 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
     // サイズ: material_name をそのまま使用
     const size = row.material_name || ''
 
-    // 長さ: material_name の末尾4桁を抽出
-    const materialName = row.material_name || ''
-    const lengthMatch = materialName.match(/(\d{4})$/)
-    const length = lengthMatch ? lengthMatch[1] : ''
+    // 長さ: 材料マスタ（materials.length）
+    const length = formatOrderSheetLength(row.length)
 
     tableRowsHtml += `
       <tr>
@@ -8225,6 +8251,63 @@ ${groupBlocks}
 /* 調整数输入框样式 */
 .adjustment-quantity-input {
   width: 100%;
+}
+
+/* 表内の数値入力：背景色は入力枠（wrapper）全体に塗り、内側 input は透明・枠なし */
+:deep(.el-table .el-input-number .el-input__wrapper) {
+  padding: 0;
+  border-radius: 5px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.2s ease;
+}
+
+:deep(.el-table .el-input-number .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #667eea inset,
+    0 0 0 2px rgba(102, 126, 234, 0.15);
+}
+
+:deep(.el-table .el-input-number .el-input__inner) {
+  height: 28px;
+  padding: 0 8px;
+  border: none !important;
+  border-radius: 5px;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:deep(.el-table .usage-quantity-input .el-input__wrapper) {
+  background-color: #e0f2fe;
+  box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+
+:deep(.el-table .usage-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0284c7 inset,
+    0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+:deep(.el-table .order-quantity-input .el-input__wrapper) {
+  background-color: #fde68a;
+  box-shadow: 0 0 0 1px #f59e0b inset;
+}
+
+:deep(.el-table .order-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #d97706 inset,
+    0 0 0 2px rgba(245, 158, 11, 0.22);
+}
+
+.initial-stock-input.positive-stock :deep(.el-input__wrapper) {
+  background-color: #f0f9ff;
+  box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+
+.initial-stock-input.positive-stock :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0284c7 inset,
+    0 0 0 2px rgba(14, 165, 233, 0.2);
 }
 
 /* ============================================================

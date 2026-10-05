@@ -730,6 +730,10 @@ def _csv_worker(csv_task_queue, in_queue_csv_paths):
                 pass
 
 
+# 処理中に再検知された Excel（filename -> filepath）。処理完了後に再投入する（excel_lock で保護）
+_excel_rerun_pending: dict = {}
+
+
 def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, excel_lock):
     """生産計画 Excel 専用ワーカー；同一 Excel は 1 ワーカーのみ処理"""
     excel_processor = ExcelProcessor()
@@ -740,19 +744,19 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
         except Exception:
             break
         filepath, filename = item if isinstance(item, (list, tuple)) and len(item) >= 2 else (None, None)
+        owns_processing = False
         try:
             if filepath is None or filename is None:
                 continue
             in_queue_excel_filenames.discard(filename)
             with excel_lock:
                 if filename in processing_excel:
-                    logger.debug("Excel は他ワーカーで処理中のためスキップ: %s", filename)
-                    try:
-                        excel_task_queue.task_done()
-                    except Exception:
-                        pass
+                    # 他ワーカーの処理中フラグは消さない（消すと同一 Excel が並行処理され重複 INSERT になる）
+                    _excel_rerun_pending[filename] = filepath
+                    logger.debug("Excel は他ワーカーで処理中のため完了後に再処理: %s", filename)
                     continue
                 processing_excel.add(filename)
+                owns_processing = True
             wait_for_file_stable(
                 filepath,
                 timeout=10,
@@ -853,8 +857,18 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
         except Exception as e:
             logger.error("[Excel] 処理失敗 %s: %s", filename, e, exc_info=True)
         finally:
-            if is_excel_target_file(filename) or is_inspection_excel_file(filename) or is_welding_excel_file(filename) or is_cutting_excel_file(filename) or is_forming_excel_file(filename) or is_chamfering_excel_file(filename) or is_plating_excel_file(filename):
-                processing_excel.discard(filename)
+            if owns_processing:
+                rerun_path = None
+                with excel_lock:
+                    processing_excel.discard(filename)
+                    rerun_path = _excel_rerun_pending.pop(filename, None)
+                    if rerun_path and filename not in in_queue_excel_filenames:
+                        in_queue_excel_filenames.add(filename)
+                    else:
+                        rerun_path = None
+                if rerun_path:
+                    logger.info("[Excel] 処理中に変更を検知していたため再投入: %s", filename)
+                    excel_task_queue.put((rerun_path, filename))
             try:
                 excel_task_queue.task_done()
             except Exception:

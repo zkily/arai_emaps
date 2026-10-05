@@ -3,7 +3,7 @@
     <div class="page-ambient" aria-hidden="true" />
 
     <div class="bdr-inner">
-      <header class="toolbar toolbar-elevated animate-in pb-hero pb-hero--page" style="--delay: 0ms">
+      <header class="toolbar toolbar-elevated pb-hero pb-hero--page">
         <div class="toolbar-fx pb-bubbles" aria-hidden="true" />
         <div class="toolbar-brand">
           <div class="brand-icon">
@@ -12,21 +12,22 @@
           <div class="brand-copy">
             <h1 class="toolbar-title pb-hero-title">大量廃棄・保留品管理</h1>
             <p class="toolbar-sub pb-hero-desc">記録登録 · 処理追跡 · 未処理通知 · 在庫消滅</p>
-            <div class="toolbar-chips">
-              <span class="toolbar-chip">
-                <el-icon><Calendar /></el-icon>
-                {{ filters.date_range ? `${filters.date_range[0]} ～ ${filters.date_range[1]}` : '発生日 全期間' }}
-              </span>
-              <span v-if="filters.report_category" class="toolbar-chip">
-                <el-icon><Document /></el-icon>
-                {{ filters.report_category }}
-              </span>
-              <span v-if="selectedRows.length" class="toolbar-chip">
-                <el-icon><CircleCheckFilled /></el-icon>
-                選択 {{ selectedRows.length }}件
-              </span>
-            </div>
           </div>
+        </div>
+
+        <div class="toolbar-chips">
+          <span class="toolbar-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ filters.date_range ? `${filters.date_range[0]} ～ ${filters.date_range[1]}` : '発生日 全期間' }}
+          </span>
+          <span v-if="filters.report_category" class="toolbar-chip">
+            <el-icon><Document /></el-icon>
+            {{ filters.report_category }}
+          </span>
+          <span v-if="selectedRows.length" class="toolbar-chip">
+            <el-icon><CircleCheckFilled /></el-icon>
+            選択 {{ selectedRows.length }}件
+          </span>
         </div>
 
         <div class="toolbar-actions">
@@ -47,14 +48,8 @@
         </div>
       </header>
 
-      <section
-        class="kpi-grid animate-in"
-        style="--delay: 40ms"
-        @mousemove="handleKpiTilt"
-        @mouseleave="resetKpiTilt"
-      >
+      <section class="kpi-grid">
         <article class="kpi-card kpi-card--total">
-          <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
             <div class="kpi-icon"><el-icon :size="18"><Document /></el-icon></div>
             <span class="kpi-card__name">総件数</span>
@@ -63,7 +58,6 @@
           <p class="kpi-card__hint">現在の検索条件を含む一覧</p>
         </article>
         <article class="kpi-card kpi-card--pending">
-          <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
             <div class="kpi-icon"><el-icon :size="18"><WarningFilled /></el-icon></div>
             <span class="kpi-card__name">未処理</span>
@@ -72,7 +66,6 @@
           <p class="kpi-card__hint">全体の未処理件数</p>
         </article>
         <article class="kpi-card kpi-card--overdue" :class="{ 'is-alert': overdueTotal > 0 }">
-          <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
             <div class="kpi-icon"><el-icon :size="18"><Timer /></el-icon></div>
             <span class="kpi-card__name">期限超過</span>
@@ -81,7 +74,6 @@
           <p class="kpi-card__hint">保留品の処理期限超過</p>
         </article>
         <article class="kpi-card kpi-card--done">
-          <div class="kpi-card__glow" aria-hidden="true" />
           <header class="kpi-card__head">
             <div class="kpi-icon"><el-icon :size="18"><CircleCheckFilled /></el-icon></div>
             <span class="kpi-card__name">処理済</span>
@@ -91,7 +83,7 @@
         </article>
       </section>
 
-      <section class="panel panel-elevated filter-panel animate-in" style="--delay: 80ms">
+      <section class="panel panel-elevated filter-panel">
         <div class="panel-head">
           <div class="panel-head-left">
             <span class="panel-accent panel-accent--amber" />
@@ -202,7 +194,7 @@
         </el-form>
       </section>
 
-      <section class="panel panel-elevated table-panel animate-in" style="--delay: 120ms">
+      <section class="panel panel-elevated table-panel">
         <div class="panel-head">
           <div class="panel-head-left">
             <span class="panel-accent panel-accent--blue" />
@@ -330,7 +322,7 @@
       destroy-on-close
       append-to-body
       align-center
-      class="bdr-dialog bdr-dialog--edit"
+      class="bdr-dialog bdr-dialog--edit pb-std"
       :show-close="true"
     >
       <template #header>
@@ -556,7 +548,7 @@
       destroy-on-close
       append-to-body
       align-center
-      class="bdr-dialog bdr-dialog--notify"
+      class="bdr-dialog bdr-dialog--notify pb-std"
     >
       <div v-loading="notifyLoading" class="notify-body">
         <div v-if="notifyPreview" class="notify-hero" :class="{ 'notify-hero--warn': !notifyPreview.can_send }">
@@ -897,33 +889,6 @@ function processKey(proc: string) {
     その他: 'other',
   }
   return map[proc] || 'other'
-}
-
-// KPIカードの3Dチルト（マウス追従）
-function handleKpiTilt(e: MouseEvent) {
-  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.kpi-card')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
-    if (el !== card) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!card) return
-  const rect = card.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  card.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
-  card.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
-  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetKpiTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.kpi-card').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
 }
 
 function tableRowClassName({ row }: { row: BulkDisposalRetentionRecord }) {
@@ -1372,22 +1337,6 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.animate-in {
-  animation: fade-up 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: var(--delay, 0ms);
-}
-
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* Toolbar */
 .toolbar {
   display: flex;
@@ -1459,7 +1408,7 @@ onMounted(async () => {
   font-size: 0.8125rem;
   font-weight: 750;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -1538,31 +1487,6 @@ onMounted(async () => {
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   border: 1px solid rgba(226, 232, 240, 0.98);
   box-shadow: var(--shadow-soft);
-}
-
-.kpi-card__glow {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  right: -30px;
-  top: -40px;
-  border-radius: 50%;
-  filter: blur(28px);
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-.kpi-card--total .kpi-card__glow {
-  background: #93c5fd;
-}
-.kpi-card--pending .kpi-card__glow {
-  background: #fcd34d;
-}
-.kpi-card--overdue .kpi-card__glow {
-  background: #fda4af;
-}
-.kpi-card--done .kpi-card__glow {
-  background: #6ee7b7;
 }
 
 .kpi-card__head {
@@ -2202,7 +2126,7 @@ onMounted(async () => {
 }
 
 /* ============================================================
- * 页面美化：現代UI・3D動効・色分け（大量廃棄・保留品 / amber→orange→rose 警告系）
+ * 页面美化：現代UI・色分け（大量廃棄・保留品 / amber→orange→rose 警告系）
  * ============================================================ */
 
 /* ---------- ヒーローヘッダー ---------- */
@@ -2213,8 +2137,8 @@ onMounted(async () => {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(135deg, #b45309 0%, #ea580c 32%, #e11d48 70%, #be185d 100%);
   box-shadow:
-    0 18px 36px -18px rgba(190, 18, 60, 0.6),
-    0 4px 12px -6px rgba(234, 88, 12, 0.4),
+    0 14px 30px -20px rgba(190, 18, 60, 0.55),
+    0 2px 8px -4px rgba(234, 88, 12, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.16) inset;
 }
 .bdr-modern .toolbar-fx {
@@ -2224,36 +2148,40 @@ onMounted(async () => {
   z-index: 0;
 }
 .bdr-modern .toolbar-brand,
+.bdr-modern .toolbar-chips,
 .bdr-modern .toolbar-actions {
   position: relative;
   z-index: 1;
 }
+.bdr-modern .brand-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
 .bdr-modern .brand-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
   box-shadow:
-    0 10px 20px -8px rgba(76, 5, 25, 0.6),
-    0 2px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -3px 0 rgba(159, 18, 57, 0.35) inset;
-  animation: bdrIconFloat 5.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(159, 18, 57, 0.3);
 }
 .bdr-modern .toolbar-title {
-  font-size: 1.2rem;
   color: #fff;
-  letter-spacing: 0.04em;
-  text-shadow: 0 2px 6px rgba(76, 5, 25, 0.3);
+  letter-spacing: 0.02em;
 }
 .bdr-modern .toolbar-sub {
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.88);
 }
 .bdr-modern .toolbar-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  margin-left: auto;
 }
 .bdr-modern .toolbar-chip {
   display: inline-flex;
@@ -2269,77 +2197,171 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 6px 14px -8px rgba(76, 5, 25, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* ---------- 操作ボタン：3Dキーキャップ ---------- */
+/* ---------- 操作ボタン（ネイティブ button のため el-button 用の共通標準と同等をここで定義） ---------- */
 .bdr-modern .action-btn {
-  --k-edge: #cbd5e1;
-  --k-glow: rgba(15, 23, 42, 0.25);
+  --k-rgb: 100 116 139;
+  isolation: isolate;
   box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.08),
+    0 1px 2px rgba(15, 23, 42, 0.1),
+    0 4px 10px -4px rgb(var(--k-rgb) / 0.32);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
-.bdr-modern .action-btn--primary {
-  --k-edge: #1e3a8a;
-  --k-glow: rgba(37, 99, 235, 0.55);
+/* 未処理件数バッジがはみ出すため overflow:hidden を使わず、背景位置で一度だけ光沢を流す */
+.bdr-modern .action-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+      100deg,
+      transparent 35%,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 65%
+    )
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 130% 0;
 }
-.bdr-modern .action-btn--notify {
-  --k-edge: #f59e0b;
-  --k-glow: rgba(146, 64, 14, 0.45);
-}
-.bdr-modern .action-btn--print {
-  --k-edge: #a78bfa;
-  --k-glow: rgba(76, 29, 149, 0.45);
+.bdr-modern .action-btn:hover:not(:disabled)::after {
+  background-position: -30% 0;
+  transition: background-position 0.6s ease;
 }
 .bdr-modern .action-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  filter: brightness(1.04);
+  transform: translateY(-1px);
   box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.1),
+    0 3px 6px -2px rgba(15, 23, 42, 0.14),
+    0 10px 20px -8px rgb(var(--k-rgb) / 0.5);
 }
 .bdr-modern .action-btn:active:not(:disabled) {
-  transform: translateY(2px);
+  transform: translateY(1px);
+  transition-duration: 0.06s;
   box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -4px var(--k-glow);
+    inset 0 2px 4px rgba(15, 23, 42, 0.2),
+    0 1px 1px rgba(15, 23, 42, 0.1);
 }
-.bdr-modern .action-btn:disabled {
-  box-shadow: none;
+.bdr-modern .action-btn:focus-visible {
+  outline: 2px solid rgb(var(--k-rgb) / 0.45);
+  outline-offset: 2px;
 }
-.bdr-modern .action-badge {
-  animation: bdrBadgePulse 2s ease-in-out infinite;
+.bdr-modern .action-btn .el-icon {
+  transition: transform 0.2s ease;
+}
+.bdr-modern .action-btn:hover:not(:disabled) .el-icon:not(.is-loading) {
+  transform: translateX(1px);
+}
+.bdr-modern .action-btn--ghost {
+  --k-rgb: 71 85 105;
+}
+.bdr-modern .action-btn--ghost:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
-/* ---------- KPIカード：3Dチルト＋色分け ---------- */
-.bdr-modern .kpi-grid {
-  perspective: 900px;
+/* ---------- ヘッダー操作：白地ピル（濃色ヒーロー上） ---------- */
+.bdr-modern .toolbar-actions .action-btn {
+  --k-rgb: 37 99 235;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #2563eb;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #1e40af;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(76, 5, 25, 0.35);
 }
+.bdr-modern .toolbar-actions .action-btn--notify {
+  --k-rgb: 217 119 6;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+  color: #92400e;
+}
+.bdr-modern .toolbar-actions .action-btn--print {
+  --k-rgb: 124 58 237;
+  --k-tint: #ede9fe;
+  --k-tint-h: #ddd6fe;
+  --k-ico: #7c3aed;
+  color: #5b21b6;
+}
+.bdr-modern .toolbar-actions .action-btn:hover:not(:disabled),
+.bdr-modern .toolbar-actions .action-btn:focus-visible {
+  color: rgb(var(--k-rgb));
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.bdr-modern .toolbar-actions .action-btn:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(76, 5, 25, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75);
+}
+.bdr-modern .toolbar-actions .action-btn:active:not(:disabled) {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(76, 5, 25, 0.3);
+}
+.bdr-modern .toolbar-actions .action-btn:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.85);
+}
+.bdr-modern .toolbar-actions .action-btn .el-icon {
+  color: var(--k-ico);
+}
+.bdr-modern .action-badge {
+  top: -6px;
+  right: -6px;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 2px 6px rgba(225, 29, 72, 0.4);
+}
+
+/* 無効ボタン：半透明ではなく実色グレー */
+.bdr-modern .action-btn.action-btn:disabled {
+  opacity: 1;
+  color: #94a3b8;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transform: none;
+}
+.bdr-modern .action-btn.action-btn:disabled .el-icon {
+  color: #94a3b8;
+}
+.bdr-modern .action-btn:disabled::after {
+  content: none;
+}
+
+/* ---------- KPIカード：色分け（動きなし） ---------- */
 .bdr-modern .kpi-card {
   --kpi: #2563eb;
-  --kpi-edge: #1e40af;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transform-style: preserve-3d;
-  transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease;
 }
 .bdr-modern .kpi-card--pending {
   --kpi: #d97706;
-  --kpi-edge: #92400e;
 }
 .bdr-modern .kpi-card--overdue {
   --kpi: #e11d48;
-  --kpi-edge: #9f1239;
 }
 .bdr-modern .kpi-card--done {
   --kpi: #059669;
-  --kpi-edge: #065f46;
 }
 .bdr-modern .kpi-card::before {
   content: '';
@@ -2351,41 +2373,18 @@ onMounted(async () => {
   background: linear-gradient(90deg, color-mix(in srgb, var(--kpi) 55%, #ffffff), var(--kpi));
   pointer-events: none;
 }
-.bdr-modern .kpi-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at var(--mx, 50%) var(--my, 50%),
-    color-mix(in srgb, var(--kpi) 16%, transparent) 0%,
-    transparent 60%
-  );
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-.bdr-modern .kpi-card:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 20px 34px -18px color-mix(in srgb, var(--kpi) 55%, transparent),
-    0 4px 10px rgba(15, 23, 42, 0.06);
-}
-.bdr-modern .kpi-card:hover::after {
-  opacity: 1;
-}
 .bdr-modern .kpi-icon {
-  transform: translateZ(20px);
   box-shadow:
-    0 3px 0 var(--kpi-edge),
-    0 8px 14px -6px color-mix(in srgb, var(--kpi) 70%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 4px 10px -4px color-mix(in srgb, var(--kpi) 60%, transparent);
 }
 .bdr-modern .kpi-card__value {
   color: color-mix(in srgb, var(--kpi) 45%, #0f172a);
-  transform: translateZ(14px);
 }
 .bdr-modern .kpi-card--overdue.is-alert {
-  animation: bdrAlertRing 2.4s ease-in-out infinite;
+  border-color: rgba(244, 63, 94, 0.45);
+  background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);
 }
 .bdr-modern .kpi-card--overdue.is-alert .kpi-card__value {
   color: #e11d48;
@@ -2393,20 +2392,24 @@ onMounted(async () => {
 
 /* ---------- パネル ---------- */
 .bdr-modern .panel-accent {
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
 }
 .bdr-modern .panel-accent--blue {
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.3);
 }
 
-/* 区分チップ：3Dキーキャップ（区分別カラー） */
+/* 区分チップ：淡い立体（区分別カラー）。hover は 1px 浮上のみ */
 .bdr-modern .chip {
   --chip-edge: #475569;
-  box-shadow: 0 2px 0 #e2e8f0;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.06);
   transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
     color 0.15s ease,
+    border-color 0.15s ease,
     background 0.15s ease;
 }
 .bdr-modern .chip--cat-disposal,
@@ -2432,22 +2435,26 @@ onMounted(async () => {
   --chip-edge: #065f46;
 }
 .bdr-modern .chip:not(.chip--active):hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   color: var(--chip-edge);
   border-color: color-mix(in srgb, var(--chip-edge) 35%, #ffffff);
   box-shadow:
-    0 4px 0 #e2e8f0,
-    0 8px 14px -8px color-mix(in srgb, var(--chip-edge) 60%, transparent);
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 6px 12px -6px color-mix(in srgb, var(--chip-edge) 55%, transparent);
 }
 .bdr-modern .chip--active {
-  transform: translateY(-1px);
   box-shadow:
-    0 3px 0 var(--chip-edge),
-    0 8px 14px -6px color-mix(in srgb, var(--chip-edge) 60%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 6px 12px -6px color-mix(in srgb, var(--chip-edge) 60%, transparent);
 }
 .bdr-modern .chip:active {
   transform: translateY(1px);
+}
+.bdr-modern .chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--chip-edge) 45%, transparent);
+  outline-offset: 2px;
 }
 
 /* ---------- 記録一覧テーブル ---------- */
@@ -2471,85 +2478,34 @@ onMounted(async () => {
 .bdr-modern .pill {
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
 }
-.bdr-modern .cell-deadline--overdue {
-  animation: bdrBlink 1.6s ease-in-out infinite;
-}
 .bdr-modern .act-btn {
   width: 26px;
   height: 26px;
   border-radius: 8px;
   transition:
-    transform 0.15s ease,
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
     background 0.15s ease,
     box-shadow 0.15s ease;
 }
 .bdr-modern .act-edit:hover {
   background: #eff6ff;
   transform: translateY(-1px);
-  box-shadow: 0 2px 0 #bfdbfe;
+  box-shadow: inset 0 0 0 1px #bfdbfe;
 }
 .bdr-modern .act-del:hover {
   background: #fff1f2;
   transform: translateY(-1px);
-  box-shadow: 0 2px 0 #fecdd3;
+  box-shadow: inset 0 0 0 1px #fecdd3;
+}
+.bdr-modern .act-btn:active {
+  transform: translateY(1px);
 }
 .bdr-modern .pagination-bar :deep(.el-pagination.is-background .el-pager li.is-active) {
   background: linear-gradient(135deg, #f97316 0%, #e11d48 100%);
   box-shadow:
-    0 2px 0 #9f1239,
-    0 6px 12px -6px rgba(225, 29, 72, 0.7);
-  transform: translateY(-1px);
-}
-
-/* ---------- キーフレーム ---------- */
-@keyframes bdrIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
-  }
-}
-@keyframes bdrBadgePulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
-  }
-}
-@keyframes bdrAlertRing {
-  0%,
-  100% {
-    border-color: rgba(226, 232, 240, 0.98);
-  }
-  50% {
-    border-color: rgba(244, 63, 94, 0.55);
-  }
-}
-@keyframes bdrBlink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bdr-modern .brand-icon,
-  .bdr-modern .action-badge,
-  .bdr-modern .kpi-card--overdue.is-alert,
-  .bdr-modern .cell-deadline--overdue {
-    animation: none;
-  }
-  .bdr-modern .kpi-card {
-    transform: none;
-    transition: none;
-  }
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(159, 18, 57, 0.35),
+    0 3px 8px -4px rgba(225, 29, 72, 0.7);
 }
 </style>
 

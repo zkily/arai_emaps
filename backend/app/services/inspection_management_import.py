@@ -723,6 +723,9 @@ def sync_parsed_rows_to_db(
         insert_cols.append("data_source")
     placeholders = ", ".join(["%s"] * len(insert_cols))
     sql = f"INSERT INTO inspection_management ({', '.join(insert_cols)}) VALUES ({placeholders})"
+    if has_sync_col:
+        # 並行同期で同一 external_sync_key が先に確定済みの場合はスキップ（ファイル全体を失敗させない）
+        sql += " ON DUPLICATE KEY UPDATE id = id"
 
     batch_params = []
     for row in new_rows:
@@ -758,7 +761,9 @@ def sync_parsed_rows_to_db(
         batch_params.append(tuple(values))
 
     cursor.executemany(sql, batch_params)
-    result.inserted = len(new_rows)
+    affected = cursor.rowcount
+    result.inserted = affected if has_sync_col and 0 <= affected <= len(new_rows) else len(new_rows)
+    result.skipped_duplicate += len(new_rows) - result.inserted
     return result
 
 

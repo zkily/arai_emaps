@@ -1,12 +1,30 @@
 <template>
-  <div class="shipping-list-page">
+  <div class="shipping-list-page sl-modern pb-std">
     <div class="list-card">
-      <div class="card-header">
+      <div class="card-header pb-hero pb-hero--page">
+        <div class="header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title">{{ t('shipping.listTitle') }}</h1>
+          <div class="header-copy">
+            <h1 class="header-title pb-hero-title">{{ t('shipping.listTitle') }}</h1>
+            <p class="header-desc pb-hero-desc">納入先別に出荷内容を確認し、カレンダーから便グループ別の出荷確認リストを印刷</p>
+          </div>
+        </div>
+        <div class="header-chips">
+          <span class="header-chip">
+            <el-icon><Calendar /></el-icon>
+            {{ headerPeriodText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Location /></el-icon>
+            {{ headerDestinationText }}
+          </span>
+          <span class="header-chip">
+            <el-icon><Files /></el-icon>
+            {{ listData?.length || 0 }}件
+          </span>
         </div>
       </div>
 
@@ -20,9 +38,9 @@
             <el-date-picker v-model="filters.dateRange" type="daterange" :start-placeholder="t('shipping.startDate')" :end-placeholder="t('shipping.endDate')"
               value-format="YYYY-MM-DD" @change="handleDateChange" class="date-picker" size="small" />
             <div class="date-nav-buttons">
-              <el-button size="small" @click="adjustDate(-1)" class="nav-btn">←</el-button>
+              <el-button size="small" @click="adjustDate(-1)" class="nav-btn nav-prev">←</el-button>
               <el-button size="small" @click="goToToday" class="nav-btn today-btn">{{ t('shipping.today') }}</el-button>
-              <el-button size="small" @click="adjustDate(1)" class="nav-btn">→</el-button>
+              <el-button size="small" @click="adjustDate(1)" class="nav-btn nav-next">→</el-button>
             </div>
           </div>
 
@@ -32,14 +50,14 @@
               collapse-tags-tooltip @change="handleDestinationChange" class="destination-select" size="small">
               <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label" :value="dest.value" />
             </el-select>
-            <el-button :icon="Setting" @click="showGroupManager = true" class="group-btn" :title="t('shipping.groupManage')" size="small">
+            <el-button :icon="Setting" @click="showGroupManager = true" class="action-btn group-btn" :title="t('shipping.groupManage')" size="small">
               {{ t('shipping.group') }}
             </el-button>
           </div>
 
           <div class="filter-actions">
             <el-button type="primary" :icon="Printer" @click="handleReport"
-              :disabled="loading || !listData || listData.length === 0" class="print-btn" size="small">
+              :disabled="loading || !listData || listData.length === 0" class="action-btn print-btn" size="small">
               {{ t('shipping.print') }}
             </el-button>
           </div>
@@ -59,28 +77,28 @@
 
       <div v-if="!loading && listData && listData.length > 0" class="stats-section">
         <div class="stats-grid">
-          <div class="stat-card">
+          <div class="stat-card destinations">
             <div class="stat-icon"><el-icon><Location /></el-icon></div>
             <div class="stat-content">
               <div class="stat-value">{{ totalDestinations }}</div>
               <div class="stat-label">納入先数</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card dates">
             <div class="stat-icon"><el-icon><Calendar /></el-icon></div>
             <div class="stat-content">
               <div class="stat-value">{{ totalDates }}</div>
               <div class="stat-label">出荷日数</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card products">
             <div class="stat-icon"><el-icon><Box /></el-icon></div>
             <div class="stat-content">
               <div class="stat-value">{{ totalProducts }}</div>
               <div class="stat-label">製品種類</div>
             </div>
           </div>
-          <div class="stat-card">
+          <div class="stat-card boxes">
             <div class="stat-icon"><el-icon><Files /></el-icon></div>
             <div class="stat-content">
               <div class="stat-value">{{ totalBoxes }}</div>
@@ -246,6 +264,22 @@ const totalProducts = computed(() => {
 const totalBoxes = computed(() => {
   if (!Array.isArray(listData.value)) return 0
   return listData.value.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0)
+})
+
+const headerPeriodText = computed(() => {
+  const [from, to] = filters.dateRange || []
+  if (!from) return '—'
+  return !to || from === to ? from : `${from} 〜 ${to}`
+})
+
+const headerDestinationText = computed(() => {
+  if (filters.selectedGroup >= 0) {
+    const g = destinationGroups.value?.[filters.selectedGroup]
+    const name = g?.groupName || g?.group_name
+    if (name) return name
+  }
+  const n = filters.destinationCds.length
+  return n > 0 ? `納入先 ${n}件` : '全納入先'
 })
 
 const hasGroups = computed(() => {
@@ -842,6 +876,574 @@ function handleGroupChange() {
     width: 100%;
   }
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 页面美化：現代UI・色分け（出荷確認リスト / 出荷系 green→emerald） */
+.shipping-list-page.sl-modern {
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(34, 197, 94, 0.1), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(16, 185, 129, 0.09), transparent 60%),
+    #f2f8f4;
+}
+
+.sl-modern .list-card {
+  border-radius: 16px;
+  border: 1px solid rgba(187, 247, 208, 0.9);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 18px 40px -26px rgba(21, 128, 61, 0.55),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+/* ---------- ヘッダー ---------- */
+.sl-modern .card-header {
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: none;
+  background: linear-gradient(120deg, #052e16 0%, #166534 34%, #16a34a 70%, #10b981 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.sl-modern .header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sl-modern .header-left,
+.sl-modern .header-chips {
+  position: relative;
+  z-index: 1;
+}
+
+.sl-modern .header-left {
+  gap: 12px;
+  min-width: 0;
+}
+
+.sl-modern .header-icon-container {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(5, 46, 22, 0.3);
+}
+
+.sl-modern .header-icon {
+  font-size: 20px;
+}
+
+.sl-modern .header-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.sl-modern .header-title {
+  padding: 0;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.sl-modern .header-desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.02em;
+}
+
+.sl-modern .header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sl-modern .header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- カレンダーとの間隔をそろえる ---------- */
+.sl-modern :deep(.shipping-calendar-inline) {
+  margin: 8px 8px 0;
+}
+
+/* ---------- 絞り込み ---------- */
+.sl-modern .filter-section {
+  position: relative;
+  overflow: hidden;
+  margin: 8px;
+  padding: 10px 12px 8px;
+  border-radius: 12px;
+  border: 1px solid #d1fae5;
+  background: linear-gradient(180deg, #ffffff 0%, #f6fcf8 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(21, 128, 61, 0.45);
+}
+
+.sl-modern .filter-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #16a34a 0%, #10b981 60%, #34d399 100%);
+}
+
+.sl-modern .filter-row {
+  gap: 8px 14px;
+}
+
+.sl-modern .filter-label {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #166534;
+  border-radius: 999px;
+  background: #ecfdf5;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 #a7f3d0;
+}
+
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+.sl-modern .date-picker :deep(.el-input__wrapper),
+.sl-modern .destination-select :deep(.el-select__wrapper) {
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #cde8d8 inset;
+}
+
+.sl-modern .date-picker :deep(.el-input__wrapper:hover),
+.sl-modern .destination-select :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #86efac inset;
+}
+
+.sl-modern .date-picker :deep(.el-input__wrapper.is-active),
+.sl-modern .date-picker :deep(.el-input__wrapper.is-focus),
+.sl-modern .destination-select :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #16a34a inset,
+    0 0 0 3px rgba(22, 163, 74, 0.14);
+}
+
+/* ---------- ボタン：軽い立体（影・動きは共通ボタン標準、色はグラデーション＋光沢） ---------- */
+.sl-modern .nav-btn,
+.sl-modern .action-btn {
+  --k-from: #4ade80;
+  --k-to: #16a34a;
+  --k-edge: #15803d;
+  --k-rgb: 22 163 74;
+  min-width: 0;
+  color: #fff;
+  font-weight: 700;
+  border: 1px solid var(--k-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
+}
+
+.sl-modern .nav-btn:not(:disabled):hover,
+.sl-modern .action-btn:not(:disabled):hover,
+.sl-modern .nav-btn:focus-visible,
+.sl-modern .action-btn:focus-visible {
+  color: #fff;
+  border-color: var(--k-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
+}
+
+.sl-modern .date-nav-buttons {
+  gap: 0;
+  margin-left: 4px;
+}
+
+.sl-modern .nav-btn.nav-prev,
+.sl-modern .nav-btn.nav-next {
+  color: #166534;
+  border-color: #bbf7d0;
+  background: linear-gradient(180deg, #ffffff 0%, #f3fcf6 100%);
+}
+
+.sl-modern .nav-btn.nav-prev:not(:disabled):hover,
+.sl-modern .nav-btn.nav-next:not(:disabled):hover,
+.sl-modern .nav-btn.nav-prev:focus-visible,
+.sl-modern .nav-btn.nav-next:focus-visible {
+  color: #14532d;
+  border-color: #86efac;
+  background: linear-gradient(180deg, #ffffff 0%, #e8f9ee 100%);
+}
+
+.sl-modern .nav-btn.today-btn {
+  --k-from: #34d399;
+  --k-to: #059669;
+  --k-edge: #047857;
+  --k-rgb: 5 150 105;
+}
+
+.sl-modern .action-btn.group-btn {
+  --k-from: #94a3b8;
+  --k-to: #64748b;
+  --k-edge: #475569;
+  --k-rgb: 71 85 105;
+}
+
+.sl-modern .action-btn.print-btn {
+  --k-from: #4ade80;
+  --k-to: #15803d;
+  --k-edge: #166534;
+  --k-rgb: 21 128 61;
+}
+
+.sl-modern .action-btn.print-btn:disabled,
+.sl-modern .action-btn.print-btn.is-disabled {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
+}
+
+/* グループ選択：ピルチップ（淡い立体、hover は 1px 浮上のみ） */
+.sl-modern .group-selection {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #cde8d8;
+}
+
+.sl-modern .group-radios :deep(.el-radio) {
+  height: 26px;
+  margin-right: 6px;
+  padding: 0 12px 0 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid #d1fae5;
+  background: #fff;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(22, 163, 74, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.sl-modern .group-radios :deep(.el-radio__label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.sl-modern .group-radios :deep(.el-radio:not(.is-disabled):not(.is-checked):hover) {
+  transform: translateY(-1px);
+  border-color: #86efac;
+  background: #f6fcf8;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 6px 12px -6px rgba(22, 163, 74, 0.5);
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-checked) {
+  border-color: #15803d;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #22c55e 0%, #10b981 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(20, 83, 45, 0.3),
+    0 4px 10px -4px rgba(22, 163, 74, 0.6);
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-checked .el-radio__label) {
+  color: #fff;
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-checked .el-radio__inner) {
+  border-color: #fff;
+  background: #fff;
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-checked .el-radio__inner::after) {
+  background: #16a34a;
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-disabled) {
+  background: #f1f5f9;
+  box-shadow: none;
+}
+
+.sl-modern .group-radios :deep(.el-radio.is-disabled .el-radio__label) {
+  color: #94a3b8;
+}
+
+/* ---------- 統計カード（色分け・動きなし） ---------- */
+.sl-modern .stats-section {
+  margin: 0 8px 8px;
+  padding: 0;
+  color: inherit;
+  border: none;
+  background: transparent;
+}
+
+.sl-modern .stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sl-modern .stat-card {
+  --tc: #16a34a;
+  position: relative;
+  overflow: hidden;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--tc) 18%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 7%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px -16px color-mix(in srgb, var(--tc) 70%, transparent);
+}
+
+.sl-modern .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tc) 45%, #fff), var(--tc));
+}
+
+.sl-modern .stat-card.destinations {
+  --tc: #16a34a;
+}
+
+.sl-modern .stat-card.dates {
+  --tc: #0891b2;
+}
+
+.sl-modern .stat-card.products {
+  --tc: #7c3aed;
+}
+
+.sl-modern .stat-card.boxes {
+  --tc: #d97706;
+}
+
+.sl-modern .stat-card .stat-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  opacity: 1;
+  border-radius: 9px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 60%, #fff) 0%, var(--tc) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 4px 10px -4px color-mix(in srgb, var(--tc) 70%, transparent);
+}
+
+.sl-modern .stat-card .stat-value {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--tc) 40%, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-modern .stat-card .stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #64748b;
+}
+
+/* ---------- 一覧テーブル ---------- */
+.sl-modern .table-section.glass-card {
+  position: relative;
+  margin: 0 8px 8px;
+  border-radius: 12px;
+  border: 1px solid #d1fae5;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(21, 128, 61, 0.45);
+}
+
+.sl-modern .table-section.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, #16a34a 0%, #10b981 60%, #34d399 100%);
+}
+
+.sl-modern .table-container {
+  border-radius: 0;
+}
+
+.sl-modern .table-container :deep(.el-table) {
+  --el-table-border-color: #eef2f7;
+  --el-table-row-hover-bg-color: #f2fbf5;
+  border-radius: 0;
+  color: #1e293b;
+}
+
+.sl-modern .table-container :deep(.el-table__header-wrapper th.el-table__cell) {
+  padding: 7px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #166534;
+  background: linear-gradient(180deg, #f6fcf8 0%, #e8f8ee 100%) !important;
+  border-bottom: 1px solid #bbf7d0;
+}
+
+.sl-modern .table-container :deep(.el-table__body td.el-table__cell) {
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sl-modern .table-container :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: #f8fcf9;
+}
+
+.sl-modern .table-container :deep(.el-table__body tr:not(.group-header-row):hover > td.el-table__cell) {
+  background: #f2fbf5 !important;
+}
+
+.sl-modern .table-container :deep(.el-table__body tr:not(.group-header-row):hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #16a34a;
+}
+
+.sl-modern .group-header-row :deep(td) {
+  background: linear-gradient(90deg, #e8f8ee 0%, #f0fdf4 55%, #ffffff 100%) !important;
+  border-bottom: 1px solid #d1fae5;
+}
+
+.sl-modern .group-header-cell {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #14532d;
+}
+
+.sl-modern .group-header-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  color: #fff;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #4ade80 0%, #16a34a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(20, 83, 45, 0.3);
+}
+
+.sl-modern .no-cell,
+.sl-modern .date-cell {
+  font-weight: 700;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-modern .destination-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.sl-modern .shipping-no-cell {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.sl-modern .quantity-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 1px 10px;
+  font-weight: 800;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #92400e;
+  border-radius: 999px;
+  background: #fffbeb;
+  box-shadow: inset 0 0 0 1px #fde68a;
+}
+
+/* 合計行：淡いグリーンで強調（濃い塗りにしない） */
+.sl-modern .table-container :deep(.el-table__footer) {
+  color: #14532d;
+  background: #ecfdf5;
+}
+
+.sl-modern .table-container :deep(.el-table__footer-wrapper td.el-table__cell) {
+  padding: 7px 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #14532d;
+  font-variant-numeric: tabular-nums;
+  background: #ecfdf5 !important;
+  border-top: 2px solid #86efac;
+  border-color: #d1fae5;
+}
+
+.sl-modern .table-container :deep(.el-table__body-wrapper) {
+  scrollbar-width: thin;
+  scrollbar-color: #bbf7d0 transparent;
+}
+
+.sl-modern .empty-state {
+  padding: 20px 16px;
+}
+
+@media (max-width: 1200px) {
+  .sl-modern .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .sl-modern .stats-grid {
     grid-template-columns: 1fr;
   }
 }

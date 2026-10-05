@@ -8,7 +8,10 @@
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title pb-hero-title">{{ t('shipping.overviewTitle') }}</h1>
+          <div class="header-copy">
+            <h1 class="header-title pb-hero-title">{{ t('shipping.overviewTitle') }}</h1>
+            <p class="header-desc pb-hero-desc">日別・便グループ別に出荷予定を確認し、カレンダーから出荷予定表を印刷</p>
+          </div>
         </div>
         <div class="header-chips">
           <span class="header-chip">
@@ -78,7 +81,7 @@
 
       <!-- 統計情報 -->
       <div v-if="!loading && overviewData && overviewData.length > 0" class="stats-section glass-stats">
-        <div class="stats-grid" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+        <div class="stats-grid">
           <div class="stat-card glass-stat destinations">
             <div class="stat-icon">
               <el-icon>
@@ -339,33 +342,6 @@ const headerDestinationText = computed(() => {
   const n = filters.destinationCds.length
   return n > 0 ? `納入先 ${n}件` : '全納入先'
 })
-
-// 統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 12).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 12).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 
 const hasGroups = computed(() => {
   if (!Array.isArray(destinationGroups.value)) return false
@@ -1275,29 +1251,43 @@ function handleGroupChange() {
     z-index: 1;
   }
 
+  .so-modern .header-left {
+    gap: 12px;
+    min-width: 0;
+  }
+
   .so-modern .header-icon-container {
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.36);
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.42);
     box-shadow:
-      0 4px 0 rgba(30, 27, 75, 0.5),
-      0 10px 20px -8px rgba(2, 6, 23, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(6px);
-    animation: soIconFloat 4.5s ease-in-out infinite;
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(30, 27, 75, 0.3);
   }
 
   .so-modern .header-icon {
-    font-size: 19px;
+    font-size: 20px;
+  }
+
+  .so-modern .header-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
   }
 
   .so-modern .header-title {
-    font-size: 18px;
+    padding: 0;
     font-weight: 800;
     letter-spacing: 0.04em;
-    text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
+  }
+
+  .so-modern .header-desc {
+    color: rgba(255, 255, 255, 0.86);
+    letter-spacing: 0.02em;
   }
 
   .so-modern .header-chips {
@@ -1318,19 +1308,26 @@ function handleGroupChange() {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.16);
     border: 1px solid rgba(255, 255, 255, 0.28);
-    backdrop-filter: blur(6px);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  /* ---------- カレンダーとの間隔をそろえる ---------- */
+  .so-modern :deep(.shipping-calendar-inline) {
+    margin: 8px 8px 0;
   }
 
   /* ---------- 絞り込み ---------- */
   .so-modern .glass-filter {
     position: relative;
     overflow: hidden;
-    padding-top: 11px;
+    margin: 8px;
+    padding: 10px 12px 8px;
     border-radius: 12px;
-    border: 1px solid rgba(199, 210, 254, 0.8);
-    background: linear-gradient(110deg, rgba(238, 242, 255, 0.95) 0%, rgba(255, 255, 255, 0.92) 60%);
-    box-shadow: 0 10px 22px -18px rgba(67, 56, 202, 0.5);
+    border: 1px solid #e0e7ff;
+    background: linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 10px 24px -20px rgba(67, 56, 202, 0.45);
   }
 
   .so-modern .glass-filter::before {
@@ -1340,139 +1337,177 @@ function handleGroupChange() {
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, #3730a3 0%, #6366f1 55%, #8b5cf6 100%);
+    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 60%, #a78bfa 100%);
+  }
+
+  .so-modern .filter-row {
+    gap: 8px 14px;
   }
 
   .so-modern .filter-label {
     display: inline-flex;
     align-items: center;
-    padding: 1px 10px;
+    height: 22px;
+    padding: 0 10px;
+    font-size: 12px;
     font-weight: 700;
     color: #3730a3;
     border-radius: 999px;
-    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    background: #eef2ff;
     box-shadow:
-      0 2px 0 #c7d2fe,
-      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      inset 0 1px 0 #ffffff,
+      inset 0 -1px 0 #c7d2fe;
   }
 
-  /* ---------- 3D キーキャップボタン（色分け） ---------- */
+  /* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+  .so-modern .date-picker :deep(.el-input__wrapper),
+  .so-modern .destination-select :deep(.el-select__wrapper) {
+    border: none;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 0 0 1px #d6dcf5 inset;
+  }
+
+  .so-modern .date-picker :deep(.el-input__wrapper:hover),
+  .so-modern .destination-select :deep(.el-select__wrapper:hover) {
+    box-shadow: 0 0 0 1px #a5b4fc inset;
+  }
+
+  .so-modern .date-picker :deep(.el-input__wrapper.is-active),
+  .so-modern .date-picker :deep(.el-input__wrapper.is-focus),
+  .so-modern .destination-select :deep(.el-select__wrapper.is-focused) {
+    box-shadow:
+      0 0 0 1px #6366f1 inset,
+      0 0 0 3px rgba(99, 102, 241, 0.14);
+  }
+
+  /* ---------- ボタン：軽い立体（影・動きは共通ボタン標準、色はグラデーション＋光沢） ---------- */
   .so-modern .nav-btn,
   .so-modern .action-btn {
     --k-from: #818cf8;
     --k-to: #4f46e5;
-    --k-edge: #3730a3;
-    --k-glow: rgba(79, 70, 229, 0.5);
+    --k-edge: #4338ca;
+    --k-rgb: 79 70 229;
     color: #fff;
     font-weight: 700;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
-    box-shadow:
-      0 3px 0 var(--k-edge),
-      0 10px 18px -8px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease,
-      filter 0.15s ease;
+    border: 1px solid var(--k-edge);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
   }
 
   .so-modern .nav-btn:not(:disabled):hover,
-  .so-modern .action-btn:not(:disabled):hover {
+  .so-modern .action-btn:not(:disabled):hover,
+  .so-modern .nav-btn:focus-visible,
+  .so-modern .action-btn:focus-visible {
     color: #fff;
-    border-color: rgba(255, 255, 255, 0.22);
-    background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
-    filter: brightness(1.06);
-    transform: translateY(-2px);
-    box-shadow:
-      0 5px 0 var(--k-edge),
-      0 14px 22px -8px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.36);
-  }
-
-  .so-modern .nav-btn:not(:disabled):active,
-  .so-modern .action-btn:not(:disabled):active {
-    transform: translateY(2px);
-    box-shadow:
-      0 1px 0 var(--k-edge),
-      0 4px 8px -4px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border-color: var(--k-edge);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
   }
 
   .so-modern .nav-btn.nav-prev,
   .so-modern .nav-btn.nav-next,
   .so-modern .action-btn.reset-btn {
-    --k-from: #ffffff;
-    --k-to: #eef2ff;
-    --k-edge: #c7d2fe;
-    --k-glow: rgba(99, 102, 241, 0.3);
     color: #3730a3;
     border-color: #c7d2fe;
+    background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
   }
 
   .so-modern .nav-btn.nav-prev:not(:disabled):hover,
   .so-modern .nav-btn.nav-next:not(:disabled):hover,
-  .so-modern .action-btn.reset-btn:not(:disabled):hover {
+  .so-modern .action-btn.reset-btn:not(:disabled):hover,
+  .so-modern .nav-btn.nav-prev:focus-visible,
+  .so-modern .nav-btn.nav-next:focus-visible,
+  .so-modern .action-btn.reset-btn:focus-visible {
     color: #312e81;
     border-color: #a5b4fc;
+    background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
   }
 
   .so-modern .nav-btn.today-btn {
     --k-from: #a78bfa;
     --k-to: #7c3aed;
-    --k-edge: #5b21b6;
-    --k-glow: rgba(124, 58, 237, 0.5);
+    --k-edge: #6d28d9;
+    --k-rgb: 124 58 237;
   }
 
   .so-modern .action-btn.group-btn {
     --k-from: #94a3b8;
-    --k-to: #475569;
-    --k-edge: #1e293b;
-    --k-glow: rgba(71, 85, 105, 0.5);
+    --k-to: #64748b;
+    --k-edge: #475569;
+    --k-rgb: 71 85 105;
   }
 
   .so-modern .action-btn.print-btn {
-    --k-from: #c084fc;
+    --k-from: #a78bfa;
     --k-to: #6d28d9;
-    --k-edge: #4c1d95;
-    --k-glow: rgba(109, 40, 217, 0.55);
+    --k-edge: #5b21b6;
+    --k-rgb: 109 40 217;
   }
 
-  .so-modern .action-btn.print-btn:disabled {
+  .so-modern .action-btn.print-btn:disabled,
+  .so-modern .action-btn.print-btn.is-disabled {
     color: #94a3b8;
-    border-color: #e2e8f0;
-    background: linear-gradient(145deg, #f8fafc 0%, #e2e8f0 100%);
-    box-shadow: none;
+    border-color: #d1d5db;
+    background: #e5e7eb;
   }
 
-  /* グループ選択：ピルチップ */
+  /* グループ選択：ピルチップ（淡い立体、hover は 1px 浮上のみ） */
   .so-modern .group-selection {
-    border-top: 1px dashed #c7d2fe;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #d6dcf5;
   }
 
   .so-modern .group-radios :deep(.el-radio) {
+    height: 26px;
+    margin-right: 6px;
+    padding: 0 12px 0 8px;
+    font-size: 12px;
     border-radius: 999px;
-    border-color: #e0e7ff;
+    border: 1px solid #e0e7ff;
     background: #fff;
-    box-shadow: 0 2px 0 #e2e8f0;
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      inset 0 -2px 0 rgba(79, 70, 229, 0.06),
+      0 1px 2px rgba(15, 23, 42, 0.05);
     transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease,
-      background 0.2s ease;
+      transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.18s ease,
+      border-color 0.15s ease,
+      background 0.15s ease;
   }
 
-  .so-modern .group-radios :deep(.el-radio:not(.is-disabled):hover) {
+  .so-modern .group-radios :deep(.el-radio__label) {
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+  }
+
+  .so-modern .group-radios :deep(.el-radio:not(.is-disabled):not(.is-checked):hover) {
     transform: translateY(-1px);
     border-color: #a5b4fc;
-    box-shadow: 0 3px 0 #c7d2fe;
+    background: #f8f9ff;
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      0 6px 12px -6px rgba(99, 102, 241, 0.5);
   }
 
   .so-modern .group-radios :deep(.el-radio.is-checked) {
-    border-color: transparent;
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-color: #4f46e5;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
     box-shadow:
-      0 3px 0 #3730a3,
-      0 8px 14px -8px rgba(99, 102, 241, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -2px 0 rgba(49, 46, 129, 0.3),
+      0 4px 10px -4px rgba(99, 102, 241, 0.6);
+  }
+
+  .so-modern .group-radios :deep(.el-radio.is-checked .el-radio__label) {
+    color: #fff;
   }
 
   .so-modern .group-radios :deep(.el-radio.is-checked .el-radio__inner) {
@@ -1484,18 +1519,27 @@ function handleGroupChange() {
     background: #6366f1;
   }
 
-  /* ---------- 統計カード（3D チルト・色分け） ---------- */
+  .so-modern .group-radios :deep(.el-radio.is-disabled) {
+    background: #f1f5f9;
+    box-shadow: none;
+  }
+
+  .so-modern .group-radios :deep(.el-radio.is-disabled .el-radio__label) {
+    color: #94a3b8;
+  }
+
+  /* ---------- 統計カード（色分け・動きなし） ---------- */
   .so-modern .glass-stats {
+    margin: 0 8px 8px;
     padding: 0;
     color: inherit;
     border: none;
     background: transparent;
-    backdrop-filter: none;
   }
 
   .so-modern .stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
-    perspective: 900px;
   }
 
   .so-modern .glass-stat {
@@ -1503,71 +1547,31 @@ function handleGroupChange() {
     position: relative;
     overflow: hidden;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
-    background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
-    backdrop-filter: none;
+    border: 1px solid color-mix(in srgb, var(--tc) 18%, #e2e8f0);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 7%, #fff) 0%, #fff 70%);
     box-shadow:
-      0 3px 0 color-mix(in srgb, var(--tc) 26%, #e2e8f0),
-      0 12px 20px -16px color-mix(in srgb, var(--tc) 70%, transparent);
-    transform-style: preserve-3d;
-    transition:
-      transform 0.18s ease-out,
-      box-shadow 0.2s ease;
-    animation: soRise 0.4s ease-out backwards;
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 18px -16px color-mix(in srgb, var(--tc) 70%, transparent);
   }
 
-  .so-modern .glass-stat,
   .so-modern .glass-stat:hover {
-    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  }
-
-  .so-modern .glass-stat:nth-child(2) {
-    animation-delay: 0.05s;
-  }
-
-  .so-modern .glass-stat:nth-child(3) {
-    animation-delay: 0.1s;
-  }
-
-  .so-modern .glass-stat:nth-child(4) {
-    animation-delay: 0.15s;
+    transform: none;
+    background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 7%, #fff) 0%, #fff 70%);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 8px 18px -16px color-mix(in srgb, var(--tc) 70%, transparent);
   }
 
   .so-modern .glass-stat::before {
     content: '';
     position: absolute;
     top: 0;
+    bottom: 0;
     left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--tc), color-mix(in srgb, var(--tc) 40%, #fff));
-  }
-
-  .so-modern .glass-stat::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    background: radial-gradient(
-      circle at var(--mx, 50%) var(--my, 50%),
-      rgba(255, 255, 255, 0.75) 0%,
-      transparent 60%
-    );
-  }
-
-  .so-modern .glass-stat:hover {
-    background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 14%, #fff) 0%, #fff 70%);
-    box-shadow:
-      0 5px 0 color-mix(in srgb, var(--tc) 34%, #e2e8f0),
-      0 18px 28px -16px color-mix(in srgb, var(--tc) 80%, transparent);
-  }
-
-  .so-modern .glass-stat:hover::after {
-    opacity: 1;
+    width: 3px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tc) 45%, #fff), var(--tc));
   }
 
   .so-modern .glass-stat.destinations {
@@ -1587,45 +1591,48 @@ function handleGroupChange() {
   }
 
   .so-modern .glass-stat .stat-icon {
-    width: 38px;
-    height: 38px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 19px;
+    font-size: 16px;
     color: #fff;
     opacity: 1;
-    border-radius: 11px;
-    background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 65%, #fff) 0%, var(--tc) 100%);
+    border-radius: 9px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tc) 60%, #fff) 0%, var(--tc) 100%);
     box-shadow:
-      0 3px 0 color-mix(in srgb, var(--tc) 70%, #0f172a),
-      0 8px 14px -6px color-mix(in srgb, var(--tc) 80%, transparent),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4);
-    transform: translateZ(18px);
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+      0 4px 10px -4px color-mix(in srgb, var(--tc) 70%, transparent);
   }
 
   .so-modern .glass-stat .stat-value {
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 800;
-    color: #0f172a;
+    line-height: 1.15;
+    color: color-mix(in srgb, var(--tc) 40%, #0f172a);
     font-variant-numeric: tabular-nums;
-    transform: translateZ(12px);
   }
 
   .so-modern .glass-stat .stat-label {
     font-size: 11px;
     font-weight: 700;
-    color: color-mix(in srgb, var(--tc) 70%, #334155);
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: #64748b;
   }
 
   /* ---------- 一覧テーブル ---------- */
   .so-modern .table-section.glass-card {
     position: relative;
-    margin: 8px;
+    margin: 0 8px 8px;
     border-radius: 12px;
-    border: 1px solid rgba(199, 210, 254, 0.8);
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 12px 26px -20px rgba(67, 56, 202, 0.5);
+    border: 1px solid #e0e7ff;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 10px 24px -20px rgba(67, 56, 202, 0.45);
   }
 
   .so-modern .table-section.glass-card::before {
@@ -1636,14 +1643,42 @@ function handleGroupChange() {
     right: 0;
     height: 3px;
     z-index: 3;
-    background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 55%, #3730a3 100%);
+    background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 60%, #a78bfa 100%);
+  }
+
+  .so-modern .table-container {
+    border-radius: 0;
+  }
+
+  .so-modern .table-container :deep(.el-table) {
+    --el-table-border-color: #eef2f7;
+    --el-table-row-hover-bg-color: #f5f7ff;
+    border-radius: 0;
+    color: #1e293b;
   }
 
   .so-modern .table-container :deep(.el-table__header-wrapper th.el-table__cell) {
-    color: #312e81;
+    padding: 7px 8px;
+    font-size: 12px;
     font-weight: 700;
-    background: linear-gradient(180deg, #f5f7ff 0%, #e0e7ff 100%) !important;
-    border-bottom: 2px solid #a5b4fc;
+    letter-spacing: 0.04em;
+    color: #3730a3;
+    background: linear-gradient(180deg, #f8f9ff 0%, #eef2ff 100%) !important;
+    border-bottom: 1px solid #c7d2fe;
+  }
+
+  .so-modern .table-container :deep(.el-table__body td.el-table__cell) {
+    padding: 6px 8px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .so-modern .table-container :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+    background: #fafbff;
+  }
+
+  .so-modern .table-container :deep(.el-table__body tr:not(.group-header-row):hover > td.el-table__cell) {
+    background: #f5f7ff !important;
   }
 
   .so-modern .table-container :deep(.el-table__body tr:not(.group-header-row):hover > td.el-table__cell:first-child) {
@@ -1651,30 +1686,47 @@ function handleGroupChange() {
   }
 
   .so-modern .group-header-row :deep(td) {
-    background: linear-gradient(90deg, #e0e7ff 0%, #f5f3ff 60%, #ffffff 100%) !important;
-    border-bottom: 1px solid #c7d2fe;
+    background: linear-gradient(90deg, #eef2ff 0%, #f5f3ff 55%, #ffffff 100%) !important;
+    border-bottom: 1px solid #e0e7ff;
   }
 
   .so-modern .group-header-cell {
-    padding: 6px 10px;
+    padding: 4px 8px;
+    font-size: 13px;
     color: #312e81;
   }
 
   .so-modern .group-header-icon {
-    width: 24px;
-    height: 24px;
-    font-size: 13px;
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
     color: #fff;
-    border-radius: 7px;
-    background: linear-gradient(145deg, #a5b4fc 0%, #4f46e5 100%);
+    border-radius: 6px;
+    background: linear-gradient(145deg, #818cf8 0%, #4f46e5 100%);
     box-shadow:
-      0 2px 0 #312e81,
-      0 6px 10px -5px rgba(79, 70, 229, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(49, 46, 129, 0.3);
+  }
+
+  .so-modern .date-cell {
+    font-weight: 700;
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .so-modern .destination-name {
+    font-weight: 600;
+    color: #1e293b;
   }
 
   .so-modern .shipping-no-cell {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
     color: #4338ca;
+  }
+
+  .so-modern .product-name-wrap {
+    color: #0f172a;
   }
 
   .so-modern .quantity-cell {
@@ -1683,63 +1735,45 @@ function handleGroupChange() {
     justify-content: center;
     min-width: 42px;
     padding: 1px 10px;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
     color: #92400e;
     border-radius: 999px;
-    background: linear-gradient(145deg, #fffbeb 0%, #fef3c7 100%);
+    background: #fffbeb;
     box-shadow: inset 0 0 0 1px #fde68a;
   }
 
+  /* 合計行：淡いインディゴで強調（濃い塗りにしない） */
   .so-modern .table-container :deep(.el-table__footer-wrapper td.el-table__cell) {
-    color: #fff;
+    padding: 7px 8px;
+    font-size: 13px;
     font-weight: 800;
+    color: #312e81;
     font-variant-numeric: tabular-nums;
-    background: linear-gradient(90deg, #312e81 0%, #6366f1 70%, #8b5cf6 100%) !important;
-    border-color: rgba(255, 255, 255, 0.12);
+    background: #eef2ff !important;
+    border-top: 2px solid #a5b4fc;
+    border-color: #e0e7ff;
   }
 
   .so-modern .table-container :deep(.el-table__body-wrapper) {
     scrollbar-width: thin;
-    scrollbar-color: #a5b4fc transparent;
+    scrollbar-color: #c7d2fe transparent;
   }
 
-  .so-modern .empty-state :deep(.el-empty__image) {
-    animation: soIconFloat 4.5s ease-in-out infinite;
-  }
-
-  @keyframes soIconFloat {
-    0%,
-    100% {
-      transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
-    }
-    50% {
-      transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
-    }
-  }
-
-  @keyframes soRise {
-    from {
-      opacity: 0;
-      translate: 0 8px;
-    }
-    to {
-      opacity: 1;
-      translate: 0 0;
-    }
+  .so-modern .empty-state {
+    padding: 20px 16px;
   }
 }
 
-@media screen and (prefers-reduced-motion: reduce) {
-  .so-modern .header-icon-container,
-  .so-modern .glass-stat,
-  .so-modern .empty-state :deep(.el-empty__image) {
-    animation: none;
+@media screen and (max-width: 1200px) {
+  .so-modern .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .so-modern .glass-stat,
-  .so-modern .glass-stat:hover {
-    transform: none;
-    transition: none;
+@media screen and (max-width: 768px) {
+  .so-modern .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
