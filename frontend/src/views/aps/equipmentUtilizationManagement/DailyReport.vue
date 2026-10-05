@@ -1,22 +1,17 @@
 <template>
-  <div class="daily-report-page dr-modern">
+  <div class="daily-report-page dr-modern pb-std">
     <el-card class="daily-report-card" shadow="hover" :body-style="{ padding: '10px 12px 12px' }">
       <template #header>
-        <div class="daily-report-head">
-          <div class="daily-report-head__fx" aria-hidden="true">
-            <span class="fx-orb orb-a" />
-            <span class="fx-orb orb-b" />
-            <span class="fx-grid" />
-            <span class="fx-sheen" />
-          </div>
+        <div class="daily-report-head pb-hero pb-hero--page">
+          <div class="daily-report-head__fx pb-bubbles" aria-hidden="true" />
           <div class="daily-report-head__main">
-            <h3 class="daily-report-head__title">
+            <h3 class="daily-report-head__title pb-hero-title">
               <span class="daily-report-head__title-inner">
                 <el-icon class="daily-report-head__title-icon"><Document /></el-icon>
                 日別設備計画表
               </span>
             </h3>
-            <p class="daily-report-head__desc">日付×設備ごとの排産計画をカレンダー形式で一覧表示します。</p>
+            <p class="daily-report-head__desc pb-hero-desc">日付×設備ごとの排産計画をカレンダー形式で一覧表示します。</p>
             <div class="daily-report-head__chips">
               <span class="daily-report-head__chip">
                 <el-icon><Operation /></el-icon>
@@ -1140,43 +1135,6 @@ async function printReport() {
     z-index: 0;
     pointer-events: none;
   }
-  .dr-modern .fx-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(2px);
-    animation: drOrbFloat 9s ease-in-out infinite;
-  }
-  .dr-modern .orb-a {
-    width: 190px;
-    height: 190px;
-    top: -90px;
-    right: 14%;
-    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(165, 180, 252, 0) 70%);
-  }
-  .dr-modern .orb-b {
-    width: 130px;
-    height: 130px;
-    bottom: -70px;
-    left: 36%;
-    background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
-    animation-delay: -4s;
-  }
-  .dr-modern .fx-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-    background-size: 22px 22px;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
-  }
-  .dr-modern .fx-sheen {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
-    background-size: 250% 100%;
-    animation: drSheen 6s ease-in-out infinite;
-  }
   .dr-modern .daily-report-head__main {
     position: relative;
     z-index: 1;
@@ -1625,24 +1583,6 @@ async function printReport() {
   .dr-modern :deep(.el-loading-spinner .path) {
     stroke: var(--dr-c2);
   }
-
-  @keyframes drOrbFloat {
-    0%,
-    100% {
-      transform: translate3d(0, 0, 0);
-    }
-    50% {
-      transform: translate3d(-18px, 12px, 0);
-    }
-  }
-  @keyframes drSheen {
-    0% {
-      background-position: 130% 0;
-    }
-    100% {
-      background-position: -30% 0;
-    }
-  }
   @keyframes drIconFloat {
     0%,
     100% {
@@ -1671,8 +1611,6 @@ async function printReport() {
 }
 
 @media screen and (prefers-reduced-motion: reduce) {
-  .dr-modern .fx-orb,
-  .dr-modern .fx-sheen,
   .dr-modern .daily-report-head__title-icon,
   .dr-modern .empty__icon,
   .dr-modern .dr-kpi {

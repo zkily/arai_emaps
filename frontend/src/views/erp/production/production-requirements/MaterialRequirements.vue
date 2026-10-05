@@ -1,18 +1,13 @@
 <template>
-  <div class="material-requirements mr-modern">
-    <header class="page-head">
-      <div class="page-head-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="material-requirements mr-modern pb-std">
+    <header class="page-head pb-hero pb-hero--page">
+      <div class="page-head-fx pb-bubbles" aria-hidden="true" />
       <div class="page-head-main">
         <div class="page-icon" aria-hidden="true">
           <el-icon :size="18"><Box /></el-icon>
         </div>
         <div class="page-head-text">
-          <h1 class="page-title">{{ t('productionRequirements.materialTitle') }}</h1>
+          <h1 class="page-title pb-hero-title">{{ t('productionRequirements.materialTitle') }}</h1>
         </div>
       </div>
       <div class="page-head-chips">
@@ -1160,51 +1155,6 @@ onMounted(() => {
   z-index: 1;
 }
 
-.mr-modern .page-head-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(24px);
-  opacity: 0.6;
-  animation: mrOrbFloat 10s ease-in-out infinite;
-}
-
-.mr-modern .page-head-fx .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -120px;
-  right: 20%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-}
-
-.mr-modern .page-head-fx .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -130px;
-  left: 24%;
-  background: radial-gradient(circle, #5eead4 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.mr-modern .page-head-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
-}
-
-.mr-modern .page-head-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: mrSheen 7s ease-in-out infinite;
-}
-
 .mr-modern .page-icon {
   width: 38px;
   height: 38px;
@@ -1668,26 +1618,6 @@ onMounted(() => {
   border-radius: 10px;
 }
 
-@keyframes mrOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 12px) scale(1.12);
-  }
-}
-
-@keyframes mrSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes mrIconFloat {
   0%,
   100% {
@@ -1716,8 +1646,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mr-modern .page-head-fx .fx-orb,
-  .mr-modern .page-head-fx .fx-sheen,
   .mr-modern .page-icon,
   .mr-modern .kpi-card {
     animation: none;

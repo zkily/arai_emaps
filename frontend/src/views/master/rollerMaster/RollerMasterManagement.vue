@@ -1,13 +1,13 @@
 <template>
-  <div class="rm-page rlm-modern">
-    <div class="rm-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="rm-page rlm-modern pb-std">
+    <div class="rm-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="rm-header-left">
         <div class="rm-title-row">
           <el-icon class="rm-title-icon" :size="20"><Histogram /></el-icon>
           <div>
-            <h1 class="rm-title">ローラーマスタ管理</h1>
-            <p class="rm-subtitle">roller_master の登録・編集・照会を行います</p>
+            <h1 class="rm-title pb-hero-title">ローラーマスタ管理</h1>
+            <p class="rm-subtitle pb-hero-desc">roller_master の登録・編集・照会を行います</p>
           </div>
         </div>
       </div>
@@ -823,52 +823,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.rlm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: rlmOrbFloat 11s ease-in-out infinite;
-}
-
-.rlm-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -90px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(251, 146, 60, 0.75), transparent 70%);
-}
-
-.rlm-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(254, 202, 202, 0.55), transparent 70%);
-  animation-delay: -5s;
-}
-
-.rlm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.rlm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: rlmSheen 7s ease-in-out infinite;
-}
-
 .rlm-modern .rm-title-icon {
   width: 40px;
   height: 40px;
@@ -1192,26 +1146,6 @@ onMounted(async () => {
   box-shadow: 0 1px 0 var(--hx-deep);
 }
 
-@keyframes rlmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes rlmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes rlmIconSpin {
   0%,
   100% {
@@ -1223,8 +1157,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rlm-modern .fx-orb,
-  .rlm-modern .fx-sheen,
   .rlm-modern .rm-title-icon {
     animation: none;
   }

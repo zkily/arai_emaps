@@ -720,8 +720,6 @@ onUnmounted(() => {
   position: fixed;
   z-index: 9999;
   background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border-radius: 12px;
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.12),
@@ -795,7 +793,6 @@ onUnmounted(() => {
 
 :deep(.el-dropdown-menu) {
   background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  backdrop-filter: blur(16px);
   border: 1px solid rgba(226, 232, 240, 0.9);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.06);
   border-radius: 12px;

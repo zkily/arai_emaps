@@ -1,15 +1,15 @@
 <template>
-  <div class="tlp-page tlm-modern">
-    <header class="tlp-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="tlp-page tlm-modern pb-std">
+    <header class="tlp-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="tlp-hero-inner">
         <div class="tlp-title-row">
           <span class="tlp-title-icon">
             <el-icon :size="20"><EditPen /></el-icon>
           </span>
           <div class="tlp-title-block">
-            <h1 class="tlp-title">各種表示印刷</h1>
-            <p class="tlp-subtitle">{{ activeSubtitle }}</p>
+            <h1 class="tlp-title pb-hero-title">各種表示印刷</h1>
+            <p class="tlp-subtitle pb-hero-desc">{{ activeSubtitle }}</p>
           </div>
         </div>
         <div class="tlp-hero-side">
@@ -869,72 +869,6 @@ onMounted(() => {
   z-index: 0;
 }
 
-.tlm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: tlmOrbFloat 11s ease-in-out infinite;
-}
-
-.tlm-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -70px;
-  right: 22%;
-  background: radial-gradient(circle, #f9a8d4 0%, transparent 70%);
-}
-
-.tlm-modern .orb-b {
-  width: 150px;
-  height: 150px;
-  bottom: -70px;
-  left: 26%;
-  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.tlm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
-}
-
-.tlm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: tlmSheen 7s ease-in-out infinite;
-}
-
-@keyframes tlmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes tlmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .tlm-modern .tlp-title-icon {
   width: 40px;
   height: 40px;
@@ -1331,8 +1265,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tlm-modern .fx-orb,
-  .tlm-modern .fx-sheen,
   .tlm-modern .tlp-title-icon :deep(svg),
   .tlm-modern .tlp-cmyk i {
     animation: none;

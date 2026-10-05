@@ -1,12 +1,7 @@
 <template>
-  <div class="scheduling-page sp-modern">
-    <div class="plan-hd">
-      <div class="plan-hd-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="scheduling-page sp-modern pb-std">
+    <div class="plan-hd pb-hero pb-hero--page">
+      <div class="plan-hd-fx pb-bubbles" aria-hidden="true" />
       <h2 class="plan-hd-title">
         <span class="plan-hd-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" focusable="false">
@@ -16,8 +11,8 @@
           </svg>
         </span>
         <span class="plan-hd-text-wrap">
-          <span class="plan-hd-title-text">生産スケジューリングボード</span>
-          <span class="plan-hd-sub">工程・ライン・期間で絞り込み、日別の計画と実績をマトリクスで確認。</span>
+          <span class="plan-hd-title-text pb-hero-title">生産スケジューリングボード</span>
+          <span class="plan-hd-sub pb-hero-desc">工程・ライン・期間で絞り込み、日別の計画と実績をマトリクスで確認。</span>
         </span>
       </h2>
       <div class="plan-hd-meta">
@@ -2799,50 +2794,6 @@ watch(
   pointer-events: none;
   z-index: 0;
 }
-.sp-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: spOrbFloat 12s ease-in-out infinite;
-}
-.sp-modern .fx-orb.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -140px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.sp-modern .fx-orb.orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -120px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(216, 180, 254, 0.45) 0%, rgba(216, 180, 254, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.sp-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-}
-.sp-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.18) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: spSheen 7s ease-in-out infinite;
-}
 .sp-modern .plan-hd-title,
 .sp-modern .plan-hd-meta {
   position: relative;
@@ -3271,24 +3222,6 @@ watch(
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes spSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
-@keyframes spOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes spIconFloat {
   0%,
   100% {
@@ -3310,8 +3243,6 @@ watch(
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sp-modern .fx-orb,
-  .sp-modern .fx-sheen,
   .sp-modern .plan-hd-icon,
   .sp-modern .stat-card,
   .sp-modern .stat-icon {

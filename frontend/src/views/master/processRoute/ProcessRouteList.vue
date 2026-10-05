@@ -1,25 +1,20 @@
 <template>
   <transition name="fade-slide" mode="out-in">
-    <div class="route-master-container rtm-modern" v-if="true">
+    <div class="route-master-container rtm-modern pb-std" v-if="true">
       <!-- Compact Header -->
-      <div class="page-header">
-        <div class="page-header-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <div class="page-header pb-hero pb-hero--page">
+        <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-content">
           <div class="title-section">
             <div class="title-row">
               <span class="title-icon">🛠️</span>
-              <h1 class="main-title">{{ t('master.processRoute.title') }}</h1>
+              <h1 class="main-title pb-hero-title">{{ t('master.processRoute.title') }}</h1>
               <div class="stat-badge">
                 <span class="stat-number">{{ routeList.length }}</span>
                 <span class="stat-label">{{ t('master.common.items') }}</span>
               </div>
             </div>
-            <p class="subtitle">{{ t('master.processRoute.subtitle') }}</p>
+            <p class="subtitle pb-hero-desc">{{ t('master.processRoute.subtitle') }}</p>
           </div>
           <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="stat-card stat-card--active">
@@ -612,51 +607,6 @@ onMounted(fetchList)
   min-width: 0;
 }
 
-.rtm-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.6;
-  animation: rtmOrbFloat 11s ease-in-out infinite;
-}
-
-.rtm-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 30%;
-  background: radial-gradient(circle, #f0abfc 0%, transparent 70%);
-}
-
-.rtm-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 22%;
-  background: radial-gradient(circle, #c4b5fd 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.rtm-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-
-.rtm-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: rtmSheen 7s ease-in-out infinite;
-}
-
 .rtm-modern .title-row {
   gap: 12px;
 }
@@ -1007,25 +957,6 @@ onMounted(fetchList)
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes rtmOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-
-@keyframes rtmSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
 
 @keyframes rtmIconFloat {
   0%,
@@ -1045,8 +976,6 @@ onMounted(fetchList)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rtm-modern .page-header-fx .fx-orb,
-  .rtm-modern .page-header-fx .fx-sheen,
   .rtm-modern .title-icon {
     animation: none;
   }

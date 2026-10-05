@@ -1,17 +1,12 @@
 <template>
-  <div class="cutting-instruction-container ci-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="cutting-instruction-container ci-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-title">
           <!-- <span class="page-header-badge">生産指示</span> -->
-          <h1><span class="page-title-mark" aria-hidden="true"></span>切断・面取指示管理</h1>
-          <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
+          <h1 class="pb-hero-title"><span class="page-title-mark" aria-hidden="true"></span>切断・面取指示管理</h1>
+          <p class="header-desc pb-hero-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
       </div>
       <div class="header-right">
@@ -990,7 +985,7 @@
             <div v-if="!chamferingManagementListToday.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
           </div>
         </div>
-        <div class="instruction-col chamfering-management-section cutting-management-section-right">
+        <div class="instruction-col chamfering-management-section chamfering-management-section--tomorrow cutting-management-section-right">
           <div class="cutting-mgmt-header">
             <span class="cutting-mgmt-title"><span class="sec-icon sec-icon--chamfer-tm" aria-hidden="true"></span>面取指示-翌日</span>
             <div class="cutting-mgmt-date-wrap">
@@ -1181,7 +1176,7 @@
                   <el-button
                     type="warning"
                     size="small"
-                    class="kanban-sync-btn"
+                    class="kanban-sync-btn pb-btn-plain"
                     :loading="kanbanSyncProductionDayLoading"
                     :icon="Refresh"
                     @click="syncKanbanProductionDay"
@@ -11192,6 +11187,16 @@ onUnmounted(() => {
   overflow-x: hidden;
 }
 
+/* 面取指示-翌日：高さは面取指示-今日（2段ヘッダ）に合わせ、自身の内容では行の高さを広げない */
+.instruction-row .instruction-col.chamfering-management-section--tomorrow {
+  height: auto;
+  align-self: stretch;
+  contain: size;
+}
+.chamfering-management-section--tomorrow .cutting-mgmt-table-wrap {
+  max-height: none;
+}
+
 .chamfering-management-section .cutting-mgmt-table-inner {
   flex: 1;
   min-height: 0;
@@ -11223,7 +11228,6 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
   border-bottom: 2px solid #6ee7b7;
   z-index: 10;
-  backdrop-filter: blur(4px);
   box-shadow: 0 3px 6px rgba(5, 150, 105, 0.08);
 }
 
@@ -13742,6 +13746,12 @@ onUnmounted(() => {
   .cutting-management-section .cutting-mgmt-table-wrap {
     max-height: 380px;
   }
+  .instruction-row .instruction-col.chamfering-management-section--tomorrow {
+    contain: none;
+  }
+  .chamfering-management-section--tomorrow .cutting-mgmt-table-wrap {
+    max-height: 448px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -14000,56 +14010,6 @@ onUnmounted(() => {
     0 4px 12px -6px rgba(37, 99, 235, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
 }
-.ci-modern .page-header-fx {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-.ci-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: ciOrbFloat 12s ease-in-out infinite;
-}
-.ci-modern .fx-orb.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  left: 34%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.ci-modern .fx-orb.orb-b {
-  width: 220px;
-  height: 220px;
-  bottom: -140px;
-  right: 22%;
-  background: radial-gradient(circle, rgba(103, 232, 249, 0.4) 0%, rgba(103, 232, 249, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.ci-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-}
-.ci-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.18) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: ciSheen 7s ease-in-out infinite;
-}
 .ci-modern .page-header .header-left,
 .ci-modern .page-header .header-right {
   position: relative;
@@ -14059,7 +14019,7 @@ onUnmounted(() => {
   font-size: 20px !important;
   letter-spacing: 0.02em !important;
   color: #fff !important;
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+  text-shadow: none;
 }
 .cutting-instruction-container.ci-modern .page-title-mark {
   width: 10px;
@@ -14068,73 +14028,56 @@ onUnmounted(() => {
   box-shadow:
     0 0 0 3px rgba(255, 255, 255, 0.16),
     0 4px 12px rgba(8, 145, 178, 0.55);
-  animation: ciMarkPulse 2.4s ease-in-out infinite;
 }
 .cutting-instruction-container.ci-modern .header-title .header-desc {
   color: rgba(255, 255, 255, 0.86) !important;
 }
-.ci-modern .header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 0 20px;
-}
-.ci-modern .header-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 650;
-  color: #fff;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
 
-/* ヘッダー右：ピルボタンを3Dキーキャップ化 */
-.ci-modern .header-right .header-pill-btn.el-button {
-  --edge: #c7d2fe;
-  box-shadow:
-    0 3px 0 var(--edge),
-    0 10px 18px -8px rgba(15, 23, 42, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.2s ease,
-    border-color 0.2s ease;
-}
+/* ヘッダー右：白地ピル＋色ドット。hover で淡色に満ち、同色の影で浮く */
 .ci-modern .header-right .header-pill-btn--molding.el-button {
-  --edge: #a78bfa;
+  --k-rgb: 124 58 237;
+  --k-dot: #8b5cf6;
 }
 .ci-modern .header-right .header-pill-btn--cutting.el-button {
-  --edge: #60a5fa;
+  --k-rgb: 37 99 235;
+  --k-dot: #3b82f6;
 }
 .ci-modern .header-right .header-pill-btn--chamfering.el-button {
-  --edge: #34d399;
+  --k-rgb: 5 150 105;
+  --k-dot: #10b981;
 }
 .ci-modern .header-right .header-pill-btn--report.el-button {
-  --edge: #818cf8;
+  --k-rgb: 79 70 229;
 }
-.ci-modern .header-right .header-pill-btn.el-button:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--edge),
-    0 14px 22px -8px rgba(15, 23, 42, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+.ci-modern .header-right .header-pill-btn--molding.el-button::before,
+.ci-modern .header-right .header-pill-btn--cutting.el-button::before,
+.ci-modern .header-right .header-pill-btn--chamfering.el-button::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--k-dot);
+  box-shadow: 0 0 0 2px rgb(var(--k-rgb) / 0.18);
 }
-.ci-modern .header-right .header-pill-btn.el-button:active {
-  transform: translateY(2px);
+.cutting-instruction-container.ci-modern.pb-std.pb-std .header-right :deep(.header-pill-btn.header-pill-btn.el-button.el-button:not(.is-link):not(.is-text)) {
   box-shadow:
-    0 1px 0 var(--edge),
-    0 4px 8px -4px rgba(15, 23, 42, 0.5);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.35) !important;
+}
+.cutting-instruction-container.ci-modern.pb-std.pb-std .header-right :deep(.header-pill-btn.header-pill-btn.el-button.el-button:not(.is-link):not(.is-text):hover) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.16),
+    0 4px 8px -2px rgba(15, 23, 42, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.cutting-instruction-container.ci-modern.pb-std.pb-std .header-right :deep(.header-pill-btn.header-pill-btn.el-button.el-button:not(.is-link):not(.is-text):active) {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.3) !important;
 }
 
 /* ---------- セクションアイコン（3Dキーキャップ） ---------- */
@@ -14148,104 +14091,88 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     0 2px 0 var(--edge),
     0 6px 10px -4px var(--glow);
-  animation: ciIconTilt 6s ease-in-out infinite;
 }
 .cutting-instruction-container.ci-modern .sec-icon--cutting {
   --edge: #312e81;
   --glow: rgba(79, 70, 229, 0.5);
-  animation-delay: -1s;
 }
 .cutting-instruction-container.ci-modern .sec-icon--cutting-tm {
   --edge: #075985;
   --glow: rgba(2, 132, 199, 0.5);
-  animation-delay: -2s;
 }
 .cutting-instruction-container.ci-modern .sec-icon--chamfer {
   --edge: #065f46;
   --glow: rgba(5, 150, 105, 0.5);
-  animation-delay: -3s;
 }
 .cutting-instruction-container.ci-modern .sec-icon--chamfer-tm {
   --edge: #115e59;
   --glow: rgba(13, 148, 136, 0.5);
-  animation-delay: -4s;
 }
 .cutting-instruction-container.ci-modern .sec-icon--kanban {
   --edge: #92400e;
   --glow: rgba(217, 119, 6, 0.5);
-  animation-delay: -5s;
 }
 
-/* ---------- 各セクション：操作ボタン（3Dキーキャップ・色分け） ---------- */
+/* ---------- 各セクション：操作ボタン（光沢グラデ・色分け） ---------- */
 .ci-modern .cutting-mgmt-header-actions :deep(.el-button),
 .ci-modern .chamfering-mgmt-header-actions :deep(.el-button),
 .ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary) {
-  --k-from: #60a5fa;
-  --k-to: #2563eb;
-  --k-edge: #1d4ed8;
-  --k-glow: rgba(37, 99, 235, 0.5);
+  --k-top: #60a5fa;
+  --k-bg: #2563eb;
+  --k-bg-h: #1d4ed8;
+  --k-rgb: 37 99 235;
   color: #fff !important;
-  border-color: var(--k-edge) !important;
-  background: linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%) !important;
+  border-color: var(--k-bg-h) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-top) 0%, var(--k-bg) 100%) !important;
   font-weight: 700;
-  border-radius: 8px;
+  border-radius: 9px;
   opacity: 1;
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 8px 14px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.18s ease;
 }
 .ci-modern .cutting-mgmt-header-actions :deep(.el-button--default),
 .ci-modern .chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(2)) {
-  --k-from: #fbbf24;
-  --k-to: #d97706;
-  --k-edge: #b45309;
-  --k-glow: rgba(217, 119, 6, 0.5);
+  --k-top: #fbbf24;
+  --k-bg: #d97706;
+  --k-bg-h: #b45309;
+  --k-rgb: 217 119 6;
 }
 .ci-modern .chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(1)) {
-  --k-from: #fb7185;
-  --k-to: #e11d48;
-  --k-edge: #be123c;
-  --k-glow: rgba(225, 29, 72, 0.5);
+  --k-top: #fb7185;
+  --k-bg: #e11d48;
+  --k-bg-h: #be123c;
+  --k-rgb: 225 29 72;
 }
 .ci-modern .cutting-mgmt-header-actions :deep(.el-button--success),
 .ci-modern .chamfering-mgmt-header-actions :deep(.el-button--success) {
-  --k-from: #4ade80;
-  --k-to: #16a34a;
-  --k-edge: #15803d;
-  --k-glow: rgba(22, 163, 74, 0.5);
+  --k-top: #4ade80;
+  --k-bg: #16a34a;
+  --k-bg-h: #15803d;
+  --k-rgb: 22 163 74;
 }
 .ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary) {
-  --k-from: #34d399;
-  --k-to: #059669;
-  --k-edge: #047857;
-  --k-glow: rgba(5, 150, 105, 0.5);
+  --k-top: #34d399;
+  --k-bg: #059669;
+  --k-bg-h: #047857;
+  --k-rgb: 5 150 105;
 }
 .ci-modern .cutting-mgmt-header-actions :deep(.el-button:not(.is-disabled):hover),
 .ci-modern .chamfering-mgmt-header-actions :deep(.el-button:not(.is-disabled):hover),
 .ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary:not(.is-disabled):hover) {
   color: #fff !important;
-  border-color: var(--k-edge) !important;
-  background: linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%) !important;
+  border-color: var(--k-bg-h) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-bg) 0%, var(--k-bg-h) 100%) !important;
   opacity: 1;
-  filter: brightness(1.08);
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 12px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
-.ci-modern .cutting-mgmt-header-actions :deep(.el-button:not(.is-disabled):active),
-.ci-modern .chamfering-mgmt-header-actions :deep(.el-button:not(.is-disabled):active),
-.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary:not(.is-disabled):active) {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -4px var(--k-glow);
+.ci-modern .cutting-mgmt-header-actions :deep(.el-button.is-disabled),
+.ci-modern .chamfering-mgmt-header-actions :deep(.el-button.is-disabled),
+.ci-modern .chamfering-batch-section-card .cutting-mgmt-header-right :deep(.el-button--primary.is-disabled) {
+  color: #94a3b8 !important;
+  border-color: #e2e8f0 !important;
+  background: #f1f5f9 !important;
+  opacity: 1;
 }
 
 /* ---------- ページネーション ---------- */
@@ -14253,30 +14180,42 @@ onUnmounted(() => {
 .ci-modern .kanban-pagination :deep(.el-pager li) {
   border-radius: 7px;
   transition:
-    transform 0.15s ease,
-    color 0.15s ease;
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .ci-modern .pagination-wrap :deep(.el-pager li:not(.is-active):hover) {
   color: #2563eb;
+  background: #eff6ff;
   transform: translateY(-1px);
+  box-shadow:
+    inset 0 -2px 0 rgba(37, 99, 235, 0.12),
+    0 4px 8px -3px rgba(37, 99, 235, 0.35);
 }
 .ci-modern .kanban-pagination :deep(.el-pager li:not(.is-active):hover) {
   color: #d97706;
+  background: #fffbeb;
   transform: translateY(-1px);
+  box-shadow:
+    inset 0 -2px 0 rgba(217, 119, 6, 0.12),
+    0 4px 8px -3px rgba(217, 119, 6, 0.35);
 }
 .ci-modern .pagination-wrap :deep(.el-pager li.is-active) {
   color: #fff;
-  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
   box-shadow:
-    0 2px 0 #1d4ed8,
-    0 6px 10px -6px rgba(37, 99, 235, 0.6);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 3px 8px -2px rgba(37, 99, 235, 0.5);
 }
 .ci-modern .kanban-pagination :deep(.el-pager li.is-active) {
   color: #fff;
-  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
   box-shadow:
-    0 2px 0 #b45309,
-    0 6px 10px -6px rgba(217, 119, 6, 0.6);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 3px 8px -2px rgba(217, 119, 6, 0.5);
 }
 .ci-modern .pagination-wrap :deep(.el-pagination__total) {
   padding: 0 8px;
@@ -14295,56 +14234,6 @@ onUnmounted(() => {
   border: 1px solid #fde68a;
 }
 
-/* ---------- キーフレーム ---------- */
-@keyframes ciSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
-@keyframes ciOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-@keyframes ciIconTilt {
-  0%,
-  100% {
-    transform: perspective(200px) rotateX(0deg) rotateY(0deg);
-  }
-  50% {
-    transform: perspective(200px) rotateX(12deg) rotateY(-16deg);
-  }
-}
-@keyframes ciMarkPulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.16),
-      0 4px 12px rgba(8, 145, 178, 0.55);
-  }
-  50% {
-    box-shadow:
-      0 0 0 5px rgba(255, 255, 255, 0.08),
-      0 4px 16px rgba(8, 145, 178, 0.75);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ci-modern .fx-orb,
-  .ci-modern .fx-sheen,
-  .cutting-instruction-container.ci-modern .page-title-mark,
-  .cutting-instruction-container.ci-modern .sec-icon {
-    animation: none;
-  }
-}
 </style>
 
 <!-- 設備・データ管理製品名下拉選項字體縮小（popper 掛在 body，需單獨樣式） -->

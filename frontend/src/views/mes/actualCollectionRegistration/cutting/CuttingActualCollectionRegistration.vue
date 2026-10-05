@@ -209,20 +209,16 @@ onMounted(() => {
 
 
 <template>
-  <div class="iar car-modern">
-    <header class="iar-hero iar-rise">
-      <div class="car-hero-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+  <div class="iar car-modern pb-std">
+    <header class="iar-hero iar-rise pb-hero pb-hero--page">
+      <div class="car-hero-fx pb-bubbles" aria-hidden="true" />
       <div class="iar-hero__main">
         <div class="iar-hero__icon">
           <el-icon :size="22"><DataLine /></el-icon>
         </div>
         <div>
           <div class="iar-hero__eyebrow">MES · 実績収集登録</div>
-          <h1 class="iar-hero__title">切断実績収集登録</h1>
+          <h1 class="iar-hero__title pb-hero-title">切断実績収集登録</h1>
         </div>
       </div>
       <div class="iar-hero__chips">
@@ -2307,34 +2303,6 @@ onMounted(() => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.car-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.car-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.car-modern .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -130px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(165, 243, 252, 0.4) 0%, rgba(165, 243, 252, 0) 70%);
-}
-.car-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 12% 50%, #000 0%, transparent 65%);
-  mask-image: radial-gradient(ellipse at 12% 50%, #000 0%, transparent 65%);
 }
 .car-modern .iar-hero__icon {
   width: 44px;

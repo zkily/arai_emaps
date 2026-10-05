@@ -1,14 +1,14 @@
 <template>
-  <div class="user-list usr-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="user-list usr-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon-sm">
           <el-icon :size="18"><User /></el-icon>
         </div>
         <div class="header-text">
-          <h1>{{ t('systemUser.user.title') }}</h1>
-          <p class="subtitle">{{ t('systemUser.user.subtitle') }}</p>
+          <h1 class="pb-hero-title">{{ t('systemUser.user.title') }}</h1>
+          <p class="subtitle pb-hero-desc">{{ t('systemUser.user.subtitle') }}</p>
         </div>
       </div>
       <div class="header-chips" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1942,72 +1942,6 @@ onMounted(() => {
   z-index: 0;
 }
 
-.usr-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: usrOrbFloat 11s ease-in-out infinite;
-}
-
-.usr-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -70px;
-  right: 24%;
-  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
-}
-
-.usr-modern .orb-b {
-  width: 150px;
-  height: 150px;
-  bottom: -70px;
-  left: 30%;
-  background: radial-gradient(circle, #f9a8d4 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.usr-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
-}
-
-.usr-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: usrSheen 7s ease-in-out infinite;
-}
-
-@keyframes usrOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes usrSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .usr-modern .header-icon-sm {
   width: 40px;
   height: 40px;
@@ -2370,8 +2304,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .usr-modern .fx-orb,
-  .usr-modern .fx-sheen,
   .usr-modern .header-icon-sm,
   .usr-modern .status-pill.active .status-dot {
     animation: none;

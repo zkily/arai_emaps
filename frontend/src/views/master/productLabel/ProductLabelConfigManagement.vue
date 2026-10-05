@@ -1,13 +1,13 @@
 <template>
-  <div class="plc-page plm-modern">
-    <header class="plc-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="plc-page plm-modern pb-std">
+    <header class="plc-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="plc-hero-inner">
         <div class="plc-title-row">
           <span class="plc-title-icon"><el-icon :size="20"><PriceTag /></el-icon></span>
           <div>
-            <h1 class="plc-title">成型用ラベル設定</h1>
-            <p class="plc-subtitle">現品票（A4縦・2列×3行）の加工用製品名・入数・8枠・印刷色を管理（製品CD末尾「1」のみ）</p>
+            <h1 class="plc-title pb-hero-title">成型用ラベル設定</h1>
+            <p class="plc-subtitle pb-hero-desc">現品票（A4縦・2列×3行）の加工用製品名・入数・8枠・印刷色を管理（製品CD末尾「1」のみ）</p>
           </div>
         </div>
         <div class="plc-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -2647,72 +2647,6 @@ onUnmounted(() => {
   z-index: 0;
 }
 
-.plm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: plmOrbFloat 11s ease-in-out infinite;
-}
-
-.plm-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -70px;
-  right: 18%;
-  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
-}
-
-.plm-modern .orb-b {
-  width: 150px;
-  height: 150px;
-  bottom: -70px;
-  left: 30%;
-  background: radial-gradient(circle, #fda4af 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.plm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
-}
-
-.plm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: plmSheen 7s ease-in-out infinite;
-}
-
-@keyframes plmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes plmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .plm-modern .plc-title-icon {
   width: 40px;
   height: 40px;
@@ -3012,8 +2946,6 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .plm-modern .fx-orb,
-  .plm-modern .fx-sheen,
   .plm-modern .plc-title-icon {
     animation: none;
   }

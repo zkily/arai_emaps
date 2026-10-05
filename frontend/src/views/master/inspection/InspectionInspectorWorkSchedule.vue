@@ -1,19 +1,19 @@
 <template>
-  <div class="iiws iiws-modern">
+  <div class="iiws iiws-modern pb-std">
     <div class="iiws__bg" aria-hidden="true">
       <div class="iiws__orb iiws__orb--1" />
       <div class="iiws__orb iiws__orb--2" />
     </div>
 
-    <header class="iiws-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+    <header class="iiws-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="iiws-hero__main">
         <div class="iiws-hero__icon">
           <el-icon :size="18"><Clock /></el-icon>
         </div>
         <div class="iiws-hero__text">
           <div class="iiws-hero__eyebrow">マスタ · 検査 · 仕上課</div>
-          <h1 class="iiws-hero__title">検査員所定工時管理</h1>
+          <h1 class="iiws-hero__title pb-hero-title">検査員所定工時管理</h1>
         </div>
       </div>
       <div class="iiws-hero__chips" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1539,52 +1539,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.iiws-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: iiwsOrbFloat 11s ease-in-out infinite;
-}
-
-.iiws-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 24%;
-  background: radial-gradient(circle, rgba(196, 181, 253, 0.7), transparent 70%);
-}
-
-.iiws-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.5), transparent 70%);
-  animation-delay: -5s;
-}
-
-.iiws-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.iiws-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: iiwsSheen 7s ease-in-out infinite;
-}
-
 .iiws-modern .iiws-hero__icon {
   width: 40px;
   height: 40px;
@@ -1965,26 +1919,6 @@ onMounted(async () => {
   box-shadow: 0 4px 0 #c4b5fd;
 }
 
-@keyframes iiwsOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes iiwsSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes iiwsIconTick {
   0%,
   100% {
@@ -2022,8 +1956,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .iiws-modern .fx-orb,
-  .iiws-modern .fx-sheen,
   .iiws-modern .iiws-hero__icon,
   .iiws-modern .iiws-priority__arrow,
   .iiws-modern .iiws-ctrl__shell--hours.is-live {

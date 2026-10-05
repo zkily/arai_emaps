@@ -1,11 +1,7 @@
 <template>
-  <div class="production-data-management pd-modern">
-    <div class="page-header production-header glass-header">
-      <div class="header-fx" aria-hidden="true">
-        <div class="fx-orb orb-a" />
-        <div class="fx-orb orb-b" />
-        <div class="fx-grid" />
-      </div>
+  <div class="production-data-management pd-modern pb-std">
+    <div class="page-header production-header glass-header pb-hero pb-hero--page">
+      <div class="header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -13,8 +9,8 @@
               <el-icon><DataBoard /></el-icon>
             </div>
             <div class="title-copy">
-              <span class="title-text">生産データ管理</span>
-              <p class="subtitle">受注・実績・在庫を一元管理</p>
+              <span class="title-text pb-hero-title">生産データ管理</span>
+              <p class="subtitle pb-hero-desc">受注・実績・在庫を一元管理</p>
             </div>
           </h2>
         </div>
@@ -178,7 +174,7 @@
             title="その他"
             direction="btt"
             size="auto"
-            class="others-drawer"
+            class="others-drawer pb-std"
           >
             <div class="others-drawer-list">
               <div
@@ -434,9 +430,9 @@
           </div>
           <div class="filter-item date-quick-item">
             <div class="date-quick-buttons">
-              <el-button size="small" plain @click="shiftDateRange(-1)">前日</el-button>
-              <el-button size="small" type="primary" plain @click="setTodayRange">今日</el-button>
-              <el-button size="small" plain @click="shiftDateRange(1)">翌日</el-button>
+              <el-button size="small" plain class="pb-btn-plain" @click="shiftDateRange(-1)">前日</el-button>
+              <el-button size="small" type="primary" plain class="pb-btn-plain" @click="setTodayRange">今日</el-button>
+              <el-button size="small" plain class="pb-btn-plain" @click="shiftDateRange(1)">翌日</el-button>
             </div>
           </div>
           <div class="filter-item filter-group--product">
@@ -692,7 +688,7 @@
       v-model="showGenerateConfirmDialog"
       title="データ生成確認"
       width="550px"
-      class="generate-confirm-dialog"
+      class="generate-confirm-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -737,7 +733,7 @@
       v-model="showPlanConfirmDialog"
       title="計画データ更新確認"
       width="550px"
-      class="plan-confirm-dialog"
+      class="plan-confirm-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -764,7 +760,7 @@
     <!-- 工程セル单击：当月実績一覧 -->
     <el-dialog
       v-model="showMonthActualDialog"
-      class="month-actual-dialog"
+      class="month-actual-dialog pb-std"
       width="1080px"
       align-center
       destroy-on-close
@@ -951,7 +947,7 @@
       width="420px"
       append-to-body
       :close-on-click-modal="false"
-      class="month-actual-edit-dialog"
+      class="month-actual-edit-dialog pb-std"
     >
       <el-form label-width="88px" @submit.prevent>
         <el-form-item label="日付">
@@ -998,7 +994,7 @@
       v-model="showTransactionInputDialog"
       title="在庫取引ログ入力"
       :width="transactionNeedsEntitySelect ? '720px' : '580px'"
-      class="transaction-log-dialog"
+      class="transaction-log-dialog pb-std"
       :close-on-click-modal="false"
       @close="closeTransactionInputDialog"
     >
@@ -1177,7 +1173,7 @@
       v-model="showActualUpdateConfirmDialog"
       title="実績データ更新確認"
       width="550px"
-      class="actual-update-confirm-dialog"
+      class="actual-update-confirm-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1218,7 +1214,7 @@
       v-model="showInventoryTrendUpdateConfirmDialog"
       title="在庫・推移更新確認"
       width="550px"
-      class="inventory-trend-confirm-dialog"
+      class="inventory-trend-confirm-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1247,7 +1243,7 @@
       v-model="showProductMasterUpdateDialog"
       title="製品マスタ更新"
       width="550px"
-      class="product-master-update-dialog"
+      class="product-master-update-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1291,7 +1287,7 @@
       v-model="showMachineUpdateDialog"
       title="設備フィールド更新"
       width="550px"
-      class="machine-update-dialog"
+      class="machine-update-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1335,7 +1331,7 @@
       v-model="showAllUpdateConfirmDialog"
       title="全部一括更新確認"
       width="520px"
-      class="all-update-confirm-dialog"
+      class="all-update-confirm-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1376,7 +1372,7 @@
       v-model="showPrintDateDialog"
       title="工程別計画確認印刷 - 対象日選択"
       width="420px"
-      class="process-print-date-dialog"
+      class="process-print-date-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="generate-confirm-content">
@@ -1403,7 +1399,7 @@
       width="1100px"
       :close-on-click-modal="false"
       destroy-on-close
-      class="molding-plan-dialog"
+      class="molding-plan-dialog pb-std"
       align-center
     >
       <template #header>
@@ -1613,7 +1609,7 @@
       v-model="showMoldingMachineConfigDialog"
       width="720px"
       align-center
-      class="molding-machine-config-dialog"
+      class="molding-machine-config-dialog pb-std"
       destroy-on-close
       :close-on-click-modal="false"
     >
@@ -1676,7 +1672,7 @@
       v-model="showMoldingBomDialog"
       width="680px"
       align-center
-      class="molding-bom-compact-dialog"
+      class="molding-bom-compact-dialog pb-std"
       destroy-on-close
       :close-on-click-modal="false"
       @closed="clearMoldingBomSaveTimers"
@@ -1804,7 +1800,7 @@
       width="1100px"
       :close-on-click-modal="false"
       destroy-on-close
-      class="molding-plan-dialog"
+      class="molding-plan-dialog pb-std"
       align-center
     >
       <template #header>
@@ -2015,7 +2011,7 @@
       v-model="showWeldingMachineConfigDialog"
       width="720px"
       align-center
-      class="molding-machine-config-dialog"
+      class="molding-machine-config-dialog pb-std"
       destroy-on-close
       :close-on-click-modal="false"
     >
@@ -2078,7 +2074,7 @@
       v-model="showWeldingBomDialog"
       width="680px"
       align-center
-      class="molding-bom-compact-dialog"
+      class="molding-bom-compact-dialog pb-std"
       destroy-on-close
       :close-on-click-modal="false"
       @closed="clearWeldingBomSaveTimers"
@@ -2159,7 +2155,7 @@
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
-      class="progress-dialog progress-dialog--styled"
+      class="progress-dialog progress-dialog--styled pb-std"
     >
       <div class="progress-content">
         <div class="progress-info">
@@ -2189,7 +2185,7 @@
       v-model="showBatchInitialStockDialog"
       title="初期在庫一括登録"
       width="720px"
-      class="batch-initial-stock-dialog"
+      class="batch-initial-stock-dialog pb-std"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -2268,7 +2264,7 @@
       v-model="showBatchActualDialog"
       title="実績一括登録"
       width="780px"
-      class="batch-actual-dialog"
+      class="batch-actual-dialog pb-std"
       :close-on-click-modal="false"
       destroy-on-close
     >
@@ -2359,7 +2355,7 @@
       v-model="showColumnSettings"
       title="列表示設定"
       width="600px"
-      class="column-settings-dialog"
+      class="column-settings-dialog pb-std"
       :close-on-click-modal="false"
     >
       <div class="column-settings-content">
@@ -7787,15 +7783,6 @@ onUnmounted(() => {
   margin-bottom: 12px;
   color: white;
   box-shadow: 0 10px 28px rgba(5, 150, 105, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-.page-header.glass-header {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.page-header:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 32px rgba(16, 185, 129, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.22) inset;
 }
 .production-header {
   background: linear-gradient(135deg, #059669 0%, #10b981 55%, #34d399 100%);
@@ -7837,7 +7824,6 @@ onUnmounted(() => {
 }
 .title-text {
   letter-spacing: 0.03em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .subtitle {
   margin: 0;
@@ -7854,135 +7840,127 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
 }
+/* ツールバー：白地ピル・操作別カラー（アイコン・文字・枠・ホバー色で区別） */
 .header-actions :deep(.el-button) {
+  --k-rgb: 71 85 105;
+  --k-fg: #334155;
+  --k-fg-h: #0f172a;
+  --k-bd: #cbd5e1;
+  --k-bd-h: #94a3b8;
+  --k-tint: #f1f5f9;
+  --k-tint-h: #e2e8f0;
+  --k-ico: #64748b;
+  --el-button-text-color: var(--k-fg);
+  --el-button-hover-text-color: var(--k-fg-h);
+  --el-button-active-text-color: var(--k-fg-h);
+  --el-button-border-color: var(--k-bd);
+  --el-button-hover-border-color: var(--k-bd-h);
+  --el-button-active-border-color: var(--k-bd-h);
   font-size: 0.72rem;
   height: 30px;
-  padding: 0 10px;
-  border-radius: 11px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  border-width: 1px;
-  border-style: solid;
+  padding: 0 13px 0 11px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--k-bd);
+  color: var(--k-fg);
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
   position: relative;
   overflow: hidden;
   transition:
-    background 0.22s ease,
-    border-color 0.22s ease,
-    box-shadow 0.22s ease,
-    transform 0.18s ease,
-    filter 0.22s ease;
-  box-shadow:
-    0 8px 18px -12px rgba(15, 23, 42, 0.45),
-    0 1px 0 rgba(255, 255, 255, 0.25) inset;
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
-.header-actions :deep(.el-button:not(.is-disabled):hover) {
-  transform: translateY(-1px);
-  filter: saturate(1.05);
+.header-actions :deep(.el-button .el-icon) {
+  color: var(--k-ico);
 }
-.header-actions :deep(.el-button:not(.is-disabled):active) {
-  transform: translateY(1px);
+.header-actions :deep(.el-button:not(.is-disabled):hover),
+.header-actions :deep(.el-button:not(.is-disabled):focus) {
+  border-color: var(--k-bd-h);
+  color: var(--k-fg-h);
+  background: linear-gradient(135deg, #ffffff 0%, var(--k-tint) 45%, var(--k-tint-h) 100%);
 }
-/* ツールバー：操作別カラー */
 .header-actions :deep(.others-btn.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 58%, #4338ca 100%);
-  border-color: #4338ca;
-  box-shadow:
-    0 9px 18px -12px rgba(67, 56, 202, 0.75),
-    0 1px 0 rgba(255, 255, 255, 0.22) inset;
-}
-.header-actions :deep(.others-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
-  border-color: #4f46e5;
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #a5b4fc;
+  --k-bd-h: #818cf8;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
 }
 .header-actions :deep(.refresh-btn.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 62%, #0284c7 100%);
-  border-color: #0284c7;
-  box-shadow:
-    0 8px 18px -12px rgba(14, 165, 233, 0.7),
-    0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-.header-actions :deep(.refresh-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 58%, #0ea5e9 100%);
-  border-color: #0ea5e9;
+  --k-rgb: 2 132 199;
+  --k-fg: #0369a1;
+  --k-fg-h: #075985;
+  --k-bd: #7dd3fc;
+  --k-bd-h: #38bdf8;
+  --k-tint: #e0f2fe;
+  --k-tint-h: #bae6fd;
+  --k-ico: #0ea5e9;
 }
 .header-actions :deep(.print-btn.el-button) {
-  color: #f8fafc;
-  background: linear-gradient(135deg, #64748b 0%, #475569 62%, #334155 100%);
-  border-color: #334155;
-  box-shadow:
-    0 8px 16px -12px rgba(51, 65, 85, 0.72),
-    0 1px 0 rgba(255, 255, 255, 0.18) inset;
-}
-.header-actions :deep(.print-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #94a3b8 0%, #64748b 60%, #475569 100%);
+  --k-rgb: 71 85 105;
+  --k-fg: #334155;
+  --k-fg-h: #1e293b;
+  --k-bd: #cbd5e1;
+  --k-bd-h: #94a3b8;
+  --k-tint: #f1f5f9;
+  --k-tint-h: #e2e8f0;
+  --k-ico: #475569;
 }
 .header-actions :deep(.process-print-btn-primary.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #34d399 0%, #10b981 54%, #059669 100%);
-  border-color: #047857;
-  box-shadow:
-    0 9px 18px -12px rgba(5, 150, 105, 0.72),
-    0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-.header-actions :deep(.process-print-btn-primary.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #6ee7b7 0%, #34d399 52%, #10b981 100%);
-  border-color: #059669;
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-fg-h: #065f46;
+  --k-bd: #6ee7b7;
+  --k-bd-h: #34d399;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
 }
 .header-actions :deep(.recommended-print-dropdown-btn.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 52%, #d97706 100%);
-  border-color: #b45309;
-  box-shadow:
-    0 8px 18px -12px rgba(217, 119, 6, 0.72),
-    0 1px 0 rgba(255, 255, 255, 0.22) inset;
-}
-.header-actions :deep(.recommended-print-dropdown-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 52%, #f59e0b 100%);
-  border-color: #d97706;
+  --k-rgb: 217 119 6;
+  --k-fg: #b45309;
+  --k-fg-h: #92400e;
+  --k-bd: #fcd34d;
+  --k-bd-h: #fbbf24;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #f59e0b;
 }
 .header-actions :deep(.production-plan-dropdown-btn.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 55%, #7c3aed 100%);
-  border-color: #6d28d9;
-  box-shadow:
-    0 9px 18px -12px rgba(124, 58, 237, 0.74),
-    0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-.header-actions :deep(.production-plan-dropdown-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 52%, #8b5cf6 100%);
-  border-color: #7c3aed;
+  --k-rgb: 124 58 237;
+  --k-fg: #6d28d9;
+  --k-fg-h: #5b21b6;
+  --k-bd: #c4b5fd;
+  --k-bd-h: #a78bfa;
+  --k-tint: #ede9fe;
+  --k-tint-h: #ddd6fe;
+  --k-ico: #8b5cf6;
 }
 .header-actions :deep(.inventory-stagnation-btn.el-button) {
-  color: #fff;
-  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 52%, #e11d48 100%);
-  border-color: #be123c;
-  box-shadow:
-    0 9px 18px -12px rgba(225, 29, 72, 0.72),
-    0 1px 0 rgba(255, 255, 255, 0.22) inset;
-}
-.header-actions :deep(.inventory-stagnation-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(135deg, #fda4af 0%, #fb7185 50%, #f43f5e 100%);
-  border-color: #e11d48;
+  --k-rgb: 225 29 72;
+  --k-fg: #be123c;
+  --k-fg-h: #9f1239;
+  --k-bd: #fda4af;
+  --k-bd-h: #fb7185;
+  --k-tint: #ffe4e6;
+  --k-tint-h: #fecdd3;
+  --k-ico: #f43f5e;
 }
 .header-actions :deep(.settings-btn.el-button) {
-  color: #334155;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border-color: #cbd5e1;
-  box-shadow:
-    0 8px 14px -12px rgba(15, 23, 42, 0.35),
-    0 1px 0 rgba(255, 255, 255, 0.92) inset;
-}
-.header-actions :deep(.settings-btn.el-button:hover:not(.is-disabled)) {
-  color: #0f172a;
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-  border-color: #94a3b8;
-}
-.header-actions :deep(.el-button.is-disabled) {
-  opacity: 0.54;
-  filter: grayscale(0.1) saturate(0.86);
-  box-shadow: none !important;
+  --k-rgb: 100 116 139;
+  --k-fg: #475569;
+  --k-fg-h: #334155;
+  --k-bd: #e2e8f0;
+  --k-bd-h: #cbd5e1;
+  --k-tint: #f8fafc;
+  --k-tint-h: #f1f5f9;
+  --k-ico: #64748b;
 }
 /* 内容区域：统一字体 0.75rem，组件高度 28px */
 .table-card {
@@ -9385,130 +9363,48 @@ onUnmounted(() => {
   pointer-events: none;
   z-index: 0;
 }
-.pd-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-}
-.pd-modern .fx-orb.orb-a {
-  width: 240px;
-  height: 240px;
-  top: -120px;
-  right: 8%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.pd-modern .fx-orb.orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -120px;
-  left: 18%;
-  background: radial-gradient(circle, rgba(165, 243, 252, 0.4) 0%, rgba(165, 243, 252, 0) 70%);
-}
-.pd-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
-}
 .pd-modern .header-content {
   position: relative;
   z-index: 1;
 }
 .pd-modern .title-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
   box-shadow:
-    0 10px 20px -8px rgba(2, 44, 34, 0.55),
-    0 2px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -3px 0 rgba(4, 120, 87, 0.35) inset;
-}
-.pd-modern .title-icon .el-icon {
-  filter: drop-shadow(0 2px 3px rgba(2, 44, 34, 0.35));
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.25);
 }
 .pd-modern .title-text {
-  font-size: 21px;
   letter-spacing: 0.05em;
-  text-shadow: 0 2px 6px rgba(2, 44, 34, 0.25);
 }
-/* ---------- ヘッダー操作ボタン（3Dキーキャップ） ---------- */
-.pd-modern .header-actions :deep(.el-button) {
-  --edge: rgba(15, 23, 42, 0.35);
-  --glow: rgba(15, 23, 42, 0.35);
+/* ---------- ヘッダー操作ボタン（白地ピル） ---------- */
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.production-data-management.pd-modern.pb-std.pb-std
+  .header-actions
+  :deep(.el-button.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled)) {
   box-shadow:
-    0 3px 0 var(--edge),
-    0 10px 18px -8px var(--glow),
-    0 1px 0 rgba(255, 255, 255, 0.28) inset;
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(2, 44, 34, 0.35) !important;
 }
-.pd-modern .header-actions :deep(.el-button::before) {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.38) 50%,
-    transparent 70%
-  );
-  background-size: 250% 100%;
-  background-position: 130% 0;
-  transition: background-position 0.6s ease;
-  pointer-events: none;
-}
-.pd-modern .header-actions :deep(.el-button:not(.is-disabled):hover) {
-  transform: translateY(-2px);
+.production-data-management.pd-modern.pb-std.pb-std
+  .header-actions
+  :deep(.el-button.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover) {
   box-shadow:
-    0 5px 0 var(--edge),
-    0 14px 22px -8px var(--glow),
-    0 1px 0 rgba(255, 255, 255, 0.3) inset;
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(2, 44, 34, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
 }
-.pd-modern .header-actions :deep(.el-button:not(.is-disabled):hover::before) {
-  background-position: -30% 0;
-}
-.pd-modern .header-actions :deep(.el-button:not(.is-disabled):active) {
-  transform: translateY(2px);
+.production-data-management.pd-modern.pb-std.pb-std
+  .header-actions
+  :deep(.el-button.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active) {
   box-shadow:
-    0 1px 0 var(--edge),
-    0 4px 8px -4px var(--glow),
-    0 1px 0 rgba(255, 255, 255, 0.2) inset;
-}
-.pd-modern .header-actions :deep(.others-btn.el-button) {
-  --edge: #3730a3;
-  --glow: rgba(79, 70, 229, 0.6);
-}
-.pd-modern .header-actions :deep(.refresh-btn.el-button) {
-  --edge: #0369a1;
-  --glow: rgba(14, 165, 233, 0.6);
-}
-.pd-modern .header-actions :deep(.print-btn.el-button) {
-  --edge: #1e293b;
-  --glow: rgba(51, 65, 85, 0.6);
-}
-.pd-modern .header-actions :deep(.process-print-btn-primary.el-button) {
-  --edge: #065f46;
-  --glow: rgba(5, 150, 105, 0.6);
-}
-.pd-modern .header-actions :deep(.recommended-print-dropdown-btn.el-button) {
-  --edge: #92400e;
-  --glow: rgba(217, 119, 6, 0.6);
-}
-.pd-modern .header-actions :deep(.production-plan-dropdown-btn.el-button) {
-  --edge: #5b21b6;
-  --glow: rgba(124, 58, 237, 0.6);
-}
-.pd-modern .header-actions :deep(.inventory-stagnation-btn.el-button) {
-  --edge: #9f1239;
-  --glow: rgba(225, 29, 72, 0.6);
-}
-.pd-modern .header-actions :deep(.settings-btn.el-button) {
-  --edge: #cbd5e1;
-  --glow: rgba(15, 23, 42, 0.28);
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(2, 44, 34, 0.3) !important;
 }
 
 /* ---------- フィルター ---------- */
@@ -9565,21 +9461,30 @@ onUnmounted(() => {
   font-size: 12px;
   color: #fff;
   background: linear-gradient(135deg, #34d399, #059669);
-  box-shadow: 0 2px 0 #047857, 0 4px 8px -4px rgba(5, 150, 105, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.35),
+    0 3px 6px -3px rgba(5, 150, 105, 0.5);
 }
 .pd-modern .filter-group--product .filter-label {
   color: #0369a1;
 }
 .pd-modern .filter-group--product .filter-label .el-icon {
   background: linear-gradient(135deg, #38bdf8, #0284c7);
-  box-shadow: 0 2px 0 #0369a1, 0 4px 8px -4px rgba(2, 132, 199, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(3, 105, 161, 0.35),
+    0 3px 6px -3px rgba(2, 132, 199, 0.5);
 }
 .pd-modern .filter-group--keyword .filter-label {
   color: #334155;
 }
 .pd-modern .filter-group--keyword .filter-label .el-icon {
   background: linear-gradient(135deg, #94a3b8, #475569);
-  box-shadow: 0 2px 0 #334155, 0 4px 8px -4px rgba(71, 85, 105, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(51, 65, 85, 0.35),
+    0 3px 6px -3px rgba(71, 85, 105, 0.5);
 }
 .pd-modern .date-quick-buttons {
   height: 30px;
@@ -9601,22 +9506,36 @@ onUnmounted(() => {
   color: #047857;
   background: #fff;
   border-color: rgba(16, 185, 129, 0.3);
-  box-shadow: 0 2px 0 #cbd5e1, 0 6px 10px -6px rgba(15, 23, 42, 0.3);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.06),
+    0 3px 8px -4px rgba(15, 23, 42, 0.3);
   transform: translateY(-1px);
 }
 .pd-modern .date-quick-buttons :deep(.el-button--primary.is-plain) {
   color: #fff;
   background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
   border-color: #059669;
-  box-shadow: 0 2px 0 #047857, 0 6px 10px -6px rgba(5, 150, 105, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.3),
+    0 3px 8px -4px rgba(5, 150, 105, 0.6);
 }
 .pd-modern .date-quick-buttons :deep(.el-button--primary.is-plain:hover) {
   color: #fff;
   background: linear-gradient(180deg, #6ee7b7 0%, #34d399 100%);
-  box-shadow: 0 3px 0 #047857, 0 8px 12px -6px rgba(5, 150, 105, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.3),
+    0 6px 12px -6px rgba(5, 150, 105, 0.65);
 }
 .pd-modern .date-quick-buttons :deep(.el-button:active) {
   transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.15);
+}
+.pd-modern .date-quick-buttons :deep(.el-button:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
 }
 
 /* ---------- タブ（3Dピル・タブ別カラー） ---------- */
@@ -9643,8 +9562,9 @@ onUnmounted(() => {
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   box-shadow:
-    0 2px 0 #e2e8f0,
-    0 6px 12px -10px rgba(15, 23, 42, 0.35);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 2px 6px -3px rgba(15, 23, 42, 0.25);
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
@@ -9700,25 +9620,28 @@ onUnmounted(() => {
 .pd-modern .summary-table-tabs :deep(.el-tabs__header .el-tabs__item:not(.is-active):hover) {
   color: var(--tab-deep);
   border-color: var(--tab);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
-    0 4px 0 #e2e8f0,
-    0 10px 16px -10px var(--tab-glow);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 8px 16px -10px var(--tab-glow);
 }
 .pd-modern .summary-table-tabs :deep(.el-tabs__header .el-tabs__item.is-active) {
   color: #fff;
   border-color: var(--tab-deep);
   background: linear-gradient(135deg, var(--tab) 0%, var(--tab-deep) 100%);
-  transform: translateY(-1px);
   box-shadow:
-    0 3px 0 var(--tab-deep),
-    0 10px 18px -8px var(--tab-glow),
-    0 1px 0 rgba(255, 255, 255, 0.3) inset;
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18),
+    0 8px 16px -8px var(--tab-glow);
+}
+.pd-modern .summary-table-tabs :deep(.el-tabs__header .el-tabs__item:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--tab-glow);
 }
 .pd-modern .summary-table-tabs :deep(.el-tabs__item.is-active .tab-dot) {
   background: #fff;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
-  animation: pdDotPulse 1.8s ease-in-out infinite;
 }
 
 /* ---------- テーブル ---------- */
@@ -9782,24 +9705,13 @@ onUnmounted(() => {
   color: #fff;
   font-weight: 700;
   background: linear-gradient(135deg, #34d399 0%, #059669 100%);
-  box-shadow: 0 2px 0 #047857, 0 6px 12px -6px rgba(5, 150, 105, 0.6);
-}
-
-/* ---------- キーフレーム ---------- */
-@keyframes pdDotPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.12);
-  }
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.3),
+    0 3px 8px -4px rgba(5, 150, 105, 0.6);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pd-modern .summary-table-tabs :deep(.el-tabs__item.is-active .tab-dot) {
-    animation: none;
-  }
   .pd-modern .header-actions :deep(.el-button),
   .pd-modern .summary-table-tabs :deep(.el-tabs__item),
   .pd-modern .filter-item {

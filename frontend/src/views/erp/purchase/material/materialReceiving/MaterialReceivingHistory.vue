@@ -1,15 +1,15 @@
 <template>
-  <div class="material-logs-container mrh-modern">
-    <header class="page-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /></div>
+  <div class="material-logs-container mrh-modern pb-std">
+    <header class="page-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="page-hero__main">
         <div class="page-hero__brand">
           <div class="page-hero__icon" aria-hidden="true">
             <el-icon :size="20"><Document /></el-icon>
           </div>
           <div class="page-hero__titles">
-            <h1 class="page-hero__title">材料受入履歴</h1>
-            <p class="page-hero__sub">材料の受入・検品を管理します</p>
+            <h1 class="page-hero__title pb-hero-title">材料受入履歴</h1>
+            <p class="page-hero__sub pb-hero-desc">材料の受入・検品を管理します</p>
           </div>
         </div>
         <div class="page-hero__stats" role="status">
@@ -1510,34 +1510,6 @@ onMounted(() => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.mrh-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.mrh-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  right: 30%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.mrh-modern .orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -110px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(165, 243, 252, 0.42) 0%, rgba(165, 243, 252, 0) 70%);
-}
-.mrh-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
 }
 .mrh-modern .page-hero__icon {
   width: 42px;

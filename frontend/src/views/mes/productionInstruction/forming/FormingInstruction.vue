@@ -1,20 +1,15 @@
 <template>
-  <div class="molding-instruction-container mi-modern" :class="{ 'is-compact': compact }">
+  <div class="molding-instruction-container mi-modern pb-std" :class="{ 'is-compact': compact }">
     <!-- コンパクトヘッダー -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="header-info">
           <div class="title-wrapper">
             <el-icon class="title-icon"><Document /></el-icon>
-            <h1 class="page-title">成型指示書発行管理</h1>
+            <h1 class="page-title pb-hero-title">成型指示書発行管理</h1>
           </div>
-          <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+          <span class="page-subtitle pb-hero-desc">生産計画データ管理・指示発行システム</span>
         </div>
         <div class="page-header-actions">
           <div class="header-stats">
@@ -9588,6 +9583,16 @@ onUnmounted(() => {
 }
 
 /* 页面美化：現代UI・3D動効・色分け（成型指示書発行管理 / MES 成型：sky→blue→indigo） */
+.molding-instruction-container.mi-modern,
+.molding-instruction-container.mi-modern .plan-section,
+.molding-instruction-container.mi-modern .section-card,
+.molding-instruction-container.mi-modern .stats-grid,
+.molding-instruction-container.mi-modern .search-bar,
+.molding-instruction-container.mi-modern .compact-table,
+.molding-instruction-container.mi-modern .instruction-section .section-card::before {
+  animation: none;
+}
+
 .molding-instruction-container.mi-modern .page-header {
   padding: 12px 18px;
   border-radius: 14px;
@@ -9607,94 +9612,6 @@ onUnmounted(() => {
   display: none;
 }
 
-.mi-modern .page-header-fx {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-.mi-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(26px);
-  opacity: 0.55;
-  animation: miOrbFloat 9s ease-in-out infinite;
-}
-
-.mi-modern .page-header-fx .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  right: 12%;
-  background: radial-gradient(circle, #38bdf8 0%, transparent 70%);
-}
-
-.mi-modern .page-header-fx .orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -100px;
-  left: 18%;
-  background: radial-gradient(circle, #a78bfa 0%, transparent 70%);
-  animation-delay: -4.5s;
-}
-
-.mi-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 35%, #000 70%, transparent 100%);
-}
-
-.mi-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.16) 50%,
-    transparent 100%
-  );
-  animation: miSheen 7s ease-in-out infinite;
-}
-
-@keyframes miOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 12px) scale(1.12);
-  }
-}
-
-@keyframes miSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
-
-@keyframes miIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
-  }
-}
-
 .mi-modern .title-wrapper {
   gap: 12px;
 }
@@ -9711,27 +9628,24 @@ onUnmounted(() => {
     0 4px 0 rgba(12, 74, 110, 0.55),
     0 10px 20px -8px rgba(2, 6, 23, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(6px);
-  animation: miIconFloat 4.5s ease-in-out infinite;
 }
 
 .molding-instruction-container.mi-modern .page-title {
   background: none;
   color: #fff;
   -webkit-text-fill-color: #fff;
-  text-shadow: 0 2px 10px rgba(2, 6, 23, 0.35);
   letter-spacing: 0.4px;
 }
 
 .molding-instruction-container.mi-modern .page-subtitle {
-  color: rgba(224, 242, 254, 0.88);
+  color: rgba(224, 242, 254, 0.9);
 }
 
 .mi-modern .header-stats {
   gap: 8px;
 }
 
-/* 「データ更新」ボタンと同じ外観（白→淡色グラデ＋下エッジ影）。ぼかし・文字影なし */
+/* 統計チップ：白→淡色グラデ＋下エッジ影（ボタンではないので hover 移動なし） */
 .molding-instruction-container.mi-modern .header-stat-item {
   gap: 6px;
   height: 34px;
@@ -9740,13 +9654,11 @@ onUnmounted(() => {
   border-radius: 10px;
   box-sizing: border-box;
   border: 1px solid rgba(255, 255, 255, 0.8);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: none;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item:hover {
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .molding-instruction-container.mi-modern .header-stat-item--total {
@@ -9754,12 +9666,6 @@ onUnmounted(() => {
   box-shadow:
     0 3px 0 #7dd3fc,
     0 10px 18px -8px rgba(2, 6, 23, 0.55);
-}
-
-.molding-instruction-container.mi-modern .header-stat-item--total:hover {
-  box-shadow:
-    0 5px 0 #7dd3fc,
-    0 14px 22px -8px rgba(2, 6, 23, 0.6);
 }
 
 .molding-instruction-container.mi-modern .header-stat-item.header-stat-item--total .stat-value {
@@ -9775,12 +9681,6 @@ onUnmounted(() => {
   box-shadow:
     0 3px 0 #c4b5fd,
     0 10px 18px -8px rgba(2, 6, 23, 0.55);
-}
-
-.molding-instruction-container.mi-modern .header-stat-item--machine:hover {
-  box-shadow:
-    0 5px 0 #c4b5fd,
-    0 14px 22px -8px rgba(2, 6, 23, 0.6);
 }
 
 .molding-instruction-container.mi-modern .header-stat-item.header-stat-item--machine .stat-value {
@@ -9815,9 +9715,8 @@ onUnmounted(() => {
 .molding-instruction-container.mi-modern .header-stat-item .stat-value {
   font-size: 18px;
   line-height: 1;
-  margin-bottom:0;
+  margin-bottom: 0;
   font-weight: 800;
-  color: #0f172a;
   font-variant-numeric: tabular-nums;
 }
 
@@ -9825,37 +9724,23 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1;
   font-weight: 600;
-  color: #334155;
   white-space: nowrap;
 }
 
+/* データ更新：白地ピル（影・動きは共通ボタン標準） */
 .molding-instruction-container.mi-modern .action-btn.refresh-btn {
+  --k-rgb: 14 165 233;
   height: 34px;
   padding: 6px 14px;
   border-radius: 10px;
   color: #0c4a6e;
   background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
   border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow:
-    0 3px 0 #7dd3fc,
-    0 10px 18px -8px rgba(2, 6, 23, 0.55);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
 }
 
 .molding-instruction-container.mi-modern .action-btn.refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 #7dd3fc,
-    0 14px 22px -8px rgba(2, 6, 23, 0.6);
-}
-
-.molding-instruction-container.mi-modern .action-btn.refresh-btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 #7dd3fc,
-    0 4px 8px -4px rgba(2, 6, 23, 0.5);
+  color: #075985;
+  background: linear-gradient(180deg, #ffffff 0%, #bae6fd 100%);
 }
 
 /* セクションカード：アクセントバー */
@@ -9882,7 +9767,7 @@ onUnmounted(() => {
 }
 
 .mi-modern .plan-section .search-bar {
-  background: linear-gradient(135deg, rgba(240, 249, 255, 0.95) 0%, rgba(238, 242, 255, 0.9) 100%);
+  background: linear-gradient(135deg, #f0f9ff 0%, #eef2ff 100%);
   border-bottom: 1px dashed rgba(125, 211, 252, 0.6);
   border-radius: 10px 10px 0 0;
 }
@@ -9895,60 +9780,41 @@ onUnmounted(() => {
   align-self: center;
   border-radius: 999px;
   background: linear-gradient(145deg, #e0f2fe 0%, #bae6fd 100%);
-  box-shadow:
-    0 2px 0 #7dd3fc,
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
-/* 検索バーボタン：3Dキーキャップ（色分け） */
+/* 検索バーボタン：光沢グラデ（色分け）。影・動きは共通ボタン標準 */
 .mi-modern .plan-section .search-controls .date-btn,
 .mi-modern .plan-section .search-controls .print-btn,
 .mi-modern .plan-qty-chart-section .month-btn {
   --k-from: #60a5fa;
   --k-to: #2563eb;
   --k-edge: #1d4ed8;
-  --k-glow: rgba(37, 99, 235, 0.55);
+  --k-rgb: 37 99 235;
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: linear-gradient(145deg, var(--k-from) 0%, var(--k-to) 100%);
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.15s ease;
+  font-weight: 600;
+  border: 1px solid var(--k-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
 }
 
 .mi-modern .plan-section .search-controls .date-btn:hover,
 .mi-modern .plan-section .search-controls .print-btn:hover,
 .mi-modern .plan-qty-chart-section .month-btn:hover {
   color: #fff;
-  filter: brightness(1.06);
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.36);
-}
-
-.mi-modern .plan-section .search-controls .date-btn:active,
-.mi-modern .plan-section .search-controls .print-btn:active,
-.mi-modern .plan-qty-chart-section .month-btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -4px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: var(--k-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--k-to) 0%, var(--k-edge) 100%);
 }
 
 .mi-modern .plan-section .search-controls .date-btn.prev,
 .mi-modern .plan-qty-chart-section .month-btn.prev {
   --k-from: #fb7185;
   --k-to: #dc2626;
-  --k-edge: #991b1b;
-  --k-glow: rgba(220, 38, 38, 0.5);
+  --k-edge: #b91c1c;
+  --k-rgb: 220 38 38;
 }
 
 .mi-modern .plan-section .search-controls .date-btn.next,
@@ -9956,55 +9822,35 @@ onUnmounted(() => {
   --k-from: #34d399;
   --k-to: #059669;
   --k-edge: #047857;
-  --k-glow: rgba(5, 150, 105, 0.5);
+  --k-rgb: 5 150 105;
 }
 
 .mi-modern .plan-section .search-controls .print-btn.el-button--success {
   --k-from: #4ade80;
   --k-to: #16a34a;
-  --k-edge: #166534;
-  --k-glow: rgba(22, 163, 74, 0.5);
+  --k-edge: #15803d;
+  --k-rgb: 22 163 74;
 }
 
 .mi-modern .plan-section .search-controls .print-btn.el-button--primary {
   --k-from: #818cf8;
   --k-to: #4f46e5;
-  --k-edge: #3730a3;
-  --k-glow: rgba(79, 70, 229, 0.5);
+  --k-edge: #4338ca;
+  --k-rgb: 79 70 229;
 }
 
 .mi-modern .plan-section .search-controls .print-btn.el-button--info {
   --k-from: #94a3b8;
   --k-to: #475569;
-  --k-edge: #1e293b;
-  --k-glow: rgba(71, 85, 105, 0.5);
+  --k-edge: #334155;
+  --k-rgb: 71 85 105;
 }
 
 .mi-modern .plan-section .search-controls .print-btn.el-button--warning {
   --k-from: #fbbf24;
   --k-to: #ea580c;
-  --k-edge: #9a3412;
-  --k-glow: rgba(234, 88, 12, 0.5);
-}
-
-.mi-modern .plan-section .search-controls .print-btn.is-loading {
-  filter: saturate(0.8);
-}
-
-.mi-modern .plan-section .forming-notes-toolbar-btn {
-  box-shadow:
-    0 3px 0 #cbd5e1,
-    0 8px 14px -8px rgba(15, 23, 42, 0.35);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.mi-modern .plan-section .forming-notes-toolbar-btn:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 #cbd5e1,
-    0 12px 18px -8px rgba(15, 23, 42, 0.4);
+  --k-edge: #c2410c;
+  --k-rgb: 234 88 12;
 }
 
 /* 計画テーブル：ヘッダー sky グラデーション（行背景は維持） */
@@ -10026,7 +9872,7 @@ onUnmounted(() => {
 
 /* 日別チャートカード：ヘッダー */
 .mi-modern .plan-qty-chart-section .card-header {
-  background: linear-gradient(135deg, rgba(238, 242, 255, 0.95) 0%, rgba(245, 243, 255, 0.9) 100%);
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
 }
 
 .mi-modern .plan-qty-chart-section .card-header::after {
@@ -10047,7 +9893,7 @@ onUnmounted(() => {
   box-shadow:
     0 3px 0 #4c1d95,
     0 8px 14px -6px rgba(109, 40, 217, 0.6);
-  animation: miIconFloat 5s ease-in-out infinite;
+  animation: none;
 }
 
 .mi-modern .plan-qty-chart-sub {
@@ -10056,14 +9902,5 @@ onUnmounted(() => {
   color: #5b21b6;
   background: rgba(139, 92, 246, 0.1);
   border: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mi-modern .page-header-fx .fx-orb,
-  .mi-modern .page-header-fx .fx-sheen,
-  .molding-instruction-container.mi-modern .title-icon,
-  .mi-modern .plan-qty-chart-title-row > .el-icon {
-    animation: none;
-  }
 }
 </style>

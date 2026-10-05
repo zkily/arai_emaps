@@ -1,13 +1,13 @@
 <template>
-  <div class="rb-page rbm-modern">
-    <div class="rb-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="rb-page rbm-modern pb-std">
+    <div class="rb-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="rb-header-left">
         <div class="rb-title-row">
           <span class="rb-title-icon"><el-icon :size="20"><Histogram /></el-icon></span>
-          <h1 class="rb-title">ローラーBOM管理</h1>
+          <h1 class="rb-title pb-hero-title">ローラーBOM管理</h1>
         </div>
-        <p class="rb-subtitle">ローラー・製品・設備の対応関係を登録・検索・一括操作します</p>
+        <p class="rb-subtitle pb-hero-desc">ローラー・製品・設備の対応関係を登録・検索・一括操作します</p>
       </div>
       <div class="rb-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
         <div v-for="(s, i) in statItems" :key="s.l" :class="['rb-stat', `rb-stat--${i}`]">
@@ -923,52 +923,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.rbm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: rbmOrbFloat 11s ease-in-out infinite;
-}
-
-.rbm-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(251, 146, 60, 0.6), transparent 70%);
-}
-
-.rbm-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(214, 211, 209, 0.45), transparent 70%);
-  animation-delay: -5s;
-}
-
-.rbm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.rbm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: rbmSheen 7s ease-in-out infinite;
-}
-
 .rbm-modern .rb-title-icon {
   width: 40px;
   height: 40px;
@@ -1234,26 +1188,6 @@ onMounted(async () => {
   box-shadow: 0 1px 0 var(--hx-deep);
 }
 
-@keyframes rbmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes rbmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes rbmIconRoll {
   0%,
   100% {
@@ -1265,8 +1199,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rbm-modern .fx-orb,
-  .rbm-modern .fx-sheen,
   .rbm-modern .rb-title-icon {
     animation: none;
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="inventory-list-page il-modern">
+  <div class="inventory-list-page il-modern pb-std">
     <div class="page-bg">
       <div class="bg-gradient"></div>
       <div class="bg-orb bg-orb-1"></div>
@@ -7,19 +7,14 @@
       <div class="bg-orb bg-orb-3"></div>
     </div>
 
-    <div class="page-header glass animate-in">
-      <div class="header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header glass pb-hero pb-hero--page">
+      <div class="header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon">
           <el-icon size="24"><List /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="header-title">仕掛品・製品在庫照会</h1>
+          <h1 class="header-title pb-hero-title">仕掛品・製品在庫照会</h1>
           <div class="header-chips">
             <span class="header-chip">
               <el-icon><Calendar /></el-icon>
@@ -1234,43 +1229,6 @@ onMounted(() => {
   z-index: 0;
   pointer-events: none;
 }
-.il-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(2px);
-  animation: ilOrbFloat 9s ease-in-out infinite;
-}
-.il-modern .orb-a {
-  width: 200px;
-  height: 200px;
-  top: -90px;
-  right: 18%;
-  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(153, 246, 228, 0) 70%);
-}
-.il-modern .orb-b {
-  width: 140px;
-  height: 140px;
-  bottom: -76px;
-  left: 34%;
-  background: radial-gradient(circle at 40% 40%, rgba(165, 243, 252, 0.4), rgba(165, 243, 252, 0) 70%);
-  animation-delay: -4s;
-}
-.il-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
-}
-.il-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
-  background-size: 250% 100%;
-  animation: ilSheen 6s ease-in-out infinite;
-}
 .il-modern .header-left,
 .il-modern .header-actions {
   position: relative;
@@ -1687,24 +1645,6 @@ onMounted(() => {
   background: linear-gradient(90deg, #10b981, #059669);
   animation: none;
 }
-
-@keyframes ilOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(-18px, 12px, 0);
-  }
-}
-@keyframes ilSheen {
-  0% {
-    background-position: 130% 0;
-  }
-  100% {
-    background-position: -30% 0;
-  }
-}
 @keyframes ilIconFloat {
   0%,
   100% {
@@ -1733,8 +1673,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .il-modern .fx-orb,
-  .il-modern .fx-sheen,
   .il-modern .header-icon,
   .il-modern .progress-fill,
   .il-modern .progress-icon,

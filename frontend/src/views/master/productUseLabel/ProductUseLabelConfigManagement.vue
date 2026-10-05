@@ -1,13 +1,13 @@
 <template>
-  <div class="pul-page pum-modern">
-    <header class="pul-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="pul-page pum-modern pb-std">
+    <header class="pul-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="pul-hero-inner">
         <div class="pul-title-row">
           <span class="pul-title-icon"><el-icon :size="20"><Tickets /></el-icon></span>
           <div>
-            <h1 class="pul-title">製品用ラベル設定</h1>
-            <p class="pul-subtitle">
+            <h1 class="pul-title pb-hero-title">製品用ラベル設定</h1>
+            <p class="pul-subtitle pb-hero-desc">
               B4横向・通常4×5枚／東北INOAC向け4×4枚。製品マスタから取込後、背番号・バーコード等を編集して印刷します。
             </p>
             <div class="pul-hero-badges">
@@ -2258,72 +2258,6 @@ onBeforeUnmount(() => {
   z-index: 0;
 }
 
-.pum-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: pumOrbFloat 11s ease-in-out infinite;
-}
-
-.pum-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -70px;
-  right: 20%;
-  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-}
-
-.pum-modern .orb-b {
-  width: 150px;
-  height: 150px;
-  bottom: -70px;
-  left: 28%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.pum-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
-}
-
-.pum-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: pumSheen 7s ease-in-out infinite;
-}
-
-@keyframes pumOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes pumSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .pum-modern .pul-title-icon {
   width: 40px;
   height: 40px;
@@ -2696,8 +2630,6 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pum-modern .fx-orb,
-  .pum-modern .fx-sheen,
   .pum-modern .pul-title-icon {
     animation: none;
   }

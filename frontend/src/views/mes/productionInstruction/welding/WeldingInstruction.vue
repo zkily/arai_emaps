@@ -1,20 +1,15 @@
 <template>
-  <div class="welding-instruction-container wi-modern">
+  <div class="welding-instruction-container wi-modern pb-std">
     <!-- コンパクトヘッダー -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="header-info">
           <div class="title-wrapper">
             <el-icon class="title-icon"><Document /></el-icon>
-            <h1 class="page-title">溶接指示書発行管理</h1>
+            <h1 class="page-title pb-hero-title">溶接指示書発行管理</h1>
           </div>
-          <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+          <span class="page-subtitle pb-hero-desc">生産計画データ管理・指示発行システム</span>
           <div v-if="planSearchForm.machineName" class="header-chips">
             <span class="header-chip">
               <el-icon><Monitor /></el-icon>
@@ -6567,76 +6562,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.wi-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(26px);
-  opacity: 0.55;
-  animation: wiOrbFloat 9s ease-in-out infinite;
-}
-
-.wi-modern .page-header-fx .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  right: 12%;
-  background: radial-gradient(circle, #e879f9 0%, transparent 70%);
-}
-
-.wi-modern .page-header-fx .orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -100px;
-  left: 18%;
-  background: radial-gradient(circle, #a78bfa 0%, transparent 70%);
-  animation-delay: -4.5s;
-}
-
-.wi-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 35%, #000 70%, transparent 100%);
-}
-
-.wi-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.16) 50%,
-    transparent 100%
-  );
-  animation: wiSheen 7s ease-in-out infinite;
-}
-
-@keyframes wiOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 12px) scale(1.12);
-  }
-}
-
-@keyframes wiSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes wiIconFloat {
   0%,
   100% {
@@ -7007,8 +6932,6 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wi-modern .page-header-fx .fx-orb,
-  .wi-modern .page-header-fx .fx-sheen,
   .welding-instruction-container.wi-modern .title-icon,
   .wi-modern .plan-qty-chart-title-row > .el-icon {
     animation: none;

@@ -1,11 +1,11 @@
 <template>
-  <div class="destination-master-container dst-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="destination-master-container dst-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-row">
           <span class="title-icon">🚚</span>
-          <h1 class="main-title">{{ t('master.destination.title') }}</h1>
+          <h1 class="main-title pb-hero-title">{{ t('master.destination.title') }}</h1>
           <div class="stat-badges" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
             <div class="stat-badge">
               <span class="stat-number">{{ destinationList.length }}</span>
@@ -641,52 +641,6 @@ onMounted(fetchList)
   pointer-events: none;
 }
 
-.dst-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: dstOrbFloat 11s ease-in-out infinite;
-}
-
-.dst-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(249, 168, 212, 0.75), transparent 70%);
-}
-
-.dst-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 10%;
-  background: radial-gradient(circle, rgba(196, 181, 253, 0.6), transparent 70%);
-  animation-delay: -5s;
-}
-
-.dst-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.dst-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: dstSheen 7s ease-in-out infinite;
-}
-
 .dst-modern .title-icon {
   display: inline-flex;
   align-items: center;
@@ -975,26 +929,6 @@ onMounted(fetchList)
   font-weight: 600;
 }
 
-@keyframes dstOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes dstSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes dstIconDrive {
   0%,
   100% {
@@ -1009,8 +943,6 @@ onMounted(fetchList)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dst-modern .fx-orb,
-  .dst-modern .fx-sheen,
   .dst-modern .title-icon {
     animation: none;
   }

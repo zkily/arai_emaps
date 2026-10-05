@@ -1299,6 +1299,7 @@ export default {
   },
   orderMonthly: {
     title: 'Monthly Orders',
+    subtitle: 'View monthly forecast and confirmed quantities; generate daily orders, update forecasts and batch register',
     btnGenerateDaily: 'Generate Daily',
     btnUpdateForecast: 'Update Forecast',
     btnUpdateProduct: 'Update Product',

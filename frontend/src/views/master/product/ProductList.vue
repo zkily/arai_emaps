@@ -1,22 +1,17 @@
 <template>
-  <div class="product-master-container prm-modern">
+  <div class="product-master-container prm-modern pb-std">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
-          <h1 class="main-title">
+          <h1 class="main-title pb-hero-title">
             <el-icon class="title-icon">
               <Box />
             </el-icon>
             {{ t('master.product.title') }}
           </h1>
-          <p class="subtitle">{{ t('master.product.subtitle') }}</p>
+          <p class="subtitle pb-hero-desc">{{ t('master.product.subtitle') }}</p>
         </div>
         <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card">
@@ -2709,51 +2704,6 @@ onMounted(async () => {
   z-index: 1;
 }
 
-.prm-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.6;
-  animation: prmOrbFloat 11s ease-in-out infinite;
-}
-
-.prm-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 32%;
-  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
-}
-
-.prm-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 24%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.prm-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-
-.prm-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: prmSheen 7s ease-in-out infinite;
-}
-
 .prm-modern .main-title {
   gap: 12px;
   font-size: 20px;
@@ -3111,25 +3061,6 @@ onMounted(async () => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes prmOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-
-@keyframes prmSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
 
 @keyframes prmIconFloat {
   0%,
@@ -3142,8 +3073,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prm-modern .page-header-fx .fx-orb,
-  .prm-modern .page-header-fx .fx-sheen,
   .prm-modern .title-icon,
   .prm-modern .filter-icon {
     animation: none;

@@ -1,16 +1,11 @@
 <template>
-  <div class="process-master-container prc-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="process-master-container prc-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-row">
           <span class="title-icon">⚙️</span>
-          <h1 class="main-title">{{ t('master.process.title') }}</h1>
+          <h1 class="main-title pb-hero-title">{{ t('master.process.title') }}</h1>
           <div class="stat-badge">
             <span class="stat-number">{{ tableData.length }}</span>
             <span class="stat-label">{{ t('master.common.items') }}</span>
@@ -316,51 +311,6 @@ onMounted(() => fetchList())
 .prc-modern .header-content {
   position: relative;
   z-index: 1;
-}
-
-.prc-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: prcOrbFloat 11s ease-in-out infinite;
-}
-
-.prc-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 30%;
-  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-}
-
-.prc-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 22%;
-  background: radial-gradient(circle, #94a3b8 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.prc-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-
-.prc-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.14) 50%, transparent 100%);
-  animation: prcSheen 7s ease-in-out infinite;
 }
 
 .prc-modern .title-row {
@@ -680,25 +630,6 @@ onMounted(() => fetchList())
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes prcOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-
-@keyframes prcSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
 
 @keyframes prcIconSpin {
   0%,
@@ -718,8 +649,6 @@ onMounted(() => fetchList())
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prc-modern .page-header-fx .fx-orb,
-  .prc-modern .page-header-fx .fx-sheen,
   .prc-modern .title-icon {
     animation: none;
   }

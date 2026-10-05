@@ -1,21 +1,16 @@
 <template>
-  <div class="ppf-page ppf-modern">
+  <div class="ppf-page ppf-modern pb-std">
     <header class="ppf-hero">
       <div class="ppf-hero__accent" aria-hidden="true" />
-      <div class="ppf-hero__inner">
-        <div class="page-header-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <div class="ppf-hero__inner pb-hero pb-hero--page">
+        <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="ppf-hero__brand">
           <div class="ppf-hero__icon">
             <el-icon :size="20"><Operation /></el-icon>
           </div>
           <div class="ppf-hero__text">
-            <h1 class="ppf-hero__title">工程加工費マスタ</h1>
-            <p class="ppf-hero__sub">工程×加工方法の単価を登録 · 明細BOMの加工費プルダウンに使用</p>
+            <h1 class="ppf-hero__title pb-hero-title">工程加工費マスタ</h1>
+            <p class="ppf-hero__sub pb-hero-desc">工程×加工方法の単価を登録 · 明細BOMの加工費プルダウンに使用</p>
           </div>
         </div>
         <div class="ppf-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1029,51 +1024,6 @@ onMounted(() => {
   z-index: 1;
 }
 
-.ppf-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.6;
-  animation: ppfOrbFloat 11s ease-in-out infinite;
-}
-
-.ppf-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 34%;
-  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
-}
-
-.ppf-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 20%;
-  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.ppf-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-
-.ppf-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.18) 50%, transparent 100%);
-  animation: ppfSheen 7s ease-in-out infinite;
-}
-
 .ppf-modern .ppf-hero__icon {
   width: 40px;
   height: 40px;
@@ -1404,25 +1354,6 @@ onMounted(() => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes ppfOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-
-@keyframes ppfSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
 
 @keyframes ppfIconFloat {
   0%,
@@ -1454,8 +1385,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ppf-modern .page-header-fx .fx-orb,
-  .ppf-modern .page-header-fx .fx-sheen,
   .ppf-modern .ppf-hero__icon,
   .ppf-modern .ppf-hero__accent,
   .ppf-modern .ppf-data-cap__dot {

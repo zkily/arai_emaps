@@ -1172,6 +1172,7 @@ export default {
   },
   orderMonthly: {
     title: 'Đơn hàng theo tháng',
+    subtitle: 'Tra cứu số lượng dự báo và xác nhận theo tháng; tạo đơn ngày, cập nhật dự báo và đăng ký hàng loạt',
     btnGenerateDaily: 'Tạo đơn ngày',
     btnUpdateForecast: 'Cập nhật dự báo',
     btnUpdateProduct: 'Cập nhật sản phẩm',

@@ -1,16 +1,16 @@
 <template>
-  <div class="bom-editor pbe-modern">
-    <header class="pbe-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="bom-editor pbe-modern pb-std">
+    <header class="pbe-hero pb-hero">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="pbe-hero__accent" aria-hidden="true" />
-      <div class="pbe-hero__inner">
+      <div class="pbe-hero__inner pb-hero--page">
         <div class="pbe-hero__brand">
           <div class="pbe-hero__icon">
             <el-icon :size="20"><Document /></el-icon>
           </div>
           <div class="pbe-hero__text">
-            <h1 class="pbe-hero__title">製品BOM表管理</h1>
-            <p class="pbe-hero__sub">
+            <h1 class="pbe-hero__title pb-hero-title">製品BOM表管理</h1>
+            <p class="pbe-hero__sub pb-hero-desc">
               製品を選ぶと左に工程順、右にBOMの材料・部品（版選択後）· 下に構成ツリー
             </p>
           </div>
@@ -3155,52 +3155,6 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.pbe-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: pbeOrbFloat 11s ease-in-out infinite;
-}
-
-.pbe-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 28%;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.65), transparent 70%);
-}
-
-.pbe-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 16%;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.5), transparent 70%);
-  animation-delay: -5s;
-}
-
-.pbe-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.pbe-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: pbeSheen 7s ease-in-out infinite;
-}
-
 .pbe-modern .pbe-hero__brand {
   flex: 1;
   min-width: 240px;
@@ -3601,26 +3555,6 @@ onMounted(() => {
   box-shadow: 0 2px 0 #1e3a8a;
 }
 
-@keyframes pbeOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes pbeSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes pbeAccentFlow {
   from {
     background-position: 0% 0;
@@ -3651,8 +3585,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pbe-modern .fx-orb,
-  .pbe-modern .fx-sheen,
   .pbe-modern .pbe-hero__accent,
   .pbe-modern .pbe-hero__icon,
   .pbe-modern .pbe-panel-cap__dot {

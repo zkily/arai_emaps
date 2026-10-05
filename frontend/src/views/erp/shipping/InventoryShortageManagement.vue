@@ -1,19 +1,14 @@
 <template>
-  <div class="inventory-shortage is-modern">
+  <div class="inventory-shortage is-modern pb-std">
     <div class="overview-card glass-card">
       <!-- ページタイトル（アイコン＋タイトルのみ） -->
-      <div class="card-header glass-header">
-        <div class="header-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <div class="card-header glass-header pb-hero pb-hero--page">
+        <div class="header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
           <div class="header-icon-container">
             <el-icon class="header-icon"><Box /></el-icon>
           </div>
-          <h1 class="header-title">{{ t('shipping.inventoryShortageTitle') }}</h1>
+          <h1 class="header-title pb-hero-title">{{ t('shipping.inventoryShortageTitle') }}</h1>
         </div>
         <div class="header-chips">
           <span class="header-chip">
@@ -2804,51 +2799,6 @@ onMounted(() => {
     z-index: 1;
   }
 
-  .is-modern .header-fx .fx-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(24px);
-    opacity: 0.6;
-    animation: isOrbFloat 10s ease-in-out infinite;
-  }
-
-  .is-modern .header-fx .orb-a {
-    width: 220px;
-    height: 220px;
-    top: -120px;
-    right: 18%;
-    background: radial-gradient(circle, #5eead4 0%, transparent 70%);
-  }
-
-  .is-modern .header-fx .orb-b {
-    width: 200px;
-    height: 200px;
-    bottom: -130px;
-    left: 22%;
-    background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-    animation-delay: -5s;
-  }
-
-  .is-modern .header-fx .fx-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-    background-size: 22px 22px;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
-  }
-
-  .is-modern .header-fx .fx-sheen {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -40%;
-    width: 35%;
-    background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-    animation: isSheen 7s ease-in-out infinite;
-  }
-
   .is-modern .header-icon-container {
     background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
     border: 1px solid rgba(255, 255, 255, 0.36);
@@ -3264,26 +3214,6 @@ onMounted(() => {
     animation: isIconFloat 4.5s ease-in-out infinite;
   }
 
-  @keyframes isOrbFloat {
-    0%,
-    100% {
-      transform: translate(0, 0) scale(1);
-    }
-    50% {
-      transform: translate(24px, 12px) scale(1.12);
-    }
-  }
-
-  @keyframes isSheen {
-    0%,
-    60% {
-      left: -40%;
-    }
-    100% {
-      left: 130%;
-    }
-  }
-
   @keyframes isIconFloat {
     0%,
     100% {
@@ -3323,8 +3253,6 @@ onMounted(() => {
 }
 
 @media screen and (prefers-reduced-motion: reduce) {
-  .is-modern .header-fx .fx-orb,
-  .is-modern .header-fx .fx-sheen,
   .is-modern .header-icon-container,
   .is-modern .header-chip--alert,
   .is-modern .glass-stat,

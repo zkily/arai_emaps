@@ -1,22 +1,17 @@
 <template>
-  <div class="order-destination-history odh-modern">
+  <div class="order-destination-history odh-modern pb-std">
     <div class="page-shell">
       <!-- 页头 + 筛选：紧凑一体 -->
-      <header class="hero-panel">
-        <div class="hero-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
-        <div class="hero-top">
+      <header class="hero-panel pb-hero">
+        <div class="hero-fx pb-bubbles" aria-hidden="true" />
+        <div class="hero-top pb-hero--page">
           <div class="title-block">
             <div class="title-icon" aria-hidden="true">
               <el-icon><OfficeBuilding /></el-icon>
             </div>
             <div class="title-text">
-              <h1 class="page-title">納入先別受注履歴</h1>
-              <p class="page-subtitle">納入先ごとの受注データ分析・履歴管理</p>
+              <h1 class="page-title pb-hero-title">納入先別受注履歴</h1>
+              <p class="page-subtitle pb-hero-desc">納入先ごとの受注データ分析・履歴管理</p>
             </div>
           </div>
           <div class="hero-meta">
@@ -1354,50 +1349,6 @@ onMounted(async () => {
   pointer-events: none;
   z-index: 0;
 }
-.odh-modern .hero-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: odhOrbFloat 12s ease-in-out infinite;
-}
-.odh-modern .hero-fx .orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  right: 22%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.odh-modern .hero-fx .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -110px;
-  left: 34%;
-  background: radial-gradient(circle, rgba(244, 114, 182, 0.35) 0%, rgba(244, 114, 182, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.odh-modern .hero-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 14% 30%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 14% 30%, #000 0%, transparent 70%);
-}
-.odh-modern .hero-fx .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.16) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: odhSheen 7s ease-in-out infinite;
-}
 .odh-modern .hero-top,
 .odh-modern .filter-strip {
   position: relative;
@@ -1754,24 +1705,6 @@ onMounted(async () => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes odhOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-@keyframes odhSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
 @keyframes odhIconFloat {
   0%,
   100% {
@@ -1799,8 +1732,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .odh-modern .hero-fx .fx-orb,
-  .odh-modern .hero-fx .fx-sheen,
   .odh-modern .title-icon,
   .odh-modern .section-icon,
   .odh-modern .kpi-card {

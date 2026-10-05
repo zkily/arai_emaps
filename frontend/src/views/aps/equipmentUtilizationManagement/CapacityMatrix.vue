@@ -1,20 +1,15 @@
 <template>
-  <div class="cap-matrix-page cm-modern">
-    <div class="plan-hd no-print">
-      <div class="plan-hd-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="cap-matrix-page cm-modern pb-std">
+    <div class="plan-hd no-print pb-hero pb-hero--page">
+      <div class="plan-hd-fx pb-bubbles" aria-hidden="true" />
       <div class="plan-hd-text">
-        <h2 class="plan-hd-title">
+        <h2 class="plan-hd-title pb-hero-title">
           <span class="plan-hd-title-inner">
             <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
             設備稼働時間表
           </span>
         </h2>
-        <p class="plan-hd-sub">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
+        <p class="plan-hd-sub pb-hero-desc">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
       </div>
       <div class="plan-hd-meta">
         <span class="plan-hd-chip">
@@ -1014,48 +1009,6 @@ onMounted(async () => {
     z-index: 0;
     pointer-events: none;
   }
-  .cm-modern .fx-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(2px);
-    animation: cmOrbFloat 9s ease-in-out infinite;
-  }
-  .cm-modern .orb-a {
-    width: 180px;
-    height: 180px;
-    top: -80px;
-    right: 12%;
-    background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.32), rgba(165, 180, 252, 0) 70%);
-  }
-  .cm-modern .orb-b {
-    width: 130px;
-    height: 130px;
-    bottom: -70px;
-    left: 30%;
-    background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
-    animation-delay: -4s;
-  }
-  .cm-modern .fx-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-    background-size: 22px 22px;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
-  }
-  .cm-modern .fx-sheen {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      110deg,
-      transparent 30%,
-      rgba(255, 255, 255, 0.16) 48%,
-      transparent 62%
-    );
-    background-size: 250% 100%;
-    animation: cmSheen 6s ease-in-out infinite;
-  }
   .cm-modern .plan-hd-text,
   .cm-modern .plan-hd-meta {
     position: relative;
@@ -1404,23 +1357,6 @@ onMounted(async () => {
       opacity: 1;
     }
   }
-  @keyframes cmOrbFloat {
-    0%,
-    100% {
-      transform: translate3d(0, 0, 0);
-    }
-    50% {
-      transform: translate3d(-18px, 12px, 0);
-    }
-  }
-  @keyframes cmSheen {
-    0% {
-      background-position: 130% 0;
-    }
-    100% {
-      background-position: -30% 0;
-    }
-  }
   @keyframes cmIconFloat {
     0%,
     100% {
@@ -1435,8 +1371,6 @@ onMounted(async () => {
 @media screen and (prefers-reduced-motion: reduce) {
   .cm-modern .plan-hd,
   .cm-modern .plan-card,
-  .cm-modern .fx-orb,
-  .cm-modern .fx-sheen,
   .cm-modern .plan-hd-title-icon,
   .cm-modern .matrix-empty__icon,
   .cm-modern .matrix-table tbody tr {

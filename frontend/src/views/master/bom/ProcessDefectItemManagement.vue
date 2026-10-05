@@ -1,15 +1,15 @@
 <template>
-  <div class="pdi-page pdm-modern">
-    <header class="pdi-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="pdi-page pdm-modern pb-std">
+    <header class="pdi-hero pb-hero">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="pdi-hero__accent" aria-hidden="true" />
-      <div class="pdi-hero__inner">
+      <div class="pdi-hero__inner pb-hero--page">
         <div class="pdi-hero__icon">
           <el-icon :size="20"><Warning /></el-icon>
         </div>
         <div class="pdi-hero__text">
-          <h1 class="pdi-hero__title">工程別不良項目マスタ</h1>
-          <p class="pdi-hero__sub">
+          <h1 class="pdi-hero__title pb-hero-title">工程別不良項目マスタ</h1>
+          <p class="pdi-hero__sub pb-hero-desc">
             収集工程ごとに MES で選択する不良項目を登録。帰属工程で責任工程（前工程不良等）を指定します。
           </p>
         </div>
@@ -798,52 +798,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.pdm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: pdmOrbFloat 11s ease-in-out infinite;
-}
-
-.pdm-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(251, 113, 133, 0.65), transparent 70%);
-}
-
-.pdm-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(252, 211, 77, 0.6), transparent 70%);
-  animation-delay: -5s;
-}
-
-.pdm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.pdm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: pdmSheen 7s ease-in-out infinite;
-}
-
 .pdm-modern .pdi-hero__inner {
   flex-wrap: wrap;
 }
@@ -1180,26 +1134,6 @@ onMounted(async () => {
   box-shadow: 0 2px 0 var(--hx-deep);
 }
 
-@keyframes pdmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes pdmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes pdmAccentFlow {
   from {
     background-position: 0% 0;
@@ -1237,8 +1171,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pdm-modern .fx-orb,
-  .pdm-modern .fx-sheen,
   .pdm-modern .pdi-hero__accent,
   .pdm-modern .pdi-hero__icon,
   .pdm-modern .pdi-data-cap__dot {

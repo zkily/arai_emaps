@@ -678,7 +678,7 @@ const handleCommand = async (command: string) => {
   --hdr-border: rgba(226, 232, 255, 0.2);
   --hdr-border-hover: rgba(238, 242, 255, 0.42);
   --hdr-inset: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  --hdr-blur: blur(16px);
+  --hdr-blur: none;
   --hdr-text: #f8fafc;
   --hdr-text-muted: rgba(248, 250, 252, 0.88);
   --hdr-accent: #c7d2fe;

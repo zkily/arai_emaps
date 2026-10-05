@@ -1,16 +1,16 @@
 <template>
-  <div class="ppup-page ppu-modern">
-    <header class="ppup-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="ppup-page ppu-modern pb-std">
+    <header class="ppup-hero pb-hero">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="ppup-hero__glow" aria-hidden="true" />
-      <div class="ppup-hero__inner">
+      <div class="ppup-hero__inner pb-hero--page">
         <div class="ppup-hero__brand">
           <div class="ppup-hero__icon">
             <el-icon :size="18"><Money /></el-icon>
           </div>
           <div class="ppup-hero__text">
-            <h1 class="ppup-hero__title">{{ t('bomHome.productUnitPriceTitle') }}</h1>
-            <p class="ppup-hero__sub">{{ t('bomHome.productUnitPriceDesc') }}</p>
+            <h1 class="ppup-hero__title pb-hero-title">{{ t('bomHome.productUnitPriceTitle') }}</h1>
+            <p class="ppup-hero__sub pb-hero-desc">{{ t('bomHome.productUnitPriceDesc') }}</p>
           </div>
         </div>
         <div class="ppup-hero__stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1982,52 +1982,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.ppu-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: ppuOrbFloat 11s ease-in-out infinite;
-}
-
-.ppu-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(110, 231, 183, 0.6), transparent 70%);
-}
-
-.ppu-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(253, 224, 71, 0.6), transparent 70%);
-  animation-delay: -5s;
-}
-
-.ppu-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.ppu-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: ppuSheen 7s ease-in-out infinite;
-}
-
 .ppu-modern .ppup-hero__brand {
   flex: 1;
   min-width: 240px;
@@ -2358,26 +2312,6 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-@keyframes ppuOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes ppuSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes ppuAccentFlow {
   from {
     background-position: 0% 0;
@@ -2408,8 +2342,6 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ppu-modern .fx-orb,
-  .ppu-modern .fx-sheen,
   .ppu-modern .ppup-hero__accent,
   .ppu-modern .ppup-hero__icon,
   .ppu-modern .ppup-data-cap__dot {

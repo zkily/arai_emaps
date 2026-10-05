@@ -1,16 +1,16 @@
 <template>
-  <div class="inventory-value-management ivm-modern">
+  <div class="inventory-value-management ivm-modern pb-std">
     <!-- ページヘッダー -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="header-left">
           <div class="header-icon">
             <Operation class="icon" />
           </div>
           <div class="header-text">
-            <h1 class="page-title">棚卸金額管理</h1>
-            <p class="page-description">在庫金額の照会・分析（実在庫・サマリを自動反映）</p>
+            <h1 class="page-title pb-hero-title">棚卸金額管理</h1>
+            <p class="page-description pb-hero-desc">在庫金額の照会・分析（実在庫・サマリを自動反映）</p>
           </div>
         </div>
         <div class="header-actions">
@@ -3861,72 +3861,6 @@ onMounted(() => {
   z-index: 0;
 }
 
-.ivm-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.5;
-  animation: ivmOrbFloat 11s ease-in-out infinite;
-}
-
-.ivm-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -80px;
-  left: 30%;
-  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
-}
-
-.ivm-modern .orb-b {
-  width: 160px;
-  height: 160px;
-  bottom: -80px;
-  right: 18%;
-  background: radial-gradient(circle, #fde68a 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.ivm-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 110% at 40% 40%, #000 20%, transparent 75%);
-}
-
-.ivm-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 26%;
-  background: linear-gradient(100deg, transparent, rgba(255, 244, 214, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: ivmSheen 7s ease-in-out infinite;
-}
-
-@keyframes ivmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes ivmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .ivm-modern .header-icon {
   width: 40px;
   height: 40px;
@@ -4273,8 +4207,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ivm-modern .fx-orb,
-  .ivm-modern .fx-sheen,
   .ivm-modern .header-icon .icon,
   .ivm-modern .kpi-tile__glow {
     animation: none;

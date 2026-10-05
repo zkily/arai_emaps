@@ -1,26 +1,17 @@
 <template>
-  <div class="bdr-page bdr-modern">
-    <div class="page-ambient" aria-hidden="true">
-      <div class="orb orb-a" />
-      <div class="orb orb-b" />
-      <div class="orb orb-c" />
-    </div>
+  <div class="bdr-page bdr-modern pb-std">
+    <div class="page-ambient" aria-hidden="true" />
 
     <div class="bdr-inner">
-      <header class="toolbar toolbar-elevated animate-in" style="--delay: 0ms">
-        <div class="toolbar-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <header class="toolbar toolbar-elevated animate-in pb-hero pb-hero--page" style="--delay: 0ms">
+        <div class="toolbar-fx pb-bubbles" aria-hidden="true" />
         <div class="toolbar-brand">
           <div class="brand-icon">
             <el-icon :size="20"><WarningFilled /></el-icon>
           </div>
           <div class="brand-copy">
-            <h1 class="toolbar-title">大量廃棄・保留品管理</h1>
-            <p class="toolbar-sub">記録登録 · 処理追跡 · 未処理通知 · 在庫消滅</p>
+            <h1 class="toolbar-title pb-hero-title">大量廃棄・保留品管理</h1>
+            <p class="toolbar-sub pb-hero-desc">記録登録 · 処理追跡 · 未処理通知 · 在庫消滅</p>
             <div class="toolbar-chips">
               <span class="toolbar-chip">
                 <el-icon><Calendar /></el-icon>
@@ -1371,48 +1362,6 @@ onMounted(async () => {
   background: linear-gradient(155deg, #eef4ff 0%, #f7f9fc 38%, #fff8f1 100%);
 }
 
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.42;
-  animation: orb-float 18s ease-in-out infinite;
-}
-
-.orb-a {
-  width: 380px;
-  height: 380px;
-  top: -120px;
-  right: 6%;
-  background: radial-gradient(circle, #fda4af 0%, transparent 70%);
-}
-.orb-b {
-  width: 300px;
-  height: 300px;
-  bottom: 6%;
-  left: -70px;
-  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
-  animation-delay: -6s;
-}
-.orb-c {
-  width: 240px;
-  height: 240px;
-  top: 46%;
-  right: 22%;
-  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
-  animation-delay: -11s;
-}
-
-@keyframes orb-float {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(12px, -14px) scale(1.05);
-  }
-}
-
 .bdr-inner {
   position: relative;
   z-index: 1;
@@ -2274,50 +2223,6 @@ onMounted(async () => {
   pointer-events: none;
   z-index: 0;
 }
-.bdr-modern .toolbar-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: bdrOrbFloat 12s ease-in-out infinite;
-}
-.bdr-modern .toolbar-fx .orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  right: 26%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.bdr-modern .toolbar-fx .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -120px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(254, 240, 138, 0.4) 0%, rgba(254, 240, 138, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.bdr-modern .toolbar-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-.bdr-modern .toolbar-fx .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.18) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: bdrSheen 7s ease-in-out infinite;
-}
 .bdr-modern .toolbar-brand,
 .bdr-modern .toolbar-actions {
   position: relative;
@@ -2468,9 +2373,6 @@ onMounted(async () => {
 .bdr-modern .kpi-card:hover::after {
   opacity: 1;
 }
-.bdr-modern .kpi-card__glow {
-  animation: bdrOrbFloat 10s ease-in-out infinite;
-}
 .bdr-modern .kpi-icon {
   transform: translateZ(20px);
   box-shadow:
@@ -2600,24 +2502,6 @@ onMounted(async () => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes bdrOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-@keyframes bdrSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
 @keyframes bdrIconFloat {
   0%,
   100% {
@@ -2656,11 +2540,8 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bdr-modern .toolbar-fx .fx-orb,
-  .bdr-modern .toolbar-fx .fx-sheen,
   .bdr-modern .brand-icon,
   .bdr-modern .action-badge,
-  .bdr-modern .kpi-card__glow,
   .bdr-modern .kpi-card--overdue.is-alert,
   .bdr-modern .cell-deadline--overdue {
     animation: none;

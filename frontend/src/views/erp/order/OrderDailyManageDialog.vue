@@ -7,12 +7,12 @@
     destroy-on-close
     :before-close="handleClose"
     :close-on-click-modal="false"
-    class="daily-manage-dialog dm-glass"
+    class="daily-manage-dialog dm-glass pb-std"
     :show-close="false"
   >
     <template #header>
-      <div class="dm-header dmm-hero">
-        <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+      <div class="dm-header dmm-hero pb-hero">
+        <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="dm-header-inner">
           <div class="dm-title-wrap">
             <div class="dm-title-icon">
@@ -843,72 +843,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.dmm-hero .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.5;
-  animation: dmmOrbFloat 11s ease-in-out infinite;
-}
-
-.dmm-hero .orb-a {
-  width: 160px;
-  height: 160px;
-  top: -80px;
-  right: 30%;
-  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-}
-
-.dmm-hero .orb-b {
-  width: 130px;
-  height: 130px;
-  bottom: -80px;
-  left: 20%;
-  background: radial-gradient(circle, #c4b5fd 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.dmm-hero .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 120% at 60% 40%, #000 20%, transparent 75%);
-}
-
-.dmm-hero .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 26%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: dmmSheen 7s ease-in-out infinite;
-}
-
-@keyframes dmmOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes dmmSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .dmm-hero .dm-title-icon {
   width: 34px;
   height: 34px;
@@ -1295,8 +1229,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dmm-hero .fx-orb,
-  .dmm-hero .fx-sheen,
   .dmm-hero .dm-title-icon {
     animation: none;
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="route-step-manager prr-modern">
+  <div class="route-step-manager prr-modern pb-std">
     <div class="page-bg" aria-hidden="true">
       <div class="page-bg__gradient" />
       <div class="page-bg__orb page-bg__orb--1" />
@@ -7,20 +7,15 @@
     </div>
 
     <div class="route-step-manager__inner">
-      <header class="page-header">
-        <div class="page-header-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <header class="page-header pb-hero pb-hero--page">
+        <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-main">
           <div class="header-icon-wrap">
             <el-icon class="header-icon" :size="22"><Tools /></el-icon>
           </div>
           <div class="header-text">
-            <h1 class="main-title">製品ルートマスタ</h1>
-            <p class="subtitle">製品を選択し、工程ステップ・設備を設定します</p>
+            <h1 class="main-title pb-hero-title">製品ルートマスタ</h1>
+            <p class="subtitle pb-hero-desc">製品を選択し、工程ステップ・設備を設定します</p>
           </div>
         </div>
         <div v-if="selectedProduct" class="header-pill">
@@ -354,51 +349,6 @@ const selectProduct = (productCd: string) => {
   z-index: 1;
 }
 
-.prr-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.6;
-  animation: prrOrbFloat 11s ease-in-out infinite;
-}
-
-.prr-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 26%;
-  background: radial-gradient(circle, #f9a8d4 0%, transparent 70%);
-}
-
-.prr-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 20%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.prr-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-
-.prr-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: prrSheen 7s ease-in-out infinite;
-}
-
 .prr-modern .header-icon-wrap {
   width: 40px;
   height: 40px;
@@ -485,25 +435,6 @@ const selectProduct = (productCd: string) => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes prrOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-
-@keyframes prrSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
 
 @keyframes prrIconFloat {
   0%,
@@ -527,8 +458,6 @@ const selectProduct = (productCd: string) => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .prr-modern .page-header-fx .fx-orb,
-  .prr-modern .page-header-fx .fx-sheen,
   .prr-modern .header-icon-wrap,
   .prr-modern .header-pill,
   .prr-modern .empty-state__icon-wrap {

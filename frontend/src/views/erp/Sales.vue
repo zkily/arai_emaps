@@ -1,11 +1,7 @@
 <template>
-  <div class="sales-home">
-    <div class="glass-header">
-      <div class="header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+  <div class="sales-home pb-std">
+    <div class="glass-header pb-hero pb-hero--page">
+      <div class="header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="header-left">
           <div class="header-icon-wrap">
@@ -14,8 +10,8 @@
             </div>
           </div>
           <div class="header-text">
-            <h1 class="header-title">販売管理</h1>
-            <div class="header-subtitle">Sales Management</div>
+            <h1 class="header-title pb-hero-title">販売管理</h1>
+            <div class="header-subtitle pb-hero-desc">Sales Management</div>
           </div>
         </div>
       </div>
@@ -182,34 +178,6 @@ onMounted(fetchStats)
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -130px;
-  right: 26%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.orb-b {
-  width: 220px;
-  height: 220px;
-  bottom: -140px;
-  left: 18%;
-  background: radial-gradient(circle, rgba(165, 180, 252, 0.45) 0%, rgba(165, 180, 252, 0) 70%);
-}
-.fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
 }
 .header-content {
   display: flex;

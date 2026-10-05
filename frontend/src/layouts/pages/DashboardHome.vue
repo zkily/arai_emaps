@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-home db-modern">
+  <div class="dashboard-home db-modern pb-std">
     <el-alert
       v-if="showMenuAccessWarning"
       type="warning"
@@ -11,14 +11,9 @@
     />
 
     <!-- Welcome Banner -->
-    <div class="welcome-banner">
+    <div class="welcome-banner pb-hero pb-hero--page">
       <div class="welcome-banner__mesh" aria-hidden="true" />
-      <div class="welcome-banner__shine" aria-hidden="true" />
-      <div class="welcome-banner__fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+      <div class="welcome-banner__fx pb-bubbles" aria-hidden="true" />
       <div class="welcome-banner__row">
         <div class="welcome-content">
           <div class="welcome-avatar-wrap">
@@ -31,7 +26,6 @@
             </div>
           </div>
           <div class="welcome-copy">
-            <p class="welcome-greeting">{{ t('dashboard.welcomeGreeting') }}</p>
             <h1 class="welcome-title">
               <span class="welcome-name">{{ displayName }}</span>
               <span v-if="welcomeSuffix" class="welcome-suffix">{{ welcomeSuffix }}</span>
@@ -39,10 +33,6 @@
             <div class="welcome-chips">
               <span class="welcome-chip welcome-chip--role">{{ roleDisplay }}</span>
               <span v-if="departmentName" class="welcome-chip welcome-chip--dept">{{ departmentName }}</span>
-              <span class="welcome-chip welcome-chip--date">
-                <el-icon><Calendar /></el-icon>
-                {{ todayText }}
-              </span>
             </div>
           </div>
         </div>
@@ -183,8 +173,6 @@ const avatarGradient = computed(() => avatarGradientFor(displayName.value))
 const roleDisplay = computed(() => displayUserRoleName(userStore.user, t))
 const departmentName = computed(() => userStore.user?.department_name?.trim() || '')
 const welcomeSuffix = computed(() => t('dashboard.welcomeSuffix'))
-const todayText = dayjs().format('YYYY/MM/DD')
-
 /** 統計・クイックカード：マウス追従の3D傾き */
 let tiltedCard: HTMLElement | null = null
 function clearCardTilt(card: HTMLElement | null) {
@@ -575,30 +563,6 @@ onMounted(() => {
     radial-gradient(circle at 50% 100%, rgba(15, 23, 42, 0.15) 0%, transparent 45%);
 }
 
-.welcome-banner__shine {
-  pointer-events: none;
-  position: absolute;
-  top: -40%;
-  right: -15%;
-  width: 55%;
-  height: 140%;
-  background: linear-gradient(
-    115deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.07) 40%,
-    rgba(255, 255, 255, 0.14) 50%,
-    rgba(255, 255, 255, 0.05) 60%,
-    transparent 100%
-  );
-  transform: rotate(-12deg);
-  animation: welcome-shine-sweep 3.6s ease-in-out infinite;
-}
-
-@keyframes welcome-shine-sweep {
-  0% { transform: rotate(-12deg) translateX(-30%); }
-  100% { transform: rotate(-12deg) translateX(30%); }
-}
-
 .welcome-banner__row {
   position: relative;
   z-index: 1;
@@ -646,16 +610,8 @@ onMounted(() => {
 .welcome-copy {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-}
-
-.welcome-greeting {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.82);
 }
 
 .welcome-title {
@@ -668,7 +624,7 @@ onMounted(() => {
 }
 
 .welcome-name {
-  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.02em;
   background: linear-gradient(
@@ -1174,7 +1130,7 @@ onMounted(() => {
 
 /* ---------- ウェルカムバナー ---------- */
 .db-modern .welcome-banner {
-  padding: 16px 18px;
+  padding: 14px 18px;
   box-shadow:
     0 4px 8px -2px rgba(79, 70, 229, 0.16),
     0 24px 44px -16px rgba(79, 70, 229, 0.45),
@@ -1185,45 +1141,14 @@ onMounted(() => {
   inset: 0;
   pointer-events: none;
 }
-.db-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: dbOrbFloat 12s ease-in-out infinite;
-}
-.db-modern .fx-orb.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  left: 36%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.db-modern .fx-orb.orb-b {
-  width: 220px;
-  height: 220px;
-  bottom: -140px;
-  right: 6%;
-  background: radial-gradient(circle, rgba(103, 232, 249, 0.35) 0%, rgba(103, 232, 249, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.db-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 22% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 22% 50%, #000 0%, transparent 70%);
-}
 .db-modern .welcome-avatar-wrap {
   perspective: 600px;
 }
 .db-modern .welcome-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 15px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 19px;
   box-shadow:
     0 10px 22px -6px rgba(15, 23, 42, 0.45),
     inset 0 2px 0 rgba(255, 255, 255, 0.32),
@@ -1231,18 +1156,30 @@ onMounted(() => {
   transform-style: preserve-3d;
   animation: dbIconTilt 5.5s ease-in-out infinite;
 }
-.db-modern .welcome-chip {
-  font-size: 10px;
-  padding: 3px 9px;
+/* 役職・所属：同一スタイルの文字のみ（背景・枠なし）、間は細い区切り線 */
+.db-modern .welcome-chips {
+  align-items: center;
+  gap: 0;
 }
-.db-modern .welcome-chip--date {
-  gap: 4px;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+.db-modern .welcome-chip,
+.db-modern .welcome-chip--role,
+.db-modern .welcome-chip--dept {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.9);
+}
+.db-modern .welcome-chip + .welcome-chip::before {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 11px;
+  margin: 0 10px;
+  background: rgba(255, 255, 255, 0.45);
 }
 .db-modern .welcome-tagline {
   -webkit-backdrop-filter: blur(6px);
@@ -1518,15 +1455,6 @@ onMounted(() => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes dbOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes dbIconTilt {
   0%,
   100% {
@@ -1548,7 +1476,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .db-modern .fx-orb,
   .db-modern .welcome-avatar,
   .db-modern .stat-card,
   .db-modern .stat-icon,

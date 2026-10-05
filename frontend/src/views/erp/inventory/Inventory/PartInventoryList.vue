@@ -1,13 +1,13 @@
 <template>
-  <div class="inventory-list-page piq-modern">
-    <div class="page-header glass animate-in">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /></div>
+  <div class="inventory-list-page piq-modern pb-std">
+    <div class="page-header glass pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon header-icon--part">
           <el-icon size="24"><Files /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="header-title">部品在庫照会</h1>
+          <h1 class="header-title pb-hero-title">部品在庫照会</h1>
           <span class="header-meta">{{ totalCount }} 件</span>
         </div>
       </div>
@@ -908,34 +908,6 @@ onMounted(() => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.piq-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.piq-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  right: 12%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.piq-modern .orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -110px;
-  left: 24%;
-  background: radial-gradient(circle, rgba(253, 230, 138, 0.42) 0%, rgba(253, 230, 138, 0) 70%);
-}
-.piq-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
 }
 .piq-modern .header-icon--part {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));

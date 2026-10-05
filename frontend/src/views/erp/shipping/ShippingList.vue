@@ -1,16 +1,13 @@
 <template>
   <div
-    class="shipping-list-container sl-modern"
+    class="shipping-list-container sl-modern pb-std"
     v-loading="pageLoading"
     element-loading-text="ページを読み込み中..."
     element-loading-background="rgba(255, 255, 255, 0.9)"
   >
     <!-- 页面头部 -->
-    <div class="page-header" :class="{ 'page-loaded': !pageLoading }">
-      <div class="header-orb orb-a"></div>
-      <div class="header-orb orb-b"></div>
-      <div class="header-orb orb-c"></div>
-      <div class="header-grid"></div>
+    <div class="page-header pb-hero pb-hero--page" :class="{ 'page-loaded': !pageLoading }">
+      <div class="pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -20,8 +17,8 @@
               </el-icon>
             </div>
             <div class="title-block">
-              <span class="title-text">{{ t('shipping.compositionTitle') }}</span>
-              <span class="subtitle">出荷構成表の作成・編集・一覧</span>
+              <span class="title-text pb-hero-title">{{ t('shipping.compositionTitle') }}</span>
+              <span class="subtitle pb-hero-desc">出荷構成表の作成・編集・一覧</span>
             </div>
           </h2>
         </div>
@@ -31,8 +28,6 @@
             :key="stat.key"
             class="stat-tile"
             :class="`stat-${stat.key}`"
-            @mousemove="handleTilt"
-            @mouseleave="resetTilt"
           >
             <span class="stat-label">
               <i class="stat-dot"></i>
@@ -68,13 +63,13 @@
                 style="width: 240px"
               />
               <div class="date-quick-buttons">
-                <el-button @click="adjustDate(-1)" class="date-btn">
+                <el-button @click="adjustDate(-1)" class="date-btn pb-btn-plain">
                   <el-icon>
                     <ArrowLeft />
                   </el-icon>
                 </el-button>
-                <el-button @click="setToday" class="date-btn today-btn"> 今日 </el-button>
-                <el-button @click="adjustDate(1)" class="date-btn">
+                <el-button @click="setToday" class="date-btn today-btn pb-btn-plain"> 今日 </el-button>
+                <el-button @click="adjustDate(1)" class="date-btn pb-btn-plain">
                   <el-icon>
                     <ArrowRight />
                   </el-icon>
@@ -146,7 +141,7 @@
                   v-for="quick in destinationQuickButtons"
                   :key="quick.code"
                   @click="selectQuickDestination(quick.code)"
-                  class="destination-quick-btn"
+                  class="destination-quick-btn pb-btn-plain"
                   :class="{ active: singleDestination === quick.code }"
                   size="small"
                 >
@@ -319,7 +314,7 @@
           <el-table-column
             label="出荷番号"
             prop="shipping_no"
-            width="105"
+            min-width="105"
             show-overflow-tooltip
             v-if="columnVisible.shipping_no"
             key="shipping_no"
@@ -335,7 +330,7 @@
           <el-table-column
             label="出荷日"
             prop="shipping_date"
-            width="120"
+            min-width="110"
             sortable
             v-if="columnVisible.shipping_date"
             key="shipping_date"
@@ -352,7 +347,7 @@
           <el-table-column
             label="納入日"
             prop="delivery_date"
-            width="120"
+            min-width="110"
             sortable
             v-if="columnVisible.delivery_date"
             key="delivery_date"
@@ -369,7 +364,7 @@
           <el-table-column
             label="納入先"
             prop="destination_name"
-            width="180"
+            min-width="200"
             show-overflow-tooltip
             v-if="columnVisible.destination_name"
             key="destination_name"
@@ -393,7 +388,7 @@
           <el-table-column
             label="製品CD"
             prop="product_cd"
-            width="80"
+            min-width="90"
             show-overflow-tooltip
             v-if="columnVisible.product_cd"
             key="product_cd"
@@ -414,7 +409,7 @@
           <el-table-column
             label="製品名"
             prop="product_name"
-            width="150"
+            min-width="180"
             show-overflow-tooltip
             v-if="columnVisible.product_name"
             key="product_name"
@@ -428,7 +423,7 @@
           <el-table-column
             label="製品タイプ"
             prop="product_type"
-            width="90"
+            min-width="90"
             align="center"
             v-if="columnVisible.product_type"
             key="product_type"
@@ -446,7 +441,7 @@
           <el-table-column
             label="箱数"
             prop="confirmed_boxes"
-            width="60"
+            min-width="64"
             align="right"
             v-if="columnVisible.confirmed_boxes"
             key="confirmed_boxes"
@@ -460,7 +455,7 @@
           <el-table-column
             label="数量"
             prop="confirmed_units"
-            width="90"
+            min-width="90"
             align="right"
             v-if="columnVisible.confirmed_units"
             key="confirmed_units"
@@ -475,7 +470,7 @@
           <el-table-column
             label="箱タイプ"
             prop="box_type"
-            width="90"
+            min-width="90"
             v-if="columnVisible.box_type"
             key="box_type"
           >
@@ -485,7 +480,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="コード" width="120" v-if="columnVisible.code" key="code">
+          <el-table-column label="コード" min-width="130" v-if="columnVisible.code" key="code">
             <template #default="{ row }">
               <el-tooltip
                 :content="row.shipping_no_p || `${row.shipping_no}_${row.product_cd}`"
@@ -499,7 +494,7 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column label="状態" width="72" v-if="columnVisible.status" key="status">
+          <el-table-column label="状態" min-width="80" v-if="columnVisible.status" key="status">
             <template #default="{ row }">
               <span class="status-simple" :class="'status-' + statusColor(row.status)">{{ row.status }}</span>
             </template>
@@ -622,7 +617,7 @@
       v-model="exportConfirmVisible"
       title=""
       width="420px"
-      class="modern-dialog export-confirm-dialog"
+      class="modern-dialog export-confirm-dialog pb-std"
       :close-on-click-modal="false"
       :close-on-press-escape="true"
       :show-close="true"
@@ -692,7 +687,7 @@
     <el-dialog
       v-model="exportProgressVisible"
       width="450px"
-      class="modern-dialog export-progress-dialog"
+      class="modern-dialog export-progress-dialog pb-std"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
@@ -782,7 +777,7 @@
       v-model="columnSelectVisible"
       title="列表示設定"
       width="600px"
-      class="modern-dialog"
+      class="modern-dialog pb-std"
       :before-close="() => (columnSelectVisible = false)"
     >
       <div class="column-select-container">
@@ -1358,26 +1353,6 @@ const headerStats = computed(() => {
     { key: 'shipped', label: '出荷済', value: statusCount['出荷済'] || 0 },
   ]
 })
-
-// 統計カードの 3D チルト
-function handleTilt(e: MouseEvent): void {
-  const el = e.currentTarget as HTMLElement
-  const rect = el.getBoundingClientRect()
-  const x = (e.clientX - rect.left) / rect.width - 0.5
-  const y = (e.clientY - rect.top) / rect.height - 0.5
-  el.style.setProperty('--rx', `${(-y * 16).toFixed(2)}deg`)
-  el.style.setProperty('--ry', `${(x * 16).toFixed(2)}deg`)
-  el.style.setProperty('--mx', `${((x + 0.5) * 100).toFixed(1)}%`)
-  el.style.setProperty('--my', `${((y + 0.5) * 100).toFixed(1)}%`)
-}
-
-function resetTilt(e: MouseEvent): void {
-  const el = e.currentTarget as HTMLElement
-  el.style.removeProperty('--rx')
-  el.style.removeProperty('--ry')
-  el.style.removeProperty('--mx')
-  el.style.removeProperty('--my')
-}
 
 const intlLocale = computed(() => localeForIntl(locale.value))
 
@@ -5673,44 +5648,12 @@ async function loadDestinationGroups() {
   align-items: center;
   justify-content: center;
   box-shadow:
-    0 8px 20px rgba(6, 182, 212, 0.3),
-    0 0 0 4px rgba(6, 182, 212, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(14, 116, 144, 0.35),
+    0 8px 20px -6px rgba(6, 182, 212, 0.4),
+    0 0 0 7px rgba(6, 182, 212, 0.12);
   position: relative;
-  animation: iconPulse 2s ease-in-out infinite;
   transition: all 0.3s ease;
-}
-
-.confirm-icon-circle::before {
-  content: '';
-  position: absolute;
-  width: 85px;
-  height: 85px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(8, 145, 178, 0.2));
-  animation: iconRipple 2s ease-out infinite;
-}
-
-@keyframes iconPulse {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 12px 32px rgba(6, 182, 212, 0.4);
-  }
-}
-
-@keyframes iconRipple {
-  0% {
-    transform: scale(0.8);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.2);
-    opacity: 0;
-  }
 }
 
 .confirm-icon {
@@ -6297,70 +6240,12 @@ async function loadDestinationGroups() {
   margin-bottom: 8px;
   padding: 10px 16px;
   border-radius: 14px;
-  background: linear-gradient(120deg, #0f172a 0%, #1e3a5f 38%, #2563eb 78%, #3b82f6 100%);
+  background: linear-gradient(120deg, #1e3a8a 0%, #1d4ed8 38%, #2563eb 70%, #60a5fa 100%);
   box-shadow:
-    0 12px 30px -14px rgba(30, 64, 175, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 18px 36px -18px rgba(30, 64, 175, 0.6),
+    0 4px 12px -6px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
   isolation: isolate;
-}
-
-.sl-modern .page-header::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.12) 50%, transparent 65%);
-  background-size: 250% 100%;
-  animation: slSheen 7s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.sl-modern .header-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  pointer-events: none;
-  z-index: 0;
-  animation: slOrbFloat 12s ease-in-out infinite;
-}
-
-.sl-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -130px;
-  left: 16%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.55), transparent 70%);
-}
-
-.sl-modern .orb-b {
-  width: 260px;
-  height: 260px;
-  bottom: -180px;
-  right: 24%;
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.55), transparent 70%);
-  animation-delay: -4s;
-}
-
-.sl-modern .orb-c {
-  width: 160px;
-  height: 160px;
-  top: -70px;
-  right: -40px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.25), transparent 70%);
-  animation-delay: -8s;
-}
-
-.sl-modern .header-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
-  pointer-events: none;
-  z-index: 0;
 }
 
 .sl-modern .header-content {
@@ -6383,13 +6268,11 @@ async function loadDestinationGroups() {
   border-radius: 12px;
   font-size: 22px;
   color: #fff;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06));
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.38);
   box-shadow:
-    0 8px 18px -6px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -3px 0 rgba(0, 0, 0, 0.15);
-  animation: slIconFloat 4.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.25);
 }
 
 .sl-modern .title-block {
@@ -6399,17 +6282,13 @@ async function loadDestinationGroups() {
 }
 
 .sl-modern .title-text {
-  font-size: 19px;
   letter-spacing: 0.06em;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .sl-modern .subtitle {
-  margin-top: 2px;
-  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .sl-modern .header-stats {
@@ -6417,7 +6296,6 @@ async function loadDestinationGroups() {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  perspective: 700px;
 }
 
 .sl-modern .stat-tile {
@@ -6431,19 +6309,14 @@ async function loadDestinationGroups() {
   border-radius: 12px;
   overflow: hidden;
   cursor: default;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.24);
   box-shadow:
-    0 6px 16px -8px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    0 4px 10px -6px rgba(15, 23, 42, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
   transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease,
-    background 0.25s ease;
-  animation: slTileIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .sl-modern .stat-tile::before {
@@ -6456,26 +6329,12 @@ async function loadDestinationGroups() {
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
 }
 
-.sl-modern .stat-tile::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.3), transparent 55%);
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
-}
-
 .sl-modern .stat-tile:hover {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
   box-shadow:
-    0 16px 28px -12px rgba(0, 0, 0, 0.6),
+    0 6px 14px -8px rgba(15, 23, 42, 0.45),
     0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-
-.sl-modern .stat-tile:hover::after {
-  opacity: 1;
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .sl-modern .stat-label {
@@ -6502,7 +6361,6 @@ async function loadDestinationGroups() {
   line-height: 1.1;
   color: #fff;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .sl-modern .stat-nos { --accent: #60a5fa; }
@@ -6512,14 +6370,6 @@ async function loadDestinationGroups() {
 .sl-modern .stat-pending { --accent: #cbd5e1; }
 .sl-modern .stat-issued { --accent: #34d399; }
 .sl-modern .stat-shipped { --accent: #fbbf24; }
-
-.sl-modern .stat-tile:nth-child(1) { animation-delay: 0.15s; }
-.sl-modern .stat-tile:nth-child(2) { animation-delay: 0.2s; }
-.sl-modern .stat-tile:nth-child(3) { animation-delay: 0.25s; }
-.sl-modern .stat-tile:nth-child(4) { animation-delay: 0.3s; }
-.sl-modern .stat-tile:nth-child(5) { animation-delay: 0.35s; }
-.sl-modern .stat-tile:nth-child(6) { animation-delay: 0.4s; }
-.sl-modern .stat-tile:nth-child(7) { animation-delay: 0.45s; }
 
 /* ---------- カード共通 ---------- */
 .sl-modern .modern-card {
@@ -6654,35 +6504,37 @@ async function loadDestinationGroups() {
   color: #fff;
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   box-shadow:
-    0 2px 0 #1d4ed8,
-    0 6px 12px -4px rgba(37, 99, 235, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.35),
+    0 3px 8px -4px rgba(37, 99, 235, 0.55);
+}
+
+.sl-modern .compact-filter-row .date-btn:active {
+  transform: translateY(1px);
+}
+
+.sl-modern .compact-filter-row .date-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 
 .sl-modern .group-manage-button {
-  border: none;
+  --k-rgb: 124 58 237;
+  border: 1px solid #7c3aed;
   border-radius: 9px;
   color: #fff;
-  background: linear-gradient(135deg, #a78bfa, #7c3aed);
-  box-shadow:
-    0 3px 0 #6d28d9,
-    0 8px 14px -6px rgba(124, 58, 237, 0.55);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, #a78bfa, #7c3aed);
 }
 
-.sl-modern .group-manage-button:hover:not(:disabled) {
+.sl-modern .group-manage-button:hover:not(:disabled),
+.sl-modern .group-manage-button:focus:not(:disabled) {
   color: #fff;
-  background: linear-gradient(135deg, #a78bfa, #7c3aed);
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 0 #6d28d9,
-    0 12px 18px -6px rgba(124, 58, 237, 0.6);
-}
-
-.sl-modern .group-manage-button:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #6d28d9;
+  border-color: #7c3aed;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, #a78bfa, #7c3aed);
 }
 
 .sl-modern .destination-quick-buttons {
@@ -6696,7 +6548,15 @@ async function loadDestinationGroups() {
   border: 1px solid #e2e8f0 !important;
   background: #fff !important;
   color: #334155 !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .sl-modern .destination-quick-btn:hover:not(:disabled) {
@@ -6704,17 +6564,30 @@ async function loadDestinationGroups() {
   color: #e11d48 !important;
   background: #fff1f2 !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 10px -4px rgba(244, 63, 94, 0.4);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(225, 29, 72, 0.08),
+    0 4px 10px -4px rgba(244, 63, 94, 0.4);
 }
 
 .sl-modern .destination-quick-btn.active,
 .sl-modern .destination-quick-btn.active:hover:not(:disabled) {
-  border-color: transparent !important;
+  border-color: #e11d48 !important;
   color: #fff !important;
   background: linear-gradient(135deg, #fb7185, #e11d48) !important;
   box-shadow:
-    0 2px 0 #be123c,
-    0 6px 14px -6px rgba(225, 29, 72, 0.6) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(190, 18, 60, 0.35),
+    0 4px 10px -4px rgba(225, 29, 72, 0.55) !important;
+}
+
+.sl-modern .destination-quick-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.sl-modern .destination-quick-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.28) !important;
 }
 
 .sl-modern .active-groups-display {
@@ -6728,11 +6601,12 @@ async function loadDestinationGroups() {
   border-radius: 999px;
   background: linear-gradient(135deg, #a78bfa, #7c3aed);
   box-shadow:
-    0 2px 0 #6d28d9,
-    0 6px 12px -6px rgba(124, 58, 237, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(91, 33, 182, 0.3),
+    0 4px 10px -6px rgba(124, 58, 237, 0.55);
 }
 
-/* ---------- 操作ボタン（3D キーキャップ） ---------- */
+/* ---------- 操作ボタン（色分けグラデーション・立体はグローバル標準） ---------- */
 .sl-modern .action-buttons-row {
   gap: 10px;
   margin: 2px 0 8px;
@@ -6742,119 +6616,92 @@ async function loadDestinationGroups() {
 .sl-modern .action-button {
   --btn-from: #60a5fa;
   --btn-to: #2563eb;
-  --btn-edge: #1d4ed8;
-  --btn-glow: rgba(37, 99, 235, 0.55);
-  overflow: visible;
+  --btn-bd: #1d4ed8;
+  --k-rgb: 37 99 235;
   min-height: 34px;
   padding: 6px 18px;
-  border: none;
+  border: 1px solid var(--btn-bd);
   border-radius: 10px;
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.03em;
-  background: linear-gradient(135deg, var(--btn-from), var(--btn-to));
-  box-shadow:
-    0 3px 0 var(--btn-edge),
-    0 10px 18px -8px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.2s ease;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--btn-from), var(--btn-to));
 }
 
 .sl-modern .action-button::before {
-  left: 0;
-  width: 100%;
-  border-radius: inherit;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%) no-repeat;
-  background-size: 250% 100%;
-  background-position: 150% 0;
-  transition: background-position 0.6s ease;
-  pointer-events: none;
+  content: none;
 }
 
-.sl-modern .action-button:hover:not(.is-disabled) {
+.sl-modern .action-button:hover:not(.is-disabled),
+.sl-modern .action-button:focus:not(.is-disabled) {
   opacity: 1;
   color: #fff;
-  background: linear-gradient(135deg, var(--btn-from), var(--btn-to));
-  filter: brightness(1.05);
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--btn-edge),
-    0 16px 24px -10px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.sl-modern .action-button:hover:not(.is-disabled)::before {
-  left: 0;
-  background-position: -50% 0;
-}
-
-.sl-modern .action-button:active:not(.is-disabled) {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--btn-edge),
-    0 4px 8px -4px var(--btn-glow);
+  border-color: var(--btn-bd);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--btn-from), var(--btn-to));
 }
 
 .sl-modern .action-button.is-disabled,
 .sl-modern .action-button.is-disabled:hover {
-  color: #fff;
-  background: linear-gradient(135deg, var(--btn-from), var(--btn-to));
-  opacity: 0.45;
-  filter: saturate(0.6);
-  transform: none;
-  box-shadow: 0 2px 0 var(--btn-edge);
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  opacity: 1;
 }
 
 .sl-modern .create-button {
   --btn-from: #34d399;
   --btn-to: #059669;
-  --btn-edge: #047857;
-  --btn-glow: rgba(5, 150, 105, 0.55);
+  --btn-bd: #059669;
+  --k-rgb: 5 150 105;
 }
 
 .sl-modern .print-button {
   --btn-from: #fbbf24;
   --btn-to: #d97706;
-  --btn-edge: #b45309;
-  --btn-glow: rgba(217, 119, 6, 0.55);
+  --btn-bd: #d97706;
+  --k-rgb: 217 119 6;
 }
 
 .sl-modern .delete-button {
   --btn-from: #fb7185;
   --btn-to: #e11d48;
-  --btn-edge: #be123c;
-  --btn-glow: rgba(225, 29, 72, 0.55);
+  --btn-bd: #e11d48;
+  --k-rgb: 225 29 72;
 }
 
 .sl-modern .setting-button {
   --btn-from: #a78bfa;
   --btn-to: #7c3aed;
-  --btn-edge: #6d28d9;
-  --btn-glow: rgba(124, 58, 237, 0.55);
+  --btn-bd: #7c3aed;
+  --k-rgb: 124 58 237;
 }
 
 .sl-modern .export-button {
   --btn-from: #22d3ee;
   --btn-to: #0891b2;
-  --btn-edge: #0e7490;
-  --btn-glow: rgba(8, 145, 178, 0.55);
+  --btn-bd: #0891b2;
+  --k-rgb: 8 145 178;
 }
 
-.sl-modern .button-badge {
-  top: -7px;
-  right: -7px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
+/* ボタンは光沢スイープ用に overflow: hidden のため、件数バッジは枠内に表示する */
+.sl-modern .action-buttons-row .button-badge {
+  position: static;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: none;
   border-radius: 999px;
-  border: 2px solid #fff;
-  background: #0f172a;
-  color: #fff;
-  box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.5);
-  animation: slPop 0.35s cubic-bezier(0.2, 0.8, 0.2, 1.4);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--btn-to);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 -1px 0 rgb(var(--k-rgb) / 0.18);
 }
 
 /* ---------- 一覧テーブル ---------- */
@@ -6886,9 +6733,9 @@ async function loadDestinationGroups() {
   color: #fff;
   background: linear-gradient(135deg, #22d3ee, #2563eb);
   box-shadow:
-    0 2px 0 #1d4ed8,
-    0 6px 12px -4px rgba(37, 99, 235, 0.5);
-  transform: perspective(200px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.35),
+    0 3px 8px -4px rgba(37, 99, 235, 0.5);
 }
 
 .sl-modern .count-badge {
@@ -6926,10 +6773,6 @@ async function loadDestinationGroups() {
   border-bottom: 1px solid #dfe6f0;
   color: #334155;
   letter-spacing: 0.03em;
-}
-
-.sl-modern :deep(.el-table__row) {
-  animation: slRowFade 0.35s ease-out both;
 }
 
 .sl-modern :deep(.el-table__row:hover) {
@@ -7062,10 +6905,6 @@ async function loadDestinationGroups() {
 .sl-modern .status-simple.status-warning { color: #d97706; }
 .sl-modern .status-simple.status-danger { color: #e11d48; }
 
-.sl-modern .status-simple.status-info::before {
-  animation: slDotPulse 1.8s ease-in-out infinite;
-}
-
 /* 行内アイコンボタン：淡色 → ホバーでグラデーション＋浮き上がり */
 .sl-modern .table-action-button.icon-only {
   --ta-bg: #eff6ff;
@@ -7100,8 +6939,6 @@ async function loadDestinationGroups() {
   color: #fff !important;
   background: linear-gradient(135deg, var(--ta-from), var(--ta-to)) !important;
   border-color: transparent !important;
-  transform: translateY(-2px) scale(1.08);
-  box-shadow: 0 6px 14px -4px var(--ta-to);
 }
 
 /* ---------- ページネーション ---------- */
@@ -7130,8 +6967,9 @@ async function loadDestinationGroups() {
   color: #fff;
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   box-shadow:
-    0 2px 0 #1d4ed8,
-    0 6px 12px -4px rgba(37, 99, 235, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.35),
+    0 3px 8px -4px rgba(37, 99, 235, 0.55);
 }
 
 /* ---------- 列表示設定ダイアログ ---------- */
@@ -7155,8 +6993,8 @@ async function loadDestinationGroups() {
 
 .checkbox-grid .modern-checkbox:hover {
   border-color: #93c5fd;
-  transform: perspective(400px) translateY(-3px) rotateX(6deg);
-  box-shadow: 0 12px 20px -12px rgba(37, 99, 235, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px -10px rgba(37, 99, 235, 0.45);
 }
 
 .checkbox-grid .modern-checkbox.is-checked {
@@ -7168,56 +7006,6 @@ async function loadDestinationGroups() {
 }
 
 /* ---------- アニメーション ---------- */
-@keyframes slSheen {
-  0% {
-    background-position: 150% 0;
-  }
-  60%,
-  100% {
-    background-position: -50% 0;
-  }
-}
-
-@keyframes slOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 10px) scale(1.12);
-  }
-}
-
-@keyframes slIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(-6deg) rotateY(14deg) translateY(-3px);
-  }
-}
-
-@keyframes slTileIn {
-  from {
-    opacity: 0;
-    transform: perspective(600px) rotateX(-35deg) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes slRowFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 @keyframes slPop {
   0% {
     transform: scale(0.6);
@@ -7226,16 +7014,6 @@ async function loadDestinationGroups() {
   100% {
     transform: scale(1);
     opacity: 1;
-  }
-}
-
-@keyframes slDotPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 22%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 8%, transparent);
   }
 }
 
@@ -7261,11 +7039,13 @@ async function loadDestinationGroups() {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sl-modern .page-header::after,
-  .sl-modern .header-orb,
-  .sl-modern .title-icon,
-  .sl-modern .status-simple.status-info::before {
+  .sl-modern .selected-badge {
     animation: none;
+  }
+  .sl-modern .destination-quick-btn,
+  .sl-modern .stat-tile,
+  .checkbox-grid .modern-checkbox {
+    transition: none;
   }
 }
 </style>

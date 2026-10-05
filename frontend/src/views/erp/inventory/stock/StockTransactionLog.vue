@@ -1,19 +1,14 @@
 <template>
-  <div class="stock-log-page stl-modern">
-    <header class="page-header glass">
-      <div class="header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="stock-log-page stl-modern pb-std">
+    <header class="page-header glass pb-hero pb-hero--page">
+      <div class="header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-inner">
         <div class="header-icon-wrap glass-icon">
           <el-icon><Document /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="page-title">在庫取引記録</h1>
-          <p class="page-subtitle">在庫受払履歴の照会・編集</p>
+          <h1 class="page-title pb-hero-title">在庫取引記録</h1>
+          <p class="page-subtitle pb-hero-desc">在庫受払履歴の照会・編集</p>
         </div>
         <div class="header-chips">
           <span class="header-chip">
@@ -1032,51 +1027,6 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.stl-modern .header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(24px);
-  opacity: 0.6;
-  animation: stlOrbFloat 10s ease-in-out infinite;
-}
-
-.stl-modern .header-fx .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -120px;
-  right: 18%;
-  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
-}
-
-.stl-modern .header-fx .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -130px;
-  left: 26%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.stl-modern .header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
-}
-
-.stl-modern .header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: stlSheen 7s ease-in-out infinite;
-}
-
 .stl-modern .header-icon-wrap {
   width: 38px;
   height: 38px;
@@ -1549,26 +1499,6 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.9);
 }
 
-@keyframes stlOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 12px) scale(1.12);
-  }
-}
-
-@keyframes stlSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes stlIconFloat {
   0%,
   100% {
@@ -1591,8 +1521,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stl-modern .header-fx .fx-orb,
-  .stl-modern .header-fx .fx-sheen,
   .stl-modern .header-icon-wrap,
   .stl-modern .stat-card {
     animation: none;

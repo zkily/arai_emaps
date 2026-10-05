@@ -1,21 +1,16 @@
 <template>
-  <div class="plan-baseline-root">
+  <div class="plan-baseline-root pb-std">
   <div class="plan-baseline-page pb-modern" :style="{ '--pb-tab': activeTabAccent }">
     <!-- 紧凑型页面头部（ガラス＋立体） -->
-    <div class="page-header">
-      <div class="page-header__orb page-header__orb--a" aria-hidden="true" />
-      <div class="page-header__orb page-header__orb--b" aria-hidden="true" />
-      <div class="page-header__fx" aria-hidden="true">
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header__fx pb-bubbles" aria-hidden="true" />
       <div class="title-wrapper">
         <div class="title-icon-wrapper">
           <el-icon class="title-icon"><TrendCharts /></el-icon>
         </div>
         <div class="title-content">
-          <h2>生産計画ベースライン管理</h2>
-          <p>基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
+          <h2 class="pb-hero-title">生産計画ベースライン管理</h2>
+          <p class="pb-hero-desc">基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
           <div class="page-header__chips">
             <span class="page-header__chip">
               <el-icon><Calendar /></el-icon>
@@ -4512,29 +4507,6 @@ ${actualDiffTotalCell}
   animation: slideDown 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.page-header__orb {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(2px);
-}
-.page-header__orb--a {
-  width: 140px;
-  height: 140px;
-  top: -56px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28), transparent 68%);
-  animation: orbFloat 6s ease-in-out infinite;
-}
-.page-header__orb--b {
-  width: 90px;
-  height: 90px;
-  bottom: -40px;
-  left: 12%;
-  background: radial-gradient(circle, rgba(167, 243, 208, 0.35), transparent 70%);
-  animation: orbFloat 7.5s ease-in-out infinite reverse;
-}
-
 .title-wrapper {
   position: relative;
   z-index: 1;
@@ -7499,16 +7471,6 @@ ${actualDiffTotalCell}
   }
 }
 
-@keyframes orbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(10px, 8px, 0);
-  }
-}
-
 @keyframes iconPulse {
   0%,
   100% {
@@ -7533,7 +7495,6 @@ ${actualDiffTotalCell}
   .heatmap-card,
   .period-compare-card,
   .tab-total-wrapper,
-  .page-header__orb,
   .title-icon-wrapper {
     animation: none !important;
   }
@@ -7617,22 +7578,6 @@ ${actualDiffTotalCell}
   inset: 0;
   z-index: 0;
   pointer-events: none;
-}
-.pb-modern .page-header__fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
-}
-.pb-modern .page-header__fx .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
-  background-size: 250% 100%;
-  animation: pbSheen 6s ease-in-out infinite;
 }
 .pb-modern .title-icon-wrapper {
   box-shadow:
@@ -7911,15 +7856,6 @@ ${actualDiffTotalCell}
   background: linear-gradient(145deg, color-mix(in srgb, var(--pb-tab) 70%, #fff), var(--pb-tab));
   color: #fff;
 }
-
-@keyframes pbSheen {
-  0% {
-    background-position: 130% 0;
-  }
-  100% {
-    background-position: -30% 0;
-  }
-}
 @keyframes pbIconFloat {
   0%,
   100% {
@@ -7944,7 +7880,6 @@ ${actualDiffTotalCell}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pb-modern .page-header__fx .fx-sheen,
   .pb-modern .page-header__chip--alert,
   .pb-modern .title-icon-wrapper {
     animation: none !important;

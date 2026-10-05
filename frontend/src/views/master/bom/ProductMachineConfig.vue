@@ -1,16 +1,16 @@
 <template>
-  <div class="product-machine-config-container fade-in pmc-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="product-machine-config-container fade-in pmc-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
-          <h1 class="main-title">
+          <h1 class="main-title pb-hero-title">
             <el-icon class="title-icon">
               <Setting />
             </el-icon>
             製品加工設備設定
           </h1>
-          <p class="subtitle">製品ごとの機器設定を管理します</p>
+          <p class="subtitle pb-hero-desc">製品ごとの機器設定を管理します</p>
         </div>
         <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
           <div class="stat-card stat-total">
@@ -1264,52 +1264,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.pmc-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: pmcOrbFloat 11s ease-in-out infinite;
-}
-
-.pmc-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 26%;
-  background: radial-gradient(circle, rgba(94, 234, 212, 0.7), transparent 70%);
-}
-
-.pmc-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.55), transparent 70%);
-  animation-delay: -5s;
-}
-
-.pmc-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.pmc-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: pmcSheen 7s ease-in-out infinite;
-}
-
 .pmc-modern .main-title {
   gap: 10px;
   text-shadow: 0 2px 10px rgba(4, 47, 46, 0.35);
@@ -1574,26 +1528,6 @@ onMounted(async () => {
   background: rgba(220, 38, 38, 0.08);
 }
 
-@keyframes pmcOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes pmcSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes pmcIconFloat {
   0%,
   100% {
@@ -1614,8 +1548,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pmc-modern .fx-orb,
-  .pmc-modern .fx-sheen,
   .pmc-modern .title-icon,
   .pmc-modern .title-icon :deep(svg) {
     animation: none;

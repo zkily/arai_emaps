@@ -7,14 +7,17 @@
     :close-on-click-modal="false"
     :destroy-on-close="true"
     top="0.5vh"
-    class="shipping-dialog"
+    class="shipping-dialog sc-modern pb-std"
   >
     <template #header>
-      <div class="dialog-header">
+      <div class="dialog-header sc-hero pb-hero">
+        <div class="sc-hero-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
-          <el-icon class="header-icon">
-            <Box />
-          </el-icon>
+          <span class="sc-hero-icon">
+            <el-icon class="header-icon">
+              <Box />
+            </el-icon>
+          </span>
           <span class="header-title">出荷構成表管理</span>
         </div>
         <div class="header-center">
@@ -200,7 +203,7 @@
                 border
                 stripe
                 style="width: 100%"
-                :height="fullscreenState ? 'calc(100vh - 300px)' : '520px'"
+                height="100%"
                 @selection-change="handleSelectionChange"
                 :row-key="getRowKey"
                 :row-class-name="tableRowClassName"
@@ -786,7 +789,7 @@
                     border
                     stripe
                     style="width: 100%"
-                    :max-height="fullscreenState ? 'calc(100vh - 350px)' : '450px'"
+                    max-height="max(240px, calc(100vh - 390px))"
                     :cell-style="{ padding: '2px 0' }"
                     size="small"
                     class="pallets-table expanded-table"
@@ -1144,15 +1147,11 @@
     top="0"
     :close-on-click-modal="false"
     :destroy-on-close="true"
-    class="pallet-edit-dialog pallet-edit-dialog-fullscreen ped-modern"
+    class="pallet-edit-dialog pallet-edit-dialog-fullscreen ped-modern pb-std"
   >
     <template #header>
-      <div class="dialog-header pallet-dialog-header ped-hero">
-        <div class="ped-hero-fx" aria-hidden="true">
-          <span class="ped-orb ped-orb--a" />
-          <span class="ped-orb ped-orb--b" />
-          <span class="ped-grid" />
-        </div>
+      <div class="dialog-header pallet-dialog-header ped-hero pb-hero">
+        <div class="ped-hero-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
           <span class="ped-hero-icon"><el-icon><View /></el-icon></span>
           <span class="header-title ped-hero-title">パレットNo詳細</span>
@@ -1396,9 +1395,10 @@
   <el-dialog
     v-model="palletRowEditDialogVisible"
     title="パレットデータ編集"
-    width="600px"
+    width="min(600px, 96vw)"
     :close-on-click-modal="false"
     :destroy-on-close="true"
+    class="pb-std"
   >
     <template #header>
       <div class="dialog-header">
@@ -1491,8 +1491,8 @@
   <el-dialog
     v-model="destinationDialogVisible"
     title="納入先選択"
-    width="800px"
-    class="modern-dialog destination-dialog"
+    width="min(800px, 96vw)"
+    class="modern-dialog destination-dialog pb-std"
     :append-to-body="true"
     :modal-append-to-body="true"
     :lock-scroll="false"
@@ -2605,7 +2605,10 @@ async function fetchDailyOrders() {
       fetchDailyOrdersDataOnly(),
     ])
 
-    dailyOrders.value = processedData
+    // 北九州ケミカル向けは出荷構成表の作成対象外
+    dailyOrders.value = processedData.filter(
+      (order: any) => !String(order?.destination_name ?? '').includes('北九州ケミカル'),
+    )
 
     if (dailyOrders.value.length === 0) {
       ElMessage.info('この期間内に利用可能な注文データがありません')
@@ -10237,8 +10240,8 @@ function applyChangesAndClose() {
 }
 
 .edit-pallet-btn:disabled {
-  background: linear-gradient(135deg, #c0c4cc 0%, #dcdfe6 100%) !important;
-  color: #909399 !important;
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
@@ -10311,32 +10314,6 @@ function applyChangesAndClose() {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-  backdrop-filter: blur(10px);
-}
-
-.modern-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.modern-btn:hover::before {
-  left: 100%;
-}
-
-.modern-btn:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
-}
-
-.modern-btn:active {
-  transform: translateY(0) scale(0.98);
-  transition: all 0.1s ease;
 }
 
 .btn-content {
@@ -10350,10 +10327,6 @@ function applyChangesAndClose() {
 .btn-icon {
   font-size: 14px;
   transition: transform 0.3s ease;
-}
-
-.modern-btn:hover .btn-icon {
-  transform: scale(1.1);
 }
 
 .btn-text {
@@ -10405,8 +10378,8 @@ function applyChangesAndClose() {
 }
 
 .submit-btn-header:disabled {
-  background: linear-gradient(135deg, #c0c4cc 0%, #dcdfe6 100%) !important;
-  color: #909399 !important;
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
@@ -10417,45 +10390,8 @@ function applyChangesAndClose() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* 加载状态动画 */
 .submit-btn-header.is-loading {
   background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%) !important;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 2px 8px rgba(103, 194, 58, 0.3);
-  }
-
-  50% {
-    box-shadow: 0 2px 8px rgba(103, 194, 58, 0.6);
-  }
-
-  100% {
-    box-shadow: 0 2px 8px rgba(103, 194, 58, 0.3);
-  }
-}
-
-/* 按钮点击波纹效果 */
-.modern-btn::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition:
-    width 0.6s ease,
-    height 0.6s ease;
-}
-
-.modern-btn:active::after {
-  width: 300px;
-  height: 300px;
 }
 
 /* 响应式设计 */
@@ -10492,8 +10428,8 @@ function applyChangesAndClose() {
 }
 
 .add-selected-btn:disabled {
-  background: linear-gradient(135deg, #c0c4cc 0%, #dcdfe6 100%) !important;
-  color: #909399 !important;
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
@@ -10515,8 +10451,8 @@ function applyChangesAndClose() {
 }
 
 .recalculate-btn:disabled {
-  background: linear-gradient(135deg, #c0c4cc 0%, #dcdfe6 100%) !important;
-  color: #909399 !important;
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
@@ -10680,34 +10616,6 @@ function applyChangesAndClose() {
   z-index: -1;
   pointer-events: none;
 }
-.ped-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.ped-orb--a {
-  width: 200px;
-  height: 200px;
-  top: -110px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.ped-orb--b {
-  width: 180px;
-  height: 180px;
-  bottom: -120px;
-  right: 30%;
-  background: radial-gradient(circle, rgba(186, 230, 253, 0.42) 0%, rgba(186, 230, 253, 0) 70%);
-}
-.ped-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 20px 20px;
-  -webkit-mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
-  mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
-}
 .ped-hero .header-left {
   gap: 10px;
 }
@@ -10723,65 +10631,85 @@ function applyChangesAndClose() {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
   border: 1px solid rgba(255, 255, 255, 0.45);
   box-shadow:
-    0 3px 0 rgba(12, 31, 74, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(12, 31, 74, 0.25);
 }
 .ped-hero-title {
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(12, 31, 74, 0.35);
 }
 .ped-hero .header-stats {
   gap: 8px;
 }
 
-/* 並び替え＝白キーキャップ（有効時 sky）/ 保存＝emerald キーキャップ */
+/* 並び替え＝白地ピル（有効時 sky 塗り）/ 保存＝白地ピル（emerald） */
 .ped-hero .glass-btn.glass-btn-sort,
 .ped-hero .glass-btn.glass-btn-save {
+  --k-rgb: 2 132 199;
   height: 30px;
-  padding: 0 14px !important;
-  border-radius: 8px !important;
+  padding: 0 14px 0 12px !important;
+  border-radius: 999px !important;
   font-weight: 700 !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease !important;
-}
-.ped-hero .glass-btn.glass-btn-sort {
   color: #075985 !important;
-  background: #fff !important;
-  border: 1px solid #fff !important;
-  box-shadow: 0 3px 0 #0c4a6e !important;
+  border: 1px solid #7dd3fc !important;
+  background: linear-gradient(135deg, #fff 0%, #fff 40%, #e0f2fe 100%) !important;
 }
-.ped-hero .glass-btn.glass-btn-sort.glass-btn-active {
-  color: #fff !important;
-  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%) !important;
-  border-color: #bae6fd !important;
-}
-.ped-hero .glass-btn.glass-btn-save {
-  color: #fff !important;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%) !important;
-  border: 1px solid #a7f3d0 !important;
-  box-shadow: 0 3px 0 #064e3b !important;
-}
-.ped-hero .glass-btn.glass-btn-sort:hover,
-.ped-hero .glass-btn.glass-btn-save:hover {
-  transform: translateY(-1px) !important;
+.ped-hero .glass-btn.glass-btn-sort .el-icon {
+  color: #0ea5e9;
 }
 .ped-hero .glass-btn.glass-btn-sort:hover {
-  box-shadow: 0 4px 0 #0c4a6e !important;
+  color: #0c4a6e !important;
+  border-color: #38bdf8 !important;
+  background: linear-gradient(135deg, #fff 0%, #e0f2fe 45%, #bae6fd 100%) !important;
+}
+.ped-hero .glass-btn.glass-btn-sort.glass-btn-active,
+.ped-hero .glass-btn.glass-btn-sort.glass-btn-active:hover {
+  color: #fff !important;
+  border-color: #0284c7 !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, #38bdf8 0%, #0284c7 100%) !important;
+}
+.ped-hero .glass-btn.glass-btn-sort.glass-btn-active .el-icon {
+  color: #fff;
+}
+.ped-hero .glass-btn.glass-btn-save {
+  --k-rgb: 5 150 105;
+  color: #047857 !important;
+  border-color: #6ee7b7 !important;
+  background: linear-gradient(135deg, #fff 0%, #fff 40%, #d1fae5 100%) !important;
+}
+.ped-hero .glass-btn.glass-btn-save .el-icon {
+  color: #10b981;
 }
 .ped-hero .glass-btn.glass-btn-save:hover {
-  box-shadow: 0 4px 0 #064e3b !important;
+  color: #065f46 !important;
+  border-color: #34d399 !important;
+  background: linear-gradient(135deg, #fff 0%, #d1fae5 45%, #a7f3d0 100%) !important;
 }
-.ped-hero .glass-btn.glass-btn-sort:active,
-.ped-hero .glass-btn.glass-btn-save:active {
-  transform: translateY(2px) !important;
-  box-shadow: 0 1px 0 rgba(12, 31, 74, 0.6) !important;
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.ped-hero.ped-hero.pb-hero
+  .glass-btn.glass-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(12, 31, 74, 0.35) !important;
+}
+.ped-hero.ped-hero.pb-hero
+  .glass-btn.glass-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(12, 31, 74, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.ped-hero.ped-hero.pb-hero
+  .glass-btn.glass-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(12, 31, 74, 0.3) !important;
 }
 
 /* ---------- テーブル ---------- */
@@ -10815,8 +10743,9 @@ function applyChangesAndClose() {
   box-shadow: inset 0 0 0 1px #bfdbfe;
 }
 .ped-body .serial-input :deep(.el-input__wrapper) {
-  border-color: #93c5fd;
-  box-shadow: 0 2px 0 #dbeafe;
+  box-shadow:
+    inset 0 0 0 1px #93c5fd,
+    0 1px 2px rgba(37, 99, 235, 0.12);
 }
 .ped-body .serial-input :deep(.el-input__wrapper.is-focus) {
   border-color: #2563eb;
@@ -10834,28 +10763,9 @@ function applyChangesAndClose() {
   background: #075985;
 }
 
-/* 操作ボタン：色分けキーキャップ、無効時は半透明にしない */
+/* 操作ボタン：立体はグローバル標準、無効時は半透明にしない */
 .ped-body .view-pallets-minimal :deep(.el-button-group .el-button) {
   border-radius: 6px;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
-}
-.ped-body .view-pallets-minimal :deep(.el-button--warning.is-plain) {
-  box-shadow: 0 2px 0 #f0c78a;
-}
-.ped-body .view-pallets-minimal :deep(.el-button--primary.is-plain) {
-  box-shadow: 0 2px 0 #b3d8ff;
-}
-.ped-body .view-pallets-minimal :deep(.el-button--danger.is-plain) {
-  box-shadow: 0 2px 0 #fbc4c4;
-}
-.ped-body .view-pallets-minimal :deep(.el-button-group .el-button:not(.is-disabled):hover) {
-  transform: translateY(-1px);
-}
-.ped-body .view-pallets-minimal :deep(.el-button-group .el-button:not(.is-disabled):active) {
-  transform: translateY(1px);
-  box-shadow: none;
 }
 .ped-body .view-pallets-minimal :deep(.el-button:disabled) {
   opacity: 1;
@@ -10863,6 +10773,198 @@ function applyChangesAndClose() {
   background: #f1f5f9;
   border-color: #e2e8f0;
   box-shadow: none;
+}
+
+/* ============================================================
+ * 页面美化：出荷No作成ダイアログ（エメラルド系ヒーロー・白地ピル）
+ * ============================================================ */
+/* EP 既定の .el-dialog / ヘッダー下の余白（16px）を除き、ヒーロー直下からカードを並べる */
+:global(.el-dialog.sc-modern) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+:global(.el-dialog.sc-modern .el-dialog__header) {
+  margin: 0;
+  padding: 0;
+}
+:global(.el-dialog.sc-modern .el-dialog__body) {
+  padding: 0;
+}
+.sc-modern .shipping-creator {
+  padding: 6px;
+  background: linear-gradient(180deg, #ecfdf5 0%, #f4faf8 48px, #f8fafc 140px);
+}
+/* 受注データ表はカード残り高さいっぱいに表示（el-table height="100%" の基準を確定させる） */
+.sc-modern .left-pool {
+  min-height: 0;
+}
+.sc-modern .left-pool > .pool-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.sc-modern .left-pool > .pool-content > .table-container {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.sc-modern .left-pool > .pool-content > .el-empty {
+  flex: 1;
+}
+.sc-modern .settings-fields-row {
+  flex-wrap: wrap;
+}
+.sc-modern .pallets-section .section-header {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 縦積み時はダイアログ全体をスクロールさせ、受注データ表は画面高さ基準で確保する */
+@media (max-width: 1200px) {
+  .sc-modern .shipping-creator {
+    height: auto;
+  }
+  .sc-modern .pool-container {
+    height: auto;
+    min-height: 0;
+    gap: 8px;
+  }
+  .sc-modern .left-pool {
+    flex: none;
+    height: max(420px, 72vh);
+  }
+  .sc-modern .right-pool {
+    flex: none;
+    min-height: 0;
+  }
+}
+@media (max-width: 768px) {
+  .sc-modern .shipping-creator {
+    padding: 4px;
+  }
+  .sc-modern .left-pool {
+    height: max(380px, 68vh);
+  }
+  .sc-hero.dialog-header {
+    padding: 10px 52px 10px 12px;
+  }
+}
+:global(.el-dialog.sc-modern .el-dialog__headerbtn) {
+  top: 11px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  z-index: 2;
+}
+:global(.el-dialog.sc-modern .el-dialog__headerbtn:hover) {
+  background: rgba(255, 255, 255, 0.3);
+}
+:global(.el-dialog.sc-modern .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+.sc-hero.dialog-header {
+  isolation: isolate;
+  min-height: 52px;
+  padding: 10px 56px 10px 16px;
+  border-radius: 0;
+  color: #fff;
+  background: linear-gradient(125deg, #047857 0%, #059669 35%, #10b981 68%, #4ade80 100%);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 6px 16px -10px rgba(4, 120, 87, 0.6);
+}
+.sc-hero.dialog-header::before {
+  display: none;
+}
+.sc-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.sc-hero .header-left {
+  gap: 10px;
+}
+.sc-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.3);
+}
+.sc-hero .header-icon {
+  font-size: 17px;
+  color: #fff;
+  filter: none;
+}
+.sc-hero .header-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+.sc-hero .header-actions .modern-btn.submit-btn-header {
+  --k-rgb: 5 150 105;
+  height: 30px;
+  padding: 0 14px 0 12px !important;
+  border: 1px solid #6ee7b7 !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #047857 !important;
+  background: linear-gradient(135deg, #fff 0%, #fff 40%, #d1fae5 100%) !important;
+}
+.sc-hero .header-actions .modern-btn.submit-btn-header .btn-icon {
+  color: #10b981;
+}
+.sc-hero .header-actions .modern-btn.submit-btn-header:not(:disabled):hover {
+  color: #065f46 !important;
+  border-color: #34d399 !important;
+  background: linear-gradient(135deg, #fff 0%, #d1fae5 45%, #a7f3d0 100%) !important;
+}
+.sc-hero .header-actions .modern-btn.submit-btn-header:disabled:not(.is-loading),
+.sc-hero .header-actions .modern-btn.submit-btn-header:disabled:not(.is-loading):hover {
+  color: #94a3b8 !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  background: #f1f5f9 !important;
+}
+.sc-hero .header-actions .modern-btn.submit-btn-header:disabled:not(.is-loading) .btn-icon {
+  color: #94a3b8;
+}
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.sc-hero.sc-hero.pb-hero
+  .header-actions
+  .submit-btn-header.submit-btn-header.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(2, 44, 34, 0.35) !important;
+}
+.sc-hero.sc-hero.pb-hero
+  .header-actions
+  .submit-btn-header.submit-btn-header.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(2, 44, 34, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.sc-hero.sc-hero.pb-hero
+  .header-actions
+  .submit-btn-header.submit-btn-header.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(2, 44, 34, 0.3) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,21 +1,17 @@
 <template>
-  <div class="inspection-container mri-modern">
+  <div class="inspection-container mri-modern pb-std">
     <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
-          <h1 class="main-title">
+          <h1 class="main-title pb-hero-title">
             <el-icon class="title-icon">
               <View />
             </el-icon>
             材料受入検品管理
           </h1>
-          <p class="subtitle">材料の品質検査・検品作業を管理します</p>
+          <p class="subtitle pb-hero-desc">材料の品質検査・検品作業を管理します</p>
         </div>
       </div>
     </div>
@@ -2377,34 +2373,6 @@ onMounted((): void => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.mri-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.mri-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -110px;
-  right: 30%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.mri-modern .orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -110px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(196, 181, 253, 0.45) 0%, rgba(196, 181, 253, 0) 70%);
-}
-.mri-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
 }
 .mri-modern .main-title {
   font-size: 20px;

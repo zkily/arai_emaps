@@ -1,12 +1,12 @@
 <template>
-  <div class="cwc cwc-modern">
-    <header class="cwc-hero">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="cwc cwc-modern pb-std">
+    <header class="cwc-hero pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="cwc-hero__left">
         <div class="cwc-hero__icon"><el-icon :size="20"><Calendar /></el-icon></div>
         <div class="cwc-hero__text">
           <div class="cwc-hero__eyebrow">マスタ · カレンダー</div>
-          <h1 class="cwc-hero__title">会社稼働カレンダー</h1>
+          <h1 class="cwc-hero__title pb-hero-title">会社稼働カレンダー</h1>
         </div>
         <span class="cwc-chip cwc-chip--muted cwc-hero__month">{{ monthLabel }}</span>
       </div>
@@ -736,52 +736,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.cwc-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: cwcOrbFloat 11s ease-in-out infinite;
-}
-
-.cwc-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 26%;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.7), transparent 70%);
-}
-
-.cwc-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(94, 234, 212, 0.55), transparent 70%);
-  animation-delay: -5s;
-}
-
-.cwc-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.cwc-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: cwcSheen 7s ease-in-out infinite;
-}
-
 .cwc-modern .cwc-hero__icon {
   width: 40px;
   height: 40px;
@@ -1173,26 +1127,6 @@ onMounted(async () => {
   color: var(--hx-deep);
 }
 
-@keyframes cwcOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes cwcSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes cwcIconFlip {
   0%,
   100% {
@@ -1226,8 +1160,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cwc-modern .fx-orb,
-  .cwc-modern .fx-sheen,
   .cwc-modern .cwc-hero__icon,
   .cwc-modern .cwc-legend__dot,
   .cwc-modern .cwc-cal__cell.is-today::after {

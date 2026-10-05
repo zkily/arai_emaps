@@ -8,13 +8,13 @@
     :before-close="handleClose"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
-    class="modern-daily-edit-dialog japanese-minimalist"
+    class="modern-daily-edit-dialog japanese-minimalist pb-std"
     :show-close="false"
   >
     <!-- カスタムヘッダー -->
     <template #header>
-      <div class="dialog-header dbe-hero">
-        <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+      <div class="dialog-header dbe-hero pb-hero">
+        <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-content">
           <div class="title-section">
             <div class="title-icon">
@@ -1672,72 +1672,6 @@ const handlePrint = () => {
   overflow: hidden;
 }
 
-.dbe-hero .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.5;
-  animation: dbeOrbFloat 11s ease-in-out infinite;
-}
-
-.dbe-hero .orb-a {
-  width: 160px;
-  height: 160px;
-  top: -80px;
-  right: 30%;
-  background: radial-gradient(circle, #7dd3fc 0%, transparent 70%);
-}
-
-.dbe-hero .orb-b {
-  width: 130px;
-  height: 130px;
-  bottom: -80px;
-  left: 22%;
-  background: radial-gradient(circle, #a5b4fc 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.dbe-hero .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 120% at 60% 40%, #000 20%, transparent 75%);
-}
-
-.dbe-hero .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 26%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transform: skewX(-18deg);
-  animation: dbeSheen 7s ease-in-out infinite;
-}
-
-@keyframes dbeOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes dbeSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .dbe-hero .title-icon {
   width: 34px;
   height: 34px;
@@ -2026,8 +1960,6 @@ const handlePrint = () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dbe-hero .fx-orb,
-  .dbe-hero .fx-sheen,
   .dbe-hero .title-icon .el-icon,
   .dbe-hero .save-summary-header {
     animation: none;

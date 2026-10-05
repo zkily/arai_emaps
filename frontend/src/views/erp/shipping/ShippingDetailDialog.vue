@@ -7,8 +7,17 @@
     destroy-on-close
     :close-on-click-modal="false"
     top="5vh"
-    class="shipping-detail-dialog"
+    class="shipping-detail-dialog sd-modern pb-std"
   >
+    <template #header="{ titleId, titleClass }">
+      <div class="sd-hero pb-hero">
+        <div class="sd-hero-fx pb-bubbles" aria-hidden="true" />
+        <span class="sd-hero-icon"><el-icon><Van /></el-icon></span>
+        <span :id="titleId" :class="[titleClass, 'sd-hero-title']">
+          出荷番号詳細：{{ shippingItems.length > 0 ? shippingItems[0].shipping_no : '' }}
+        </span>
+      </div>
+    </template>
     <div v-loading="loading" element-loading-text="データを読み込み中...">
       <!-- 出荷基本情報 -->
       <el-card class="shipping-summary-card" shadow="never" v-if="shippingItems.length > 0">
@@ -767,7 +776,6 @@ function handleClose() {
               &:hover {
                 background-color: #ecf5ff;
                 border-color: #b3d8ff;
-                transform: scale(1.05);
               }
             }
           }
@@ -886,5 +894,150 @@ function handleClose() {
   display: flex;
   justify-content: center;
   gap: 12px;
+}
+
+/* ============================================================
+ * 页面美化：出荷番号詳細（ブルー系ヒーロー・淡色カード）
+ * ============================================================ */
+:global(.el-dialog.sd-modern) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+:global(.el-dialog.sd-modern .el-dialog__header) {
+  margin: 0;
+  padding: 0;
+}
+:global(.el-dialog.sd-modern .el-dialog__headerbtn) {
+  top: 11px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  z-index: 2;
+}
+:global(.el-dialog.sd-modern .el-dialog__headerbtn:hover) {
+  background: rgba(255, 255, 255, 0.3);
+}
+:global(.el-dialog.sd-modern .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+:global(.el-dialog.sd-modern .el-dialog__body) {
+  padding: 12px 14px;
+  background: linear-gradient(160deg, #f0f9ff 0%, #eff6ff 50%, #f8fafc 100%);
+}
+:global(.el-dialog.sd-modern .el-dialog__footer) {
+  padding: 10px 14px 12px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.sd-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 56px 10px 16px;
+  background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 38%, #2563eb 70%, #60a5fa 100%);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.15);
+}
+.sd-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.sd-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.25);
+}
+.sd-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.sd-modern .shipping-summary-card,
+.sd-modern .products-table-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.45);
+}
+.sd-modern .shipping-summary-card {
+  margin-bottom: 12px;
+  border-top: 3px solid #2563eb;
+}
+.sd-modern .products-table-card {
+  border-top: 3px solid #10b981;
+}
+.sd-modern .shipping-summary-card :deep(.el-card__header),
+.sd-modern .products-table-card :deep(.el-card__header) {
+  padding: 8px 14px;
+  background: linear-gradient(180deg, #fbfdff, #fff);
+  border-bottom: 1px solid #eef2f7;
+}
+.shipping-detail-dialog.sd-modern .shipping-summary-card .summary-header .summary-icon,
+.shipping-detail-dialog.sd-modern .products-table-card .table-header .table-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.35),
+    0 3px 8px -4px rgba(37, 99, 235, 0.5);
+}
+.shipping-detail-dialog.sd-modern .products-table-card .table-header .table-icon {
+  background: linear-gradient(135deg, #34d399, #059669);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.35),
+    0 3px 8px -4px rgba(5, 150, 105, 0.5);
+}
+.shipping-detail-dialog.sd-modern .shipping-summary-card .summary-header .summary-title,
+.shipping-detail-dialog.sd-modern .products-table-card .table-header .table-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+.sd-modern .products-table :deep(.el-table__header th.el-table__cell) {
+  color: #334155;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f9fbfe, #eef3f9);
+}
+.shipping-detail-dialog.sd-modern .products-table-card .table-summary {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+}
+.shipping-detail-dialog.sd-modern
+  .products-table-card
+  .table-summary
+  .summary-row
+  .summary-item
+  .summary-value {
+  color: #1d4ed8;
+  font-variant-numeric: tabular-nums;
 }
 </style>

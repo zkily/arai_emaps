@@ -1,16 +1,12 @@
 <template>
-  <div class="pmp-page pmp-modern">
+  <div class="pmp-page pmp-modern pb-std">
     <!-- ツールバー（コンパクト・立体） -->
-    <header class="pmp-toolbar">
-      <div class="pmp-toolbar-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+    <header class="pmp-toolbar pb-hero pb-hero--page">
+      <div class="pmp-toolbar-fx pb-bubbles" aria-hidden="true" />
       <div class="pmp-toolbar__brand">
         <span class="pmp-toolbar__icon"><el-icon><DataAnalysis /></el-icon></span>
         <div class="pmp-toolbar__brand-text">
-          <h1 class="pmp-toolbar__title">工程別設備別計画</h1>
+          <h1 class="pmp-toolbar__title pb-hero-title">工程別設備別計画</h1>
           <span class="pmp-toolbar__period">{{ periodLabel }}</span>
         </div>
       </div>
@@ -3531,34 +3527,6 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.pmp-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.pmp-modern .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -120px;
-  left: 120px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.pmp-modern .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -130px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(167, 243, 208, 0.4) 0%, rgba(167, 243, 208, 0) 70%);
-}
-.pmp-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
-  mask-image: radial-gradient(ellipse at 10% 50%, #000 0%, transparent 60%);
 }
 .pmp-modern .pmp-toolbar__brand {
   flex-direction: row;

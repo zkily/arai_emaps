@@ -1,14 +1,14 @@
 <template>
-  <div class="ee-container eef-modern">
+  <div class="ee-container eef-modern pb-std">
     <!-- 页面头部 -->
-    <div class="ee-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+    <div class="ee-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="ee-header-left">
         <div class="ee-title-row">
           <span class="ee-title-icon"><el-icon :size="20"><Tools /></el-icon></span>
-          <h1 class="ee-title">設備能率管理</h1>
+          <h1 class="ee-title pb-hero-title">設備能率管理</h1>
         </div>
-        <p class="ee-subtitle">設備ごとの加工製品別能率設定・管理</p>
+        <p class="ee-subtitle pb-hero-desc">設備ごとの加工製品別能率設定・管理</p>
       </div>
       <div class="ee-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
         <div class="ee-stat" v-for="(s, i) in [
@@ -1413,52 +1413,6 @@ onMounted(async () => {
   pointer-events: none;
 }
 
-.eef-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: eefOrbFloat 11s ease-in-out infinite;
-}
-
-.eef-modern .fx-orb.orb-a {
-  width: 220px;
-  height: 220px;
-  top: -100px;
-  left: 26%;
-  background: radial-gradient(circle, rgba(190, 242, 100, 0.65), transparent 70%);
-}
-
-.eef-modern .fx-orb.orb-b {
-  width: 180px;
-  height: 180px;
-  bottom: -90px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(253, 224, 71, 0.6), transparent 70%);
-  animation-delay: -5s;
-}
-
-.eef-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at 30% 50%, #000 20%, transparent 75%);
-}
-
-.eef-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: eefSheen 7s ease-in-out infinite;
-}
-
 .eef-modern .ee-title-icon {
   width: 40px;
   height: 40px;
@@ -1751,26 +1705,6 @@ onMounted(async () => {
   box-shadow: 0 2px 0 var(--hx-deep);
 }
 
-@keyframes eefOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(26px, 14px) scale(1.12);
-  }
-}
-
-@keyframes eefSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes eefIconRev {
   0%,
   100% {
@@ -1785,8 +1719,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .eef-modern .fx-orb,
-  .eef-modern .fx-sheen,
   .eef-modern .ee-title-icon {
     animation: none;
   }

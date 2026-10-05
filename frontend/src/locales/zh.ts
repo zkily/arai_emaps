@@ -1297,6 +1297,7 @@ export default {
   },
   orderMonthly: {
     title: '月受注管理',
+    subtitle: '按月查询内示・确定本数，统一管理日受注生成・内示更新・批量登录',
     btnGenerateDaily: '日受注生成',
     btnUpdateForecast: '内示更新',
     btnUpdateProduct: '製品更新',

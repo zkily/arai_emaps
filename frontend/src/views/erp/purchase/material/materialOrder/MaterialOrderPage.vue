@@ -1,20 +1,15 @@
 <template>
-  <div class="material-order-container mo-modern" :class="`mo-tab-${activeTab}`">
+  <div class="material-order-container mo-modern pb-std" :class="`mo-tab-${activeTab}`">
     <!-- ページヘッダー -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="title-section">
           <div class="title-icon">
             <el-icon><ShoppingCart /></el-icon>
           </div>
           <div class="title-text">
-            <h1 class="main-title">材料在庫管理(発注・使用)</h1>
+            <h1 class="main-title pb-hero-title">材料在庫管理(発注・使用)</h1>
             <div class="header-chips">
               <span v-if="activeTab !== 'sub' && activeTab !== 'unusedReceiving'" class="header-chip">
                 <el-icon><Calendar /></el-icon>
@@ -1436,11 +1431,11 @@
       width="650px"
       :close-on-click-modal="false"
       :show-close="true"
-      class="print-confirm-dialog pcd-modern"
+      class="print-confirm-dialog pcd-modern pb-std"
     >
       <template #header>
-        <div class="dialog-header-with-button pcd-hero">
-          <div class="pcd-hero-fx" aria-hidden="true"><span class="pcd-orb pcd-orb--a" /><span class="pcd-orb pcd-orb--b" /><span class="pcd-grid" /></div>
+        <div class="dialog-header-with-button pcd-hero pb-hero">
+          <div class="pcd-hero-fx pb-bubbles" aria-hidden="true" />
           <div class="pcd-hero-left">
             <span class="pcd-hero-icon"><el-icon><Printer /></el-icon></span>
             <span class="dialog-title">注文書印刷確認</span>
@@ -8306,50 +8301,6 @@ ${groupBlocks}
   pointer-events: none;
   z-index: 0;
 }
-.mo-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: moOrbFloat 12s ease-in-out infinite;
-}
-.mo-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 24%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.mo-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.38) 0%, rgba(125, 211, 252, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.mo-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
-.mo-modern .page-header-fx .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.16) 50%,
-    transparent 62%
-  );
-  background-size: 250% 100%;
-  animation: moSheen 7s ease-in-out infinite;
-}
 .mo-modern .header-left,
 .mo-modern .header-actions {
   position: relative;
@@ -8755,24 +8706,6 @@ ${groupBlocks}
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes moOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
-@keyframes moSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
 @keyframes moIconFloat {
   0%,
   100% {
@@ -8795,8 +8728,6 @@ ${groupBlocks}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mo-modern .page-header-fx .fx-orb,
-  .mo-modern .page-header-fx .fx-sheen,
   .mo-modern .title-icon,
   .mo-modern .tab-item.active .el-icon {
     animation: none;
@@ -8868,34 +8799,6 @@ ${groupBlocks}
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.pcd-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.pcd-orb--a {
-  width: 180px;
-  height: 180px;
-  top: -100px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.pcd-orb--b {
-  width: 150px;
-  height: 150px;
-  bottom: -95px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(244, 114, 182, 0.38) 0%, rgba(244, 114, 182, 0) 70%);
-}
-.pcd-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 20px 20px;
-  -webkit-mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
 }
 .pcd-hero-left {
   display: flex;

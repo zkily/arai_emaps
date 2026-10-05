@@ -1,17 +1,16 @@
 <template>
-  <div class="order-monthly-list om-modern">
-    <div class="page-toolbar">
+  <div class="order-monthly-list om-modern pb-std">
+    <div class="page-toolbar pb-hero pb-hero--page">
       <div class="page-toolbar-glow" aria-hidden="true" />
-      <div class="toolbar-orb orb-a" aria-hidden="true" />
-      <div class="toolbar-orb orb-b" aria-hidden="true" />
-      <div class="toolbar-grid" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
       <div class="toolbar-left">
         <div class="toolbar-brand">
           <div class="toolbar-icon-wrap">
             <el-icon class="toolbar-icon"><Calendar /></el-icon>
           </div>
           <div class="toolbar-text">
-            <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
+            <h1 class="toolbar-title pb-hero-title">{{ t('orderMonthly.title') }}</h1>
+            <p class="toolbar-desc pb-hero-desc">{{ t('orderMonthly.subtitle') }}</p>
           </div>
         </div>
       </div>
@@ -51,7 +50,7 @@
     <el-dialog
       v-model="generateDailyConfirmVisible"
       width="420px"
-      class="generate-daily-confirm-dialog"
+      class="generate-daily-confirm-dialog pb-std"
       align-center
       :show-close="false"
     >
@@ -95,7 +94,7 @@
     <el-dialog
       v-model="forecastUpdateConfirmVisible"
       width="400px"
-      class="forecast-update-confirm-dialog"
+      class="forecast-update-confirm-dialog pb-std"
       align-center
       :show-close="false"
     >
@@ -124,7 +123,7 @@
     <el-dialog
       v-model="updateFieldsDialogVisible"
       width="440px"
-      class="update-fields-dialog"
+      class="update-fields-dialog pb-std"
       destroy-on-close
       align-center
       :show-close="false"
@@ -183,9 +182,9 @@
             <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
           </el-select>
           <div class="fi-nav">
-            <el-button class="fi-nav-btn" :icon="ArrowLeft" circle size="small" @click="goPrevPeriod" />
+            <el-button class="fi-nav-btn pb-btn-plain" :icon="ArrowLeft" circle size="small" @click="goPrevPeriod" />
             <el-button class="fi-now-btn" size="small" @click="goCurrentMonth">{{ t('orderMonthly.thisMonth') }}</el-button>
-            <el-button class="fi-nav-btn" :icon="ArrowRight" circle size="small" @click="goNextPeriod" />
+            <el-button class="fi-nav-btn pb-btn-plain" :icon="ArrowRight" circle size="small" @click="goNextPeriod" />
           </div>
         </div>
         <div class="fi-sep"></div>
@@ -434,7 +433,7 @@
       align-center
       :show-close="false"
       @close="resetForm"
-      class="monthly-edit-dialog"
+      class="monthly-edit-dialog pb-std"
     >
       <template #header>
         <div class="me-header">
@@ -529,7 +528,7 @@
     </el-dialog>
 
     <!-- Batch Registration Dialog -->
-    <el-dialog v-model="batchDialogVisible" width="900px" destroy-on-close @close="resetBatchForm">
+    <el-dialog v-model="batchDialogVisible" width="900px" class="batch-register-dialog pb-std" destroy-on-close @close="resetBatchForm">
       <template #header>
         <div class="dialog-header compact-header">
           <el-icon class="dialog-icon">
@@ -1795,7 +1794,7 @@ onMounted(() => {
 
 <style scoped>
 /* ======================================================
-   Modern Glassmorphism UI — Compact & Responsive
+   Modern UI — Compact & Responsive
    ====================================================== */
 
 /* --- Base --- */
@@ -1813,25 +1812,16 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  background: linear-gradient(
-    125deg,
-    rgba(79, 70, 229, 0.94) 0%,
-    rgba(109, 40, 217, 0.92) 38%,
-    rgba(147, 51, 234, 0.9) 72%,
-    rgba(168, 85, 247, 0.88) 100%
-  );
-  backdrop-filter: blur(20px) saturate(185%);
-  -webkit-backdrop-filter: blur(20px) saturate(185%);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  border-radius: 18px;
-  padding: 14px 20px 14px 18px;
-  margin-bottom: 14px;
+  background: linear-gradient(125deg, #4f46e5 0%, #6d28d9 38%, #9333ea 72%, #a855f7 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
   overflow: hidden;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.45) inset,
-    0 8px 32px rgba(79, 70, 229, 0.28),
-    0 20px 48px -12px rgba(109, 40, 217, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.08);
+    0 18px 36px -18px rgba(76, 29, 149, 0.6),
+    0 4px 12px -6px rgba(79, 70, 229, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 .page-toolbar-glow {
   position: absolute;
@@ -1855,28 +1845,32 @@ onMounted(() => {
 }
 .toolbar-icon-wrap {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
   box-shadow:
-    0 4px 14px rgba(15, 23, 42, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    0 6px 14px -6px rgba(15, 23, 42, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.12);
 }
 .toolbar-icon {
-  font-size: 24px;
+  font-size: 20px;
   color: #fff;
-  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.25));
 }
 .toolbar-text {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   min-width: 0;
+}
+.toolbar-desc {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.86);
 }
 .toolbar-title {
   margin: 0;
@@ -1885,10 +1879,6 @@ onMounted(() => {
   letter-spacing: 0.02em;
   line-height: 1.25;
   color: #fff;
-  text-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22),
-    0 2px 14px rgba(15, 23, 42, 0.35),
-    0 8px 24px rgba(49, 46, 129, 0.25);
 }
 .toolbar-title-accent {
   height: 3px;
@@ -1910,56 +1900,50 @@ onMounted(() => {
   row-gap: 8px;
 }
 
-/* --- Toolbar Buttons（分色 · 立体阴影 · Element Plus 覆盖） --- */
+/* --- Toolbar Buttons（白地ピル・色アイコン・色別ホバー：切断・面取指示管理と同系） --- */
 .tb-btn {
-  --tb-h: 40px;
+  --tb-h: 32px;
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #c7d2fe;
+  --k-bd-h: #a5b4fc;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+  --el-button-text-color: var(--k-fg);
+  --el-button-hover-text-color: var(--k-fg-h);
+  --el-button-active-text-color: var(--k-fg-h);
+  --el-button-border-color: var(--k-bd);
+  --el-button-hover-border-color: var(--k-bd-h);
+  --el-button-active-border-color: var(--k-bd-h);
   position: relative;
   height: var(--tb-h);
   min-height: var(--tb-h);
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border: 1px solid rgba(255, 255, 255, 0.28) !important;
-  color: #fff !important;
-  cursor: pointer;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--k-bd);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--k-fg);
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
   transition:
-    transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
-    box-shadow 0.22s ease,
-    filter 0.22s ease,
-    border-color 0.2s ease;
-  overflow: hidden;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.35) inset,
-    0 6px 16px rgba(15, 23, 42, 0.12);
-}
-.tb-btn :deep(.el-button__wrapper) {
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: transparent !important;
-  box-shadow: none !important;
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 .tb-btn :deep(.el-icon) {
-  font-size: 16px;
+  margin-right: 5px;
+  font-size: 15px;
+  color: var(--k-ico);
 }
-.tb-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 48%);
-  pointer-events: none;
-}
-.tb-btn:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.04);
-  color: #fff !important;
-}
-.tb-btn:active {
-  transform: translateY(0);
-  filter: brightness(0.98);
+.tb-btn:hover,
+.tb-btn:focus {
+  border-color: var(--k-bd-h);
+  color: var(--k-fg-h);
+  background: linear-gradient(135deg, #ffffff 0%, var(--k-tint) 45%, var(--k-tint-h) 100%);
 }
 .tb-btn:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.85);
@@ -1967,111 +1951,101 @@ onMounted(() => {
 }
 .tb-btn:disabled,
 .tb-btn.is-disabled {
-  opacity: 0.55;
-  transform: none !important;
-  filter: none;
   cursor: not-allowed;
 }
-.tb-btn :deep(.el-icon.is-loading) {
-  color: #fff;
-}
 
-/* Blue - 日受注生成 */
+/* 日受注生成 */
 .tb-btn-blue {
-  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 52%, #1e40af 100%) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    0 4px 14px rgba(37, 99, 235, 0.45),
-    0 12px 28px -8px rgba(30, 64, 175, 0.35);
+  --k-rgb: 37 99 235;
+  --k-fg: #1d4ed8;
+  --k-fg-h: #1e40af;
+  --k-bd: #93c5fd;
+  --k-bd-h: #60a5fa;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
 }
-.tb-btn-blue:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.3) inset,
-    0 8px 22px rgba(37, 99, 235, 0.55),
-    0 18px 36px -10px rgba(30, 64, 175, 0.4);
-}
-
-/* Teal - 内示更新 */
+/* 内示更新 */
 .tb-btn-teal {
-  background: linear-gradient(145deg, #2dd4bf 0%, #0d9488 52%, #0f766e 100%) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.22) inset,
-    0 4px 14px rgba(13, 148, 136, 0.42),
-    0 12px 28px -8px rgba(15, 118, 110, 0.32);
+  --k-rgb: 13 148 136;
+  --k-fg: #0f766e;
+  --k-fg-h: #115e59;
+  --k-bd: #5eead4;
+  --k-bd-h: #2dd4bf;
+  --k-tint: #ccfbf1;
+  --k-tint-h: #99f6e4;
+  --k-ico: #14b8a6;
 }
-.tb-btn-teal:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.28) inset,
-    0 8px 22px rgba(13, 148, 136, 0.52),
-    0 18px 36px -10px rgba(15, 118, 110, 0.38);
-}
-
-/* Amber - 製品更新 */
+/* 製品更新 */
 .tb-btn-amber {
-  background: linear-gradient(145deg, #fbbf24 0%, #d97706 50%, #b45309 100%) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.28) inset,
-    0 4px 14px rgba(217, 119, 6, 0.42),
-    0 12px 28px -8px rgba(180, 83, 9, 0.3);
+  --k-rgb: 217 119 6;
+  --k-fg: #b45309;
+  --k-fg-h: #92400e;
+  --k-bd: #fcd34d;
+  --k-bd-h: #fbbf24;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #f59e0b;
 }
-.tb-btn-amber:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.32) inset,
-    0 8px 22px rgba(217, 119, 6, 0.52),
-    0 18px 36px -10px rgba(180, 83, 9, 0.36);
-}
-
-/* Indigo - 日受注 */
+/* 日受注 */
 .tb-btn-indigo {
-  background: linear-gradient(145deg, #818cf8 0%, #6366f1 45%, #4f46e5 100%) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.28) inset,
-    0 4px 14px rgba(79, 70, 229, 0.45),
-    0 12px 28px -8px rgba(67, 56, 202, 0.35);
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #a5b4fc;
+  --k-bd-h: #818cf8;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
 }
-.tb-btn-indigo:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.32) inset,
-    0 8px 22px rgba(79, 70, 229, 0.55),
-    0 18px 36px -10px rgba(67, 56, 202, 0.42);
+/* 一括登録 */
+.tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-fg-h: #065f46;
+  --k-bd: #6ee7b7;
+  --k-bd-h: #34d399;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
 }
 
-/* Green - 一括登録 */
-.tb-btn-green {
-  background: linear-gradient(145deg, #34d399 0%, #059669 48%, #047857 100%) !important;
-  font-weight: 700;
+/* 濃色タイトル上の白ピル：共通ボタン標準より詳細度を上げて影をくっきりさせる */
+.order-monthly-list.om-modern.pb-std.pb-std .toolbar-actions .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.28) inset,
-    0 4px 14px rgba(5, 150, 105, 0.45),
-    0 12px 28px -8px rgba(4, 120, 87, 0.32);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.35) !important;
 }
-.tb-btn-green:hover {
+.order-monthly-list.om-modern.pb-std.pb-std .toolbar-actions .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.32) inset,
-    0 8px 22px rgba(5, 150, 105, 0.55),
-    0 18px 36px -10px rgba(4, 120, 87, 0.38);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.16),
+    0 4px 8px -2px rgba(15, 23, 42, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.order-monthly-list.om-modern.pb-std.pb-std .toolbar-actions .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.3) !important;
 }
 
 /* --- Progress --- */
 .progress-section {
   margin-bottom: 8px;
   padding: 8px 14px;
-  background: rgba(255,255,255,0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #fff;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.6);
+  border: 1px solid #e2e8f0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
-/* --- Filter Bar (Glass) --- */
+/* --- Filter Bar --- */
 .filter-bar {
-  background: rgba(255,255,255,0.65);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: #fff;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-  border: 1px solid rgba(255,255,255,0.7);
+  border: 1px solid #e2e8f0;
   padding: 8px 12px;
   margin-bottom: 10px;
 }
@@ -2100,8 +2074,7 @@ onMounted(() => {
   width: 26px; height: 26px; padding: 0;
   border-radius: 6px;
   border: 1px solid rgba(0,0,0,0.08);
-  background: rgba(255,255,255,0.8);
-  backdrop-filter: blur(4px);
+  background: #fff;
   transition: all 0.2s;
 }
 .fi-nav-btn:hover {
@@ -2121,7 +2094,7 @@ onMounted(() => {
 .fi-now-btn:hover { opacity: 0.9; color: #fff; transform: translateY(-1px); }
 .fi-sep { width: 1px; height: 22px; background: rgba(0,0,0,0.08); }
 
-/* --- Summary Cards (Glass) --- */
+/* --- Summary Cards --- */
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
@@ -2138,10 +2111,8 @@ onMounted(() => {
 .summary-card.modern-card {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.65);
-  background: rgba(255,255,255,0.55);
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid #e2e8f0;
+  background: #fff;
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2216,13 +2187,11 @@ onMounted(() => {
   pointer-events: none;
 }
 
-/* --- Table Section (Glass) --- */
+/* --- Table Section --- */
 .table-section {
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(16px) saturate(170%);
-  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  background: #fff;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.8);
+  border: 1px solid #e2e8f0;
   box-shadow: 0 4px 20px rgba(0,0,0,0.08);
   padding: 12px;
   overflow: hidden;
@@ -2383,7 +2352,6 @@ onMounted(() => {
   gap: 14px;
   padding: 20px 24px;
   background: linear-gradient(135deg, rgba(59,130,246,0.92) 0%, rgba(99,102,241,0.95) 50%, rgba(139,92,246,0.92) 100%);
-  backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255,255,255,0.2);
 }
 .gd-confirm-icon-wrap {
@@ -2423,7 +2391,6 @@ onMounted(() => {
 }
 .gd-confirm-card {
   background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(8px);
   border-radius: 12px;
   padding: 14px 16px;
   border: 1px solid rgba(0,0,0,0.06);
@@ -2534,7 +2501,6 @@ onMounted(() => {
   gap: 14px;
   padding: 20px 24px;
   background: linear-gradient(135deg, rgba(20,184,166,0.92) 0%, rgba(13,148,136,0.95) 100%);
-  backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255,255,255,0.2);
 }
 .fuc-icon-wrap {
@@ -2616,7 +2582,6 @@ onMounted(() => {
   gap: 14px;
   padding: 20px 24px;
   background: linear-gradient(135deg, rgba(245,158,11,0.92) 0%, rgba(217,119,6,0.95) 100%);
-  backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255,255,255,0.25);
 }
 .ufd-icon-wrap {
@@ -2649,7 +2614,6 @@ onMounted(() => {
 .ufd-form :deep(.el-form-item:last-child) { margin-bottom: 0; }
 .ufd-card {
   background: rgba(255,255,255,0.9);
-  backdrop-filter: blur(8px);
   border-radius: 12px;
   padding: 16px 18px;
   border: 1px solid rgba(245,158,11,0.2);
@@ -3015,7 +2979,6 @@ onMounted(() => {
 .load-btn:hover { opacity: 0.9; color: #fff; transform: translateY(-1px); }
 .table-container {
   background: rgba(255,255,255,0.8);
-  backdrop-filter: blur(8px);
   border-radius: 10px;
   padding: 8px;
 }
@@ -3102,18 +3065,16 @@ onMounted(() => {
   }
   .toolbar-right { justify-content: flex-start; }
   .toolbar-icon-wrap {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
   }
-  .toolbar-icon { font-size: 22px; }
+  .toolbar-icon { font-size: 18px; }
   .tb-label { display: none; }
   .tb-btn {
-    --tb-h: 38px;
-    padding: 0 12px;
-    border-radius: 10px;
-    font-size: 12px;
+    padding: 0 11px;
   }
+  .tb-btn :deep(.el-icon) { margin-right: 0; }
   .filter-bar { padding: 6px 10px; }
   .filter-inline { gap: 5px; }
   .fi-dest, .fi-search { width: 140px; min-width: 110px; }
@@ -3134,10 +3095,8 @@ onMounted(() => {
   .toolbar-title-accent { width: min(100px, 55vw); height: 2px; }
   .toolbar-right { gap: 6px; }
   .tb-btn {
-    --tb-h: 36px;
     padding: 0 10px;
     font-size: 11px;
-    border-radius: 10px;
   }
   .fi-year { width: 78px; }
   .fi-month { width: 68px; }
@@ -3157,167 +3116,24 @@ onMounted(() => {
 }
 
 /* ============================================================ */
-/* 页面美化：现代 UI / 3D 动效 / 颜色区分（受注＝インディゴ系）      */
+/* 页面美化：清晰・浅色・颜色区分（受注＝インディゴ系）              */
 /* ============================================================ */
 .order-monthly-list.om-modern {
   background:
-    radial-gradient(1100px 380px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
-    radial-gradient(900px 380px at 100% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
-    linear-gradient(160deg, #f3f5ff 0%, #eef0fa 45%, #f7f3ff 100%);
+    radial-gradient(1100px 380px at 0% 0%, rgba(99, 102, 241, 0.08), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(168, 85, 247, 0.06), transparent 60%),
+    linear-gradient(160deg, #f5f7ff 0%, #f1f3fb 45%, #f8f5ff 100%);
 }
-
-/* ---------- ツールバー ---------- */
-.om-modern .page-toolbar {
-  isolation: isolate;
-}
-
-.om-modern .page-toolbar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.14) 50%, transparent 65%);
-  background-size: 250% 100%;
-  animation: omSheen 7s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.om-modern .toolbar-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  pointer-events: none;
-  z-index: 0;
-  animation: omOrbFloat 12s ease-in-out infinite;
-}
-
-.om-modern .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -150px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(244, 114, 182, 0.5), transparent 70%);
-}
-
-.om-modern .orb-b {
-  width: 260px;
-  height: 260px;
-  bottom: -190px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.45), transparent 70%);
-  animation-delay: -6s;
-}
-
-.om-modern .toolbar-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.om-modern .toolbar-icon-wrap {
-  box-shadow:
-    0 10px 20px -6px rgba(15, 23, 42, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -3px 0 rgba(15, 23, 42, 0.15);
-  animation: omIconFloat 4.5s ease-in-out infinite;
-}
-
-.om-modern .toolbar-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.om-modern .toolbar-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  font-variant-numeric: tabular-nums;
-}
-
-.om-modern .toolbar-chip .el-icon {
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-/* ツールバーボタン：3D キーキャップ + シーン */
-.om-modern .tb-btn {
-  --edge: rgba(15, 23, 42, 0.35);
-  --glow: rgba(15, 23, 42, 0.25);
-  box-shadow:
-    0 3px 0 var(--edge),
-    0 10px 20px -8px var(--glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.2s ease;
-}
-
-.om-modern .tb-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%) no-repeat;
-  background-size: 250% 100%;
-  background-position: 150% 0;
-  transition: background-position 0.6s ease;
-  pointer-events: none;
-}
-
-.om-modern .tb-btn:hover:not(.is-disabled) {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--edge),
-    0 16px 26px -10px var(--glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.om-modern .tb-btn:hover:not(.is-disabled)::before {
-  background-position: -50% 0;
-}
-
-.om-modern .tb-btn:active:not(.is-disabled) {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--edge),
-    0 4px 8px -4px var(--glow);
-}
-
-.om-modern .tb-btn-blue { --edge: #1e3a8a; --glow: rgba(37, 99, 235, 0.6); }
-.om-modern .tb-btn-teal { --edge: #115e59; --glow: rgba(13, 148, 136, 0.6); }
-.om-modern .tb-btn-amber { --edge: #92400e; --glow: rgba(217, 119, 6, 0.6); }
-.om-modern .tb-btn-indigo { --edge: #3730a3; --glow: rgba(79, 70, 229, 0.6); }
-.om-modern .tb-btn-green { --edge: #065f46; --glow: rgba(5, 150, 105, 0.6); }
 
 /* ---------- 検索条件 ---------- */
 .om-modern .filter-bar {
   position: relative;
   overflow: hidden;
   padding-left: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid #e0e7ff;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 10px 24px -16px rgba(79, 70, 229, 0.3);
+    0 10px 24px -16px rgba(79, 70, 229, 0.28);
 }
 
 .om-modern .filter-bar::before {
@@ -3338,8 +3154,9 @@ onMounted(() => {
   color: #fff;
   background: linear-gradient(135deg, #818cf8, #6366f1);
   box-shadow:
-    0 2px 0 #4338ca,
-    0 6px 12px -4px rgba(99, 102, 241, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(67, 56, 202, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.55);
 }
 
 .om-modern .filter-bar :deep(.el-input__wrapper),
@@ -3367,6 +3184,7 @@ onMounted(() => {
     0 0 0 3px rgba(99, 102, 241, 0.16);
 }
 
+/* 前月／当月／翌月：セグメント。左右矢印は共通ボタン標準を外す（pb-btn-plain） */
 .om-modern .fi-nav {
   padding: 2px;
   gap: 2px;
@@ -3378,7 +3196,6 @@ onMounted(() => {
 .om-modern .fi-nav-btn {
   border: none;
   background: transparent;
-  backdrop-filter: none;
 }
 
 .om-modern .fi-nav-btn:hover {
@@ -3389,21 +3206,15 @@ onMounted(() => {
 }
 
 .om-modern .fi-now-btn,
-.om-modern .fi-now-btn:hover {
+.om-modern .fi-now-btn:hover,
+.om-modern .fi-now-btn:focus {
+  --k-rgb: 124 58 237;
   color: #fff;
   opacity: 1;
   background: linear-gradient(135deg, #a78bfa, #7c3aed);
-  box-shadow:
-    0 2px 0 #5b21b6,
-    0 6px 12px -4px rgba(124, 58, 237, 0.55);
 }
 
-.om-modern .fi-now-btn:active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #5b21b6;
-}
-
-/* ---------- 合計カード（3D チルト） ---------- */
+/* ---------- 合計カード（ホバーで 3D チルト） ---------- */
 .om-modern .summary-cards {
   perspective: 900px;
 }
@@ -3411,8 +3222,8 @@ onMounted(() => {
 .om-modern .summary-card.modern-card {
   --accent: #6366f1;
   position: relative;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #fff;
+  border: 1px solid #e2e8f0;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 10px 22px -16px rgba(15, 23, 42, 0.28);
@@ -3421,7 +3232,6 @@ onMounted(() => {
     transform 0.18s ease-out,
     box-shadow 0.25s ease,
     border-color 0.25s ease;
-  animation: omCardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .om-modern .summary-card.modern-card::before {
@@ -3441,7 +3251,7 @@ onMounted(() => {
   inset: 0;
   background: radial-gradient(
     circle at var(--mx, 50%) var(--my, 0%),
-    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 12%, transparent),
     transparent 60%
   );
   opacity: 0;
@@ -3450,11 +3260,11 @@ onMounted(() => {
 }
 
 .om-modern .summary-card.modern-card:hover {
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 18px 30px -16px color-mix(in srgb, var(--accent) 70%, transparent);
+    0 16px 28px -16px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .om-modern .summary-card.modern-card:hover::after {
@@ -3463,14 +3273,14 @@ onMounted(() => {
 
 .om-modern .card-icon {
   box-shadow:
-    0 2px 0 color-mix(in srgb, var(--accent) 70%, #000),
-    0 6px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.14),
+    0 4px 10px -4px color-mix(in srgb, var(--accent) 70%, transparent);
   transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
 .om-modern .summary-card:hover .card-icon {
-  transform: rotate(-8deg) scale(1.08);
+  transform: rotate(-6deg) scale(1.06);
 }
 
 .om-modern .summary-value {
@@ -3478,7 +3288,7 @@ onMounted(() => {
 }
 
 .om-modern .card-decoration {
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%);
 }
 
 .om-modern .info-card { --accent: #3b82f6; }
@@ -3491,24 +3301,13 @@ onMounted(() => {
 .om-modern .internal-inspection-card { --accent: #0ea5e9; }
 .om-modern .external-inspection-card { --accent: #a855f7; }
 
-.om-modern .summary-card:nth-child(1) { animation-delay: 0.05s; }
-.om-modern .summary-card:nth-child(2) { animation-delay: 0.1s; }
-.om-modern .summary-card:nth-child(3) { animation-delay: 0.15s; }
-.om-modern .summary-card:nth-child(4) { animation-delay: 0.2s; }
-.om-modern .summary-card:nth-child(5) { animation-delay: 0.25s; }
-.om-modern .summary-card:nth-child(6) { animation-delay: 0.3s; }
-.om-modern .summary-card:nth-child(7) { animation-delay: 0.35s; }
-.om-modern .summary-card:nth-child(8) { animation-delay: 0.4s; }
-.om-modern .summary-card:nth-child(9) { animation-delay: 0.45s; }
-
 /* ---------- 一覧テーブル ---------- */
 .om-modern .table-section {
   position: relative;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid #e0e7ff;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 14px 32px -18px rgba(79, 70, 229, 0.35);
+    0 14px 32px -18px rgba(79, 70, 229, 0.3);
 }
 
 .om-modern .table-section::before {
@@ -3519,6 +3318,12 @@ onMounted(() => {
   right: 0;
   height: 3px;
   background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+}
+
+.om-modern .data-table :deep(.el-table__header-wrapper th) {
+  background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%) !important;
+  color: #3730a3;
+  border-bottom: 1px solid #c7d2fe;
 }
 
 .om-modern .data-table :deep(.el-table__row:hover > td) {
@@ -3580,7 +3385,7 @@ onMounted(() => {
 .om-modern :deep(.el-tag--warning) { --tag-bg: #fffbeb; --tag-fg: #b45309; --tag-ring: #fde68a; }
 .om-modern :deep(.el-tag--danger) { --tag-bg: #fff1f2; --tag-fg: #be123c; --tag-ring: #fecdd3; }
 
-/* 行内操作：ピル型 → ホバーでグラデーション */
+/* 行内操作：ピル型 → ホバーで同色グラデーション */
 .om-modern .data-table .row-act {
   --act: #6366f1;
   --act-to: #4f46e5;
@@ -3617,58 +3422,15 @@ onMounted(() => {
   color: #fff;
   background: linear-gradient(135deg, #818cf8, #6366f1);
   box-shadow:
-    0 2px 0 #4338ca,
-    0 4px 10px -3px rgba(99, 102, 241, 0.55);
-}
-
-/* ---------- アニメーション ---------- */
-@keyframes omSheen {
-  0% {
-    background-position: 150% 0;
-  }
-  60%,
-  100% {
-    background-position: -50% 0;
-  }
-}
-
-@keyframes omOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 10px) scale(1.12);
-  }
-}
-
-@keyframes omIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(-6deg) rotateY(14deg) translateY(-3px);
-  }
-}
-
-@keyframes omCardIn {
-  from {
-    opacity: 0;
-    transform: perspective(600px) rotateX(-30deg) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(67, 56, 202, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.55);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .om-modern .page-toolbar::after,
-  .om-modern .toolbar-orb,
-  .om-modern .toolbar-icon-wrap,
-  .om-modern .summary-card.modern-card {
-    animation: none;
+  .om-modern .summary-card.modern-card,
+  .om-modern .card-icon {
+    transition: none;
   }
 }
 </style>

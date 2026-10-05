@@ -1,19 +1,14 @@
 <template>
-  <div class="shipping-report-page sr-modern">
+  <div class="shipping-report-page sr-modern pb-std">
     <div class="report-card glass-card">
       <!-- 页面标题：玻璃头部 -->
-      <div class="card-header glass-header">
-        <div class="header-fx" aria-hidden="true">
-          <span class="fx-orb orb-a" />
-          <span class="fx-orb orb-b" />
-          <span class="fx-grid" />
-          <span class="fx-sheen" />
-        </div>
+      <div class="card-header glass-header pb-hero pb-hero--page">
+        <div class="header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title">{{ t('shipping.reportTitle') }}</h1>
+          <h1 class="header-title pb-hero-title">{{ t('shipping.reportTitle') }}</h1>
         </div>
         <div class="header-chips">
           <span class="header-chip">
@@ -1626,51 +1621,6 @@ async function recordPrintFailure(errorMessage: string) {
   z-index: 1;
 }
 
-.sr-modern .header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(24px);
-  opacity: 0.6;
-  animation: srOrbFloat 10s ease-in-out infinite;
-}
-
-.sr-modern .header-fx .orb-a {
-  width: 220px;
-  height: 220px;
-  top: -120px;
-  right: 18%;
-  background: radial-gradient(circle, #38bdf8 0%, transparent 70%);
-}
-
-.sr-modern .header-fx .orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -130px;
-  left: 22%;
-  background: radial-gradient(circle, #818cf8 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.sr-modern .header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 70%, transparent 100%);
-}
-
-.sr-modern .header-fx .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
-  animation: srSheen 7s ease-in-out infinite;
-}
-
 .sr-modern .header-icon-container {
   width: 36px;
   height: 36px;
@@ -2088,26 +2038,6 @@ async function recordPrintFailure(errorMessage: string) {
   animation: srIconFloat 4.5s ease-in-out infinite;
 }
 
-@keyframes srOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 12px) scale(1.12);
-  }
-}
-
-@keyframes srSheen {
-  0%,
-  60% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
-}
-
 @keyframes srIconFloat {
   0%,
   100% {
@@ -2119,8 +2049,6 @@ async function recordPrintFailure(errorMessage: string) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sr-modern .header-fx .fx-orb,
-  .sr-modern .header-fx .fx-sheen,
   .sr-modern .header-icon-container,
   .sr-modern .empty-state :deep(.el-empty__image) {
     animation: none;

@@ -1,5 +1,5 @@
 <template>
-  <div class="supply-purchase-page">
+  <div class="supply-purchase-page pb-std">
     <div class="page-header">
       <div class="header-lead">
         <div class="title-icon"><el-icon><Box /></el-icon></div>
@@ -375,11 +375,11 @@
       v-model="printConfirmDialogVisible"
       width="650px"
       :close-on-click-modal="false"
-      class="print-confirm-dialog pcd-modern"
+      class="print-confirm-dialog pcd-modern pb-std"
     >
       <template #header>
-        <div class="dialog-header-with-button pcd-hero">
-          <div class="pcd-hero-fx" aria-hidden="true"><span class="pcd-orb pcd-orb--a" /><span class="pcd-orb pcd-orb--b" /><span class="pcd-grid" /></div>
+        <div class="dialog-header-with-button pcd-hero pb-hero">
+          <div class="pcd-hero-fx pb-bubbles" aria-hidden="true" />
           <div class="pcd-hero-left">
             <span class="pcd-hero-icon"><el-icon><Printer /></el-icon></span>
             <span class="dialog-title">注文書印刷確認</span>
@@ -1651,34 +1651,6 @@ onMounted(async () => {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-}
-.pcd-orb {
-  position: absolute;
-  border-radius: 50%;
-}
-.pcd-orb--a {
-  width: 180px;
-  height: 180px;
-  top: -100px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.pcd-orb--b {
-  width: 150px;
-  height: 150px;
-  bottom: -95px;
-  left: 22%;
-  background: radial-gradient(circle, rgba(244, 114, 182, 0.38) 0%, rgba(244, 114, 182, 0) 70%);
-}
-.pcd-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 20px 20px;
-  -webkit-mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 15% 50%, #000 0%, transparent 70%);
 }
 .pcd-hero-left {
   display: flex;

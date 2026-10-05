@@ -1,18 +1,14 @@
 <template>
-  <div class="production-actual-management pam-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+  <div class="production-actual-management pam-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="page-title">
         <div class="title-icon">
           <el-icon><TrendCharts /></el-icon>
         </div>
         <div class="title-content">
-          <h1>生産実績管理</h1>
-          <p>工程別に在庫取引ログ（実績）を横断分析します</p>
+          <h1 class="pb-hero-title">生産実績管理</h1>
+          <p class="pb-hero-desc">工程別に在庫取引ログ（実績）を横断分析します</p>
         </div>
       </div>
       <div class="page-actions">
@@ -4129,38 +4125,6 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       inset: 0;
       z-index: -1;
       pointer-events: none;
-    }
-
-    .fx-orb {
-      position: absolute;
-      border-radius: 50%;
-    }
-
-    .orb-a {
-      width: 220px;
-      height: 220px;
-      top: -110px;
-      right: 30%;
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-    }
-
-    .orb-b {
-      width: 180px;
-      height: 180px;
-      bottom: -110px;
-      left: 22%;
-      background: radial-gradient(circle, rgba(165, 243, 252, 0.42) 0%, rgba(165, 243, 252, 0) 70%);
-    }
-
-    .fx-grid {
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-      background-size: 22px 22px;
-      -webkit-mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
-      mask-image: radial-gradient(ellipse at 18% 50%, #000 0%, transparent 70%);
     }
 
     .page-title {

@@ -1,14 +1,9 @@
 <template>
-  <div class="welding-plan-list-page wpl-modern">
-    <div class="plan-hd">
-      <div class="plan-hd-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+  <div class="welding-plan-list-page wpl-modern pb-std">
+    <div class="plan-hd pb-hero pb-hero--page">
+      <div class="plan-hd-fx pb-bubbles" aria-hidden="true" />
       <div class="plan-hd-row">
-        <h2 class="plan-hd-title">
+        <h2 class="plan-hd-title pb-hero-title">
           <span class="plan-hd-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false">
               <path
@@ -50,7 +45,7 @@
           溶接ライン順で再計算
         </el-button>
       </div>
-      <p class="plan-hd-sub">
+      <p class="plan-hd-sub pb-hero-desc">
         工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。
       </p>
       <div v-if="bulkReplanning && replanProgressTotal > 0" class="replan-progress-card">
@@ -3998,45 +3993,6 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   pointer-events: none;
   z-index: 0;
 }
-.wpl-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: wplOrbFloat 12s ease-in-out infinite;
-}
-.wpl-modern .fx-orb.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.wpl-modern .fx-orb.orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -120px;
-  left: 32%;
-  background: radial-gradient(circle, rgba(251, 207, 232, 0.42) 0%, rgba(251, 207, 232, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.wpl-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
-}
-.wpl-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.18) 50%, transparent 62%);
-  background-size: 250% 100%;
-  animation: wplSheen 7s ease-in-out infinite;
-}
 .wpl-modern .plan-hd-row,
 .wpl-modern .plan-hd-sub,
 .wpl-modern .replan-progress-card {
@@ -4434,24 +4390,6 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes wplSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
-@keyframes wplOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes wplIconFloat {
   0%,
   100% {
@@ -4476,8 +4414,6 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wpl-modern .fx-orb,
-  .wpl-modern .fx-sheen,
   .wpl-modern .plan-hd-icon,
   .wpl-modern .status-lamp-dot--ongoing {
     animation: none;

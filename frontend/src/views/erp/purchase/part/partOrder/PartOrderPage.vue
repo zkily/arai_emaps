@@ -1,20 +1,16 @@
 <template>
-  <div class="part-order-container po-modern" :class="`po-tab-${activeTab}`">
+  <div class="part-order-container po-modern pb-std" :class="`po-tab-${activeTab}`">
     <!-- ページヘッダー -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="title-section">
           <div class="title-icon">
             <el-icon><ShoppingCart /></el-icon>
           </div>
           <div class="title-text">
-            <h1 class="main-title">部品在庫管理(発注・使用)</h1>
-            <p class="subtitle">部品の在庫推移・使用実績・発注を一元管理</p>
+            <h1 class="main-title pb-hero-title">部品在庫管理(発注・使用)</h1>
+            <p class="subtitle pb-hero-desc">部品の在庫推移・使用実績・発注を一元管理</p>
             <div class="header-chips">
               <span class="header-chip">
                 <el-icon><Calendar /></el-icon>
@@ -5509,38 +5505,6 @@ onMounted(() => {
   pointer-events: none;
   z-index: 0;
 }
-.po-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: poOrbFloat 12s ease-in-out infinite;
-}
-.po-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 22%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.po-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 30%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.38) 0%, rgba(125, 211, 252, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.po-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
 .po-modern .title-icon {
   width: 42px;
   height: 42px;
@@ -5863,15 +5827,6 @@ onMounted(() => {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes poOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes poIconFloat {
   0%,
   100% {
@@ -5894,7 +5849,6 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .po-modern .page-header-fx .fx-orb,
   .po-modern .title-icon,
   .po-modern .tab-item.active .el-icon {
     animation: none;

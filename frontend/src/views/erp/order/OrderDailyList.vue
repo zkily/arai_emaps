@@ -1,5 +1,5 @@
 <template>
-  <div class="order-daily-list od-modern">
+  <div class="order-daily-list od-modern pb-std">
     <div class="page-hero">
       <div class="hero-orb orb-a" aria-hidden="true" />
       <div class="hero-orb orb-b" aria-hidden="true" />
@@ -209,8 +209,8 @@
       :show-close="false"
     >
       <template #header>
-        <div class="dialog-header-custom odd-hero" :class="{ 'odd-hero--edit': editId }">
-          <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+        <div class="dialog-header-custom odd-hero pb-hero" :class="{ 'odd-hero--edit': editId }">
+          <div class="page-header-fx pb-bubbles" aria-hidden="true" />
           <div class="dialog-header-left">
             <span class="dialog-header-add-btn" :title="editId ? '編集' : '新規追加'">
               <el-icon><EditPen v-if="editId" /><Plus v-else /></el-icon>
@@ -1963,23 +1963,6 @@ onUnmounted(() => {
   animation: odOrbFloat 12s ease-in-out infinite;
 }
 
-.od-modern .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -150px;
-  left: 26%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.5), transparent 70%);
-}
-
-.od-modern .orb-b {
-  width: 240px;
-  height: 240px;
-  top: -120px;
-  right: -60px;
-  background: radial-gradient(circle, rgba(244, 114, 182, 0.45), transparent 70%);
-  animation-delay: -6s;
-}
-
 .od-modern .hero-grid {
   position: absolute;
   inset: 0;
@@ -2503,51 +2486,6 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.odd-hero .fx-orb {
-  position: absolute;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.55;
-  animation: oddOrbFloat 11s ease-in-out infinite alternate;
-}
-
-.odd-hero .orb-a {
-  top: -70px;
-  right: 18%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0%, transparent 70%);
-}
-
-.odd-hero .orb-b {
-  bottom: -90px;
-  left: 8%;
-  background: radial-gradient(circle, var(--m4) 0%, transparent 70%);
-  animation-delay: -5.5s;
-}
-
-.odd-hero .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 120% at 70% 50%, #000 0%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 120% at 70% 50%, #000 0%, transparent 75%);
-}
-
-.odd-hero .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  transform: skewX(-18deg);
-  animation: oddSheen 7s ease-in-out infinite;
-}
-
 .odd-hero .dialog-header-add-btn {
   width: 34px;
   height: 34px;
@@ -2603,25 +2541,6 @@ onUnmounted(() => {
 .odd-hero .dialog-header-close:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: rotate(90deg);
-}
-
-@keyframes oddOrbFloat {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-  100% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes oddSheen {
-  0%,
-  55% {
-    left: -40%;
-  }
-  100% {
-    left: 130%;
-  }
 }
 
 /* フォーム本体：セクション色分け（日付＝sky / 基本＝indigo / 数量＝emerald） */
@@ -2847,8 +2766,6 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .odd-hero .fx-orb,
-  .odd-hero .fx-sheen,
   .odd-hero .dialog-header-add-btn {
     animation: none;
   }

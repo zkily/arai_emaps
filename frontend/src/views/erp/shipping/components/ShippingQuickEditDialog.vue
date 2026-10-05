@@ -5,8 +5,15 @@
     width="420px"
     @close="handleClose"
     :close-on-click-modal="false"
-    class="quick-edit-dialog"
+    class="quick-edit-dialog qe-modern pb-std"
   >
+    <template #header="{ titleId, titleClass }">
+      <div class="qe-hero pb-hero">
+        <div class="qe-hero-fx pb-bubbles" aria-hidden="true" />
+        <span class="qe-hero-icon"><el-icon><Box /></el-icon></span>
+        <span :id="titleId" :class="[titleClass, 'qe-hero-title']">数量・箱数 編集</span>
+      </div>
+    </template>
     <div v-if="!shippingItem" class="loading-container">
       <el-icon class="is-loading">
         <Loading />
@@ -471,11 +478,6 @@ const handleSave = async () => {
 .save-btn:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
-  transform: translateY(-1px);
-}
-
-.save-btn:active {
-  transform: translateY(0);
 }
 
 .save-btn .el-icon {
@@ -515,5 +517,122 @@ const handleSave = async () => {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* ============================================================
+ * 页面美化：数量・箱数 編集（ブルー系ヒーロー・淡色情報カード）
+ * ============================================================ */
+:global(.el-dialog.qe-modern.quick-edit-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__header) {
+  margin: 0;
+  padding: 0;
+  background: none;
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__headerbtn) {
+  top: 11px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  z-index: 2;
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__headerbtn:hover) {
+  background: rgba(255, 255, 255, 0.3);
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__body) {
+  padding: 14px 18px;
+  background: #fff;
+}
+:global(.el-dialog.qe-modern.quick-edit-dialog .el-dialog__footer) {
+  padding: 10px 18px 14px;
+  background: #fff;
+  border-top: 1px solid #eef2f7;
+}
+
+.qe-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 56px 10px 16px;
+  background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 38%, #2563eb 70%, #60a5fa 100%);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.15);
+}
+.qe-hero-fx {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.qe-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.25);
+}
+.qe-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.qe-modern .readonly-info {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+}
+.qe-modern .info-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.35),
+    0 3px 8px -4px rgba(37, 99, 235, 0.5);
+}
+.qe-modern .info-item + .info-item .info-icon {
+  background: linear-gradient(135deg, #34d399, #059669);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(4, 120, 87, 0.35),
+    0 3px 8px -4px rgba(5, 150, 105, 0.5);
+}
+.qe-modern .info-value {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.qe-modern .save-btn,
+.qe-modern .save-btn:hover,
+.qe-modern .save-btn:focus {
+  border: 1px solid #2563eb;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
 </style>

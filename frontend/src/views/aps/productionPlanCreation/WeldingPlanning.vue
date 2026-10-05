@@ -1,17 +1,12 @@
 <template>
-  <div class="planning-page wp-modern">
+  <div class="planning-page wp-modern pb-std">
     <!-- ─── Page Header ─── -->
-    <div class="plan-hd">
-      <div class="plan-hd-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-        <span class="fx-sheen" />
-      </div>
+    <div class="plan-hd pb-hero pb-hero--page">
+      <div class="plan-hd-fx pb-bubbles" aria-hidden="true" />
       <span class="plan-hd-icon" aria-hidden="true"><el-icon><Connection /></el-icon></span>
       <div class="plan-hd-text">
-        <h2 class="plan-hd-title">{{ pageTitle }}</h2>
-        <p class="plan-hd-sub">基準開始月・工程・設備の順で指定し、品目と数量を登録。ライン上で順次つなげてガントを表示します。</p>
+        <h2 class="plan-hd-title pb-hero-title">{{ pageTitle }}</h2>
+        <p class="plan-hd-sub pb-hero-desc">基準開始月・工程・設備の順で指定し、品目と数量を登録。ライン上で順次つなげてガントを表示します。</p>
       </div>
       <div class="plan-hd-meta">
         <span v-if="selectedProcessCd" class="plan-hd-chip">
@@ -4960,45 +4955,6 @@ td.gantt-has-actual {
   pointer-events: none;
   z-index: 0;
 }
-.wp-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: wpOrbFloat 12s ease-in-out infinite;
-}
-.wp-modern .fx-orb.orb-a {
-  width: 260px;
-  height: 260px;
-  top: -150px;
-  right: 14%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.wp-modern .fx-orb.orb-b {
-  width: 200px;
-  height: 200px;
-  bottom: -120px;
-  left: 28%;
-  background: radial-gradient(circle, rgba(251, 207, 232, 0.42) 0%, rgba(251, 207, 232, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.wp-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 16% 50%, #000 0%, transparent 70%);
-}
-.wp-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.18) 50%, transparent 62%);
-  background-size: 250% 100%;
-  animation: wpSheen 7s ease-in-out infinite;
-}
 .wp-modern .plan-hd-icon,
 .wp-modern .plan-hd-text,
 .wp-modern .plan-hd-meta {
@@ -5386,24 +5342,6 @@ td.gantt-has-actual {
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes wpSheen {
-  0%,
-  100% {
-    background-position: 130% 0;
-  }
-  50% {
-    background-position: -30% 0;
-  }
-}
-@keyframes wpOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes wpIconFloat {
   0%,
   100% {
@@ -5415,8 +5353,6 @@ td.gantt-has-actual {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wp-modern .fx-orb,
-  .wp-modern .fx-sheen,
   .wp-modern .plan-hd-icon {
     animation: none;
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="capacity-page" :class="{ 'capacity-page--embed': embed, 'lc-modern': !embed }">
+  <div class="capacity-page pb-std" :class="{ 'capacity-page--embed': embed, 'lc-modern': !embed }">
     <el-card
       :shadow="embed ? 'never' : 'hover'"
       class="capacity-card"
@@ -32,21 +32,16 @@
             </el-button>
           </div>
         </div>
-        <div v-else class="card-head card-head--with-actions">
-          <div class="card-head__fx" aria-hidden="true">
-            <span class="fx-orb orb-a" />
-            <span class="fx-orb orb-b" />
-            <span class="fx-grid" />
-            <span class="fx-sheen" />
-          </div>
+        <div v-else class="card-head card-head--with-actions pb-hero pb-hero--page">
+          <div class="card-head__fx pb-bubbles" aria-hidden="true" />
           <div class="card-head__main">
-            <h3 class="card-head__title">
+            <h3 class="card-head__title pb-hero-title">
               <span class="card-head__title-inner">
                 <el-icon class="card-head__title-icon"><Setting /></el-icon>
                 設備稼働設定
               </span>
             </h3>
-            <p class="card-head__desc">
+            <p class="card-head__desc pb-hero-desc">
               日別の稼働時間帯を設定します。「休憩・技術使用・保全」は稼働合計・排産から除外（稼働帯との重複分のみ差引）。技術使用・保全は成型指示にも表示されます。
             </p>
             <div class="card-head__chips">
@@ -1945,43 +1940,6 @@ function isWeekend(d: string): boolean {
   z-index: 0;
   pointer-events: none;
 }
-.lc-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(2px);
-  animation: lcOrbFloat 9s ease-in-out infinite;
-}
-.lc-modern .orb-a {
-  width: 190px;
-  height: 190px;
-  top: -90px;
-  right: 16%;
-  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.3), rgba(165, 180, 252, 0) 70%);
-}
-.lc-modern .orb-b {
-  width: 130px;
-  height: 130px;
-  bottom: -70px;
-  left: 34%;
-  background: radial-gradient(circle at 40% 40%, rgba(196, 181, 253, 0.4), rgba(196, 181, 253, 0) 70%);
-  animation-delay: -4s;
-}
-.lc-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: linear-gradient(90deg, transparent 0%, #000 45%, transparent 100%);
-}
-.lc-modern .fx-sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 62%);
-  background-size: 250% 100%;
-  animation: lcSheen 6s ease-in-out infinite;
-}
 .lc-modern .card-head__main,
 .lc-modern .card-head__actions {
   position: relative;
@@ -2323,24 +2281,6 @@ function isWeekend(d: string): boolean {
 .lc-modern :deep(.el-loading-spinner .path) {
   stroke: var(--lc-c2);
 }
-
-@keyframes lcOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(-18px, 12px, 0);
-  }
-}
-@keyframes lcSheen {
-  0% {
-    background-position: 130% 0;
-  }
-  100% {
-    background-position: -30% 0;
-  }
-}
 @keyframes lcIconFloat {
   0%,
   100% {
@@ -2362,8 +2302,6 @@ function isWeekend(d: string): boolean {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lc-modern .fx-orb,
-  .lc-modern .fx-sheen,
   .lc-modern .card-head__title-icon,
   .lc-modern .empty__icon,
   .lc-modern .day-card {

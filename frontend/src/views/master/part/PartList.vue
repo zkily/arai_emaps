@@ -1,20 +1,16 @@
 <template>
-  <div class="part-master-container pm-modern">
+  <div class="part-master-container pm-modern pb-std">
     <!-- 与 ProductList / MaterialInspection 同构的页面头部 -->
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true">
-        <span class="fx-orb orb-a" />
-        <span class="fx-orb orb-b" />
-        <span class="fx-grid" />
-      </div>
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
           <div class="title-icon">
             <el-icon><Grid /></el-icon>
           </div>
           <div class="title-text">
-            <h1 class="main-title">{{ t('master.part.title') }}</h1>
-            <p class="subtitle">{{ t('master.part.subtitle') }}</p>
+            <h1 class="main-title pb-hero-title">{{ t('master.part.title') }}</h1>
+            <p class="subtitle pb-hero-desc">{{ t('master.part.subtitle') }}</p>
           </div>
         </div>
         <div class="header-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1982,38 +1978,6 @@ onMounted(fetchList)
   pointer-events: none;
   z-index: 0;
 }
-.pm-modern .page-header-fx .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(4px);
-  animation: pmOrbFloat 12s ease-in-out infinite;
-}
-.pm-modern .page-header-fx .orb-a {
-  width: 240px;
-  height: 240px;
-  top: -140px;
-  right: 30%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 70%);
-}
-.pm-modern .page-header-fx .orb-b {
-  width: 190px;
-  height: 190px;
-  bottom: -120px;
-  left: 26%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.38) 0%, rgba(125, 211, 252, 0) 70%);
-  animation-duration: 15s;
-  animation-delay: -6s;
-}
-.pm-modern .page-header-fx .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse at 14% 50%, #000 0%, transparent 70%);
-}
 .pm-modern .title-icon {
   width: 42px;
   height: 42px;
@@ -2260,15 +2224,6 @@ onMounted(fetchList)
 }
 
 /* ---------- キーフレーム ---------- */
-@keyframes pmOrbFloat {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(-18px, 10px, 0) scale(1.08);
-  }
-}
 @keyframes pmIconFloat {
   0%,
   100% {
@@ -2289,7 +2244,6 @@ onMounted(fetchList)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pm-modern .page-header-fx .fx-orb,
   .pm-modern .title-icon,
   .pm-modern .filter-icon,
   .pm-modern .status-pill.is-active .status-dot {

@@ -1,14 +1,14 @@
 <template>
-  <div class="role-permission rop-modern">
-    <div class="page-header">
-      <div class="page-header-fx" aria-hidden="true"><span class="fx-orb orb-a" /><span class="fx-orb orb-b" /><span class="fx-grid" /><span class="fx-sheen" /></div>
+  <div class="role-permission rop-modern pb-std">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon-sm">
           <el-icon :size="18"><Key /></el-icon>
         </div>
         <div class="header-text">
-          <h1>{{ t('systemUser.role.title') }}</h1>
-          <p class="subtitle">{{ t('systemUser.role.subtitle') }}</p>
+          <h1 class="pb-hero-title">{{ t('systemUser.role.title') }}</h1>
+          <p class="subtitle pb-hero-desc">{{ t('systemUser.role.subtitle') }}</p>
         </div>
       </div>
       <div class="header-chips" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -1682,72 +1682,6 @@ onMounted(async () => {
   z-index: 0;
 }
 
-.rop-modern .fx-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  opacity: 0.5;
-  animation: ropOrbFloat 11s ease-in-out infinite;
-}
-
-.rop-modern .orb-a {
-  width: 180px;
-  height: 180px;
-  top: -70px;
-  right: 24%;
-  background: radial-gradient(circle, #fde047 0%, transparent 70%);
-}
-
-.rop-modern .orb-b {
-  width: 150px;
-  height: 150px;
-  bottom: -70px;
-  left: 28%;
-  background: radial-gradient(circle, #fdba74 0%, transparent 70%);
-  animation-delay: -5s;
-}
-
-.rop-modern .fx-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 70% 90% at 70% 40%, #000 20%, transparent 75%);
-}
-
-.rop-modern .fx-sheen {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 30%;
-  background: linear-gradient(100deg, transparent, rgba(255, 244, 200, 0.2), transparent);
-  transform: skewX(-18deg);
-  animation: ropSheen 7s ease-in-out infinite;
-}
-
-@keyframes ropOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(18px, 10px) scale(1.12);
-  }
-}
-
-@keyframes ropSheen {
-  0% {
-    left: -40%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
-}
-
 .rop-modern .header-icon-sm {
   width: 40px;
   height: 40px;
@@ -2213,8 +2147,6 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rop-modern .fx-orb,
-  .rop-modern .fx-sheen,
   .rop-modern .header-icon-sm :deep(svg),
   .rop-modern .empty-icon {
     animation: none;
