@@ -417,22 +417,40 @@
               />
             </template>
           </el-table-column>
-          <el-table-column label="生産品種" width="108" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.productName" size="small" placeholder="" class="setup-preview-input" />
-            </template>
-          </el-table-column>
           <el-table-column label="能率" width="90" align="center">
             <template #default="{ row }">
-              <el-input v-model="row.efficiency" size="small" placeholder="" class="setup-preview-input" />
+              <el-input v-model="row.efficiency" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked" />
+            </template>
+          </el-table-column>
+          <el-table-column label="生産品種" width="172" align="center">
+            <template #default="{ row }">
+              <div class="setup-preview-product-cell">
+                <el-input
+                  v-model="row.productName"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  size="small"
+                  placeholder=""
+                  class="setup-preview-input setup-preview-stacked setup-preview-stacked-left setup-preview-product-input"
+                  :class="{ 'has-tags': splitProductNameLines(row.productName).length >= 2 }"
+                />
+                <div v-if="splitProductNameLines(row.productName).length >= 2" class="setup-preview-product-tags">
+                  <span
+                    v-for="(_, index) in splitProductNameLines(row.productName)"
+                    :key="index"
+                    class="product-line-tag"
+                    :class="`product-line-tag-${index}`"
+                  >{{ productLineTag(index, splitProductNameLines(row.productName).length) }}</span>
+                </div>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="当日計画数" width="88" align="center">
             <template #default="{ row }">
-              <el-input v-model="row.planQuantity" size="small" type="number" placeholder="" class="setup-preview-input setup-preview-plan-quantity" />
+              <el-input v-model="row.planQuantity" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked setup-preview-plan-quantity" />
             </template>
           </el-table-column>
-          <el-table-column label="残生産時間" width="88" align="center">
+          <el-table-column label="段取まで(H)" width="88" align="center">
             <template #default="{ row }">
               <el-input v-model="row.setupAfterHours" size="small" placeholder="" class="setup-preview-input" />
             </template>
@@ -450,9 +468,27 @@
               <span>{{ setupSchedulePreviewMeta?.nextDate1Label || '' }}</span>
               <span v-if="setupSchedulePreviewMeta?.nextDate1Label" class="next-date-from-note">(前日15時から)</span>
             </template>
-            <el-table-column label="次生産品種" width="152" align="center">
+            <el-table-column label="次生産品種" width="172" align="center">
               <template #default="{ row }">
-                <el-input v-model="row.nextProductName" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked setup-preview-stacked-left" />
+                <div class="setup-preview-product-cell">
+                  <el-input
+                    v-model="row.nextProductName"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 3 }"
+                    size="small"
+                    placeholder=""
+                    class="setup-preview-input setup-preview-stacked setup-preview-stacked-left setup-preview-product-input"
+                    :class="{ 'has-tags': splitProductNameLines(row.nextProductName).length >= 2 }"
+                  />
+                  <div v-if="splitProductNameLines(row.nextProductName).length >= 2" class="setup-preview-product-tags">
+                    <span
+                      v-for="(_, index) in splitProductNameLines(row.nextProductName)"
+                      :key="index"
+                      class="product-line-tag"
+                      :class="`product-line-tag-${index}`"
+                    >{{ productLineTag(index, splitProductNameLines(row.nextProductName).length) }}</span>
+                  </div>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="計画数" width="64" align="center">
@@ -474,9 +510,27 @@
               <span>{{ setupSchedulePreviewMeta?.nextDate2Label || '' }}</span>
               <span v-if="setupSchedulePreviewMeta?.nextDate2Label" class="next-date-from-note">(前日15時から)</span>
             </template>
-            <el-table-column label="次生産品種" width="152" align="center">
+            <el-table-column label="次生産品種" width="172" align="center">
               <template #default="{ row }">
-                <el-input v-model="row.next2ProductName" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" size="small" placeholder="" class="setup-preview-input setup-preview-stacked setup-preview-stacked-left" />
+                <div class="setup-preview-product-cell">
+                  <el-input
+                    v-model="row.next2ProductName"
+                    type="textarea"
+                    :autosize="{ minRows: 1, maxRows: 3 }"
+                    size="small"
+                    placeholder=""
+                    class="setup-preview-input setup-preview-stacked setup-preview-stacked-left setup-preview-product-input"
+                    :class="{ 'has-tags': splitProductNameLines(row.next2ProductName).length >= 2 }"
+                  />
+                  <div v-if="splitProductNameLines(row.next2ProductName).length >= 2" class="setup-preview-product-tags">
+                    <span
+                      v-for="(_, index) in splitProductNameLines(row.next2ProductName)"
+                      :key="index"
+                      class="product-line-tag"
+                      :class="`product-line-tag-${index}`"
+                    >{{ productLineTag(index, splitProductNameLines(row.next2ProductName).length) }}</span>
+                  </div>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="計画数" width="64" align="center">
@@ -3139,6 +3193,12 @@ const blankQuantityIfNoVariety = (display: VarietyDisplay): VarietyDisplay => {
   return display
 }
 
+/** 段取予定表「生産品種」「次生産品種」：2品種以上のとき各行の右端に付ける区分ラベル */
+const PRODUCT_LINE_TAGS = ['（現）', '（次）', '（次々）']
+const splitProductNameLines = (value: unknown): string[] => String(value ?? '').split('\n')
+const productLineTag = (index: number, total: number): string =>
+  total >= 2 ? PRODUCT_LINE_TAGS[index] || '' : ''
+
 /** 下一日、下下日共用。基准日产品相同且没有其他品种时不显示品名和計画数；两个及以上品种都显示。 */
 const resolveVarietyColumn = (
   dateIndex: Map<string, any[]>,
@@ -3159,13 +3219,7 @@ const resolveVarietyColumn = (
   const groups = listProductGroupsOnDate(dateIndex, ymd)
   if (groups.length >= 2) {
     display = {
-        name: groups
-          .map((group, index) => {
-            if (index === 0) return `現：${group.name}`
-            if (index === groups.length - 1) return `次：${group.name}`
-            return group.name
-          })
-          .join('\n'),
+        name: groups.map((group) => group.name).join('\n'),
         quantity: groups.map((group) => group.quantity).join('\n'),
     }
   } else if (forceShowAll && groups.length === 1) {
@@ -5512,15 +5566,33 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
 
     // 「当日計画数」表示用：同一設備・同一日・同一品種は順位が違っても合算する
-    const normalizedCurrentProductName = (currentProductName || '').toString().trim()
-    const aggregatedCurrentDayPlanQuantity =
-      !isProductionStop && normalizedCurrentProductName
-        ? currentProducts.reduce((sum, item: any) => {
-            const itemProductName = (item?.product_name || '').toString().trim()
-            if (itemProductName !== normalizedCurrentProductName) return sum
-            return sum + (parseInt(item?.quantity) || 0)
-          }, 0)
-        : 0
+    // 当日に2品種以上ある場合は「生産品種」「当日計画数」を上下（改行区切り）で表示する（最大3行）
+    const currentDayGroups = isProductionStop
+      ? []
+      : listProductGroupsOnDate(dateIndex, filterDate).slice(0, 3)
+    const displayCurrentProductName =
+      currentDayGroups.length >= 2
+        ? currentDayGroups.map((group) => group.name).join('\n')
+        : currentProductName
+    const aggregatedCurrentDayPlanQuantity: number | string =
+      currentDayGroups.length >= 2
+        ? currentDayGroups.map((group) => group.quantity).join('\n')
+        : (currentDayGroups[0]?.quantity ?? 0)
+    // 能率も品種ごとに上下表示（efficiency_rate → equipment_efficiency の順で取得）
+    const resolveGroupEfficiency = (productName: string): string => {
+      const item = currentProducts.find(
+        (p: any) =>
+          String(p?.product_name || '').trim() === productName &&
+          parseFloat(p?.efficiency_rate) > 0,
+      )
+      if (item) return formatEfficiencyRate(item.efficiency_rate)
+      const cached = getEfficiencyRate(machineName, productName)
+      return cached !== null && cached > 0 ? formatEfficiencyRate(cached) : ''
+    }
+    const displayEfficiency =
+      currentDayGroups.length >= 2
+        ? currentDayGroups.map((group) => resolveGroupEfficiency(group.name)).join('\n')
+        : efficiency
 
     // 総計画数、実績、生産残数の取得
     // production_plan_schedules 表から取得（machine_name + product_name + production_order で連接）
@@ -5572,25 +5644,6 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       }
     }
 
-    // 備考字段逻辑：如果当日生产数据有3个产品，把第3个产品名写入備考字段
-    let remarksText = ''
-    formingDevLog(
-      `[備考] 检查当日产品数量，设备: ${machineName}, 当日产品数: ${currentProducts.length}`,
-    )
-
-    if (currentProducts.length >= 3) {
-      // 获取第3个产品（索引为2）
-      const thirdProduct = currentProducts[2]
-      const thirdProductName = (thirdProduct as any)?.product_name || ''
-
-      if (thirdProductName && thirdProductName.trim() !== '') {
-        remarksText = `次生産品種：${thirdProductName}`
-        formingDevLog(`[備考] 当日有3个或以上产品，第3个产品名: ${thirdProductName}`)
-      }
-    } else {
-      formingDevLog(`[備考] 当日产品数少于3个，不填写備考`)
-    }
-
     // 获取operator字段（順位）
     const operator = isProductionStop
       ? ''
@@ -5617,7 +5670,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       remainingHours < 2
 
     const nextDayGroups = listProductGroupsOnDate(dateIndex, nextScheduleDate1)
-    const day1Baseline = hasNextProduct(todayProductName) ? [todayProductName] : []
+    // 下一日の比較基準は「生産品種」欄の最後の品種（当日2品種以上なら（次）/（次々）の品種）
+    const todayLastProductName =
+      currentDayGroups.length > 0
+        ? currentDayGroups[currentDayGroups.length - 1].name
+        : todayProductName
+    const day1Baseline = hasNextProduct(todayLastProductName) ? [todayLastProductName] : []
     const day1SaturdayWithPlan =
       JapanDateUtils.isSaturday(nextScheduleDate1) && nextDayGroups.length > 0
     const day1Display = resolveVarietyColumn(
@@ -5659,11 +5717,11 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       operationVariance,
       operator: operator,
       startTime,
-      productName: isProductionStop ? '生産停止' : currentProductName,
+      productName: isProductionStop ? '生産停止' : displayCurrentProductName,
       totalPlanQuantity: isProductionStop ? '' : totalPlanQuantity,
       actualProduction: isProductionStop ? '' : actualProduction,
       remainingProduction: isProductionStop ? '' : remainingProduction,
-      efficiency: isProductionStop ? '' : efficiency,
+      efficiency: isProductionStop ? '' : displayEfficiency,
       planQuantity: isProductionStop ? '' : aggregatedCurrentDayPlanQuantity,
       setupAfterHours: finalSetupAfterHours,
       setupPredictedTime: finalSetupPredictedTime,
@@ -5671,7 +5729,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       nextQuantity: displayNextQuantity,
       next2ProductName,
       next2Quantity,
-      remarks: remarksText,
+      remarks: '',
     }
   })
 
@@ -5740,6 +5798,16 @@ const buildSetupSchedulePrintHtml = (data: {
       )
       .join('<br>')
   }
+  const formatPrintProductName = (value: unknown) => {
+    const lines = splitProductNameLines(value)
+    if (lines.length < 2) return formatPrintLines(value)
+    return lines
+      .map(
+        (line, index) =>
+          `<div class="product-line"><span class="product-line-name">${formatPrintLines(line)}</span><span class="product-line-tag product-line-tag-${index}">${productLineTag(index, lines.length)}</span></div>`,
+      )
+      .join('')
+  }
   const formatPrintQuantity = (value: unknown) => {
     if (value == null || value === '') return ''
     const text = String(value)
@@ -5764,7 +5832,7 @@ const buildSetupSchedulePrintHtml = (data: {
       <style>
         @page {
           size: A4 landscape;
-          margin: 12mm 12mm 5mm 12mm;
+          margin: 6mm 12mm 5mm 12mm;
           /* 打印详细设定 */
           marks: none; /* 不显示裁剪标记 */
           bleed: 0mm; /* 无出血 */
@@ -5776,7 +5844,7 @@ const buildSetupSchedulePrintHtml = (data: {
         @media print {
           @page {
             size: A4 landscape;
-            margin: 12mm 12mm 5mm 12mm;
+            margin: 6mm 12mm 5mm 12mm;
             marks: none;
             bleed: 0mm;
           }
@@ -6104,6 +6172,28 @@ const buildSetupSchedulePrintHtml = (data: {
           text-align: left !important;
           padding-left: 4px;
         }
+        .main-table .product-line {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 4px;
+        }
+        .main-table .product-line-tag {
+          flex-shrink: 0;
+          font-weight: 700;
+          white-space: nowrap;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .main-table .product-line-tag-0 {
+          color: #1565c0;
+        }
+        .main-table .product-line-tag-1 {
+          color: #e65100;
+        }
+        .main-table .product-line-tag-2 {
+          color: #2e7d32;
+        }
         .main-table .next-arrow-cell {
           text-align: center;
           font-size: 13px;
@@ -6141,10 +6231,10 @@ const buildSetupSchedulePrintHtml = (data: {
               <th rowspan="2" class="line-col" style="width: 5%;">ライン</th>
               <th rowspan="2" style="width: 6%;">予定稼働(H)</th>
               <th rowspan="2" style="width: 4%;">操業度</th>
-              <th rowspan="2" style="width: 10%;">生産品種</th>
               <th rowspan="2" style="width: 6%;">能率(本/h)</th>
+              <th rowspan="2" style="width: 10%;">生産品種</th>
               <th rowspan="2" class="plan-quantity-header" style="width: 6%;">当日計画数</th>
-              <th rowspan="2" style="width: 5%;">残生産時間</th>
+              <th rowspan="2" style="width: 5%;">段取まで(H)</th>
               <th rowspan="2" class="blank-col" style="width: 2%;"> </th>
               <th colspan="2" class="next-date-header">${nextDate1Label}${nextDate1Label ? '<span class="next-date-from-note">(前日15時から)</span>' : ''}</th>
               <th rowspan="2" class="blank-col" style="width: 2%;"> </th>
@@ -6166,15 +6256,15 @@ const buildSetupSchedulePrintHtml = (data: {
                 <td class="line-col">${row.line}</td>
                 <td class="${(() => { const n = Number(row.plannedWorkingHours); if (!Number.isFinite(n)) return 'planned-hours planned-hours-empty'; if (n === 0) return 'planned-hours planned-hours-empty'; if (n < 8) return 'planned-hours planned-hours-low'; if (n < 16) return 'planned-hours planned-hours-mid'; if (n < 22.5) return 'planned-hours planned-hours-high'; return 'planned-hours planned-hours-very-high'; })()}">${(() => { const v = Number(row.plannedWorkingHours); return Number.isFinite(v) && v !== 0 ? v.toFixed(1) : ''; })()}</td>
                 <td class="op-progress-col ${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : String(Math.round(n)); })()}</td>
-                <td>${row.productName}</td>
-                <td class="numeric-cell">${row.efficiency || ''}</td>
-                <td class="numeric-cell plan-quantity-cell">${row.planQuantity ? row.planQuantity.toLocaleString('ja-JP') : ''}</td>
+                <td class="numeric-cell stacked-cell">${formatPrintLines(row.efficiency)}</td>
+                <td class="stacked-cell stacked-name">${formatPrintProductName(row.productName)}</td>
+                <td class="numeric-cell stacked-cell plan-quantity-cell">${formatPrintQuantity(row.planQuantity)}</td>
                 <td class="numeric-cell">${row.setupAfterHours || ''}</td>
                 <td class="next-arrow-cell">${hasNextProduct(row.nextProductName) ? '&rarr;' : ''}</td>
-                <td class="stacked-cell stacked-name">${formatPrintLines(row.nextProductName)}</td>
+                <td class="stacked-cell stacked-name">${formatPrintProductName(row.nextProductName)}</td>
                 <td class="numeric-cell stacked-cell next-qty-cell">${formatPrintQuantity(row.nextQuantity)}</td>
                 <td class="next-arrow-cell">${hasNextProduct(row.next2ProductName) ? '&rarr;' : ''}</td>
-                <td class="stacked-cell stacked-name">${formatPrintLines(row.next2ProductName)}</td>
+                <td class="stacked-cell stacked-name">${formatPrintProductName(row.next2ProductName)}</td>
                 <td class="numeric-cell stacked-cell next-qty-cell">${formatPrintQuantity(row.next2Quantity)}</td>
                 <td>${row.remarks || ''}</td>
               </tr>
@@ -8099,6 +8189,47 @@ onUnmounted(() => {
 }
 .setup-schedule-preview-dialog :deep(.setup-preview-stacked-left .el-textarea__inner) {
   text-align: left;
+}
+.setup-schedule-preview-dialog :deep(.setup-preview-plan-quantity .el-textarea__inner) {
+  font-weight: 700;
+}
+/* 生産品種：品名は左寄せ、区分ラベル（現/次/次々）は右端に重ねて表示。行高を揃えるため固定値 */
+.setup-preview-product-cell {
+  position: relative;
+  width: 100%;
+}
+.setup-schedule-preview-dialog :deep(.setup-preview-product-input .el-textarea__inner) {
+  font-size: 12px;
+  line-height: 16px;
+}
+.setup-schedule-preview-dialog :deep(.setup-preview-product-input.has-tags .el-textarea__inner) {
+  padding-right: 48px;
+}
+.setup-preview-product-tags {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.product-line-tag {
+  display: block;
+  height: 16px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.product-line-tag-0 {
+  color: #1565c0;
+}
+.product-line-tag-1 {
+  color: #e65100;
+}
+.product-line-tag-2 {
+  color: #2e7d32;
 }
 .setup-schedule-preview-dialog :deep(.next-date-group-header) {
   color: #c00 !important;

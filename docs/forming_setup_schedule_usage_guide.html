@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>成型生産計画段替予定表 使い方ガイド</title>
+    <style>
+      @page {
+        size: A4 portrait;
+        margin: 12mm 12mm 12mm 12mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: #1f2937;
+        font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif;
+        font-size: 11.5px;
+        line-height: 1.55;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      h1 {
+        margin: 0 0 2px;
+        font-size: 20px;
+        color: #111827;
+      }
+
+      .subtitle {
+        margin: 0 0 10px;
+        color: #4b5563;
+        font-size: 11px;
+      }
+
+      h2 {
+        margin: 14px 0 6px;
+        padding: 3px 8px;
+        font-size: 14px;
+        color: #fff;
+        background: #1e3a8a;
+        border-radius: 3px;
+        break-after: avoid;
+      }
+
+      h3 {
+        margin: 10px 0 4px;
+        font-size: 12.5px;
+        color: #1e3a8a;
+        break-after: avoid;
+      }
+
+      p {
+        margin: 4px 0;
+      }
+
+      ul,
+      ol {
+        margin: 4px 0 4px 20px;
+        padding: 0;
+      }
+
+      li {
+        margin: 2px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        break-inside: avoid;
+      }
+
+      .guide th,
+      .guide td {
+        border: 1px solid #cbd5e1;
+        padding: 4px 6px;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      .guide th {
+        background: #e0e7ff;
+        font-weight: 700;
+      }
+
+      .guide td:first-child {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .num {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        line-height: 16px;
+        border-radius: 50%;
+        background: #dc2626;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        text-align: center;
+        margin-right: 3px;
+        vertical-align: 1px;
+      }
+
+      .note {
+        margin: 6px 0;
+        padding: 6px 10px;
+        border-left: 4px solid #f59e0b;
+        background: #fffbeb;
+      }
+
+      .tip {
+        margin: 6px 0;
+        padding: 6px 10px;
+        border-left: 4px solid #10b981;
+        background: #ecfdf5;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 0 6px;
+        border-radius: 3px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+
+      /* ---- 帳票サンプル ---- */
+      .sample-wrap {
+        border: 1px solid #94a3b8;
+        padding: 8px;
+        background: #fff;
+        break-inside: avoid;
+      }
+
+      .sample-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 4px;
+        font-size: 10px;
+      }
+
+      .sample-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .sample-center {
+        text-align: center;
+      }
+
+      .sample-center .date {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .sample-right {
+        text-align: right;
+      }
+
+      .sample {
+        font-size: 9px;
+        line-height: 1.25;
+        table-layout: fixed;
+      }
+
+      .sample th,
+      .sample td {
+        border: 1px solid #000;
+        padding: 2px 3px;
+        text-align: center;
+        vertical-align: middle;
+      }
+
+      .sample th {
+        background: #f3f4f6;
+        font-weight: 700;
+      }
+
+      .sample th.date-head {
+        color: #c00;
+      }
+
+      .sample .from-note {
+        font-size: 7.5px;
+        font-weight: 400;
+        color: #c00;
+      }
+
+      .sample .blank {
+        border: none;
+        background: #fff;
+      }
+
+      .sample .left {
+        text-align: left;
+      }
+
+      .sample .bold {
+        font-weight: 700;
+      }
+
+      .sample .arrow {
+        border-top: none;
+        border-bottom: none;
+        color: #2563eb;
+        font-weight: 700;
+      }
+
+      .sample .neg {
+        color: #e00;
+      }
+
+      .h-low {
+        background: #fdeaea;
+      }
+
+      .h-mid {
+        background: #fff6db;
+      }
+
+      .h-high {
+        background: #e8f7ec;
+      }
+
+      .h-very-high {
+        background: #cfeecf;
+      }
+
+      .pl {
+        display: flex;
+        justify-content: space-between;
+        gap: 2px;
+      }
+
+      .tag-0 {
+        color: #1565c0;
+        font-weight: 700;
+      }
+
+      .tag-1 {
+        color: #e65100;
+        font-weight: 700;
+      }
+
+      .tag-2 {
+        color: #2e7d32;
+        font-weight: 700;
+      }
+
+      .legend {
+        display: inline-block;
+        width: 26px;
+        height: 12px;
+        border: 1px solid #94a3b8;
+        vertical-align: -2px;
+        margin-right: 3px;
+      }
+
+      .page-break {
+        break-before: page;
+      }
+
+      .footer {
+        margin-top: 14px;
+        padding-top: 6px;
+        border-top: 1px dashed #cbd5e1;
+        color: #6b7280;
+        font-size: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>成型生産計画段替予定表 使い方ガイド</h1>
+    <p class="subtitle">対象：成型ラインの班長・作業者・段取担当 ／ 画面：MES 成型生産指示</p>
+
+    <h2>1. この表について</h2>
+    <p>
+      「成型生産計画段替予定表」は、<b>ラインごとに「今日なにを作るか」「いつ段取（段替）になるか」「次の日・その次の日になにを作るか」</b>を
+      1枚で確認するための帳票です。朝礼・交替時の引継ぎ・段取準備（金型・材料・人員）の確認に使います。
+    </p>
+    <ul>
+      <li>1行 ＝ 1ライン（設備）です。</li>
+      <li>集計の区切りは <b>前日15:00 ～ 当日15:00</b> です。</li>
+    </ul>
+
+    <h2>2. 段取表のイメージ</h2>
+    <div class="sample-wrap">
+      <div class="sample-header">
+        <div class="sample-title"><span class="num">A</span>成型生産計画段替予定表</div>
+        <div class="sample-center">
+          <div class="date"><span class="num">B</span>生産日: 2026/10/05</div>
+          <div>集計時間:前日15:00~当日15:00</div>
+        </div>
+        <div class="sample-right">
+          <div><span class="num">C</span>2026/10/05 07:30</div>
+          <div><span class="num">D</span>生産計画合計数 9,600</div>
+        </div>
+      </div>
+      <table class="sample">
+        <colgroup>
+          <col style="width: 5%" />
+          <col style="width: 6%" />
+          <col style="width: 4.5%" />
+          <col style="width: 5.5%" />
+          <col style="width: 13%" />
+          <col style="width: 6%" />
+          <col style="width: 5.5%" />
+          <col style="width: 2.5%" />
+          <col style="width: 12%" />
+          <col style="width: 5%" />
+          <col style="width: 2.5%" />
+          <col style="width: 12%" />
+          <col style="width: 5%" />
+          <col style="width: 15.5%" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowspan="2">①<br />ライン</th>
+            <th rowspan="2">②<br />予定稼働(H)</th>
+            <th rowspan="2">③<br />操業度</th>
+            <th rowspan="2">④<br />能率(本/h)</th>
+            <th rowspan="2">⑤<br />生産品種</th>
+            <th rowspan="2">⑥<br />当日計画数</th>
+            <th rowspan="2">⑦<br />段取まで(H)</th>
+            <th rowspan="2" class="blank"></th>
+            <th colspan="2" class="date-head">⑧ 10/06(火)<span class="from-note">(前日15時から)</span></th>
+            <th rowspan="2" class="blank"></th>
+            <th colspan="2" class="date-head">⑨ 10/07(水)<span class="from-note">(前日15時から)</span></th>
+            <th rowspan="2">⑩<br />備考</th>
+          </tr>
+          <tr>
+            <th>次生産品種</th>
+            <th>計画数</th>
+            <th>次生産品種</th>
+            <th>計画数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1号機</td>
+            <td class="h-very-high">23.0</td>
+            <td>2</td>
+            <td>120</td>
+            <td class="left">品番A-100</td>
+            <td class="bold">2,760</td>
+            <td></td>
+            <td class="arrow"></td>
+            <td class="left"></td>
+            <td></td>
+            <td class="arrow">→</td>
+            <td class="left">品番B-200</td>
+            <td>1,800</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>2号機</td>
+            <td class="h-high">18.5</td>
+            <td class="neg">-3</td>
+            <td>95<br />80</td>
+            <td class="left">
+              <div class="pl"><span>品番C-300</span><span class="tag-0">（現）</span></div>
+              <div class="pl"><span>品番D-400</span><span class="tag-1">（次）</span></div>
+            </td>
+            <td class="bold">600<br />880</td>
+            <td>6.3</td>
+            <td class="arrow"></td>
+            <td class="left"></td>
+            <td></td>
+            <td class="arrow">→</td>
+            <td class="left">品番E-500</td>
+            <td>1,500</td>
+            <td>金型メンテ後に開始</td>
+          </tr>
+          <tr>
+            <td>3号機</td>
+            <td class="h-mid">12.0</td>
+            <td>0</td>
+            <td>150</td>
+            <td class="left">品番F-600</td>
+            <td class="bold">1,800</td>
+            <td>12.0</td>
+            <td class="arrow">→</td>
+            <td class="left">
+              <div class="pl"><span>品番G-700</span><span class="tag-0">（現）</span></div>
+              <div class="pl"><span>品番H-800</span><span class="tag-1">（次）</span></div>
+            </td>
+            <td>900<br />1,200</td>
+            <td class="arrow"></td>
+            <td class="left"></td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>4号機</td>
+            <td class="h-low">4.0</td>
+            <td></td>
+            <td></td>
+            <td class="left">生産停止</td>
+            <td class="bold"></td>
+            <td></td>
+            <td class="arrow">→</td>
+            <td class="left">品番J-900</td>
+            <td>2,000</td>
+            <td class="arrow"></td>
+            <td class="left"></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size: 10px; color: #6b7280">※ 品番・数値はサンプルです。</p>
+
+    <h2>3. ヘッダー（上部）の見かた</h2>
+    <table class="guide">
+      <thead>
+        <tr>
+          <th style="width: 22%">項目</th>
+          <th>見かた</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="num">A</span>タイトル</td>
+          <td>帳票名です。</td>
+        </tr>
+        <tr>
+          <td><span class="num">B</span>生産日</td>
+          <td>この表の対象日です。<b>今日の日付と合っているか</b>必ず確認してください。</td>
+        </tr>
+        <tr>
+          <td><span class="num">C</span>出力日時</td>
+          <td>印刷した日時です。古い表を使っていないか確認するときに見ます。</td>
+        </tr>
+        <tr>
+          <td><span class="num">D</span>生産計画合計数</td>
+          <td>全ラインの当日計画数の合計です。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>4. 各列の見かた</h2>
+    <table class="guide">
+      <thead>
+        <tr>
+          <th style="width: 22%">列</th>
+          <th>見かた</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>① ライン</td>
+          <td>設備（ライン）名です。</td>
+        </tr>
+        <tr>
+          <td>② 予定稼働(H)</td>
+          <td>
+            その日に動かす予定の時間です。背景の色で稼働の多さがわかります。<br />
+            <span class="legend h-low"></span>8時間未満
+            <span class="legend h-mid" style="margin-left: 8px"></span>8～16時間未満
+            <span class="legend h-high" style="margin-left: 8px"></span>16～22.5時間未満
+            <span class="legend h-very-high" style="margin-left: 8px"></span>22.5時間以上
+          </td>
+        </tr>
+        <tr>
+          <td>③ 操業度</td>
+          <td>計画に対する進み・遅れ（時間）です。<b style="color: #e00">マイナス（赤字）は遅れ</b>、プラスは先行です。</td>
+        </tr>
+        <tr>
+          <td>④ 能率(本/h)</td>
+          <td>1時間に作れる本数です。品種が2つ以上のときは、⑤の品種と同じ順番で上下に並びます。</td>
+        </tr>
+        <tr>
+          <td>⑤ 生産品種</td>
+          <td>
+            その日に作る品種です。1日に2～3品種あるときは上下に並び、右端に順番が表示されます（5章を参照）。<br />
+            作る予定がないときは「生産停止」と表示されます。
+          </td>
+        </tr>
+        <tr>
+          <td>⑥ 当日計画数</td>
+          <td>その日に作る数（太字）です。品種が2つ以上のときは、⑤の品種と同じ順番で上下に並びます。</td>
+        </tr>
+        <tr>
+          <td>⑦ 段取まで(H)</td>
+          <td>
+            <b>あと何時間で段取（段替）になるか</b>の目安です。例：「6.3」→ 約6.3時間後に段取。<br />
+            空欄のときは、段取の予定がない（または時間を出せない）ことを示します。
+          </td>
+        </tr>
+        <tr>
+          <td>→（矢印）</td>
+          <td>右側の日に<b>別の品種へ切り替わる</b>ことを示します。矢印がある日は段取の準備が必要です。</td>
+        </tr>
+        <tr>
+          <td>⑧ 次生産日<br />次生産品種・計画数</td>
+          <td>
+            見出しの日付（例：10/06(火)）に作る品種と数です。見出しの「(前日15時から)」は、前日15:00からの分を含むという意味です。<br />
+            <b>今日と同じ品種を続けて作る場合は空欄</b>になります（段取なし）。
+          </td>
+        </tr>
+        <tr>
+          <td>⑨ 次々生産日<br />次生産品種・計画数</td>
+          <td>⑧のさらに次の日の品種と数です。見かたは⑧と同じです。</td>
+        </tr>
+        <tr>
+          <td>⑩ 備考</td>
+          <td>計画画面で入力された稼働情報や備考が表示されます。注意事項を手書きで追記してもかまいません。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. 1日に複数の品種があるとき</h2>
+    <p>
+      「生産品種」「次生産品種」の欄では、1日に2～3品種あるとき、作る順番に上から並び、右端に色付きの印が付きます。
+      「能率」「当日計画数」「計画数」も同じ順番で上下に並びます。
+    </p>
+    <table class="guide" style="width: 70%">
+      <thead>
+        <tr>
+          <th style="width: 30%">印</th>
+          <th>意味</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag-0">（現）</span></td>
+          <td>1番目に作る品種（今つづけて作っている品種）</td>
+        </tr>
+        <tr>
+          <td><span class="tag-1">（次）</span></td>
+          <td>2番目に作る品種（1回目の段取のあと）</td>
+        </tr>
+        <tr>
+          <td><span class="tag-2">（次々）</span></td>
+          <td>3番目に作る品種（2回目の段取のあと）</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>品種が1つだけのときは、印は付きません。</p>
+
+    <h2>6. こんな表示のときは</h2>
+    <table class="guide">
+      <thead>
+        <tr>
+          <th style="width: 30%">表示</th>
+          <th>意味・対応</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>生産品種が「生産停止」</td>
+          <td>その日はそのラインで作る予定がありません。次の日に品種があれば、矢印と次生産品種が表示されます。</td>
+        </tr>
+        <tr>
+          <td>次生産品種が「生産停止」</td>
+          <td>その日はそのラインを止める予定です。</td>
+        </tr>
+        <tr>
+          <td>次生産品種が「品番（生産停止）」</td>
+          <td>その日は止める予定ですが、まもなく段取になるため、さらに次に作る品種を先に表示しています。段取の準備を始めてください。</td>
+        </tr>
+        <tr>
+          <td>次生産品種が空欄</td>
+          <td>今日と同じ品種を続けて作るため、段取はありません。</td>
+        </tr>
+        <tr>
+          <td>操業度が大きくマイナス</td>
+          <td>計画より遅れています。班長・計画担当に連絡し、必要なら備考に原因を書いてください。</td>
+        </tr>
+        <tr>
+          <td>内容が実際と違う</td>
+          <td>計画が最新でない可能性があります。計画担当に確認し、計画を直してから印刷し直してください。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">成型生産計画段替予定表 使い方ガイド ／ 2026年10月版</div>
+  </body>
+</html>
