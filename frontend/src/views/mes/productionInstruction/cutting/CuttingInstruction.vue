@@ -3992,9 +3992,10 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({ name: 'CuttingInstruction' })
+/** keep-alive の include はタブの route.name と一致させる */
+defineOptions({ name: 'MesCuttingInstruction' })
 
-import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, onActivated, onDeactivated, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Check, CircleCheck, Close, Document, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion, EditPen, Ticket } from '@element-plus/icons-vue'
 import request from '@/utils/request'
@@ -10186,6 +10187,44 @@ onMounted(() => {
   window.addEventListener('keydown', onProductionDayEditorKeydown)
 })
 onUnmounted(() => {
+  window.removeEventListener('keydown', onProductionDayEditorKeydown)
+})
+
+/** タブ切替で戻った時：絞り込み条件・ページはそのまま、一覧データのみ再取得 */
+async function refreshOnReactivate() {
+  const planPage = planPagination.currentPage
+  const kanbanCurrentPage = kanbanPage.value
+  const tasks: Promise<unknown>[] = [
+    loadPlans().then(() => {
+      planPagination.currentPage = planPage
+    }),
+    loadCuttingManagement(),
+  ]
+  if (usageSummarySectionActivated) tasks.push(loadUsageSummaryCuttingList())
+  if (chamferingSectionActivated) {
+    tasks.push(loadChamferingBatchList(), loadChamferingManagement())
+  }
+  if (kanbanSectionActivated) {
+    tasks.push(
+      loadKanbanIssuance().then(() => {
+        const maxPage = Math.max(1, Math.ceil(kanbanIssuanceList.value.length / kanbanPageSize.value))
+        kanbanPage.value = Math.min(kanbanCurrentPage, maxPage)
+      })
+    )
+  }
+  await Promise.allSettled(tasks)
+}
+
+let hasActivatedOnce = false
+onActivated(() => {
+  if (!hasActivatedOnce) {
+    hasActivatedOnce = true
+    return
+  }
+  window.addEventListener('keydown', onProductionDayEditorKeydown)
+  refreshOnReactivate()
+})
+onDeactivated(() => {
   window.removeEventListener('keydown', onProductionDayEditorKeydown)
 })
 </script>

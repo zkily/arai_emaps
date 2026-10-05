@@ -5,13 +5,13 @@
       <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
-          <h1 class="main-title pb-hero-title">
-            <el-icon class="title-icon">
-              <View />
-            </el-icon>
-            材料受入検品管理
-          </h1>
-          <p class="subtitle pb-hero-desc">材料の品質検査・検品作業を管理します</p>
+          <el-icon class="title-icon">
+            <View />
+          </el-icon>
+          <div class="title-copy">
+            <h1 class="main-title pb-hero-title">材料受入検品管理</h1>
+            <p class="subtitle pb-hero-desc">材料の品質検査・検品作業を管理します</p>
+          </div>
         </div>
       </div>
     </div>
@@ -268,7 +268,7 @@
     <el-dialog
       v-model="editDialogVisible"
       width="720px"
-      class="quality-edit-dialog"
+      class="quality-edit-dialog pb-std"
       :close-on-click-modal="false"
       align-center
       destroy-on-close
@@ -441,7 +441,7 @@
       v-model="inspectionDetailVisible"
       title="検品詳細情報"
       width="800px"
-      class="detail-dialog"
+      class="detail-dialog pb-std"
     >
       <div v-if="selectedInspectionDetail" class="inspection-detail">
         <!-- 詳細内容会在这里显示 -->
@@ -2374,26 +2374,36 @@ onMounted((): void => {
   z-index: -1;
   pointer-events: none;
 }
+.mri-modern .title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mri-modern .title-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .mri-modern .main-title {
+  display: block;
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
 }
 .mri-modern .title-icon {
-  width: 42px;
-  height: 42px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  font-size: 22px;
+  font-size: 20px;
   color: #fff;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 3px 0 rgba(49, 46, 129, 0.55),
-    0 10px 18px -8px rgba(30, 27, 75, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.28);
 }
 .mri-modern .subtitle {
   color: rgba(255, 255, 255, 0.9);
@@ -2422,7 +2432,10 @@ onMounted((): void => {
   border-radius: 7px;
   color: #fff;
   background: linear-gradient(150deg, color-mix(in srgb, var(--tc) 70%, #fff), var(--tc));
-  box-shadow: 0 2px 0 var(--tc-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 color-mix(in srgb, var(--tc-edge) 45%, transparent),
+    0 3px 6px -3px color-mix(in srgb, var(--tc) 60%, transparent);
 }
 .mri-modern :deep(.el-tabs__item.is-active) {
   color: #4338ca;
@@ -2506,33 +2519,26 @@ onMounted((): void => {
   color: var(--fc);
 }
 
-/* 印刷ボタン（violet キーキャップ） */
+/* 印刷ボタン（violet、立体はグローバル標準） */
 .mri-modern .mri-btn--print {
+  --k-rgb: 124 58 237;
   height: 28px;
   padding: 0 12px;
   border-radius: 8px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
-  border: 1px solid #6d28d9;
-  box-shadow: 0 2px 0 #5b21b6;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+  border: 1px solid #7c3aed;
 }
 .mri-modern .mri-btn--print:hover,
 .mri-modern .mri-btn--print:focus {
   color: #fff;
-  background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
-  border-color: #6d28d9;
-}
-.mri-modern .mri-btn--print:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 #5b21b6;
-}
-.mri-modern .mri-btn--print:active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #5b21b6;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+  border-color: #7c3aed;
 }
 
 /* ---------- テーブル ---------- */
@@ -2570,13 +2576,9 @@ onMounted((): void => {
   font-weight: 800;
   border-radius: 6px;
   background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
-  box-shadow: 0 2px 0 #4338ca;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mri-modern .mri-btn--print:hover,
-  .mri-modern .mri-btn--print:active {
-    transform: none;
-  }
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(67, 56, 202, 0.35),
+    0 3px 8px -4px rgba(99, 102, 241, 0.55);
 }
 </style>

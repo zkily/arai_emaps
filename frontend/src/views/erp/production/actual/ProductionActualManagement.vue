@@ -338,7 +338,7 @@
       title="取引ログ編集"
       width="480px"
       :close-on-click-modal="false"
-      class="edit-dialog pam-edit-dialog"
+      class="edit-dialog pam-edit-dialog pb-std"
     >
       <template #header>
         <div class="pam-dlg-hero">
@@ -4129,19 +4129,18 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 
     .page-title {
       .title-icon {
-        width: 42px;
-        height: 42px;
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
         border-radius: 12px;
-        background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
-        border: 1px solid rgba(255, 255, 255, 0.45);
+        background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+        border: 1px solid rgba(255, 255, 255, 0.42);
         box-shadow:
-          0 3px 0 rgba(30, 58, 138, 0.55),
-          0 10px 18px -8px rgba(23, 37, 84, 0.55),
-          inset 0 1px 0 rgba(255, 255, 255, 0.4);
-        transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+          inset 0 1px 0 rgba(255, 255, 255, 0.35),
+          inset 0 -2px 0 rgba(30, 58, 138, 0.3);
 
         &:hover {
-          transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+          transform: none;
         }
       }
 
@@ -4150,7 +4149,6 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
         font-weight: 800;
         letter-spacing: 0.04em;
         color: #fff;
-        text-shadow: 0 2px 6px rgba(23, 37, 84, 0.3);
       }
 
       p {
@@ -4158,31 +4156,23 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       }
     }
 
+    /* 白地ピル（ブルー） */
     .action-btn {
+      --k-rgb: 37 99 235;
       height: 30px;
       font-weight: 700;
       color: #1d4ed8;
-      background: #fff;
-      border: 1px solid #fff;
-      box-shadow:
-        0 3px 0 #1e3a8a,
-        0 10px 18px -10px rgba(23, 37, 84, 0.7);
-      transition:
-        transform 0.12s ease,
-        box-shadow 0.12s ease;
+      background: linear-gradient(135deg, #fff 0%, #fff 40%, #dbeafe 100%);
+      border: 1px solid #bfdbfe;
 
       &:hover {
-        color: #1d4ed8;
-        border-color: #fff;
-        transform: translateY(-2px);
-        box-shadow:
-          0 5px 0 #1e3a8a,
-          0 14px 22px -10px rgba(23, 37, 84, 0.7);
+        color: #1e40af;
+        border-color: #93c5fd;
+        background: linear-gradient(135deg, #fff 0%, #dbeafe 45%, #bfdbfe 100%);
       }
 
-      &:active {
-        transform: translateY(2px);
-        box-shadow: 0 1px 0 #1e3a8a;
+      :deep(.el-icon) {
+        color: #3b82f6;
       }
     }
   }
@@ -4252,7 +4242,10 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       font-size: 13px;
       color: #fff;
       background: linear-gradient(150deg, color-mix(in srgb, var(--sc) 70%, #fff), var(--sc));
-      box-shadow: 0 2px 0 var(--sc-ink);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -2px 0 color-mix(in srgb, var(--sc-ink) 45%, transparent),
+        0 3px 6px -3px color-mix(in srgb, var(--sc) 60%, transparent);
     }
   }
 
@@ -4318,18 +4311,18 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     }
 
     .date-input-group .quick-buttons .date-btn {
+      --k-rgb: 100 116 139;
+
       &.today {
-        background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-        box-shadow: 0 2px 0 #075985;
+        --k-rgb: 2 132 199;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+          linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
 
         &:hover {
-          background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-          box-shadow: 0 3px 0 #075985;
-        }
-
-        &:active {
-          transform: translateY(1px);
-          box-shadow: 0 1px 0 #075985;
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 55%),
+            linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
         }
       }
     }
@@ -4342,12 +4335,17 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       color: #3730a3;
       background: #fff;
       border-color: #c7d2fe;
-      box-shadow: 0 2px 0 #c7d2fe;
+      box-shadow:
+        inset 0 -2px 0 #e0e7ff,
+        0 2px 6px -3px rgba(79, 70, 229, 0.35);
     }
 
     .process-tabs :deep(.el-tabs__item.is-active) {
       background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
-      box-shadow: 0 2px 0 #3730a3;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -2px 0 rgba(55, 48, 163, 0.35),
+        0 3px 8px -4px rgba(79, 70, 229, 0.5);
     }
 
     .stats-grid .stat-card {
@@ -4355,18 +4353,18 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       background: #fff;
       border-color: #e2e8f0;
       box-shadow:
-        0 3px 0 var(--se),
-        0 10px 18px -12px rgba(15, 23, 42, 0.35);
+        inset 0 -2px 0 color-mix(in srgb, var(--se) 14%, transparent),
+        0 6px 14px -10px rgba(15, 23, 42, 0.35);
       transition:
-        transform 0.15s ease,
+        border-color 0.15s ease,
         box-shadow 0.15s ease;
 
       &:hover {
-        transform: translateY(-2px);
-        border-color: #e2e8f0;
+        transform: none;
+        border-color: color-mix(in srgb, var(--se) 30%, #e2e8f0);
         box-shadow:
-          0 5px 0 var(--se),
-          0 14px 22px -12px rgba(15, 23, 42, 0.4);
+          inset 0 -2px 0 color-mix(in srgb, var(--se) 20%, transparent),
+          0 10px 20px -12px rgba(15, 23, 42, 0.4);
       }
 
       &:has(.stat-icon.success) {
@@ -4386,7 +4384,11 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       }
 
       .stat-icon {
-        box-shadow: 0 2px 0 var(--se);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.35),
+          inset 0 -2px 0 color-mix(in srgb, var(--se) 45%, transparent),
+          0 3px 6px -3px color-mix(in srgb, var(--se) 60%, transparent);
+        transition: none;
 
         &:hover {
           transform: none;
@@ -4409,35 +4411,30 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   .chart-card .chart-header .print-btn {
     --b1: #38bdf8;
     --b2: #0284c7;
-    --be: #075985;
+    --k-rgb: 2 132 199;
     font-weight: 700;
-    background: linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
-    box-shadow: 0 2px 0 var(--be);
-    transition:
-      transform 0.12s ease,
-      box-shadow 0.12s ease;
+    border-color: var(--b2);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+      linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
 
     &:hover {
-      background: linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
-      transform: translateY(-1px);
-      box-shadow: 0 3px 0 var(--be);
-    }
-
-    &:active {
-      transform: translateY(1px);
-      box-shadow: 0 1px 0 var(--be);
+      border-color: var(--b2);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(180deg, var(--b1) 0%, var(--b2) 100%);
     }
 
     &.pam-btn--matrix {
       --b1: #a78bfa;
       --b2: #7c3aed;
-      --be: #5b21b6;
+      --k-rgb: 124 58 237;
     }
 
     &.pam-btn--chart {
       --b1: #34d399;
       --b2: #059669;
-      --be: #065f46;
+      --k-rgb: 5 150 105;
     }
   }
 
@@ -4445,7 +4442,7 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     color: #075985;
     background: #fff;
     border-color: #bae6fd;
-    box-shadow: 0 2px 0 #bae6fd;
+    box-shadow: 0 1px 3px rgba(2, 132, 199, 0.12);
   }
 
   /* ---------- テーブル ---------- */
@@ -4470,7 +4467,10 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 
     .pagination-wrapper :deep(.el-pagination) .el-pager li.is-active {
       background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
-      box-shadow: 0 2px 0 #075985;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -2px 0 rgba(7, 89, 133, 0.35),
+        0 3px 8px -4px rgba(2, 132, 199, 0.5);
     }
   }
 
@@ -4514,6 +4514,32 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
       }
     }
   }
+}
+
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.production-actual-management.pam-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(23, 37, 84, 0.35) !important;
+}
+.production-actual-management.pam-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(23, 37, 84, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.production-actual-management.pam-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(23, 37, 84, 0.3) !important;
 }
 
 /* ---------- 取引ログ編集ダイアログ（ブルー） ---------- */
@@ -4571,7 +4597,9 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   font-size: 18px;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
   border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 rgba(30, 58, 138, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
 }
 
 .pam-dlg-hero-text {
@@ -4657,41 +4685,22 @@ $shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     height: 30px;
     border-radius: 8px;
     font-weight: 700;
-    transition:
-      transform 0.12s ease,
-      box-shadow 0.12s ease;
   }
 
   .el-button:not(.save-btn) {
+    --k-rgb: 100 116 139;
     color: #475569;
     background: #fff;
     border: 1px solid #cbd5e1;
-    box-shadow: 0 2px 0 #cbd5e1;
   }
 
   .save-btn {
+    --k-rgb: 37 99 235;
     color: #fff;
-    background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+      linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
     border: 1px solid #1d4ed8;
-    box-shadow: 0 2px 0 #1e3a8a;
-  }
-
-  .el-button:hover {
-    transform: translateY(-1px);
-  }
-
-  .el-button:active {
-    transform: translateY(1px);
-    box-shadow: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .production-actual-management.pam-modern .page-header .action-btn,
-  .production-actual-management.pam-modern .process-card .stats-grid .stat-card,
-  .dialog-footer .el-button {
-    transition: none;
-    transform: none !important;
   }
 }
 </style>

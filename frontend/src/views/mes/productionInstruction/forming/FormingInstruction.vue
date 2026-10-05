@@ -7,9 +7,11 @@
         <div class="header-info">
           <div class="title-wrapper">
             <el-icon class="title-icon"><Document /></el-icon>
-            <h1 class="page-title pb-hero-title">成型指示書発行管理</h1>
+            <div class="title-copy">
+              <h1 class="page-title pb-hero-title">成型指示書発行管理</h1>
+              <span class="page-subtitle pb-hero-desc">生産計画データ管理・指示発行システム</span>
+            </div>
           </div>
-          <span class="page-subtitle pb-hero-desc">生産計画データ管理・指示発行システム</span>
         </div>
         <div class="page-header-actions">
           <div class="header-stats">
@@ -354,7 +356,7 @@
       title="指示書印刷プレビュー"
       width="90%"
       :close-on-click-modal="false"
-      class="print-preview-dialog"
+      class="print-preview-dialog pb-std"
     >
       <div class="print-preview-content">
         <div class="print-preview-header">
@@ -375,7 +377,7 @@
       top="2vh"
       :close-on-click-modal="false"
       destroy-on-close
-      class="setup-schedule-preview-dialog"
+      class="setup-schedule-preview-dialog pb-std"
     >
       <div class="setup-preview-body">
         <div v-if="setupSchedulePreviewMeta" class="setup-preview-header">
@@ -506,7 +508,7 @@
       title="設備運行時間設定"
       width="760px"
       :close-on-click-modal="false"
-      class="work-time-dialog"
+      class="work-time-dialog pb-std"
     >
       <div v-loading="workTimeConfigLoading" class="work-time-dialog__body">
         <div class="work-time-dialog__toolbar">
@@ -591,7 +593,7 @@
       :title="workTimeConfigForm.id ? '設備運行時間設定編集' : '設備運行時間設定追加'"
       width="420px"
       :close-on-click-modal="false"
-      class="work-time-form-dialog"
+      class="work-time-form-dialog pb-std"
     >
       <el-form
         ref="workTimeConfigFormRef"
@@ -647,7 +649,7 @@
       v-model="formingInstructionNotesDialogVisible"
       title="メモ（TODO）"
       width="520px"
-      class="forming-instruction-notes-dialog"
+      class="forming-instruction-notes-dialog pb-std"
       :close-on-click-modal="false"
       :destroy-on-close="true"
       :show-close="false"
@@ -723,7 +725,7 @@
       v-model="newspaperProductsDialogVisible"
       title="新聞紙をかける — 対象製品設定"
       width="520px"
-      class="forming-newspaper-products-dialog"
+      class="forming-newspaper-products-dialog pb-std"
       :close-on-click-modal="false"
       :destroy-on-close="true"
     >
@@ -9614,20 +9616,28 @@ onUnmounted(() => {
 
 .mi-modern .title-wrapper {
   gap: 12px;
+  margin-bottom: 0;
+}
+
+.mi-modern .title-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .molding-instruction-container.mi-modern .title-icon {
-  width: 36px;
-  height: 36px;
-  font-size: 19px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
   color: #fff;
-  border-radius: 11px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 4px 0 rgba(12, 74, 110, 0.55),
-    0 10px 20px -8px rgba(2, 6, 23, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(12, 74, 110, 0.3);
 }
 
 .molding-instruction-container.mi-modern .page-title {
@@ -9645,7 +9655,7 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-/* 統計チップ：白→淡色グラデ＋下エッジ影（ボタンではないので hover 移動なし） */
+/* 統計チップ：白→淡色グラデ＋淡い下ベベル（ボタンではないので hover 移動なし） */
 .molding-instruction-container.mi-modern .header-stat-item {
   gap: 6px;
   height: 34px;
@@ -9664,8 +9674,9 @@ onUnmounted(() => {
 .molding-instruction-container.mi-modern .header-stat-item--total {
   background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
   box-shadow:
-    0 3px 0 #7dd3fc,
-    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(14, 165, 233, 0.18),
+    0 4px 10px -6px rgba(2, 6, 23, 0.45);
 }
 
 .molding-instruction-container.mi-modern .header-stat-item.header-stat-item--total .stat-value {
@@ -9679,8 +9690,9 @@ onUnmounted(() => {
 .molding-instruction-container.mi-modern .header-stat-item--machine {
   background: linear-gradient(180deg, #ffffff 0%, #ede9fe 100%);
   box-shadow:
-    0 3px 0 #c4b5fd,
-    0 10px 18px -8px rgba(2, 6, 23, 0.55);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(139, 92, 246, 0.18),
+    0 4px 10px -6px rgba(2, 6, 23, 0.45);
 }
 
 .molding-instruction-container.mi-modern .header-stat-item.header-stat-item--machine .stat-value {
@@ -9741,6 +9753,53 @@ onUnmounted(() => {
 .molding-instruction-container.mi-modern .action-btn.refresh-btn:hover {
   color: #075985;
   background: linear-gradient(180deg, #ffffff 0%, #bae6fd 100%);
+}
+
+.molding-instruction-container.mi-modern .action-btn.refresh-btn :deep(.el-icon) {
+  color: #0ea5e9;
+}
+
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.molding-instruction-container.mi-modern.pb-std.pb-std
+  .page-header
+  .refresh-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(2, 6, 23, 0.35) !important;
+}
+
+.molding-instruction-container.mi-modern.pb-std.pb-std
+  .page-header
+  .refresh-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(2, 6, 23, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+
+.molding-instruction-container.mi-modern.pb-std.pb-std
+  .page-header
+  .refresh-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(2, 6, 23, 0.3) !important;
+}
+
+/* 旧スタイルの ::before スイープはグローバル標準（::after）と二重になるため無効化 */
+.mi-modern .date-btn:not(.is-loading)::before,
+.mi-modern .print-btn:not(.is-loading)::before,
+.mi-modern .action-btn:not(.is-loading)::before {
+  content: none;
+}
+
+/* 入力欄フォーカス時の拡大・カードの浮き上がりは行わない */
+.mi-modern .compact-date-picker:focus-within,
+.mi-modern .machine-select:focus-within,
+.mi-modern .keyword-input:focus-within,
+.mi-modern .section-card:hover {
+  transform: none;
 }
 
 /* セクションカード：アクセントバー */
@@ -9891,8 +9950,9 @@ onUnmounted(() => {
   border-radius: 9px;
   background: linear-gradient(145deg, #818cf8 0%, #6d28d9 100%);
   box-shadow:
-    0 3px 0 #4c1d95,
-    0 8px 14px -6px rgba(109, 40, 217, 0.6);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(76, 29, 149, 0.35),
+    0 3px 6px -3px rgba(109, 40, 217, 0.6);
   animation: none;
 }
 

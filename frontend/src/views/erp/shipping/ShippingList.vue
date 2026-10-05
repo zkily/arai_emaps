@@ -480,7 +480,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="コード" min-width="130" v-if="columnVisible.code" key="code">
+          <el-table-column label="コード" min-width="140" v-if="columnVisible.code" key="code">
             <template #default="{ row }">
               <el-tooltip
                 :content="row.shipping_no_p || `${row.shipping_no}_${row.product_cd}`"
@@ -6298,8 +6298,11 @@ async function loadDestinationGroups() {
   gap: 8px;
 }
 
+/* 統計タイル：白地＋各色の淡色ティント（青グラデーション上でも読みやすく） */
 .sl-modern .stat-tile {
-  --accent: #60a5fa;
+  --accent: #3b82f6;
+  --tint: #dbeafe;
+  --deep: #1d4ed8;
   position: relative;
   min-width: 76px;
   padding: 6px 12px 7px;
@@ -6309,11 +6312,12 @@ async function loadDestinationGroups() {
   border-radius: 12px;
   overflow: hidden;
   cursor: default;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(150deg, #ffffff 0%, #ffffff 35%, var(--tint) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow:
-    0 4px 10px -6px rgba(15, 23, 42, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    0 4px 10px -6px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 14%, transparent);
   transition:
     box-shadow 0.2s ease,
     background 0.2s ease;
@@ -6325,16 +6329,17 @@ async function loadDestinationGroups() {
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  height: 3px;
+  background: var(--accent);
 }
 
 .sl-modern .stat-tile:hover {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.12));
+  background: linear-gradient(150deg, #ffffff 0%, var(--tint) 100%);
   box-shadow:
-    0 6px 14px -8px rgba(15, 23, 42, 0.45),
-    0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    0 6px 14px -8px rgba(15, 23, 42, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .sl-modern .stat-label {
@@ -6342,9 +6347,10 @@ async function loadDestinationGroups() {
   align-items: center;
   gap: 5px;
   font-size: 10.5px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.75);
+  color: #475569;
 }
 
 .sl-modern .stat-dot {
@@ -6352,24 +6358,24 @@ async function loadDestinationGroups() {
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .sl-modern .stat-value {
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.1;
-  color: #fff;
+  color: var(--deep);
   font-variant-numeric: tabular-nums;
 }
 
-.sl-modern .stat-nos { --accent: #60a5fa; }
-.sl-modern .stat-rows { --accent: #818cf8; }
-.sl-modern .stat-boxes { --accent: #c084fc; }
-.sl-modern .stat-units { --accent: #22d3ee; }
-.sl-modern .stat-pending { --accent: #cbd5e1; }
-.sl-modern .stat-issued { --accent: #34d399; }
-.sl-modern .stat-shipped { --accent: #fbbf24; }
+.sl-modern .stat-nos { --accent: #3b82f6; --tint: #dbeafe; --deep: #1d4ed8; }
+.sl-modern .stat-rows { --accent: #6366f1; --tint: #e0e7ff; --deep: #4338ca; }
+.sl-modern .stat-boxes { --accent: #a855f7; --tint: #f3e8ff; --deep: #7e22ce; }
+.sl-modern .stat-units { --accent: #06b6d4; --tint: #cffafe; --deep: #0e7490; }
+.sl-modern .stat-pending { --accent: #94a3b8; --tint: #f1f5f9; --deep: #475569; }
+.sl-modern .stat-issued { --accent: #10b981; --tint: #d1fae5; --deep: #047857; }
+.sl-modern .stat-shipped { --accent: #f59e0b; --tint: #fef3c7; --deep: #b45309; }
 
 /* ---------- カード共通 ---------- */
 .sl-modern .modern-card {

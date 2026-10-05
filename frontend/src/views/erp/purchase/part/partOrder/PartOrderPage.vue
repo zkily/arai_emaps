@@ -11,22 +11,22 @@
           <div class="title-text">
             <h1 class="main-title pb-hero-title">部品在庫管理(発注・使用)</h1>
             <p class="subtitle pb-hero-desc">部品の在庫推移・使用実績・発注を一元管理</p>
-            <div class="header-chips">
-              <span class="header-chip">
-                <el-icon><Calendar /></el-icon>
-                {{ headerDateRangeText }}
-              </span>
-              <span class="header-chip">
-                <el-icon><Shop /></el-icon>
-                仕入先 {{ searchForm.supplier.length ? `${searchForm.supplier.length}社` : '全て' }}
-              </span>
-              <span v-if="searchForm.part_cd" class="header-chip">
-                <el-icon><Search /></el-icon>
-                部品 {{ searchForm.part_cd }}
-              </span>
-            </div>
           </div>
         </div>
+      </div>
+      <div class="header-chips">
+        <span class="header-chip">
+          <el-icon><Calendar /></el-icon>
+          {{ headerDateRangeText }}
+        </span>
+        <span class="header-chip">
+          <el-icon><Shop /></el-icon>
+          仕入先 {{ searchForm.supplier.length ? `${searchForm.supplier.length}社` : '全て' }}
+        </span>
+        <span v-if="searchForm.part_cd" class="header-chip">
+          <el-icon><Search /></el-icon>
+          部品 {{ searchForm.part_cd }}
+        </span>
       </div>
       <div class="header-actions">
         <el-button
@@ -708,7 +708,7 @@
       title="データ生成期間設定"
       width="450px"
       :close-on-click-modal="false"
-      class="data-generation-dialog"
+      class="data-generation-dialog pb-std"
     >
       <div class="data-generation-content-compact">
         <div class="form-sections-compact">
@@ -788,10 +788,11 @@
       align-center
       :close-on-click-modal="false"
       :show-close="false"
-      class="order-sheet-dialog"
+      class="order-sheet-dialog pb-std"
     >
       <template #header="{ close, titleId }">
-        <div class="osd-head">
+        <div class="osd-head pb-hero">
+          <div class="osd-head__fx pb-bubbles" aria-hidden="true" />
           <div class="osd-head__icon"><el-icon><Printer /></el-icon></div>
           <div class="osd-head__text">
             <h3 :id="titleId" class="osd-head__title">注文書発行</h3>
@@ -974,7 +975,7 @@
       title="発注提案"
       width="1100px"
       :close-on-click-modal="false"
-      class="reorder-dialog"
+      class="reorder-dialog pb-std"
     >
       <div class="reorder-toolbar">
         <div class="reorder-toolbar__field">
@@ -1106,11 +1107,12 @@
     <el-drawer
       v-model="chartDrawerVisible"
       size="62%"
-      class="part-chart-drawer"
+      class="part-chart-drawer pb-std"
       :show-close="false"
     >
       <template #header="{ close, titleId }">
-        <div class="pcd-head">
+        <div class="pcd-head pb-hero">
+          <div class="pcd-head__fx pb-bubbles" aria-hidden="true" />
           <div class="pcd-head__main">
             <div class="pcd-head__icon"><el-icon><DataLine /></el-icon></div>
             <div class="pcd-head__text">
@@ -5486,18 +5488,29 @@ onMounted(() => {
   --po-tab-edge: #5b21b6;
 }
 
+/* 入場アニメーションは行わない */
+.part-order-container.po-modern,
+.po-modern .table-section {
+  animation: none;
+}
+
 /* ---------- ヒーローヘッダー ---------- */
 .po-modern .page-header {
-  padding: 12px 18px;
+  gap: 12px;
   border-radius: 16px;
   background: linear-gradient(135deg, #3730a3 0%, #4f46e5 32%, #7c3aed 70%, #a855f7 100%);
   box-shadow:
     0 18px 36px -18px rgba(76, 29, 149, 0.65),
     0 4px 12px -6px rgba(79, 70, 229, 0.4),
     0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  transition: none;
 }
 .po-modern .page-header:hover {
   transform: none;
+}
+.po-modern .page-header::before,
+.po-modern .page-header::after {
+  display: none;
 }
 .po-modern .page-header-fx {
   position: absolute;
@@ -5505,30 +5518,50 @@ onMounted(() => {
   pointer-events: none;
   z-index: 0;
 }
+.po-modern .header-left,
+.po-modern .header-chips,
+.po-modern .header-actions {
+  position: relative;
+  z-index: 1;
+}
+.po-modern .title-section {
+  gap: 12px;
+  min-width: 0;
+}
+.po-modern .title-text {
+  align-items: flex-start;
+  min-width: 0;
+}
 .po-modern .title-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  font-size: 21px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.1) 100%);
   box-shadow:
-    0 10px 20px -8px rgba(30, 27, 75, 0.6),
-    0 2px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -3px 0 rgba(67, 56, 202, 0.4) inset;
-  animation: poIconFloat 5.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
+  transition: none;
 }
 .po-modern .page-header:hover .title-icon {
   transform: none;
 }
 .po-modern .main-title {
-  font-size: 20px;
   font-weight: 800;
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+}
+.po-modern .subtitle {
+  opacity: 1;
+  color: rgba(237, 233, 254, 0.9);
 }
 .po-modern .header-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  min-width: 0;
+  margin-left: auto;
 }
 .po-modern .header-chip {
   display: inline-flex;
@@ -5544,46 +5577,69 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* ---------- ヘッダー操作：3Dキーキャップ ---------- */
+/* ---------- ヘッダー操作：白地ピル（影・動きは共通ボタン標準） ---------- */
 .po-modern .action-btn {
-  --btn-edge: rgba(30, 27, 75, 0.45);
+  --k-rgb: 79 70 229;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #4f46e5;
   height: 34px;
   border-radius: 10px;
-  box-shadow:
-    0 3px 0 var(--btn-edge),
-    0 10px 18px -8px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.2s ease;
+  color: #3730a3;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 .po-modern .action-btn.success-btn {
-  --btn-edge: #047857;
-  border-color: rgba(255, 255, 255, 0.35);
+  --k-rgb: 5 150 105;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #059669;
+  color: #065f46;
 }
 .po-modern .action-btn.warning-btn {
-  --btn-edge: #b45309;
-  border-color: rgba(255, 255, 255, 0.35);
+  --k-rgb: 217 119 6;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+  color: #92400e;
 }
 .po-modern .action-btn:hover,
 .po-modern .action-btn:focus-visible {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--btn-edge),
-    0 14px 22px -8px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: rgb(var(--k-rgb));
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%);
+  border-color: rgba(255, 255, 255, 0.95);
 }
-.po-modern .action-btn:active {
-  transform: translateY(2px);
+.po-modern .action-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.part-order-container.po-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
   box-shadow:
-    0 1px 0 var(--btn-edge),
-    0 4px 8px -4px var(--btn-glow);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(30, 27, 75, 0.35) !important;
+}
+.part-order-container.po-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(30, 27, 75, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.part-order-container.po-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(30, 27, 75, 0.3) !important;
 }
 
 /* ---------- 検索バー ---------- */
@@ -5604,46 +5660,16 @@ onMounted(() => {
   pointer-events: none;
 }
 .po-modern .filter-label .el-icon {
-  box-shadow:
-    0 2px 0 color-mix(in srgb, var(--label-color) 35%, #ffffff),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: transform 0.2s ease;
-}
-.po-modern .filter-item:hover .filter-label .el-icon {
-  transform: translateY(-1px) rotate(-6deg);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--label-color) 25%, transparent);
 }
 .po-modern .date-nav-btn {
-  box-shadow: 0 2px 0 #e2e8f0;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease;
-}
-.po-modern .date-nav-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 #c7d2fe;
-}
-.po-modern .date-nav-btn:active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #c7d2fe;
+  --k-rgb: 79 70 229;
 }
 .po-modern .date-nav-btn.today-btn {
-  box-shadow:
-    0 2px 0 #3730a3,
-    0 6px 12px -6px rgba(99, 102, 241, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.po-modern .date-nav-btn.today-btn:hover {
-  box-shadow:
-    0 3px 0 #3730a3,
-    0 10px 16px -6px rgba(99, 102, 241, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.po-modern .date-nav-btn.today-btn:active {
-  box-shadow:
-    0 1px 0 #3730a3,
-    0 3px 6px -3px rgba(99, 102, 241, 0.5);
+  border: 1px solid #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 }
 
 /* ---------- テーブルエリア：タブ連動アクセント ---------- */
@@ -5677,105 +5703,61 @@ onMounted(() => {
   border-bottom-color: color-mix(in srgb, var(--po-tab) 16%, #e6e9f4);
 }
 
-/* タブ：3Dキーキャップ */
+/* タブ：淡い立体（上ハイライト＋下ベベル）。hover は 1px 浮上のみ */
 .po-modern .table-tabs {
   gap: 6px;
   padding: 4px 4px 6px;
 }
 .po-modern .tab-item {
-  --tab-edge: #3730a3;
   transition:
     transform 0.18s ease,
     background 0.2s ease,
     color 0.2s ease,
     box-shadow 0.18s ease;
 }
-.po-modern .tab-item--initial {
-  --tab-edge: #075985;
-}
-.po-modern .tab-item--usage {
-  --tab-edge: #065f46;
-}
-.po-modern .tab-item--order {
-  --tab-edge: #92400e;
-}
-.po-modern .tab-item--history {
-  --tab-edge: #5b21b6;
+.po-modern .tab-item:hover .el-icon {
+  transform: none;
 }
 .po-modern .tab-item:not(.active):hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
-    0 3px 0 #e2e8f0,
-    0 8px 14px -8px var(--tab-glow);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 6px 12px -8px var(--tab-glow);
 }
 .po-modern .tab-item.active {
-  transform: translateY(-2px);
+  transform: none;
   box-shadow:
-    0 3px 0 var(--tab-edge),
-    0 10px 18px -8px var(--tab-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.po-modern .tab-item.active .el-icon {
-  animation: poTabIcon 0.5s ease-out;
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18),
+    0 6px 14px -8px var(--tab-glow);
 }
 .po-modern .tab-item:active {
   transform: translateY(1px);
 }
 
-/* キー操作ヒント：立体キー */
+/* キー操作ヒント：淡いキー表示 */
 .po-modern .table-hint kbd {
   border-bottom-width: 1px;
   box-shadow:
-    0 2px 0 #cbd5e1,
-    inset 0 1px 0 #ffffff;
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(15, 23, 42, 0.08);
   background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
 }
 
-/* テーブル操作ボタン：キーキャップ */
+/* テーブル操作ボタン：色は --k-rgb（影・動きは共通ボタン標準） */
 .po-modern .table-actions .print-btn,
-.po-modern .table-actions .month-start-btn,
-.po-modern .table-actions .reorder-btn {
-  --k-edge: #3730a3;
-  --k-glow: rgba(99, 102, 241, 0.5);
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.2s ease;
+.po-modern .table-actions .month-start-btn {
+  --k-rgb: 99 102 241;
+  border: 1px solid #4338ca;
 }
 .po-modern .table-actions .reorder-btn {
-  --k-edge: #fcd34d;
-  --k-glow: rgba(245, 158, 11, 0.45);
-  box-shadow:
-    0 0 0 1px #fcd34d inset,
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow);
+  --k-rgb: 245 158 11;
+  border: 1px solid #fcd34d;
 }
-.po-modern .table-actions .print-btn:hover,
-.po-modern .table-actions .month-start-btn:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.po-modern .table-actions .reorder-btn:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px #f59e0b inset,
-    0 5px 0 #f59e0b,
-    0 14px 22px -8px var(--k-glow);
-}
-.po-modern .table-actions .print-btn:active,
-.po-modern .table-actions .month-start-btn:active,
-.po-modern .table-actions .reorder-btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -4px var(--k-glow);
+.po-modern .table-actions .reorder-btn:hover,
+.po-modern .table-actions .reorder-btn:focus-visible {
+  border-color: #f59e0b;
 }
 
 /* 表ヘッダー：タブ色の淡いグラデーション（列別文字色は維持） */
@@ -5805,7 +5787,7 @@ onMounted(() => {
   stroke: var(--po-tab);
 }
 
-/* ページネーション：キーキャップ */
+/* ページネーション */
 .po-modern .pagination-wrapper {
   background: linear-gradient(
     180deg,
@@ -5816,69 +5798,20 @@ onMounted(() => {
 .po-modern .modern-pagination :deep(.el-pager li),
 .po-modern .modern-pagination :deep(.btn-prev),
 .po-modern .modern-pagination :deep(.btn-next) {
-  box-shadow: 0 2px 0 #e2e8f0;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
 }
 .po-modern .modern-pagination :deep(.el-pager li.is-active) {
   background: linear-gradient(135deg, var(--po-tab-2) 0%, var(--po-tab) 100%);
   box-shadow:
-    0 2px 0 var(--po-tab-edge),
-    0 6px 12px -6px var(--po-tab);
-  transform: translateY(-1px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 color-mix(in srgb, var(--po-tab-edge) 45%, transparent),
+    0 3px 8px -4px var(--po-tab);
+  transform: none;
 }
-
-/* ---------- キーフレーム ---------- */
-@keyframes poIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
-  }
-}
-@keyframes poTabIcon {
-  0% {
-    transform: perspective(200px) rotateY(0deg) scale(1);
-  }
-  60% {
-    transform: perspective(200px) rotateY(200deg) scale(1.15);
-  }
-  100% {
-    transform: perspective(200px) rotateY(360deg) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .po-modern .title-icon,
-  .po-modern .tab-item.active .el-icon {
-    animation: none;
-  }
-  .po-modern .tab-item,
-  .po-modern .action-btn {
-    transition: none;
-  }
-}
-
-
 </style>
 
 <!-- 部品在庫推移ドロワー：el-drawer 内部要素には scoped 属性が付かないため別ブロック -->
 <style>
-@keyframes pcdRise {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pcdShine {
-  0% { transform: translateX(-140%) skewX(-18deg); }
-  55%, 100% { transform: translateX(360%) skewX(-18deg); }
-}
-
-@keyframes pcdPulse {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
-  50% { box-shadow: 0 0 0 5px transparent; }
-}
-
 .part-chart-drawer.el-drawer {
   overflow: hidden;
   border-radius: 18px 0 0 18px;
@@ -5924,18 +5857,6 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.pcd-head::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 28%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  animation: pcdShine 6s ease-in-out infinite;
-  pointer-events: none;
-}
-
 .pcd-head__main,
 .pcd-head__side {
   position: relative;
@@ -5958,17 +5879,11 @@ onMounted(() => {
   justify-content: center;
   font-size: 22px;
   border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  backdrop-filter: blur(10px);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 8px 18px rgba(30, 27, 75, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  transition: transform 0.3s ease;
-}
-
-.pcd-head:hover .pcd-head__icon {
-  transform: rotate(-6deg) scale(1.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 
 .pcd-head__text {
@@ -5989,7 +5904,6 @@ onMounted(() => {
   line-height: 1.25;
   letter-spacing: 0.02em;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6013,7 +5927,7 @@ onMounted(() => {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.26);
-  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .pcd-chip .el-icon {
@@ -6052,7 +5966,6 @@ onMounted(() => {
   height: 7px;
   border-radius: 50%;
   background: currentColor;
-  animation: pcdPulse 1.8s ease-in-out infinite;
 }
 
 .pcd-status.is-danger {
@@ -6097,11 +6010,9 @@ onMounted(() => {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
+  background: #fff;
   border: 1px solid rgba(226, 232, 240, 0.9);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
-  animation: pcdRise 0.4s ease-out both;
 }
 
 .pcd-toolbar__label {
@@ -6175,7 +6086,7 @@ onMounted(() => {
 }
 
 .pcd-month__btn:active {
-  transform: scale(0.96);
+  transform: translateY(1px);
 }
 
 .pcd-month__btn--current {
@@ -6249,14 +6160,8 @@ onMounted(() => {
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 6px 16px rgba(15, 23, 42, 0.05);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  animation: pcdRise 0.45s ease-out both;
+  transition: box-shadow 0.25s ease;
 }
-
-.pcd-kpi:nth-child(1) { animation-delay: 0.05s; }
-.pcd-kpi:nth-child(2) { animation-delay: 0.1s; }
-.pcd-kpi:nth-child(3) { animation-delay: 0.15s; }
-.pcd-kpi:nth-child(4) { animation-delay: 0.2s; }
 
 .pcd-kpi::before {
   content: '';
@@ -6278,19 +6183,17 @@ onMounted(() => {
   border-radius: 50%;
   background: var(--k-grad);
   opacity: 0.08;
-  transition: transform 0.35s ease, opacity 0.35s ease;
+  transition: opacity 0.35s ease;
   pointer-events: none;
 }
 
 .pcd-kpi:hover {
-  transform: translateY(-3px);
   box-shadow:
     0 14px 28px var(--k-glow),
     0 0 0 1px var(--k-soft);
 }
 
 .pcd-kpi:hover::after {
-  transform: scale(1.35);
   opacity: 0.14;
 }
 
@@ -6346,11 +6249,6 @@ onMounted(() => {
     0 8px 16px var(--k-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     inset 0 -2px 0 rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s ease;
-}
-
-.pcd-kpi:hover .pcd-kpi__icon {
-  transform: translateY(-1px) rotate(-6deg) scale(1.06);
 }
 
 .pcd-kpi__body {
@@ -6399,7 +6297,6 @@ onMounted(() => {
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 10px 28px rgba(15, 23, 42, 0.06);
-  animation: pcdRise 0.5s ease-out 0.25s both;
 }
 
 .pcd-chart__head {
@@ -6524,18 +6421,6 @@ onMounted(() => {
   pointer-events: none;
 }
 
-.osd-head::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 28%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
-  animation: pcdShine 6s ease-in-out infinite;
-  pointer-events: none;
-}
-
 .osd-head__icon,
 .osd-head__text,
 .osd-close {
@@ -6552,16 +6437,11 @@ onMounted(() => {
   justify-content: center;
   font-size: 20px;
   border-radius: 12px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.38);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 8px 18px rgba(30, 27, 75, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  transition: transform 0.3s ease;
-}
-
-.osd-head:hover .osd-head__icon {
-  transform: rotate(-6deg) scale(1.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 
 .osd-head__text {
@@ -6575,7 +6455,6 @@ onMounted(() => {
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .osd-head__sub {
@@ -6610,14 +6489,6 @@ onMounted(() => {
   flex-direction: column;
   gap: 12px;
 }
-
-.osd-body > * {
-  animation: pcdRise 0.35s ease both;
-}
-
-.osd-body > *:nth-child(2) { animation-delay: 0.05s; }
-.osd-body > *:nth-child(3) { animation-delay: 0.1s; }
-.osd-body > *:nth-child(4) { animation-delay: 0.15s; }
 
 .osd-target {
   display: flex;
@@ -6801,17 +6672,14 @@ onMounted(() => {
 }
 
 .osd-footer__print.el-button--primary {
+  --k-rgb: 99 102 241;
   border: none;
   font-weight: 700;
   background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.7);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .osd-footer__print.el-button--primary:not(.is-disabled):hover {
-  transform: translateY(-1px);
   background: linear-gradient(135deg, #818cf8 0%, #8b5cf6 100%);
-  box-shadow: 0 10px 22px -6px rgba(99, 102, 241, 0.75);
 }
 
 .osd-footer__print .el-icon {

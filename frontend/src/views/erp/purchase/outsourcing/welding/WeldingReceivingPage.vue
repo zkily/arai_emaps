@@ -1,7 +1,8 @@
 <template>
-  <div class="outsourcing-receiving-page welding-receiving-page">
+  <div class="outsourcing-receiving-page welding-receiving-page orx-modern pb-std">
     <!-- 页面头部 -->
-    <div class="page-header welding-header glass-header">
+    <div class="page-header welding-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -9,8 +10,8 @@
               <el-icon><Download /></el-icon>
             </div>
             <div class="title-copy">
-              <span class="title-text">外注溶接受入</span>
-              <p class="subtitle">外注溶接品の受入検収処理を行います</p>
+              <span class="title-text pb-hero-title">外注溶接受入</span>
+              <p class="subtitle pb-hero-desc">外注溶接品の受入検収処理を行います</p>
             </div>
           </h2>
         </div>
@@ -272,7 +273,7 @@
       :title="dialogTitle"
       width="980px"
       destroy-on-close
-      class="receiving-dialog create-dialog"
+      class="receiving-dialog create-dialog orx-dialog pb-std"
       :close-on-click-modal="false"
     >
       <template #header>
@@ -497,7 +498,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="受入詳細" width="700px" class="detail-dialog">
+    <el-dialog v-model="detailVisible" title="受入詳細" width="700px" class="detail-dialog orx-dialog pb-std">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="受入番号">{{ detailData.receivingNo }}</el-descriptions-item>
         <el-descriptions-item label="受入日">{{ detailData.receivingDate }}</el-descriptions-item>
@@ -535,7 +536,7 @@
     </el-dialog>
 
     <!-- 订单详情对话框 -->
-    <el-dialog v-model="orderDetailVisible" title="注文詳細" width="700px" class="detail-dialog">
+    <el-dialog v-model="orderDetailVisible" title="注文詳細" width="700px" class="detail-dialog orx-dialog pb-std">
       <el-descriptions :column="2" border>
         <el-descriptions-item label="注文番号">{{ orderDetailData.orderNo }}</el-descriptions-item>
         <el-descriptions-item label="注文日">{{ orderDetailData.orderDate }}</el-descriptions-item>
@@ -574,7 +575,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+/** keep-alive の include はタブの route.name と一致させる */
+defineOptions({ name: 'OutsourcingWeldingReceiving' })
+
+import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Plus,
@@ -1623,6 +1627,16 @@ onMounted(async () => {
   await loadInspectors()
   await loadProductNames()
   await handleSearch()
+})
+
+/** タブ切替で戻った時：絞り込み条件・ページはそのまま、一覧データのみ再取得（権限なし時は警告を出さない） */
+let hasActivatedOnce = false
+onActivated(() => {
+  if (!hasActivatedOnce) {
+    hasActivatedOnce = true
+    return
+  }
+  if (canEdit.value) handleSearch()
 })
 </script>
 
@@ -2817,5 +2831,328 @@ onMounted(async () => {
   .kpi-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・色分け（外注溶接受入 / インディゴ・バイオレット系）
+ * 外注メッキ受入と共通構成。配色は .orx-modern の変数で切り替える
+ * ============================================================ */
+.orx-modern {
+  --ox-hero: linear-gradient(125deg, #312e81 0%, #4338ca 35%, #6d28d9 70%, #8b5cf6 100%);
+  --ox-bg: linear-gradient(160deg, #eef2ff 0%, #f5f3ff 48%, #f8fafc 100%);
+  --ox-c: #4f46e5;
+  --ox-rgb: 79 70 229;
+  --ox-soft: #e0e7ff;
+  --ox-ink: #3730a3;
+  --ox-c2: #7c3aed;
+  --ox-c2-soft: #ede9fe;
+  --ox-c2-ink: #5b21b6;
+  --ox-deep-rgb: 30 27 75;
+  --ox-shadow:
+    0 10px 24px -18px rgb(var(--ox-rgb) / 0.5),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  background: var(--ox-bg);
+  animation: none;
+}
+
+/* ---------- ヘッダー（ヒーロー） ---------- */
+.orx-modern .page-header,
+.orx-modern .page-header:hover {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--ox-hero);
+  box-shadow:
+    0 18px 36px -18px rgb(var(--ox-rgb) / 0.6),
+    0 4px 12px -6px rgb(var(--ox-deep-rgb) / 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: none;
+  transition: none;
+}
+.orx-modern .title {
+  gap: 12px;
+}
+.orx-modern .title-icon,
+.orx-modern .page-header:hover .title-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgb(var(--ox-deep-rgb) / 0.3);
+  transform: none;
+  transition: none;
+}
+.orx-modern .title-copy {
+  gap: 0;
+}
+.orx-modern .title-text {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+.orx-modern .subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 1;
+}
+
+/* 統計チップ：白地＋各色の淡色ティント（件数＝テーマ色 / 未検収＝amber / 本日入庫＝第2色） */
+.orx-modern .stat-chip {
+  --sc: var(--ox-c);
+  --sc-tint: var(--ox-soft);
+  --sc-deep: var(--ox-ink);
+  min-width: 84px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: linear-gradient(150deg, #fff 0%, #fff 35%, var(--sc-tint) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 color-mix(in srgb, var(--sc) 14%, transparent),
+    0 4px 10px -6px rgb(var(--ox-deep-rgb) / 0.5);
+}
+.orx-modern .stat-chip--pending {
+  --sc: #d97706;
+  --sc-tint: #fef3c7;
+  --sc-deep: #b45309;
+}
+.orx-modern .stat-chip--qty {
+  --sc: var(--ox-c2);
+  --sc-tint: var(--ox-c2-soft);
+  --sc-deep: var(--ox-c2-ink);
+}
+.orx-modern .stat-chip__value {
+  color: var(--sc-deep);
+  font-variant-numeric: tabular-nums;
+}
+.orx-modern .stat-chip__label {
+  font-weight: 600;
+  color: #475569;
+  opacity: 1;
+}
+
+/* ---------- KPI カード ---------- */
+.orx-modern .kpi-card {
+  box-shadow: var(--ox-shadow);
+}
+.orx-modern .kpi-card__icon {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.06);
+}
+.orx-modern .kpi-card__value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- カード（絞り込み＝テーマ色 / 一覧＝第2色）：不透明の白地 ---------- */
+.orx-modern .glass-card,
+.orx-modern .glass-card:hover {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--ox-shadow);
+  animation: none;
+}
+.orx-modern .filter-card.glass-card {
+  border-top: 3px solid var(--ox-c);
+  background: linear-gradient(
+    135deg,
+    #fff 0%,
+    #fff 55%,
+    color-mix(in srgb, var(--ox-soft) 55%, #fff) 100%
+  );
+}
+.orx-modern .table-card.glass-card {
+  border-top: 3px solid var(--ox-c2);
+  border-radius: 12px;
+}
+
+/* ---------- 絞り込み ---------- */
+.orx-modern .filter-group {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.orx-modern .filter-label {
+  color: var(--ox-ink);
+}
+.orx-modern .filter-group :deep(.el-input__wrapper),
+.orx-modern .filter-group :deep(.el-select__wrapper) {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+.orx-modern .filter-group :deep(.el-input__wrapper:hover),
+.orx-modern .filter-group :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgb(var(--ox-rgb) / 0.55) inset;
+}
+.orx-modern .filter-group :deep(.el-input__wrapper.is-focus),
+.orx-modern .filter-group :deep(.el-range-editor.is-active),
+.orx-modern .filter-group :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px var(--ox-c) inset,
+    0 0 0 3px rgb(var(--ox-rgb) / 0.15);
+}
+.orx-modern .filter-group :deep(.el-input__prefix),
+.orx-modern .filter-group :deep(.el-range__icon) {
+  color: var(--ox-c);
+}
+
+/* 期間クイックボタン（今日＝テーマ色の塗り / 他＝白地） */
+.orx-modern .quick-btn {
+  --k-rgb: var(--ox-rgb);
+  color: var(--ox-ink);
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--ox-c) 30%, #fff);
+}
+.orx-modern .quick-btn:hover {
+  color: var(--ox-ink);
+  background: color-mix(in srgb, var(--ox-soft) 60%, #fff);
+  border-color: var(--ox-c);
+}
+.orx-modern .quick-btn.month-btn {
+  background: color-mix(in srgb, var(--ox-soft) 45%, #fff);
+}
+.orx-modern .quick-btn.today-btn,
+.orx-modern .quick-btn.today-btn:hover {
+  color: #fff;
+  opacity: 1;
+  border-color: var(--ox-c);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--ox-c2) 0%, var(--ox-c) 100%);
+}
+.orx-modern .reset-btn {
+  --k-rgb: 100 116 139;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+}
+.orx-modern .reset-btn:hover {
+  color: #334155;
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+/* ---------- 操作バー（受入登録＝テーマ色 / 印刷＝amber） ---------- */
+.orx-modern .action-btn--create,
+.orx-modern .action-btn--create:hover {
+  --k-rgb: var(--ox-rgb);
+  color: #fff;
+  border: 1px solid var(--ox-c);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--ox-c2) 0%, var(--ox-c) 100%);
+}
+.orx-modern .action-btn--print,
+.orx-modern .action-btn--print:hover {
+  --k-rgb: 217 119 6;
+  color: #fff;
+  border: 1px solid #d97706;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+}
+
+/* ---------- テーブル ---------- */
+.orx-modern .data-table :deep(.el-table__header th) {
+  border-bottom: 2px solid color-mix(in srgb, var(--ox-c) 35%, #fff);
+}
+.orx-modern .data-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 var(--ox-c);
+}
+.orx-modern .pagination-wrapper :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--ox-c2) 0%, var(--ox-c) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgb(var(--ox-deep-rgb) / 0.25),
+    0 3px 8px -4px rgb(var(--ox-rgb) / 0.5);
+}
+
+/* ---------- ダイアログ（ページ内に描画されるためテーマ変数を継承） ---------- */
+:global(.el-dialog.orx-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 60px -20px rgb(var(--ox-rgb) / 0.45),
+    0 8px 18px rgba(15, 23, 42, 0.1);
+}
+:global(.el-dialog.orx-dialog .el-dialog__header) {
+  margin: 0;
+  padding: 12px 56px 12px 18px;
+  border-radius: 0;
+  border-bottom: none;
+  background: var(--ox-hero);
+  box-shadow: none;
+}
+:global(.el-dialog.orx-dialog .el-dialog__title) {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+:global(.el-dialog.orx-dialog .el-dialog__headerbtn) {
+  top: 8px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+:global(.el-dialog.orx-dialog.create-dialog .el-dialog__headerbtn) {
+  top: 16px;
+}
+:global(.el-dialog.orx-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+}
+:global(.el-dialog.orx-dialog.create-dialog .el-dialog__body),
+:global(.el-dialog.orx-dialog.create-dialog .el-dialog__footer) {
+  padding: 0;
+}
+:global(.el-dialog.orx-dialog.detail-dialog .el-dialog__body) {
+  padding: 14px 18px 18px;
+}
+:global(.el-dialog.orx-dialog .el-descriptions__label) {
+  color: var(--ox-ink);
+  background: color-mix(in srgb, var(--ox-soft) 45%, #fff);
+}
+.orx-modern .create-dialog__header {
+  color: #fff;
+}
+.orx-modern .create-dialog__header-icon {
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgb(var(--ox-deep-rgb) / 0.3);
+}
+.orx-modern .create-dialog__btn--submit,
+.orx-modern .create-dialog__btn--submit:hover {
+  --k-rgb: var(--ox-rgb);
+  color: #fff;
+  border: 1px solid var(--ox-c);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--ox-c2) 0%, var(--ox-c) 100%);
+}
+.orx-modern .create-dialog__btn--cancel {
+  --k-rgb: 100 116 139;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+}
+.orx-modern .create-dialog__btn--cancel:hover {
+  color: #334155;
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 </style>

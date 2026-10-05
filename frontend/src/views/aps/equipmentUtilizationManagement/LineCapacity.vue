@@ -35,33 +35,31 @@
         <div v-else class="card-head card-head--with-actions pb-hero pb-hero--page">
           <div class="card-head__fx pb-bubbles" aria-hidden="true" />
           <div class="card-head__main">
-            <h3 class="card-head__title pb-hero-title">
-              <span class="card-head__title-inner">
-                <el-icon class="card-head__title-icon"><Setting /></el-icon>
-                設備稼働設定
-              </span>
-            </h3>
-            <p class="card-head__desc pb-hero-desc">
-              日別の稼働時間帯を設定します。「休憩・技術使用・保全」は稼働合計・排産から除外（稼働帯との重複分のみ差引）。技術使用・保全は成型指示にも表示されます。
-            </p>
-            <div class="card-head__chips">
-              <span v-if="selectedLineLabel" class="card-head__chip">
-                <el-icon><Monitor /></el-icon>
-                {{ selectedLineLabel }}
-              </span>
-              <span v-if="dateRange?.[0]" class="card-head__chip">
-                <el-icon><Calendar /></el-icon>
-                {{ dateRange[0] }} 〜 {{ dateRange[1] }}
-              </span>
-              <span v-if="daySlots.length > 0" class="card-head__chip">
-                <el-icon><Clock /></el-icon>
-                表示 {{ displayDaySlots.length }} 日
-              </span>
-              <span v-if="daySlots.length > 0" class="card-head__chip card-head__chip--strong">
-                <el-icon><Timer /></el-icon>
-                稼働合計 {{ totalProductiveHours.toFixed(1) }}h
-              </span>
+            <el-icon class="card-head__title-icon"><Setting /></el-icon>
+            <div class="card-head__copy">
+              <h3 class="card-head__title pb-hero-title">設備稼働設定</h3>
+              <p class="card-head__desc pb-hero-desc">
+                日別の稼働時間帯を設定します。「休憩・技術使用・保全」は稼働合計・排産から除外（稼働帯との重複分のみ差引）。技術使用・保全は成型指示にも表示されます。
+              </p>
             </div>
+          </div>
+          <div class="card-head__chips">
+            <span v-if="selectedLineLabel" class="card-head__chip">
+              <el-icon><Monitor /></el-icon>
+              {{ selectedLineLabel }}
+            </span>
+            <span v-if="dateRange?.[0]" class="card-head__chip">
+              <el-icon><Calendar /></el-icon>
+              {{ dateRange[0] }} 〜 {{ dateRange[1] }}
+            </span>
+            <span v-if="daySlots.length > 0" class="card-head__chip">
+              <el-icon><Clock /></el-icon>
+              表示 {{ displayDaySlots.length }} 日
+            </span>
+            <span v-if="daySlots.length > 0" class="card-head__chip card-head__chip--strong">
+              <el-icon><Timer /></el-icon>
+              稼働合計 {{ totalProductiveHours.toFixed(1) }}h
+            </span>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
             <el-button
@@ -1923,11 +1921,11 @@ function isWeekend(d: string): boolean {
     0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
-/* ---- Hero ヘッダー ---- */
+/* ---- Hero ヘッダー（内側の .pb-hero--page が padding を持つため header は 0） ---- */
 .lc-modern .capacity-card :deep(.el-card__header) {
   position: relative;
   overflow: hidden;
-  padding: 12px 16px;
+  padding: 0;
   border-bottom: none;
   border-left: none;
   color: #fff;
@@ -1941,6 +1939,7 @@ function isWeekend(d: string): boolean {
   pointer-events: none;
 }
 .lc-modern .card-head__main,
+.lc-modern .card-head__chips,
 .lc-modern .card-head__actions {
   position: relative;
   z-index: 1;
@@ -1948,38 +1947,43 @@ function isWeekend(d: string): boolean {
 .lc-modern .card-head--with-actions {
   align-items: center;
 }
+.lc-modern .card-head__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lc-modern .card-head__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
 .lc-modern .card-head__title {
-  font-size: 17px;
   font-weight: 800;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
-}
-.lc-modern .card-head__title-inner {
-  gap: 10px;
 }
 .lc-modern .card-head__title-icon {
-  width: 34px;
-  height: 34px;
-  font-size: 19px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
   color: #fff;
-  border-radius: 10px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 8px 16px -6px rgba(30, 27, 75, 0.55),
-    inset 0 -3px 0 rgba(30, 27, 75, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  animation: lcIconFloat 4.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 .lc-modern .card-head__desc {
-  margin-top: 4px;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(255, 255, 255, 0.86);
 }
 .lc-modern .card-head__chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 8px;
+  min-width: 0;
 }
 .lc-modern .card-head__chip {
   display: inline-flex;
@@ -1991,100 +1995,91 @@ function isWeekend(d: string): boolean {
   font-size: 12px;
   font-weight: 600;
   color: #fff;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(6px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 .lc-modern .card-head__chip--strong {
   background: rgba(255, 255, 255, 0.26);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
-/* ---- 3D キーキャップボタン ---- */
-.lc-modern .lcap-btn-save.el-button--success,
+/* ---- 一括保存：Hero 上の白地ピル（影・動きは共通ボタン標準） ---- */
+.lc-modern .card-head__actions .lcap-btn-save {
+  --k-rgb: 22 163 74;
+  height: 32px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.lc-modern .card-head__actions .lcap-btn-save:not(.is-disabled) {
+  color: #15803d;
+  background: linear-gradient(180deg, #ffffff 0%, #dcfce7 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+.lc-modern .card-head__actions .lcap-btn-save:not(.is-disabled):hover {
+  color: #166534;
+  background: linear-gradient(180deg, #ffffff 0%, #bbf7d0 100%);
+}
+.lc-modern .card-head__actions .lcap-btn-save:not(.is-disabled) :deep(.el-icon) {
+  color: #16a34a;
+}
+
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.capacity-page.lc-modern.pb-std.pb-std
+  .card-head__actions
+  .lcap-btn-save.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(30, 27, 75, 0.35) !important;
+}
+.capacity-page.lc-modern.pb-std.pb-std
+  .card-head__actions
+  .lcap-btn-save.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(30, 27, 75, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.capacity-page.lc-modern.pb-std.pb-std
+  .card-head__actions
+  .lcap-btn-save.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(30, 27, 75, 0.3) !important;
+}
+
+/* ---- ボタン：色分けは --k-rgb（影・動きは共通ボタン標準） ---- */
 .lc-modern .toolbar__quick-month-btn,
 .lc-modern .bulk-apply-panel__actions :deep(.el-button),
 .lc-modern .slots-list__add :deep(.el-button) {
-  --k-edge: #3730a3;
-  --k-glow: rgba(79, 70, 229, 0.45);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.15s ease;
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -10px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.lc-modern .lcap-btn-save:not(.is-disabled):hover,
-.lc-modern .toolbar__quick-month-btn:not(.is-disabled):hover,
-.lc-modern .bulk-apply-panel__actions :deep(.el-button:not(.is-disabled):hover),
-.lc-modern .slots-list__add :deep(.el-button:not(.is-disabled):hover) {
-  transform: translateY(-2px);
-  filter: brightness(1.04);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -10px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.lc-modern .lcap-btn-save:not(.is-disabled):active,
-.lc-modern .toolbar__quick-month-btn:not(.is-disabled):active,
-.lc-modern .bulk-apply-panel__actions :deep(.el-button:not(.is-disabled):active),
-.lc-modern .slots-list__add :deep(.el-button:not(.is-disabled):active) {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -6px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.lc-modern .lcap-btn-save.is-disabled {
-  box-shadow: none;
-}
-.lc-modern .lcap-btn-save.el-button--success {
-  --k-edge: #15803d;
-  --k-glow: rgba(22, 163, 74, 0.55);
-  border: none;
-  font-weight: 700;
-  background: linear-gradient(180deg, #4ade80, #16a34a);
+  --k-rgb: 100 116 139;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.el-button--primary),
 .lc-modern .slots-list__add :deep(.el-button--primary),
 .lc-modern .lcap-btn-month-this {
-  --k-edge: #93c5fd;
-  --k-glow: rgba(37, 99, 235, 0.35);
+  --k-rgb: 37 99 235;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.el-button--success),
 .lc-modern .lcap-btn-month-next {
-  --k-edge: #86efac;
-  --k-glow: rgba(22, 163, 74, 0.35);
+  --k-rgb: 22 163 74;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.el-button--warning),
 .lc-modern .slots-list__add :deep(.el-button--warning) {
-  --k-edge: #fcd34d;
-  --k-glow: rgba(217, 119, 6, 0.35);
-}
-.lc-modern .bulk-apply-panel__actions :deep(.el-button--info),
-.lc-modern .slots-list__add :deep(.el-button--info) {
-  --k-edge: #cbd5e1;
-  --k-glow: rgba(100, 116, 139, 0.3);
+  --k-rgb: 217 119 6;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.el-button--danger) {
-  --k-edge: #fca5a5;
-  --k-glow: rgba(239, 68, 68, 0.35);
+  --k-rgb: 239 68 68;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.lcap-preset--22h) {
-  --k-edge: #fbbf24;
-  --k-glow: rgba(217, 119, 6, 0.35);
+  --k-rgb: 217 119 6;
 }
 .lc-modern .bulk-apply-panel__actions :deep(.lcap-preset--24h) {
-  --k-edge: #a5b4fc;
-  --k-glow: rgba(79, 70, 229, 0.35);
-}
-.lc-modern .slots-list__add :deep(.el-button:not(.el-button--primary):not(.el-button--warning):not(.el-button--info)) {
-  --k-edge: #e2e8f0;
-  --k-glow: rgba(100, 116, 139, 0.25);
+  --k-rgb: 79 70 229;
 }
 
 /* ---- ツールバー・一括パネル ---- */
@@ -2130,7 +2125,9 @@ function isWeekend(d: string): boolean {
   color: #fff;
   font-size: 12px;
   background: linear-gradient(135deg, var(--lc-c1), var(--lc-c3));
-  box-shadow: 0 3px 8px -3px rgba(79, 70, 229, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 .lc-modern .bulk-apply-panel__title-icon {
   width: 22px;
@@ -2139,7 +2136,9 @@ function isWeekend(d: string): boolean {
   color: #fff;
   font-size: 13px;
   background: linear-gradient(135deg, #f59e0b, #ea580c);
-  box-shadow: 0 3px 8px -3px rgba(234, 88, 12, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(154, 52, 18, 0.35);
 }
 .lc-modern .toolbar :deep(.el-input__wrapper),
 .lc-modern .toolbar :deep(.el-select__wrapper) {
@@ -2153,7 +2152,7 @@ function isWeekend(d: string): boolean {
     0 4px 10px -6px rgba(79, 70, 229, 0.5);
 }
 
-/* ---- 日カード：稼働時間で色分け＋浮上 ---- */
+/* ---- 日カード：稼働時間で色分け ---- */
 .lc-modern .calendar-grid {
   gap: 8px;
   padding: 2px 2px 6px;
@@ -2177,13 +2176,11 @@ function isWeekend(d: string): boolean {
   border-color: color-mix(in srgb, var(--dc) 26%, var(--el-border-color-lighter));
   background: linear-gradient(170deg, color-mix(in srgb, var(--dc) 7%, #fff) 0%, #fff 45%);
   box-shadow:
-    0 2px 0 color-mix(in srgb, var(--dc) 22%, #e2e8f0),
+    0 1px 2px rgba(15, 23, 42, 0.04),
     0 8px 16px -14px color-mix(in srgb, var(--dc) 70%, transparent);
   transition:
-    transform 0.18s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
-  animation: lcCardIn 0.35s ease-out backwards;
 }
 .lc-modern .day-card::before {
   content: '';
@@ -2195,11 +2192,10 @@ function isWeekend(d: string): boolean {
   background: linear-gradient(90deg, var(--dc), color-mix(in srgb, var(--dc) 40%, #fff));
 }
 .lc-modern .day-card:hover {
-  transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--dc) 50%, var(--el-border-color-lighter));
   box-shadow:
-    0 4px 0 color-mix(in srgb, var(--dc) 30%, #e2e8f0),
-    0 14px 24px -14px color-mix(in srgb, var(--dc) 80%, transparent);
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 12px 22px -14px color-mix(in srgb, var(--dc) 80%, transparent);
 }
 .lc-modern .day-card--h-zero {
   --dc: #94a3b8;
@@ -2229,13 +2225,13 @@ function isWeekend(d: string): boolean {
   border: none;
   background: linear-gradient(135deg, color-mix(in srgb, var(--dc) 70%, #fff), var(--dc));
   box-shadow:
-    0 2px 0 color-mix(in srgb, var(--dc) 60%, #0f172a),
-    0 4px 8px -4px color-mix(in srgb, var(--dc) 70%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18);
 }
 .lc-modern .day-card__tag--zero {
   color: var(--el-text-color-secondary);
   background: var(--el-fill-color);
-  box-shadow: 0 2px 0 var(--el-border-color-lighter);
+  box-shadow: inset 0 -1px 0 var(--el-border-color-lighter);
 }
 
 /* ---- 時間帯行：種別の左バー ---- */
@@ -2270,9 +2266,9 @@ function isWeekend(d: string): boolean {
   border-radius: 16px;
   background: linear-gradient(145deg, #818cf8, #6d28d9);
   box-shadow:
-    0 12px 20px -10px rgba(79, 70, 229, 0.7),
-    inset 0 -3px 0 rgba(30, 27, 75, 0.25);
-  animation: lcIconFloat 4.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -3px 0 rgba(30, 27, 75, 0.3),
+    0 8px 16px -10px rgba(79, 70, 229, 0.6);
 }
 .lc-modern .empty--hint .empty__icon {
   color: #fff;
@@ -2280,36 +2276,6 @@ function isWeekend(d: string): boolean {
 }
 .lc-modern :deep(.el-loading-spinner .path) {
   stroke: var(--lc-c2);
-}
-@keyframes lcIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
-  }
-}
-@keyframes lcCardIn {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 8px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lc-modern .card-head__title-icon,
-  .lc-modern .empty__icon,
-  .lc-modern .day-card {
-    animation: none;
-  }
-  .lc-modern .day-card:hover {
-    transform: none;
-  }
 }
 </style>
 

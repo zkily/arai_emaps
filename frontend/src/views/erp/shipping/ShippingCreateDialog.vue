@@ -323,9 +323,11 @@
                       size="small"
                       type="primary"
                       circle
-                      @click="addToSelectedItems([row])"
+                      @click="addToSelectedItems([row as DailyOrder])"
                       :disabled="
-                        isItemSelected(row) || !!row.shipping_no || isItemInRightTable(row)
+                        isItemSelected(row as DailyOrder) ||
+                        !!row.shipping_no ||
+                        isItemInRightTable(row as DailyOrder)
                       "
                       class="action-btn"
                     >
@@ -696,7 +698,7 @@
                   </el-table-column>
                   <el-table-column label="操作" width="50" fixed="right">
                     <template #default="{ row }">
-                      <el-button size="small" type="danger" circle @click="removeSelectedItem(row)">
+                      <el-button size="small" type="danger" circle @click="removeSelectedItem(row as DailyOrder)">
                         <el-icon>
                           <Delete />
                         </el-icon>
@@ -1293,7 +1295,7 @@
         </el-table-column>
 
         <!-- パレット番号 - 編集可能 -->
-        <el-table-column label="パレット番号" width="180">
+        <el-table-column label="パレット番号" width="180" align="center">
           <template #default="{ row, $index }">
             <div class="pallet-number-editor">
               <span class="prefix-label">{{ row.shipping_no_prefix }}</span>
@@ -1311,14 +1313,14 @@
                       <button
                         type="button"
                         class="serial-btn serial-btn-up"
-                        @click.stop="incrementSerial(row, $index)"
+                        @click.stop="incrementSerial(row as Pallet, $index)"
                       >
                         ▲
                       </button>
                       <button
                         type="button"
                         class="serial-btn serial-btn-down"
-                        @click.stop="decrementSerial(row, $index)"
+                        @click.stop="decrementSerial(row as Pallet, $index)"
                       >
                         ▼
                       </button>
@@ -1349,7 +1351,7 @@
               <el-button
                 size="small"
                 type="warning"
-                @click="editPalletRow(row, $index)"
+                @click="editPalletRow(row as Pallet, $index)"
                 title="編集"
                 plain
               >
@@ -1360,7 +1362,7 @@
               <el-button
                 size="small"
                 type="primary"
-                @click="duplicatePallet(row, $index)"
+                @click="duplicatePallet(row as Pallet, $index)"
                 title="複製"
                 plain
               >
@@ -1794,7 +1796,7 @@ const quickDestinations = ref([
 // 托盘设置
 const settings = ref({
   unitsPerBox: 20, // 每箱产品数量
-  optimizationMethod: 'heuristic', // 默认使用启发式算法
+  optimizationMethod: 'heuristic', // 默认使用欲張り法
 })
 
 // 不同箱种的托盘设置 - 从页面的パレット容量設定获取
@@ -1872,8 +1874,9 @@ function wouldExceedMixedLimit(
 // 优化算法选项
 const optimizationOptions = [
   { label: '欲張り法 (優化版)', value: 'heuristic' },
+  { label: 'スマート最適化', value: 'smart' },
   // { label: '欲張り法 (高速)', value: 'greedy' },
-  { label: '遺伝的アルゴリズム (優化版)', value: 'genetic' },
+  { label: '遺伝的アルゴリズム (大規模向け)', value: 'genetic' },
   { label: '従来割当て (オリジナル)', value: 'original' },
   { label: '条件分解のみ (組合せなし)', value: 'decompose_only' },
 ]
@@ -3288,20 +3291,14 @@ function recalculatePallets() {
   }
 
   // 根据选择的优化方法进行托盘分配
+  const method = settings.value.optimizationMethod
   if (
-    settings.value.optimizationMethod === 'heuristic' ||
-    settings.value.optimizationMethod === 'greedy' ||
-    settings.value.optimizationMethod === 'genetic' ||
-    settings.value.optimizationMethod === 'decompose_only'
+    method === 'smart' ||
+    method === 'heuristic' ||
+    method === 'greedy' ||
+    method === 'genetic' ||
+    method === 'decompose_only'
   ) {
-    // 使用高级算法
-    let algorithmName = '欲張り法'
-    if (settings.value.optimizationMethod === 'genetic') {
-      algorithmName = '遺伝的アルゴリズム'
-    } else if (settings.value.optimizationMethod === 'decompose_only') {
-      algorithmName = '条件分解のみ'
-    }
-
     // 设置每种箱型的托盘容量
     const boxCapacitySettings = {
       小箱: boxSettings.value.小箱,
@@ -3344,13 +3341,16 @@ function recalculatePallets() {
       }
 
       // 根据选择的算法进行托盘分配
-      let groupPallets
-      if (settings.value.optimizationMethod === 'genetic') {
-        // 遺伝的アルゴリズムを使用してパレットを割り当て
-        groupPallets = allocatePalletsGeneticAlgorithm(items, boxCapacitySettings)
-      } else if (settings.value.optimizationMethod === 'decompose_only') {
+      let groupPallets: Pallet[]
+      if (method === 'smart') {
+        // スマート最適化（厳密探索 + 分割によるパレット削減）
+        groupPallets = allocatePalletsSmart(items, boxCapacitySettings)
+      } else if (method === 'genetic') {
+        // 遺伝的アルゴリズム（厳密探索が打ち切られた大規模ケースを GA で改善）
+        groupPallets = allocatePalletsSmart(items, boxCapacitySettings, true)
+      } else if (method === 'decompose_only') {
         // 条件分解アルゴリズムを使用（組み合わせなし）
-        groupPallets = allocatePalletsDecomposeOnly(items, boxCapacitySettings)
+        groupPallets = allocatePalletsDecomposeOnly(items, boxCapacitySettings) ?? []
       } else {
         // 欲張りアルゴリズムを使用してパレットを割り当て
         groupPallets = allocatePallets(items, boxCapacitySettings)
@@ -3360,7 +3360,7 @@ function recalculatePallets() {
       for (let i = 0; i < groupPallets.length; i++) {
         const pallet = groupPallets[i]
         // 条件分解アルゴリズムの場合はパレット番号の序列番号を空のままにする
-        if (settings.value.optimizationMethod === 'decompose_only') {
+        if (method === 'decompose_only') {
           const prefix = `${dateStr}${pallet.destination_cd}`
           pallet.shipping_no_prefix = prefix
           pallet.shipping_no_serial = '' // 序列番号は空
@@ -3374,8 +3374,8 @@ function recalculatePallets() {
       allPallets = [...allPallets, ...groupPallets]
     })
 
-    // パレットマージ最適化を適用（条件分解アルゴリズムはマージ最適化を行わない）
-    if (settings.value.optimizationMethod !== 'decompose_only') {
+    // パレットマージ最適化は欲張り法のみ（条件分解は組合せなし、スマート/GA は探索内で最適化済み）
+    if (method === 'heuristic' || method === 'greedy') {
       allPallets = optimizePalletsByMerging(allPallets)
     }
     pallets.value = allPallets
@@ -3818,13 +3818,16 @@ function sortPalletNumbers() {
  *    - 优先组合成设定条件的箱数 (满载托盘优先)
  *    - 改进混载策略，提高箱数利用率
  *
- * 2. 遺伝的アルゴリズム 优化:
- *    - 增加约束条件验证和修复机制
- *    - 自动拆分超出限制的托盘 (箱数 > 设定值)
- *    - 自动拆分混載製品超过6种的托盘
- *    - 提高适应度计算精度，增加容量优化权重
+ * 2. スマート最適化 (推奨):
+ *    - 単品満載パレットを確定後、端数を分枝限定法で厳密探索（パレット数 → 混載度 → 分散 → 充填）
+ *    - パレット数が下限 ceil(総箱数/容量) を超える場合のみ、端数を分割してパレットを削減
+ *    - 本数は端数箱を残り側に寄せて按分し、合計本数を受注と一致させる
  *
- * 3. 通用约束条件:
+ * 3. 遺伝的アルゴリズム:
+ *    - スマート最適化と同じ前処理・後処理。厳密探索がノード上限で打ち切られた場合のみ
+ *      グルーピングGA（パレット単位の交叉・解体再挿入の変異）で追加改善
+ *
+ * 4. 通用约束条件:
  *    - 混載製品种类 ≤ 6种（同一品番の製品タイプ違いは1種類として扱う）
  *    - 同一产品总箱数 ≤ 设定条件的箱数
  *    - 优先生成满载托盘
@@ -3887,14 +3890,15 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
       const fullPallets = Math.floor(product.totalBoxes / maxBoxesPerPallet)
       const remainderBoxes = product.totalBoxes % maxBoxesPerPallet
 
-      // 每箱产品数量（設定の「1箱あたり本数」をフォールバックに使用）
-      const unitsPerBox =
-        product.totalBoxes > 0
-          ? Math.ceil(product.totalUnits / product.totalBoxes)
-          : (settings.value?.unitsPerBox ?? 20)
+      // 本数は端数箱を残り側に寄せて按分し、合計本数を受注と一致させる
+      let leftBoxes = product.totalBoxes
+      let leftUnits = product.totalUnits
 
       // 生成完整托盘
       for (let i = 0; i < fullPallets; i++) {
+        const palletUnits = splitUnits(leftBoxes, leftUnits, maxBoxesPerPallet)
+        leftBoxes -= maxBoxesPerPallet
+        leftUnits -= palletUnits
         pallets.push({
           product_cd: product.product_cd,
           product_name: product.product_name,
@@ -3905,7 +3909,7 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
           delivery_date: product.delivery_date,
           box_type: (boxType as string) === 'default' ? '-' : boxType,
           confirmed_boxes: maxBoxesPerPallet,
-          confirmed_units: maxBoxesPerPallet * unitsPerBox,
+          confirmed_units: palletUnits,
           unit: '本',
           remarks: '',
           detail: [
@@ -3915,7 +3919,7 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
               product_type: product.product_type,
               box_type: (boxType as string) === 'default' ? '-' : boxType,
               confirmed_boxes: maxBoxesPerPallet,
-              confirmed_units: maxBoxesPerPallet * unitsPerBox,
+              confirmed_units: palletUnits,
               delivery_date: product.delivery_date,
               shipping_date: product.shipping_date,
             },
@@ -3926,7 +3930,7 @@ function allocatePallets(items: DailyOrder[], boxCapacitySettings: BoxCapacitySe
       // 保存剩余箱数
       if (remainderBoxes > 0) {
         product.remainderBoxes = remainderBoxes
-        product.remainderUnits = remainderBoxes * unitsPerBox
+        product.remainderUnits = leftUnits
       } else {
         product.remainderBoxes = 0
         product.remainderUnits = 0
@@ -4822,1572 +4826,593 @@ function debugShowData() {
   ElMessage.success('调试信息已打印到控制台')
 }
 
-// 遗传算法实现托盘分配 - 优化版，增加约束条件
-function allocatePalletsGeneticAlgorithm(
+// ==================== スマート最適化 / 遺伝的アルゴリズム 共通パッキングコア ====================
+//
+// 制約（既存条件と同一）:
+//   - 出荷日×納入先ごと（呼び出し元でグループ化済み）、箱種ごとに別パレット
+//   - 1パレットの箱数 ≤ パレット容量設定
+//   - 混載種類（品番単位、製品タイプ違いは同一種類）≤ MAX_MIXED_PRODUCTS
+//   - 品番×製品タイプは明細を分けたまま、同一パレットへ載せられる
+// 評価（辞書式）: パレット数 → 混載度 → 品番の分散パレット数 → 充填の偏り（満載パレットを多く）
+
+/** パッキング単位（品番×製品タイプ単位の箱数・本数） */
+interface PackItem {
+  key: string
+  cd: string
+  boxes: number
+  units: number
+  src: any
+}
+
+type PackBin = PackItem[]
+
+interface PackScore {
+  pallets: number
+  mixed: number
+  spread: number
+  fill: number
+}
+
+const SMART_SEARCH_NODE_LIMIT = 30000
+const GA_POPULATION_SIZE = 30
+const GA_MAX_GENERATIONS = 200
+const GA_STAGNATION_LIMIT = 40
+const GA_TIME_LIMIT_MS = 200
+// 端数を複数パレットへ分割して載せるのは、パレット数が減る場合のみ
+const ALLOW_SPLIT_TO_SAVE_PALLET = true
+
+function toBoxNumber(v: unknown): number {
+  const n = typeof v === 'number' ? v : parseInt(String(v ?? ''), 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** boxes 箱 / units 本 から takeBoxes 箱を切り出したときの本数（端数箱は残り側に寄せ、合計は保存） */
+function splitUnits(boxes: number, units: number, takeBoxes: number): number {
+  if (takeBoxes >= boxes) return units
+  if (takeBoxes <= 0) return 0
+  if (units >= boxes) {
+    const perBox = Math.ceil(units / boxes)
+    return Math.min(takeBoxes * perBox, units - (boxes - takeBoxes))
+  }
+  return Math.round((units * takeBoxes) / boxes)
+}
+
+function packBinBoxes(bin: PackBin): number {
+  return bin.reduce((sum, item) => sum + item.boxes, 0)
+}
+
+function scorePacking(bins: PackBin[], capacity: number): PackScore {
+  let mixed = 0
+  let fill = 0
+  const binsPerCd = new Map<string, number>()
+  bins.forEach((bin) => {
+    const cds = new Set(bin.map((item) => item.cd))
+    mixed += cds.size - 1
+    const ratio = packBinBoxes(bin) / capacity
+    fill += ratio * ratio
+    cds.forEach((cd) => binsPerCd.set(cd, (binsPerCd.get(cd) || 0) + 1))
+  })
+  let spread = 0
+  binsPerCd.forEach((n) => (spread += n - 1))
+  return { pallets: bins.length, mixed, spread, fill }
+}
+
+/** a が b より良ければ負数 */
+function compareScore(a: PackScore, b: PackScore): number {
+  if (a.pallets !== b.pallets) return a.pallets - b.pallets
+  if (a.mixed !== b.mixed) return a.mixed - b.mixed
+  if (a.spread !== b.spread) return a.spread - b.spread
+  return b.fill - a.fill
+}
+
+/** 箱種ごとに 品番×製品タイプ 単位へ集計 */
+function buildPackItemsByBoxType(items: DailyOrder[]): Map<string, PackItem[]> {
+  const result = new Map<string, Map<string, PackItem>>()
+  items.forEach((item) => {
+    const boxes = toBoxNumber(item.confirmed_boxes)
+    if (boxes <= 0) return
+    const boxType = item.box_type || 'default'
+    if (!result.has(boxType)) result.set(boxType, new Map())
+    const group = result.get(boxType)!
+    const key = productTypeGroupKey(item)
+    const existing = group.get(key)
+    if (existing) {
+      existing.boxes += boxes
+      existing.units += toBoxNumber(item.confirmed_units)
+    } else {
+      group.set(key, {
+        key,
+        cd: item.product_cd || key,
+        boxes,
+        units: toBoxNumber(item.confirmed_units),
+        src: item,
+      })
+    }
+  })
+  const flattened = new Map<string, PackItem[]>()
+  result.forEach((group, boxType) => flattened.set(boxType, [...group.values()]))
+  return flattened
+}
+
+/** 単品で満載になる分を先に満載パレットとして確定し、端数だけを組合せ対象にする */
+function extractFullPallets(items: PackItem[], capacity: number) {
+  const full: PackBin[] = []
+  const rest: PackItem[] = []
+  items.forEach((item) => {
+    let boxes = item.boxes
+    let units = item.units
+    while (boxes >= capacity) {
+      const palletUnits = splitUnits(boxes, units, capacity)
+      full.push([{ ...item, boxes: capacity, units: palletUnits }])
+      boxes -= capacity
+      units -= palletUnits
+    }
+    if (boxes > 0) rest.push({ ...item, boxes, units })
+  })
+  return { full, rest }
+}
+
+/** Best-Fit Decreasing（同一品番のパレットを優先）。items は呼び出し側で並べ替え済み */
+function packBestFit(items: PackItem[], capacity: number, maxVarieties: number): PackBin[] {
+  const bins: PackBin[] = []
+  const loads: number[] = []
+  const cdSets: Set<string>[] = []
+  items.forEach((item) => {
+    let bestIdx = -1
+    let bestRank = Infinity
+    for (let b = 0; b < bins.length; b++) {
+      const free = capacity - loads[b]
+      if (item.boxes > free) continue
+      const sameCd = cdSets[b].has(item.cd)
+      if (!sameCd && cdSets[b].size >= maxVarieties) continue
+      const rank = (sameCd ? 0 : capacity + 1) + (free - item.boxes)
+      if (rank < bestRank) {
+        bestRank = rank
+        bestIdx = b
+      }
+    }
+    if (bestIdx < 0) {
+      bins.push([item])
+      loads.push(item.boxes)
+      cdSets.push(new Set([item.cd]))
+    } else {
+      bins[bestIdx].push(item)
+      loads[bestIdx] += item.boxes
+      cdSets[bestIdx].add(item.cd)
+    }
+  })
+  return bins
+}
+
+/**
+ * 分枝限定法による端数パレットの厳密探索。
+ * ノード数上限に達した場合はそれまでの最良解を返す（complete=false）。
+ */
+function packExact(
+  items: PackItem[],
+  capacity: number,
+  maxVarieties: number,
+  initial: PackBin[],
+): { bins: PackBin[]; complete: boolean } {
+  const n = items.length
+  const suffixBoxes = new Array<number>(n + 1).fill(0)
+  for (let i = n - 1; i >= 0; i--) suffixBoxes[i] = suffixBoxes[i + 1] + items[i].boxes
+
+  let best = initial
+  let bestScore = scorePacking(initial, capacity)
+  const bins: PackBin[] = []
+  const loads: number[] = []
+  const cdCounts: Map<string, number>[] = []
+  let mixed = 0
+  let nodes = 0
+  let aborted = false
+
+  const dfs = (i: number) => {
+    if (aborted) return
+    if (++nodes > SMART_SEARCH_NODE_LIMIT) {
+      aborted = true
+      return
+    }
+    if (i === n) {
+      const score = scorePacking(bins, capacity)
+      if (compareScore(score, bestScore) < 0) {
+        best = bins.map((bin) => [...bin])
+        bestScore = score
+      }
+      return
+    }
+
+    let freeTotal = 0
+    for (const load of loads) freeTotal += capacity - load
+    const lowerPallets =
+      bins.length + Math.max(0, Math.ceil((suffixBoxes[i] - freeTotal) / capacity))
+    if (
+      lowerPallets > bestScore.pallets ||
+      (lowerPallets === bestScore.pallets && mixed > bestScore.mixed)
+    ) {
+      return
+    }
+
+    const item = items[i]
+    const candidates: number[] = []
+    for (let b = 0; b < bins.length; b++) {
+      if (loads[b] + item.boxes > capacity) continue
+      if (!cdCounts[b].has(item.cd) && cdCounts[b].size >= maxVarieties) continue
+      candidates.push(b)
+    }
+    // 同一品番を含むパレット → 残り空間が少ない順
+    candidates.sort((a, b) => {
+      const sa = cdCounts[a].has(item.cd) ? 0 : 1
+      const sb = cdCounts[b].has(item.cd) ? 0 : 1
+      if (sa !== sb) return sa - sb
+      return loads[b] - loads[a]
+    })
+
+    // 積載量と品番構成が同じパレットは等価なので1つだけ試す
+    const tried = new Set<string>()
+    for (const b of candidates) {
+      const signature = `${loads[b]}|${[...cdCounts[b].keys()].sort().join(',')}`
+      if (tried.has(signature)) continue
+      tried.add(signature)
+
+      const counts = cdCounts[b]
+      const isNewVariety = !counts.has(item.cd)
+      bins[b].push(item)
+      loads[b] += item.boxes
+      counts.set(item.cd, (counts.get(item.cd) || 0) + 1)
+      if (isNewVariety) mixed++
+
+      dfs(i + 1)
+
+      bins[b].pop()
+      loads[b] -= item.boxes
+      const c = counts.get(item.cd)! - 1
+      if (c === 0) counts.delete(item.cd)
+      else counts.set(item.cd, c)
+      if (isNewVariety) mixed--
+      if (aborted) return
+    }
+
+    if (bins.length + 1 <= bestScore.pallets) {
+      bins.push([item])
+      loads.push(item.boxes)
+      cdCounts.push(new Map([[item.cd, 1]]))
+      dfs(i + 1)
+      bins.pop()
+      loads.pop()
+      cdCounts.pop()
+    }
+  }
+
+  dfs(0)
+  return { bins: best, complete: !aborted }
+}
+
+/**
+ * グルーピング遺伝的アルゴリズム（GGA）。
+ * 交叉: 親B のパレット群を親A に注入し、重複品目を含む A 側パレットを解体して Best-Fit 再挿入。
+ * 変異: 充填率の低いパレットを優先して解体し、ランダム順で再挿入。
+ */
+function packGenetic(
+  items: PackItem[],
+  capacity: number,
+  maxVarieties: number,
+  seed: PackBin[],
+): PackBin[] {
+  const totalBoxes = items.reduce((sum, item) => sum + item.boxes, 0)
+  const lowerPallets = Math.ceil(totalBoxes / capacity)
+
+  interface Chromosome {
+    bins: number[][]
+    score: PackScore
+  }
+
+  const randInt = (n: number) => Math.floor(Math.random() * n)
+  const toBins = (bins: number[][]) => bins.map((bin) => bin.map((idx) => items[idx]))
+  const evaluate = (bins: number[][]): Chromosome => ({
+    bins,
+    score: scorePacking(toBins(bins), capacity),
+  })
+  const isOptimal = (score: PackScore) => score.pallets === lowerPallets && score.mixed === 0
+
+  const reinsert = (
+    bins: number[][],
+    freed: number[],
+    mode: 'sorted' | 'perturbed' | 'shuffled',
+  ): number[][] => {
+    const order = [...freed].sort((a, b) => items[b].boxes - items[a].boxes)
+    if (mode === 'shuffled') {
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = randInt(i + 1)
+        ;[order[i], order[j]] = [order[j], order[i]]
+      }
+    } else if (mode === 'perturbed') {
+      for (let k = 0; k < Math.ceil(order.length / 3); k++) {
+        const i = randInt(order.length)
+        const j = randInt(order.length)
+        ;[order[i], order[j]] = [order[j], order[i]]
+      }
+    }
+    const loads = bins.map((bin) => bin.reduce((sum, idx) => sum + items[idx].boxes, 0))
+    const cdSets = bins.map((bin) => new Set(bin.map((idx) => items[idx].cd)))
+    order.forEach((idx) => {
+      const item = items[idx]
+      let bestIdx = -1
+      let bestRank = Infinity
+      for (let b = 0; b < bins.length; b++) {
+        const free = capacity - loads[b]
+        if (item.boxes > free) continue
+        const sameCd = cdSets[b].has(item.cd)
+        if (!sameCd && cdSets[b].size >= maxVarieties) continue
+        const rank = (sameCd ? 0 : capacity + 1) + (free - item.boxes)
+        if (rank < bestRank) {
+          bestRank = rank
+          bestIdx = b
+        }
+      }
+      if (bestIdx < 0) {
+        bins.push([idx])
+        loads.push(item.boxes)
+        cdSets.push(new Set([item.cd]))
+      } else {
+        bins[bestIdx].push(idx)
+        loads[bestIdx] += item.boxes
+        cdSets[bestIdx].add(item.cd)
+      }
+    })
+    return bins
+  }
+
+  const crossover = (a: number[][], b: number[][]): number[][] => {
+    const start = randInt(b.length)
+    const length = 1 + randInt(Math.max(1, Math.ceil(b.length / 2)))
+    const injected = b.slice(start, start + length).map((bin) => [...bin])
+    const injectedSet = new Set(injected.flat())
+    const kept: number[][] = []
+    const freed: number[] = []
+    a.forEach((bin) => {
+      if (bin.some((idx) => injectedSet.has(idx))) {
+        bin.forEach((idx) => {
+          if (!injectedSet.has(idx)) freed.push(idx)
+        })
+      } else {
+        kept.push([...bin])
+      }
+    })
+    return reinsert([...kept, ...injected], freed, 'sorted')
+  }
+
+  const mutate = (bins: number[][]): number[][] => {
+    const copy = bins.map((bin) => [...bin])
+    const freed: number[] = []
+    const removeCount = Math.min(copy.length, 1 + randInt(3))
+    for (let k = 0; k < removeCount && copy.length > 0; k++) {
+      let target = randInt(copy.length)
+      if (Math.random() < 0.5) {
+        let minLoad = Infinity
+        copy.forEach((bin, idx) => {
+          const load = bin.reduce((sum, i) => sum + items[i].boxes, 0)
+          if (load < minLoad) {
+            minLoad = load
+            target = idx
+          }
+        })
+      }
+      freed.push(...copy.splice(target, 1)[0])
+    }
+    return reinsert(copy, freed, 'perturbed')
+  }
+
+  const indexOf = new Map(items.map((item, idx) => [item, idx]))
+  const allIdx = items.map((_, idx) => idx)
+  let population: Chromosome[] = [
+    evaluate(seed.map((bin) => bin.map((item) => indexOf.get(item)!))),
+    evaluate(reinsert([], allIdx, 'sorted')),
+  ]
+  while (population.length < GA_POPULATION_SIZE) {
+    population.push(evaluate(reinsert([], allIdx, population.length % 2 ? 'shuffled' : 'perturbed')))
+  }
+
+  const tournament = (): Chromosome => {
+    const a = population[randInt(population.length)]
+    const b = population[randInt(population.length)]
+    return compareScore(a.score, b.score) <= 0 ? a : b
+  }
+
+  population.sort((x, y) => compareScore(x.score, y.score))
+  let best = population[0]
+  let stagnant = 0
+  const startedAt = performance.now()
+
+  for (let gen = 0; gen < GA_MAX_GENERATIONS; gen++) {
+    if (isOptimal(best.score) || stagnant >= GA_STAGNATION_LIMIT) break
+    if (performance.now() - startedAt > GA_TIME_LIMIT_MS) break
+
+    const next: Chromosome[] = population.slice(0, 2)
+    while (next.length < GA_POPULATION_SIZE) {
+      const p1 = tournament()
+      const p2 = tournament()
+      let child = Math.random() < 0.8 ? crossover(p1.bins, p2.bins) : p1.bins.map((b) => [...b])
+      if (Math.random() < 0.3) child = mutate(child)
+      next.push(evaluate(child))
+    }
+    next.sort((x, y) => compareScore(x.score, y.score))
+    population = next
+
+    if (compareScore(population[0].score, best.score) < 0) {
+      best = population[0]
+      stagnant = 0
+    } else {
+      stagnant++
+    }
+  }
+
+  return toBins(best.bins)
+}
+
+/**
+ * 最も積載の少ないパレットの品目を、他パレットの空き容量へ分割して載せ替え、パレットを1つ減らす。
+ * 同一品番を含むパレットを優先し、混載種類上限は守る。下限 ceil(総箱数/容量) に達するか改善不能まで繰り返す。
+ */
+function eliminatePalletsBySplitting(
+  bins: PackBin[],
+  capacity: number,
+  maxVarieties: number,
+): PackBin[] {
+  const totalBoxes = bins.reduce((sum, bin) => sum + packBinBoxes(bin), 0)
+  const lowerPallets = Math.ceil(totalBoxes / capacity)
+  let result = bins
+
+  const tryDistribute = (victim: number): PackBin[] | null => {
+    const others = result.filter((_, idx) => idx !== victim).map((bin) => [...bin])
+    const loads = others.map(packBinBoxes)
+    const cdSets = others.map((bin) => new Set(bin.map((item) => item.cd)))
+    const moving = [...result[victim]].sort((a, b) => b.boxes - a.boxes)
+    for (const item of moving) {
+      let leftBoxes = item.boxes
+      let leftUnits = item.units
+      const targets = others
+        .map((_, idx) => idx)
+        .filter(
+          (idx) =>
+            loads[idx] < capacity &&
+            (cdSets[idx].has(item.cd) || cdSets[idx].size < maxVarieties),
+        )
+        .sort((a, b) => {
+          const sa = cdSets[a].has(item.cd) ? 0 : 1
+          const sb = cdSets[b].has(item.cd) ? 0 : 1
+          if (sa !== sb) return sa - sb
+          return loads[a] - loads[b]
+        })
+      for (const t of targets) {
+        if (leftBoxes <= 0) break
+        const take = Math.min(capacity - loads[t], leftBoxes)
+        const takeUnits = splitUnits(leftBoxes, leftUnits, take)
+        others[t].push({ ...item, boxes: take, units: takeUnits })
+        loads[t] += take
+        cdSets[t].add(item.cd)
+        leftBoxes -= take
+        leftUnits -= takeUnits
+      }
+      if (leftBoxes > 0) return null
+    }
+    return others
+  }
+
+  let improved = true
+  while (improved && result.length > lowerPallets) {
+    improved = false
+    const order = result
+      .map((_, idx) => idx)
+      .sort((a, b) => packBinBoxes(result[a]) - packBinBoxes(result[b]))
+    for (const victim of order) {
+      const next = tryDistribute(victim)
+      if (next) {
+        result = next
+        improved = true
+        break
+      }
+    }
+  }
+  return result
+}
+
+/** 採番順: 単品パレット（品番順・箱数多い順）→ 混載パレット（箱数多い順） */
+function sortBinsForNumbering(bins: PackBin[]): PackBin[] {
+  const isSingle = (bin: PackBin) => new Set(bin.map((item) => item.cd)).size === 1
+  return [...bins].sort((a, b) => {
+    const sa = isSingle(a) ? 0 : 1
+    const sb = isSingle(b) ? 0 : 1
+    if (sa !== sb) return sa - sb
+    if (sa === 0 && a[0].cd !== b[0].cd) return a[0].cd.localeCompare(b[0].cd)
+    return packBinBoxes(b) - packBinBoxes(a)
+  })
+}
+
+function buildPalletFromBin(bin: PackBin, boxType: string): Pallet {
+  const displayBoxType = boxType === 'default' ? '-' : boxType
+  const merged = new Map<string, PackItem>()
+  bin.forEach((item) => {
+    const existing = merged.get(item.key)
+    if (existing) {
+      existing.boxes += item.boxes
+      existing.units += item.units
+    } else {
+      merged.set(item.key, { ...item })
+    }
+  })
+
+  const detail: PalletItem[] = [...merged.values()].map((item) => ({
+    product_cd: item.src.product_cd,
+    product_name: item.src.product_name,
+    product_type: item.src.product_type,
+    box_type: displayBoxType,
+    confirmed_boxes: item.boxes,
+    confirmed_units: item.units,
+    delivery_date: item.src.delivery_date,
+    shipping_date: item.src.shipping_date,
+  }))
+  const allSameProduct = detail.every((d) => d.product_cd === detail[0].product_cd)
+  const head = bin[0].src
+
+  return {
+    product_cd: allSameProduct ? detail[0].product_cd : detail.map((d) => d.product_cd).join(','),
+    product_name: allSameProduct
+      ? detail[0].product_name
+      : detail.map((d) => d.product_name).join(','),
+    product_type: allSameProduct
+      ? detail[0].product_type
+      : detail.map((d) => d.product_type).join(','),
+    destination_cd: head.destination_cd,
+    destination_name: head.destination_name,
+    shipping_date: head.shipping_date,
+    delivery_date: allSameProduct
+      ? detail[0].delivery_date
+      : detail.map((d) => d.delivery_date).join(','),
+    box_type: displayBoxType,
+    confirmed_boxes: detail.reduce((sum, d) => sum + d.confirmed_boxes, 0),
+    confirmed_units: detail.reduce((sum, d) => sum + d.confirmed_units, 0),
+    unit: '本',
+    remarks: allSameProduct ? '' : '混載パレット',
+    detail,
+  }
+}
+
+/**
+ * スマート最適化（useGenetic=true で遺伝的アルゴリズム）。
+ * 1. 単品満載パレットを確定 2. 端数を Best-Fit → 分枝限定法で最適化（GA は探索打ち切り時のみ追加改善）
+ * 3. パレット数が下限を超える場合は端数を分割して削減
+ */
+function allocatePalletsSmart(
   items: DailyOrder[],
   boxCapacitySettings: BoxCapacitySettings,
+  useGenetic = false,
 ): Pallet[] {
-  // console.log('使用遗传算法分配托盘，项目数量:', items.length)
+  const pallets: Pallet[] = []
+  buildPackItemsByBoxType(items).forEach((packItems, boxType) => {
+    const capacity = Math.max(1, boxCapacitySettings[boxType] || boxCapacitySettings.default || 1)
+    const { full, rest } = extractFullPallets(packItems, capacity)
 
-  // 按箱种分组
-  const boxTypeGroups: { [key: string]: any[] } = {}
-  items.forEach((item) => {
-    const boxType = item.box_type || 'default'
-    if (!boxTypeGroups[boxType]) {
-      boxTypeGroups[boxType] = []
+    let bins: PackBin[] = []
+    if (rest.length > 0) {
+      const sorted = [...rest].sort((a, b) => b.boxes - a.boxes || a.cd.localeCompare(b.cd))
+      const greedy = packBestFit(sorted, capacity, MAX_MIXED_PRODUCTS)
+      const exact = packExact(sorted, capacity, MAX_MIXED_PRODUCTS, greedy)
+      bins =
+        useGenetic && !exact.complete
+          ? packGenetic(sorted, capacity, MAX_MIXED_PRODUCTS, exact.bins)
+          : exact.bins
+      if (ALLOW_SPLIT_TO_SAVE_PALLET) {
+        bins = eliminatePalletsBySplitting(bins, capacity, MAX_MIXED_PRODUCTS)
+      }
     }
-    boxTypeGroups[boxType].push(item)
+
+    full.sort((a, b) => a[0].cd.localeCompare(b[0].cd))
+    ;[...full, ...sortBinsForNumbering(bins)].forEach((bin) => {
+      pallets.push(buildPalletFromBin(bin, boxType))
+    })
   })
-
-  const allPallets: any[] = []
-
-  // 处理每种箱型
-  Object.entries(boxTypeGroups).forEach(([boxType, typeItems]: [string, any[]]) => {
-    // 获取该箱型的最大容量
-    const maxBoxesPerPallet = boxCapacitySettings[boxType] || boxCapacitySettings.default
-
-    // 按品番×製品タイプ分组（量産品と試作品は明細を分けたまま）
-    const productGroups: { [key: string]: any } = {}
-    typeItems.forEach((item) => {
-      const groupKey = productTypeGroupKey(item)
-      if (!productGroups[groupKey]) {
-        productGroups[groupKey] = {
-          ...item,
-          totalBoxes: 0,
-          totalUnits: 0,
-        }
-      }
-      // 确保数值有效
-      const boxes =
-        typeof item.confirmed_boxes === 'number'
-          ? item.confirmed_boxes
-          : parseInt(item.confirmed_boxes) || 0
-      const units =
-        typeof item.confirmed_units === 'number'
-          ? item.confirmed_units
-          : parseInt(item.confirmed_units) || 0
-
-      productGroups[groupKey].totalBoxes += boxes
-      productGroups[groupKey].totalUnits += units
-    })
-
-    // 在转换为遗传算法格式之前，先处理大于32箱的产品拆分
-    const splitProducts: {
-      id: any
-      originalId: any
-      name: any
-      product_type: any
-      boxes: any
-      units: any
-      destination_cd: any
-      destination_name: any
-      shipping_date: any
-      delivery_date: any
-      box_type: string
-      isSplit: boolean
-      splitGroup?: number
-      totalSplitGroups?: number
-    }[] = []
-    Object.values(productGroups).forEach((product: any) => {
-      const totalBoxes = product.totalBoxes
-      const totalUnits = product.totalUnits
-      const unitsPerBox = totalBoxes > 0 ? totalUnits / totalBoxes : 0
-
-      // 只对小箱进行拆分处理
-      if (boxType === '小箱' && totalBoxes > 32) {
-        // console.log(`产品 ${product.product_cd} 箱数 ${totalBoxes} > 32，需要拆分`)
-
-        // 计算需要多少个32箱的组
-        const fullGroups = Math.floor(totalBoxes / 32)
-        const remainder = totalBoxes % 32
-
-        // 创建32箱的组
-        for (let i = 0; i < fullGroups; i++) {
-          splitProducts.push({
-            id: `${productTypeGroupKey(product)}_split_${i + 1}`,
-            originalId: product.product_cd,
-            name: product.product_name,
-            product_type: product.product_type,
-            boxes: 32,
-            units: Math.round(32 * unitsPerBox),
-            destination_cd: product.destination_cd,
-            destination_name: product.destination_name,
-            shipping_date: product.shipping_date,
-            delivery_date: product.delivery_date,
-            box_type: (boxType as string) === 'default' ? '-' : boxType,
-            isSplit: true,
-            splitGroup: i + 1,
-            totalSplitGroups: fullGroups + (remainder > 0 ? 1 : 0),
-          })
-        }
-
-        // 如果有剩余，创建剩余组
-        if (remainder > 0) {
-          splitProducts.push({
-            id: `${productTypeGroupKey(product)}_split_${fullGroups + 1}`,
-            originalId: product.product_cd,
-            name: product.product_name,
-            product_type: product.product_type,
-            boxes: remainder,
-            units: Math.round(remainder * unitsPerBox),
-            destination_cd: product.destination_cd,
-            destination_name: product.destination_name,
-            shipping_date: product.shipping_date,
-            delivery_date: product.delivery_date,
-            box_type: (boxType as string) === 'default' ? '-' : boxType,
-            isSplit: true,
-            splitGroup: fullGroups + 1,
-            totalSplitGroups: fullGroups + 1,
-          })
-        }
-
-        // console.log(
-        //   `产品 ${product.product_cd} 拆分完成：${fullGroups}个32箱组 + ${remainder > 0 ? '1个' + remainder + '箱组' : '无剩余'}`,
-        // )
-      } else {
-        // 不需要拆分的产品直接添加
-        splitProducts.push({
-          id: productTypeGroupKey(product),
-          originalId: product.product_cd,
-          name: product.product_name,
-          product_type: product.product_type,
-          boxes: totalBoxes,
-          units: totalUnits,
-          destination_cd: product.destination_cd,
-          destination_name: product.destination_name,
-          shipping_date: product.shipping_date,
-          delivery_date: product.delivery_date,
-          box_type: (boxType as string) === 'default' ? '-' : boxType,
-          isSplit: false,
-        })
-      }
-    })
-
-    //  console.log(
-    //   `箱种 ${boxType} 拆分后产品数量：${Object.keys(productGroups).length} -> ${splitProducts.length}`,
-    // )
-
-    // 使用拆分后的产品进行遗传算法
-    const products = splitProducts
-
-    // 使用遗传算法优化托盘分配
-    const geneticResult = runGeneticAlgorithm(products, maxBoxesPerPallet)
-
-    // 验证和修复遗传算法结果
-    const validatedResult = validateAndFixGeneticResult(geneticResult, maxBoxesPerPallet)
-
-    // 将结果转换为托盘数据
-    const pallets = validatedResult.map((palletData) => {
-      const palletItems = palletData.items.map(
-        (item: {
-          originalId: any
-          id: any
-          name: any
-          product_type: any
-          box_type: any
-          boxes: any
-          units: any
-          delivery_date: any
-          shipping_date: any
-          isSplit: any
-          splitGroup: any
-          totalSplitGroups: any
-        }) => {
-          // 使用原始产品ID显示，隐藏拆分信息
-          const displayProductCd = item.originalId || item.id
-          const displayProductName = item.name
-
-          return {
-            product_cd: displayProductCd,
-            product_name: displayProductName,
-            product_type: item.product_type,
-            box_type: item.box_type,
-            confirmed_boxes: item.boxes,
-            confirmed_units: item.units,
-            delivery_date: item.delivery_date,
-            shipping_date: item.shipping_date,
-            // 保留拆分信息用于调试
-            _splitInfo: item.isSplit
-              ? {
-                  splitGroup: item.splitGroup,
-                  totalSplitGroups: item.totalSplitGroups,
-                  originalId: item.originalId,
-                }
-              : null,
-          }
-        },
-      )
-
-      // 按原始产品ID合并显示（合并拆分的产品项）
-      const mergedItems: { [key: string]: any } = {}
-      palletItems.forEach(
-        (item: {
-          product_cd: any
-          product_name: any
-          product_type: any
-          box_type: any
-          confirmed_boxes: any
-          confirmed_units: any
-          delivery_date: any
-          shipping_date: any
-        }) => {
-          const key = productTypeGroupKey(item)
-          if (!mergedItems[key]) {
-            mergedItems[key] = {
-              product_cd: item.product_cd,
-              product_name: item.product_name,
-              product_type: item.product_type,
-              box_type: item.box_type,
-              confirmed_boxes: item.confirmed_boxes,
-              confirmed_units: item.confirmed_units,
-              delivery_date: item.delivery_date,
-              shipping_date: item.shipping_date,
-            }
-          } else {
-            // 合并同一产品的不同拆分组
-            mergedItems[key].confirmed_boxes += item.confirmed_boxes
-            mergedItems[key].confirmed_units += item.confirmed_units
-          }
-        },
-      )
-
-      const finalPalletItems: PalletItem[] = Object.values(mergedItems)
-
-      // 确定是否为混载托盘
-      const isMixed = finalPalletItems.length > 1
-      const allSameProduct = finalPalletItems.every(
-        (item) => item.product_cd === finalPalletItems[0].product_cd,
-      )
-
-      return {
-        product_cd: allSameProduct
-          ? finalPalletItems[0].product_cd
-          : finalPalletItems.map((i) => i.product_cd).join(','),
-        product_name: allSameProduct
-          ? finalPalletItems[0].product_name
-          : finalPalletItems.map((i) => i.product_name).join(','),
-        product_type: allSameProduct
-          ? finalPalletItems[0].product_type
-          : finalPalletItems.map((i) => i.product_type).join(','),
-        destination_cd: palletItems[0].destination_cd || palletData.items[0].destination_cd,
-        destination_name: palletItems[0].destination_name || palletData.items[0].destination_name,
-        shipping_date: palletItems[0].shipping_date || palletData.items[0].shipping_date,
-        delivery_date: allSameProduct
-          ? finalPalletItems[0].delivery_date
-          : finalPalletItems.map((i) => i.delivery_date).join(','),
-        box_type: (boxType as string) === 'default' ? '-' : boxType,
-        confirmed_boxes: palletData.totalBoxes,
-        confirmed_units: palletData.totalUnits,
-        unit: '本',
-        remarks: isMixed && !allSameProduct ? '混載パレット' : '',
-        detail: finalPalletItems,
-      }
-    })
-
-    allPallets.push(...pallets)
-  })
-
-  // 应用托盘合并优化（与贪心算法相同的优化逻辑）
-  const optimizedPallets = optimizePalletsByMerging(allPallets)
-  // console.log(
-  //   `遗传算法托盘合并优化完成，优化前: ${allPallets.length}，优化后: ${optimizedPallets.length}`,
-  // )
-
-  return optimizedPallets
-}
-
-// 验证和修复遗传算法结果
-function validateAndFixGeneticResult(solution: any[], maxBoxesPerPallet: number): any[] {
-  const fixedSolution: any[] = []
-
-  solution.forEach((pallet) => {
-    // 检查并修复超出箱数限制的托盘
-    if (pallet.totalBoxes > maxBoxesPerPallet) {
-      // console.log(`发现超出限制的托盘: ${pallet.totalBoxes} > ${maxBoxesPerPallet}`)
-
-      // 将超出限制的托盘拆分成多个托盘
-      const splitPallets = splitOverflowPallet(pallet, maxBoxesPerPallet)
-      fixedSolution.push(...splitPallets)
-    } else if (pallet.items.length > MAX_MIXED_PRODUCTS) {
-      // 检查并修复混载产品种类超过設定上限的托盘
-      const splitPallets = splitMixedProductPallet(pallet, maxBoxesPerPallet)
-      fixedSolution.push(...splitPallets)
-    } else {
-      // 托盘符合要求，直接添加
-      fixedSolution.push(pallet)
-    }
-  })
-
-  return fixedSolution
-}
-
-// 拆分超出箱数限制的托盘
-function splitOverflowPallet(pallet: any, maxBoxesPerPallet: number): any[] {
-  const splitPallets = []
-  const remainingItems = [...pallet.items]
-
-  while (remainingItems.length > 0) {
-    const newPallet = {
-      totalBoxes: 0,
-      totalUnits: 0,
-      items: [] as any[],
-    }
-
-    // 按箱数从大到小排序，优先放入大的产品
-    remainingItems.sort((a, b) => b.boxes - a.boxes)
-
-    let i = 0
-    while (i < remainingItems.length && newPallet.totalBoxes < maxBoxesPerPallet) {
-      const item = remainingItems[i]
-
-      if (newPallet.totalBoxes + item.boxes <= maxBoxesPerPallet) {
-        // 完全放入
-        newPallet.items.push(item)
-        newPallet.totalBoxes += item.boxes
-        newPallet.totalUnits += item.units
-        remainingItems.splice(i, 1)
-      } else if (newPallet.items.length === 0) {
-        // 单个产品就超过限制，需要拆分产品
-        const availableSpace = maxBoxesPerPallet
-        const splitRatio = availableSpace / item.boxes
-
-        const newItem = {
-          ...item,
-          boxes: availableSpace,
-          units: Math.floor(item.units * splitRatio),
-        }
-
-        newPallet.items.push(newItem)
-        newPallet.totalBoxes += newItem.boxes
-        newPallet.totalUnits += newItem.units
-
-        // 更新剩余产品
-        item.boxes -= availableSpace
-        item.units -= newItem.units
-
-        if (item.boxes <= 0) {
-          remainingItems.splice(i, 1)
-        } else {
-          i++
-        }
-      } else {
-        i++
-      }
-    }
-
-    if (newPallet.items.length > 0) {
-      splitPallets.push(newPallet)
-    }
-  }
-
-  return splitPallets
-}
-
-// 拆分混载产品种类超过6种的托盘
-function splitMixedProductPallet(pallet: any, maxBoxesPerPallet: number): any[] {
-  const splitPallets = []
-  const remainingItems = [...pallet.items]
-
-  while (remainingItems.length > 0) {
-    const newPallet = {
-      totalBoxes: 0,
-      totalUnits: 0,
-      items: [] as any[],
-    }
-
-    // 按箱数从大到小排序
-    remainingItems.sort((a, b) => b.boxes - a.boxes)
-
-    let i = 0
-    while (
-      i < remainingItems.length &&
-      newPallet.items.length < MAX_MIXED_PRODUCTS &&
-      newPallet.totalBoxes < maxBoxesPerPallet
-    ) {
-      const item = remainingItems[i]
-
-      if (newPallet.totalBoxes + item.boxes <= maxBoxesPerPallet) {
-        // 完全放入
-        newPallet.items.push(item)
-        newPallet.totalBoxes += item.boxes
-        newPallet.totalUnits += item.units
-        remainingItems.splice(i, 1)
-      } else {
-        i++
-      }
-    }
-
-    if (newPallet.items.length > 0) {
-      splitPallets.push(newPallet)
-    } else {
-      // 如果无法放入任何项目，强制放入第一个项目（可能需要拆分）
-      if (remainingItems.length > 0) {
-        const item = remainingItems[0]
-        if (item.boxes > maxBoxesPerPallet) {
-          // 拆分大产品
-          const splitRatio = maxBoxesPerPallet / item.boxes
-          const newItem = {
-            ...item,
-            boxes: maxBoxesPerPallet,
-            units: Math.floor(item.units * splitRatio),
-          }
-
-          newPallet.items.push(newItem)
-          newPallet.totalBoxes += newItem.boxes
-          newPallet.totalUnits += newItem.units
-
-          // 更新剩余产品
-          item.boxes -= maxBoxesPerPallet
-          item.units -= newItem.units
-
-          if (item.boxes <= 0) {
-            remainingItems.splice(0, 1)
-          }
-        } else {
-          // 直接放入
-          newPallet.items.push(item)
-          newPallet.totalBoxes += item.boxes
-          newPallet.totalUnits += item.units
-          remainingItems.splice(0, 1)
-        }
-
-        splitPallets.push(newPallet)
-      }
-    }
-  }
-
-  return splitPallets
-}
-
-// 遗传算法核心实现
-function runGeneticAlgorithm(products: any[], maxBoxesPerPallet: number): any[] {
-  //    console.log('运行遗传算法，产品数量:', products.length, '最大箱数:', maxBoxesPerPallet)
-
-  // 如果产品数量为0，直接返回空数组
-  if (products.length === 0) return []
-
-  // 如果只有一个产品，使用简单分配
-  if (products.length === 1) {
-    return simpleAllocation(products[0], maxBoxesPerPallet)
-  }
-
-  // 首先按目的地和日期分组
-  const groupedProducts = groupProductsByDestinationAndDate(products)
-
-  // 如果分组后每组只有一个产品，使用简单分配
-  if (Object.keys(groupedProducts).length === products.length) {
-    return products.flatMap((product) => simpleAllocation(product, maxBoxesPerPallet))
-  }
-
-  // 遗传算法参数
-  const populationSize = 100 // 进一步增加种群大小以提高多样性
-  const generations = 200 // 进一步增加迭代代数以提高收敛质量
-  const initialMutationRate = 0.25 // 初始变异率较高，以增加探索能力
-  const finalMutationRate = 0.05 // 最终变异率较低，以增加利用能力
-  const crossoverRate = 0.9 // 增加交叉率以增加利用能力
-
-  // 动态变异率 - 随着代数增加而减小
-  const getMutationRate = (currentGen: number) => {
-    return (
-      initialMutationRate - (initialMutationRate - finalMutationRate) * (currentGen / generations)
-    )
-  }
-
-  // 初始化种群
-  let population: any[] = []
-
-  // 添加一些按目的地和日期分组的解决方案
-  population.push(generateDestinationBasedSolution(products, maxBoxesPerPallet))
-  population.push(generateDateBasedSolution(products, maxBoxesPerPallet))
-  population.push(generateProductBasedSolution(products, maxBoxesPerPallet))
-
-  // 添加一些贪心算法生成的解决方案
-  population.push(firstFitDecreasing([...products], maxBoxesPerPallet))
-  population.push(bestFitDecreasing([...products], maxBoxesPerPallet))
-
-  // 填充剩余的种群
-  while (population.length < populationSize) {
-    population.push(generateRandomSolution(products, maxBoxesPerPallet))
-  }
-
-  // 迭代进化
-  // 保存历史最佳解
-  let globalBestSolution = null
-  let globalBestFitness = -1
-
-  // 跟踪种群多样性
-  const diversityHistory = []
-
-  for (let gen = 0; gen < generations; gen++) {
-    // 计算当前代的变异率
-    const currentMutationRate = getMutationRate(gen)
-
-    // 计算适应度
-    const fitnessScores = population.map((solution) =>
-      calculateFitness(solution, maxBoxesPerPallet),
-    )
-
-    // 找出当前代最佳解
-    const bestIndex = fitnessScores.indexOf(Math.max(...fitnessScores))
-    const bestSolution = population[bestIndex]
-    const bestFitness = fitnessScores[bestIndex]
-
-    // 更新全局最佳解
-    if (bestFitness > globalBestFitness) {
-      globalBestSolution = JSON.parse(JSON.stringify(bestSolution))
-      globalBestFitness = bestFitness
-    }
-
-    // 计算种群多样性 (使用适应度标准差作为多样性度量)
-    const avgFitness = fitnessScores.reduce((sum, f) => sum + f, 0) / fitnessScores.length
-    const fitnessVariance =
-      fitnessScores.reduce((sum, f) => sum + Math.pow(f - avgFitness, 2), 0) / fitnessScores.length
-    const diversity = Math.sqrt(fitnessVariance)
-    diversityHistory.push(diversity)
-
-    // 选择
-    const selectedIndices = selection(fitnessScores, populationSize)
-    const selectedPopulation = selectedIndices.map((index) => population[index])
-
-    // 新一代种群
-    const newPopulation = []
-
-    // 精英保留策略 - 保留全局最佳解和当前代最佳解
-    newPopulation.push(JSON.parse(JSON.stringify(globalBestSolution)))
-    if (bestSolution !== globalBestSolution) {
-      newPopulation.push(JSON.parse(JSON.stringify(bestSolution)))
-    }
-
-    // 如果多样性过低，注入一些新的随机解
-    const recentDiversity = diversityHistory.slice(-5)
-    const avgRecentDiversity =
-      recentDiversity.reduce((sum, d) => sum + d, 0) / recentDiversity.length
-
-    if (avgRecentDiversity < 0.01 && gen > 50) {
-      // 多样性太低，注入新的随机解
-      const numNewSolutions = Math.floor(populationSize * 0.1) // 注入10%新解
-      for (let i = 0; i < numNewSolutions; i++) {
-        if (Math.random() < 0.5) {
-          // 使用随机解
-          newPopulation.push(generateRandomSolution(products, maxBoxesPerPallet))
-        } else {
-          // 使用基于目的地或日期的解决方案
-          if (Math.random() < 0.5) {
-            newPopulation.push(generateDestinationBasedSolution(products, maxBoxesPerPallet))
-          } else {
-            newPopulation.push(generateDateBasedSolution(products, maxBoxesPerPallet))
-          }
-        }
-      }
-    }
-
-    // 交叉和变异
-    while (newPopulation.length < populationSize) {
-      // 选择父代 - 使用锦标赛选择
-      const tournamentSize = 3
-      let parent1Index = Math.floor(Math.random() * selectedPopulation.length)
-      let parent2Index = Math.floor(Math.random() * selectedPopulation.length)
-
-      // 锦标赛选择父代1
-      for (let i = 0; i < tournamentSize - 1; i++) {
-        const candidateIndex = Math.floor(Math.random() * selectedPopulation.length)
-        const candidateFitness = calculateFitness(
-          selectedPopulation[candidateIndex],
-          maxBoxesPerPallet,
-        )
-        const currentFitness = calculateFitness(selectedPopulation[parent1Index], maxBoxesPerPallet)
-
-        if (candidateFitness > currentFitness) {
-          parent1Index = candidateIndex
-        }
-      }
-
-      // 锦标赛选择父代2
-      for (let i = 0; i < tournamentSize - 1; i++) {
-        const candidateIndex = Math.floor(Math.random() * selectedPopulation.length)
-        const candidateFitness = calculateFitness(
-          selectedPopulation[candidateIndex],
-          maxBoxesPerPallet,
-        )
-        const currentFitness = calculateFitness(selectedPopulation[parent2Index], maxBoxesPerPallet)
-
-        if (candidateFitness > currentFitness) {
-          parent2Index = candidateIndex
-        }
-      }
-
-      let offspring
-
-      // 交叉
-      if (Math.random() < crossoverRate) {
-        offspring = crossover(
-          selectedPopulation[parent1Index],
-          selectedPopulation[parent2Index],
-          maxBoxesPerPallet,
-        )
-      } else {
-        // 不交叉，直接复制更好的父代
-        const parent1Fitness = calculateFitness(selectedPopulation[parent1Index], maxBoxesPerPallet)
-        const parent2Fitness = calculateFitness(selectedPopulation[parent2Index], maxBoxesPerPallet)
-
-        if (parent1Fitness > parent2Fitness) {
-          offspring = JSON.parse(JSON.stringify(selectedPopulation[parent1Index]))
-        } else {
-          offspring = JSON.parse(JSON.stringify(selectedPopulation[parent2Index]))
-        }
-      }
-
-      // 变异 - 使用当前代的动态变异率
-      if (Math.random() < currentMutationRate) {
-        offspring = mutate(offspring, maxBoxesPerPallet)
-      }
-
-      newPopulation.push(offspring)
-    }
-
-    // 更新种群
-    population = newPopulation
-
-    // 打印进度
-    if (gen % 20 === 0 || gen === generations - 1) {
-      // console.log(
-      //   `遗传算法迭代 ${gen}/${generations}, 最佳适应度: ${bestFitness.toFixed(4)}, 平均适应度: ${avgFitness.toFixed(4)}, 多样性: ${diversity.toFixed(4)}, 变异率: ${currentMutationRate.toFixed(4)}`,
-      // )
-    }
-  }
-
-  // 计算最终适应度
-  const finalFitnessScores = population.map((solution) =>
-    calculateFitness(solution, maxBoxesPerPallet),
-  )
-  const bestIndex = finalFitnessScores.indexOf(Math.max(...finalFitnessScores))
-  const currentBestSolution = population[bestIndex]
-  const currentBestFitness = finalFitnessScores[bestIndex]
-
-  // 比较当前最佳解和全局最佳解
-  if (currentBestFitness > globalBestFitness) {
-    // console.log('最终迭代产生了更好的解决方案，适应度:', currentBestFitness.toFixed(4))
-    return currentBestSolution
-  } else {
-    // console.log('使用全局最佳解决方案，适应度:', globalBestFitness.toFixed(4))
-    return globalBestSolution
-  }
-}
-
-// 为单个产品生成简单分配
-function simpleAllocation(product: any, maxBoxesPerPallet: number): any[] {
-  const totalBoxes = product.boxes
-  const fullPallets = Math.floor(totalBoxes / maxBoxesPerPallet)
-  const remainderBoxes = totalBoxes % maxBoxesPerPallet
-
-  const pallets = []
-
-  // 创建满载托盘
-  for (let i = 0; i < fullPallets; i++) {
-    const boxesInPallet = maxBoxesPerPallet
-    const unitsInPallet = Math.ceil(boxesInPallet * (product.units / product.boxes))
-
-    pallets.push({
-      totalBoxes: boxesInPallet,
-      totalUnits: unitsInPallet,
-      items: [
-        {
-          ...product,
-          boxes: boxesInPallet,
-          units: unitsInPallet,
-        },
-      ],
-    })
-  }
-
-  // 创建剩余托盘
-  if (remainderBoxes > 0) {
-    const unitsInPallet = Math.ceil(remainderBoxes * (product.units / product.boxes))
-
-    pallets.push({
-      totalBoxes: remainderBoxes,
-      totalUnits: unitsInPallet,
-      items: [
-        {
-          ...product,
-          boxes: remainderBoxes,
-          units: unitsInPallet,
-        },
-      ],
-    })
-  }
-
   return pallets
-}
-
-// 按目的地和日期对产品分组
-function groupProductsByDestinationAndDate(products: any[]) {
-  const groups: { [key: string]: any[] } = {}
-
-  products.forEach((product) => {
-    const destKey = product.destination_cd || 'unknown'
-    const dateKey = product.shipping_date || 'unknown'
-    const groupKey = `${destKey}-${dateKey}`
-
-    if (!groups[groupKey]) {
-      groups[groupKey] = []
-    }
-    groups[groupKey].push(product)
-  })
-
-  return groups
-}
-
-// 生成基于目的地的解决方案
-function generateDestinationBasedSolution(products: any[], maxBoxesPerPallet: number) {
-  if (!guardSalesOperation(canCreate)) return
-
-  // 按目的地分组
-  const destGroups: { [key: string]: any[] } = {}
-  products.forEach((product) => {
-    const destKey = product.destination_cd || 'unknown'
-    if (!destGroups[destKey]) {
-      destGroups[destKey] = []
-    }
-    destGroups[destKey].push({ ...product })
-  })
-
-  // 对每个目的地组使用First Fit Decreasing
-  const pallets: any[] = []
-  Object.values(destGroups).forEach((group: any[]) => {
-    // 按箱数从大到小排序
-    group.sort((a, b) => b.boxes - a.boxes)
-    const groupPallets = firstFitDecreasing(group, maxBoxesPerPallet)
-    pallets.push(...groupPallets)
-  })
-
-  return pallets
-}
-
-// 生成基于日期的解决方案
-function generateDateBasedSolution(products: any[], maxBoxesPerPallet: number) {
-  if (!guardSalesOperation(canCreate)) return
-
-  // 按日期分组
-  const dateGroups: { [key: string]: any[] } = {}
-  products.forEach((product) => {
-    const dateKey = product.shipping_date || 'unknown'
-    if (!dateGroups[dateKey]) {
-      dateGroups[dateKey] = []
-    }
-    dateGroups[dateKey].push({ ...product })
-  })
-
-  // 对每个日期组使用First Fit Decreasing
-  const pallets: any[] = []
-  Object.values(dateGroups).forEach((group: any[]) => {
-    // 按箱数从大到小排序
-    group.sort((a, b) => b.boxes - a.boxes)
-    const groupPallets = firstFitDecreasing(group, maxBoxesPerPallet)
-    pallets.push(...groupPallets)
-  })
-
-  return pallets
-}
-
-// 生成基于产品的解决方案
-function generateProductBasedSolution(products: any[], maxBoxesPerPallet: number) {
-  if (!guardSalesOperation(canCreate)) return
-
-  // 按产品ID分组
-  const productGroups: { [key: string]: any } = {}
-  products.forEach((product) => {
-    const productKey = product.id
-    if (!productGroups[productKey]) {
-      productGroups[productKey] = { ...product }
-    } else {
-      productGroups[productKey].boxes += product.boxes
-      productGroups[productKey].units += product.units
-    }
-  })
-
-  // 将合并后的产品转换为数组
-  const mergedProducts = Object.values(productGroups)
-
-  // 对每个产品使用简单分配
-  const pallets: any[] = []
-  mergedProducts.forEach((product) => {
-    const productPallets = simpleAllocation(product, maxBoxesPerPallet)
-    pallets.push(...productPallets)
-  })
-
-  return pallets
-}
-
-// Best Fit Decreasing算法 - 优化版，增加混载产品限制
-function bestFitDecreasing(products: any[], maxBoxesPerPallet: number): any[] {
-  // 按箱数从大到小排序
-  products.sort((a, b) => b.boxes - a.boxes)
-
-  const pallets = []
-  const remainingProducts = [...products]
-
-  while (remainingProducts.length > 0) {
-    // 取出第一个产品
-    const currentProduct = remainingProducts.shift()
-
-    // 尝试找到最佳托盘（剩余空间最小的托盘）
-    let bestPalletIndex = -1
-    let bestRemainingSpace = maxBoxesPerPallet + 1
-
-    for (let i = 0; i < pallets.length; i++) {
-      const pallet = pallets[i]
-      const remainingSpace = maxBoxesPerPallet - pallet.totalBoxes
-
-      // 检查混载产品种类限制（設定の上限）
-      const existingProduct = pallet.items.find((item) => item.id === currentProduct.id)
-      const wouldExceedProductLimit =
-        !existingProduct && wouldExceedMixedLimit(pallet.items, currentProduct)
-
-      if (
-        !wouldExceedProductLimit &&
-        remainingSpace >= currentProduct.boxes &&
-        remainingSpace < bestRemainingSpace
-      ) {
-        bestPalletIndex = i
-        bestRemainingSpace = remainingSpace
-      }
-    }
-
-    // 如果找到合适的托盘
-    if (bestPalletIndex !== -1) {
-      const pallet = pallets[bestPalletIndex]
-
-      // 检查是否有同一产品
-      const sameProductItemIndex = pallet.items.findIndex((item) => item.id === currentProduct.id)
-
-      if (sameProductItemIndex !== -1) {
-        // 更新现有产品
-        const item = pallet.items[sameProductItemIndex]
-        item.boxes += currentProduct.boxes
-        item.units += currentProduct.units
-      } else {
-        // 添加新产品
-        pallet.items.push({ ...currentProduct })
-      }
-
-      // 更新托盘总数
-      pallet.totalBoxes += currentProduct.boxes
-      pallet.totalUnits += currentProduct.units
-    } else {
-      // 创建新托盘
-      pallets.push({
-        totalBoxes: currentProduct.boxes,
-        totalUnits: currentProduct.units,
-        items: [{ ...currentProduct }],
-      })
-    }
-  }
-
-  return pallets
-}
-
-// 生成随机解决方案
-function generateRandomSolution(products: any[], maxBoxesPerPallet: number) {
-  if (!guardSalesOperation(canCreate)) return
-
-  // 深拷贝产品列表
-  const productsCopy = JSON.parse(JSON.stringify(products))
-
-  // 随机打乱产品顺序
-  shuffleArray(productsCopy)
-
-  // 随机选择分配策略
-  const strategyChoice = Math.random()
-
-  if (strategyChoice < 0.4) {
-    // 使用First Fit Decreasing策略
-    return firstFitDecreasing(productsCopy, maxBoxesPerPallet)
-  } else if (strategyChoice < 0.8) {
-    // 使用Best Fit Decreasing策略
-    return bestFitDecreasing(productsCopy, maxBoxesPerPallet)
-  } else {
-    // 使用随机分组策略
-    // 随机分组数量
-    const numGroups = Math.max(1, Math.floor(Math.random() * Math.min(5, productsCopy.length)))
-    const groups = Array(numGroups)
-      .fill(null)
-      .map(() => [] as any[])
-
-    // 随机分配产品到组
-    productsCopy.forEach((product: any) => {
-      const groupIndex = Math.floor(Math.random() * numGroups)
-      groups[groupIndex].push(product)
-    })
-
-    // 对每个组使用First Fit Decreasing
-    const pallets: any[] = []
-    groups.forEach((group: any[]) => {
-      if (group.length > 0) {
-        const groupPallets = firstFitDecreasing(group, maxBoxesPerPallet)
-        pallets.push(...groupPallets)
-      }
-    })
-
-    return pallets
-  }
-}
-
-// 随机打乱数组
-function shuffleArray(array: any[]): void {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[array[i], array[j]] = [array[j], array[i]]
-  }
-}
-
-// First Fit Decreasing算法 - 优化版，增加混载产品限制
-function firstFitDecreasing(products: any[], maxBoxesPerPallet: number): any[] {
-  // 按箱数从大到小排序
-  products.sort((a, b) => b.boxes - a.boxes)
-
-  const pallets = []
-  const remainingProducts = [...products]
-
-  while (remainingProducts.length > 0) {
-    // 取出第一个产品
-    const currentProduct = remainingProducts.shift()
-
-    // 尝试将产品放入现有托盘
-    let placed = false
-
-    // 首先尝试放入同一产品的托盘
-    for (const pallet of pallets) {
-      // 检查是否有同一产品的托盘且有足够空间
-      const sameProductItem = pallet.items.find((item) => item.id === currentProduct.id)
-
-      if (sameProductItem && pallet.totalBoxes + currentProduct.boxes <= maxBoxesPerPallet) {
-        // 更新托盘信息
-        pallet.totalBoxes += currentProduct.boxes
-        pallet.totalUnits += currentProduct.units
-
-        // 更新产品信息
-        sameProductItem.boxes += currentProduct.boxes
-        sameProductItem.units += currentProduct.units
-
-        placed = true
-        break
-      }
-    }
-
-    // 同一品種・製品タイプ違いは別明細のまま、同一パレットへ載せる
-    if (!placed) {
-      for (const pallet of pallets) {
-        const sameVariety = pallet.items.some(
-          (item) => itemProductCd(item) === itemProductCd(currentProduct),
-        )
-        if (
-          sameVariety &&
-          !wouldExceedMixedLimit(pallet.items, currentProduct) &&
-          pallet.totalBoxes + currentProduct.boxes <= maxBoxesPerPallet
-        ) {
-          pallet.totalBoxes += currentProduct.boxes
-          pallet.totalUnits += currentProduct.units
-          pallet.items.push({
-            ...currentProduct,
-          })
-          placed = true
-          break
-        }
-      }
-    }
-
-    // 如果没有放入同一产品的托盘，尝试放入任何有空间的托盘
-    if (!placed) {
-      for (const pallet of pallets) {
-        // 检查混载产品种类限制（設定の上限）
-        if (wouldExceedMixedLimit(pallet.items, currentProduct)) {
-          continue
-        }
-
-        if (pallet.totalBoxes + currentProduct.boxes <= maxBoxesPerPallet) {
-          // 更新托盘信息
-          pallet.totalBoxes += currentProduct.boxes
-          pallet.totalUnits += currentProduct.units
-
-          // 添加新产品到托盘
-          pallet.items.push({
-            ...currentProduct,
-          })
-
-          placed = true
-          break
-        }
-      }
-    }
-
-    // 如果无法放入任何现有托盘，创建新托盘
-    if (!placed) {
-      pallets.push({
-        totalBoxes: currentProduct.boxes,
-        totalUnits: currentProduct.units,
-        items: [
-          {
-            ...currentProduct,
-          },
-        ],
-      })
-    }
-  }
-
-  return pallets
-}
-
-// 计算适应度 - 优化版，增加混载约束和箱数设定条件检查
-function calculateFitness(solution: any[], maxBoxesPerPallet: number): number {
-  // 计算托盘利用率
-  const utilizationRates = solution.map((pallet) => pallet.totalBoxes / maxBoxesPerPallet)
-  const avgUtilization = utilizationRates.reduce((sum, rate) => sum + rate, 0) / solution.length
-
-  // 计算同一产品集中度
-  let productConcentration = 0
-  solution.forEach((pallet) => {
-    if (pallet.items.length === 1) {
-      // 单一产品托盘得高分
-      productConcentration += 1
-    } else {
-      // 多种产品托盘，计算主要产品的比例
-      const mainProduct = pallet.items.reduce(
-        (max: { boxes: number }, item: { boxes: number }) => (item.boxes > max.boxes ? item : max),
-        { boxes: 0 },
-      )
-      const mainProductRatio = mainProduct.boxes / pallet.totalBoxes
-      productConcentration += mainProductRatio
-    }
-  })
-  productConcentration /= solution.length
-
-  // 检查混载产品种类约束（設定の上限）
-  let mixedProductConstraint = 1
-  solution.forEach((pallet) => {
-    if (pallet.items.length > MAX_MIXED_PRODUCTS) {
-      mixedProductConstraint *= 0.1 // 超过設定種類数の托盘を厳しくペナルティ
-    } else if (pallet.items.length > 1) {
-      mixedProductConstraint *= (MAX_MIXED_PRODUCTS + 1 - pallet.items.length) / MAX_MIXED_PRODUCTS
-    }
-  })
-
-  // 检查设定条件的箱数组合（优先生成正好等于设定容量的托盘）
-  let capacityOptimization = 0
-  solution.forEach((pallet) => {
-    if (pallet.totalBoxes === maxBoxesPerPallet) {
-      capacityOptimization += 1 // 满载托盘得高分
-    } else {
-      capacityOptimization += (pallet.totalBoxes / maxBoxesPerPallet) * 0.8 // 部分加载的托盘得分较低
-    }
-  })
-  capacityOptimization /= solution.length
-
-  // 计算同一目的地集中度
-  const destinationGroups = new Map()
-  solution.forEach((pallet) => {
-    pallet.items.forEach((item: { destination_cd: any }) => {
-      if (!item.destination_cd) return
-
-      const destKey = item.destination_cd
-      if (!destinationGroups.has(destKey)) {
-        destinationGroups.set(destKey, new Set())
-      }
-      destinationGroups.get(destKey).add(pallet)
-    })
-  })
-
-  // 目的地集中度 - 每个目的地使用的托盘数量越少越好
-  let destinationConcentration = 0
-  if (destinationGroups.size > 0) {
-    let totalDestinationPallets = 0
-    destinationGroups.forEach((pallets) => {
-      totalDestinationPallets += pallets.size
-    })
-    // 平均每个目的地的托盘数量，越少越好
-    destinationConcentration = destinationGroups.size / Math.max(1, totalDestinationPallets)
-  }
-
-  // 计算同一日期集中度
-  const dateGroups = new Map()
-  solution.forEach((pallet) => {
-    pallet.items.forEach((item: { shipping_date: any }) => {
-      if (!item.shipping_date) return
-
-      const dateKey = item.shipping_date
-      if (!dateGroups.has(dateKey)) {
-        dateGroups.set(dateKey, new Set())
-      }
-      dateGroups.get(dateKey).add(pallet)
-    })
-  })
-
-  // 日期集中度 - 每个日期使用的托盘数量越少越好
-  let dateConcentration = 0
-  if (dateGroups.size > 0) {
-    let totalDatePallets = 0
-    dateGroups.forEach((pallets) => {
-      totalDatePallets += pallets.size
-    })
-    // 平均每个日期的托盘数量，越少越好
-    dateConcentration = dateGroups.size / Math.max(1, totalDatePallets)
-  }
-
-  // 托盘数量惩罚因子
-  const palletCountPenalty = 1 / (1 + solution.length * 0.05)
-
-  // 综合适应度，优先考虑设定条件
-  // 权重调整: 增加容量优化和混载约束的权重
-  return (
-    (0.2 * avgUtilization +
-      0.2 * productConcentration +
-      0.2 * capacityOptimization +
-      0.15 * destinationConcentration +
-      0.15 * dateConcentration) *
-    mixedProductConstraint *
-    palletCountPenalty
-  )
-}
-
-// 选择操作
-function selection(fitnessScores: number[], populationSize: number): number[] {
-  // 轮盘赌选择
-  const totalFitness = fitnessScores.reduce((sum, score) => sum + score, 0)
-  const relativeFitness = fitnessScores.map((score) => score / totalFitness)
-
-  // 累积概率
-  const cumulativeProbabilities = []
-  let sum = 0
-  for (const fitness of relativeFitness) {
-    sum += fitness
-    cumulativeProbabilities.push(sum)
-  }
-
-  // 选择个体
-  const selectedIndices = []
-  for (let i = 0; i < populationSize; i++) {
-    const r = Math.random()
-    for (let j = 0; j < cumulativeProbabilities.length; j++) {
-      if (r <= cumulativeProbabilities[j]) {
-        selectedIndices.push(j)
-        break
-      }
-    }
-  }
-
-  return selectedIndices
-}
-
-// 交叉操作
-function crossover(parent1: any[], parent2: any[], maxBoxesPerPallet: number): any[] {
-  // 随机选择交叉类型
-  const crossoverType = Math.random()
-
-  if (crossoverType < 0.3) {
-    // 标准交叉：合并产品后重新分配
-    const productsMap = new Map()
-
-    // 从父代1收集产品
-    parent1.forEach((pallet) => {
-      pallet.items.forEach((item: { id: any; boxes: any; units: any }) => {
-        if (!productsMap.has(item.id)) {
-          productsMap.set(item.id, { ...item, boxes: 0, units: 0 })
-        }
-        const product = productsMap.get(item.id)
-        product.boxes += item.boxes
-        product.units += item.units
-      })
-    })
-
-    // 确保与父代2的产品总量一致
-    parent2.forEach((pallet) => {
-      pallet.items.forEach((item: { id: any }) => {
-        if (!productsMap.has(item.id)) {
-          productsMap.set(item.id, { ...item })
-        }
-      })
-    })
-
-    // 将产品转换为数组
-    const products = Array.from(productsMap.values())
-
-    // 随机打乱产品顺序
-    shuffleArray(products)
-
-    // 使用First Fit Decreasing重新分配
-    return firstFitDecreasing(products, maxBoxesPerPallet)
-  } else if (crossoverType < 0.6) {
-    // 目的地优先交叉：尝试保留相同目的地的托盘
-    // 从两个父代中提取托盘
-    const pallets1 = JSON.parse(JSON.stringify(parent1))
-    const pallets2 = JSON.parse(JSON.stringify(parent2))
-
-    // 按目的地分组
-    const destGroups1: { [key: string]: number[] } = {}
-    const destGroups2: { [key: string]: number[] } = {}
-
-    pallets1.forEach((pallet: { items: { destination_cd: any; boxes: any }[] }, idx: number) => {
-      // 确定托盘的主要目的地
-      const destCounts: { [key: string]: number } = {}
-      pallet.items.forEach((item: { destination_cd: any; boxes: any }) => {
-        const dest = item.destination_cd || 'unknown'
-        destCounts[dest] = (destCounts[dest] || 0) + item.boxes
-      })
-
-      // 找出最多箱数的目的地
-      let mainDest = 'unknown'
-      let maxBoxes = 0
-
-      for (const [dest, boxes] of Object.entries(destCounts)) {
-        const boxCount = Number(boxes)
-        if (boxCount > maxBoxes) {
-          maxBoxes = boxCount
-          mainDest = dest
-        }
-      }
-
-      if (!destGroups1[mainDest]) {
-        destGroups1[mainDest] = []
-      }
-      destGroups1[mainDest].push(idx)
-    })
-
-    pallets2.forEach((pallet: { items: { destination_cd: any; boxes: any }[] }, idx: number) => {
-      // 确定托盘的主要目的地
-      const destCounts: { [key: string]: number } = {}
-      pallet.items.forEach((item: { destination_cd: any; boxes: any }) => {
-        const dest = item.destination_cd || 'unknown'
-        destCounts[dest] = (destCounts[dest] || 0) + item.boxes
-      })
-
-      // 找出最多箱数的目的地
-      let mainDest = 'unknown'
-      let maxBoxes = 0
-
-      for (const [dest, boxes] of Object.entries(destCounts)) {
-        const boxCount = Number(boxes)
-        if (boxCount > maxBoxes) {
-          maxBoxes = boxCount
-          mainDest = dest
-        }
-      }
-
-      if (!destGroups2[mainDest]) {
-        destGroups2[mainDest] = []
-      }
-      destGroups2[mainDest].push(idx)
-    })
-
-    // 随机选择交换的目的地组
-    const dests1 = Object.keys(destGroups1)
-    const dests2 = Object.keys(destGroups2)
-
-    if (dests1.length > 0 && dests2.length > 0) {
-      const dest1 = dests1[Math.floor(Math.random() * dests1.length)]
-      const dest2 = dests2[Math.floor(Math.random() * dests2.length)]
-
-      // 提取选中的托盘
-      const selectedPallets1 = destGroups1[dest1].map((idx) => pallets1[idx])
-      const selectedPallets2 = destGroups2[dest2].map((idx) => pallets2[idx])
-
-      // 从原列表中移除
-      destGroups1[dest1]
-        .sort((a, b) => b - a)
-        .forEach((idx) => {
-          pallets1.splice(idx, 1)
-        })
-
-      destGroups2[dest2]
-        .sort((a, b) => b - a)
-        .forEach((idx) => {
-          pallets2.splice(idx, 1)
-        })
-
-      // 交换添加
-      const child1 = [...pallets1, ...selectedPallets2]
-      const child2 = [...pallets2, ...selectedPallets1]
-
-      return Math.random() < 0.5 ? child1 : child2
-    }
-  }
-
-  // 日期优先交叉
-  // 从两个父代中提取托盘
-  const pallets1 = JSON.parse(JSON.stringify(parent1))
-  const pallets2 = JSON.parse(JSON.stringify(parent2))
-
-  // 按日期分组
-  const dateGroups1: { [key: string]: number[] } = {}
-  const dateGroups2: { [key: string]: number[] } = {}
-
-  pallets1.forEach((pallet: { items: { shipping_date: any; boxes: any }[] }, idx: number) => {
-    // 确定托盘的主要日期
-    const dateCounts: { [key: string]: number } = {}
-    pallet.items.forEach((item: { shipping_date: any; boxes: any }) => {
-      const date = item.shipping_date || 'unknown'
-      dateCounts[date] = (dateCounts[date] || 0) + item.boxes
-    })
-
-    // 找出最多箱数的日期
-    let mainDate = 'unknown'
-    let maxBoxes = 0
-
-    for (const [date, boxes] of Object.entries(dateCounts)) {
-      const boxCount = Number(boxes)
-      if (boxCount > maxBoxes) {
-        maxBoxes = boxCount
-        mainDate = date
-      }
-    }
-
-    if (!dateGroups1[mainDate]) {
-      dateGroups1[mainDate] = []
-    }
-    dateGroups1[mainDate].push(idx)
-  })
-
-  pallets2.forEach((pallet: { items: { shipping_date: any; boxes: any }[] }, idx: number) => {
-    // 确定托盘的主要日期
-    const dateCounts: { [key: string]: number } = {}
-    pallet.items.forEach((item: { shipping_date: any; boxes: any }) => {
-      const date = item.shipping_date || 'unknown'
-      dateCounts[date] = (dateCounts[date] || 0) + item.boxes
-    })
-
-    // 找出最多箱数的日期
-    let mainDate = 'unknown'
-    let maxBoxes = 0
-
-    for (const [date, boxes] of Object.entries(dateCounts)) {
-      const boxCount = Number(boxes)
-      if (boxCount > maxBoxes) {
-        maxBoxes = boxCount
-        mainDate = date
-      }
-    }
-
-    if (!dateGroups2[mainDate]) {
-      dateGroups2[mainDate] = []
-    }
-    dateGroups2[mainDate].push(idx)
-  })
-
-  // 随机选择交换的日期组
-  const dates1 = Object.keys(dateGroups1)
-  const dates2 = Object.keys(dateGroups2)
-
-  if (dates1.length > 0 && dates2.length > 0) {
-    const date1 = dates1[Math.floor(Math.random() * dates1.length)]
-    const date2 = dates2[Math.floor(Math.random() * dates2.length)]
-
-    // 提取选中的托盘
-    const selectedPallets1 = dateGroups1[date1].map((idx) => pallets1[idx])
-    const selectedPallets2 = dateGroups2[date2].map((idx) => pallets2[idx])
-
-    // 从原列表中移除
-    dateGroups1[date1]
-      .sort((a, b) => b - a)
-      .forEach((idx) => {
-        pallets1.splice(idx, 1)
-      })
-
-    dateGroups2[date2]
-      .sort((a, b) => b - a)
-      .forEach((idx) => {
-        pallets2.splice(idx, 1)
-      })
-
-    // 交换添加
-    const child1 = [...pallets1, ...selectedPallets2]
-    const child2 = [...pallets2, ...selectedPallets1]
-
-    return Math.random() < 0.5 ? child1 : child2
-  }
-
-  // 如果前面的方法都失败，回退到默认方法
-  return firstFitDecreasing(
-    [...parent1.flatMap((p) => p.items), ...parent2.flatMap((p) => p.items)].slice(
-      0,
-      parent1.flatMap((p) => p.items).length,
-    ),
-    maxBoxesPerPallet,
-  )
-}
-
-// 变异操作
-function mutate(solution: any[], maxBoxesPerPallet: number): any[] {
-  // 深拷贝解决方案
-  const mutatedSolution = JSON.parse(JSON.stringify(solution))
-
-  // 随机选择变异类型
-  const mutationType = Math.floor(Math.random() * 3)
-
-  switch (mutationType) {
-    case 0:
-      // 变异类型1: 随机交换两个托盘中的产品
-      if (mutatedSolution.length >= 2) {
-        const pallet1Index = Math.floor(Math.random() * mutatedSolution.length)
-        let pallet2Index
-        do {
-          pallet2Index = Math.floor(Math.random() * mutatedSolution.length)
-        } while (pallet1Index === pallet2Index)
-
-        const pallet1 = mutatedSolution[pallet1Index]
-        const pallet2 = mutatedSolution[pallet2Index]
-
-        if (pallet1.items.length > 0 && pallet2.items.length > 0) {
-          const item1Index = Math.floor(Math.random() * pallet1.items.length)
-          const item2Index = Math.floor(Math.random() * pallet2.items.length)
-
-          const item1 = pallet1.items[item1Index]
-          const item2 = pallet2.items[item2Index]
-
-          // 检查交换后是否超过托盘容量
-          const pallet1NewBoxes = pallet1.totalBoxes - item1.boxes + item2.boxes
-          const pallet2NewBoxes = pallet2.totalBoxes - item2.boxes + item1.boxes
-
-          if (pallet1NewBoxes <= maxBoxesPerPallet && pallet2NewBoxes <= maxBoxesPerPallet) {
-            // 更新托盘总数
-            pallet1.totalBoxes = pallet1NewBoxes
-            pallet1.totalUnits = pallet1.totalUnits - item1.units + item2.units
-
-            pallet2.totalBoxes = pallet2NewBoxes
-            pallet2.totalUnits = pallet2.totalUnits - item2.units + item1.units
-
-            // 交换产品
-            pallet1.items[item1Index] = item2
-            pallet2.items[item2Index] = item1
-          }
-        }
-      }
-      break
-
-    case 1:
-      // 变异类型2: 随机将一个托盘中的产品移动到另一个托盘
-      if (mutatedSolution.length >= 2) {
-        const sourceIndex = Math.floor(Math.random() * mutatedSolution.length)
-        const sourcePallet = mutatedSolution[sourceIndex]
-
-        if (sourcePallet.items.length > 1) {
-          const itemIndex = Math.floor(Math.random() * sourcePallet.items.length)
-          const item = sourcePallet.items[itemIndex]
-
-          // 寻找可以接收此产品的托盘
-          const possibleTargets = mutatedSolution.filter(
-            (p: { totalBoxes: number }, idx: number) =>
-              idx !== sourceIndex && p.totalBoxes + item.boxes <= maxBoxesPerPallet,
-          )
-
-          if (possibleTargets.length > 0) {
-            const targetPallet = possibleTargets[Math.floor(Math.random() * possibleTargets.length)]
-
-            // 从源托盘移除
-            sourcePallet.items.splice(itemIndex, 1)
-            sourcePallet.totalBoxes -= item.boxes
-            sourcePallet.totalUnits -= item.units
-
-            // 添加到目标托盘
-            targetPallet.items.push(item)
-            targetPallet.totalBoxes += item.boxes
-            targetPallet.totalUnits += item.units
-
-            // 如果源托盘为空，移除它
-            if (sourcePallet.items.length === 0) {
-              mutatedSolution.splice(sourceIndex, 1)
-            }
-          }
-        }
-      }
-      break
-
-    case 2:
-      // 变异类型3: 随机重新分配一个产品
-      if (mutatedSolution.length > 0) {
-        // 随机选择一个产品
-        const productIds = new Set()
-        mutatedSolution.forEach((pallet: { items: { id: any }[] }) => {
-          pallet.items.forEach((item: { id: any }) => {
-            productIds.add(item.id)
-          })
-        })
-
-        const productIdArray = Array.from(productIds)
-        if (productIdArray.length > 0) {
-          const selectedProductId =
-            productIdArray[Math.floor(Math.random() * productIdArray.length)]
-
-          // 收集该产品的所有实例
-          let totalBoxes = 0
-          let totalUnits = 0
-          let productTemplate = null
-
-          // 从所有托盘中移除该产品
-          for (let i = mutatedSolution.length - 1; i >= 0; i--) {
-            const pallet = mutatedSolution[i]
-            const itemIndices: number[] = []
-
-            // 找出该产品在托盘中的所有实例
-            pallet.items.forEach((item: { id: any; boxes: any; units: any }, idx: number) => {
-              if (item.id === selectedProductId) {
-                itemIndices.push(idx)
-                totalBoxes += item.boxes
-                totalUnits += item.units
-                productTemplate = { ...item }
-              }
-            })
-
-            // 从后向前移除，避免索引问题
-            for (let j = itemIndices.length - 1; j >= 0; j--) {
-              const idx = itemIndices[j]
-              const item = pallet.items[idx]
-
-              pallet.totalBoxes -= item.boxes
-              pallet.totalUnits -= item.units
-              pallet.items.splice(idx, 1)
-            }
-
-            // 如果托盘为空，移除它
-            if (pallet.items.length === 0) {
-              mutatedSolution.splice(i, 1)
-            }
-          }
-
-          // 重新分配该产品
-          if (productTemplate && totalBoxes > 0) {
-            // 创建新产品实例
-            const newProduct: any = Object.assign({}, productTemplate || {})
-            newProduct.boxes = totalBoxes
-            newProduct.units = totalUnits
-
-            // 使用First Fit策略分配
-            let placed = false
-
-            // 尝试放入现有托盘
-            for (const pallet of mutatedSolution) {
-              if (pallet.totalBoxes + newProduct.boxes <= maxBoxesPerPallet) {
-                pallet.items.push(newProduct)
-                pallet.totalBoxes += newProduct.boxes
-                pallet.totalUnits += newProduct.units
-                placed = true
-                break
-              }
-            }
-
-            // 如果无法放入现有托盘，创建新托盘
-            if (!placed) {
-              mutatedSolution.push({
-                totalBoxes: newProduct.boxes,
-                totalUnits: newProduct.units,
-                items: [newProduct],
-              })
-            }
-          }
-        }
-      }
-      break
-  }
-
-  return mutatedSolution
 }
 
 // 托盘合并优化函数（パレット容量設定に完全準拠）
@@ -6759,7 +5784,7 @@ function getDuplicateStats(items: DailyOrder[]) {
   })
 
   // 检查批次内重复
-  const batchDuplicates = findDuplicatesInBatch(items.filter((item) => !item.shipping_no))
+  const batchDuplicates = findDuplicatesInBatch(items.filter((item) => !item.shipping_no)) ?? []
   stats.batchDuplicates = batchDuplicates.length
 
   return stats
@@ -6786,8 +5811,6 @@ function allocatePalletsDecomposeOnly(items: any[], boxCapacitySettings: any) {
 
 // 単一製品用のパレット作成（組み合わせなし、パレット番号なし）
 function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxType: string) {
-  if (!guardSalesOperation(canCreate)) return
-
   const pallets: {
     product_cd: any
     product_name: any
@@ -6830,16 +5853,17 @@ function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxTyp
 
   if (totalBoxes <= 0) return pallets
 
-  // 1箱あたりの製品数量（設定の「1箱あたり本数」をフォールバックに使用）
-  const unitsPerBox =
-    totalBoxes > 0 ? Math.ceil(totalUnits / totalBoxes) : (settings.value?.unitsPerBox ?? 20)
-
   // 必要なパレット数を計算
   const fullPallets = Math.floor(totalBoxes / maxBoxesPerPallet)
   const remainderBoxes = totalBoxes % maxBoxesPerPallet
+  let leftBoxes = totalBoxes
+  let leftUnits = totalUnits
 
   // 完全パレットを作成
   for (let i = 0; i < fullPallets; i++) {
+    const palletUnits = splitUnits(leftBoxes, leftUnits, maxBoxesPerPallet)
+    leftBoxes -= maxBoxesPerPallet
+    leftUnits -= palletUnits
     const pallet: any = {
       product_cd: item.product_cd,
       product_name: item.product_name,
@@ -6850,7 +5874,7 @@ function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxTyp
       delivery_date: item.delivery_date,
       box_type: (boxType as string) === 'default' ? '-' : boxType,
       confirmed_boxes: maxBoxesPerPallet,
-      confirmed_units: maxBoxesPerPallet * unitsPerBox,
+      confirmed_units: palletUnits,
       unit: '本',
       remarks: '条件分解のみ',
       // パレット番号は空のまま（後で手動設定）
@@ -6863,7 +5887,7 @@ function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxTyp
           product_type: item.product_type,
           box_type: (boxType as string) === 'default' ? '-' : boxType,
           confirmed_boxes: maxBoxesPerPallet,
-          confirmed_units: maxBoxesPerPallet * unitsPerBox,
+          confirmed_units: palletUnits,
           delivery_date: item.delivery_date,
           shipping_date: item.shipping_date,
         },
@@ -6884,7 +5908,7 @@ function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxTyp
       delivery_date: item.delivery_date,
       box_type: (boxType as string) === 'default' ? '-' : boxType,
       confirmed_boxes: remainderBoxes,
-      confirmed_units: remainderBoxes * unitsPerBox,
+      confirmed_units: leftUnits,
       unit: '本',
       remarks: '条件分解のみ',
       // パレット番号は空のまま（後で手動設定）
@@ -6897,7 +5921,7 @@ function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxTyp
           product_type: item.product_type,
           box_type: (boxType as string) === 'default' ? '-' : boxType,
           confirmed_boxes: remainderBoxes,
-          confirmed_units: remainderBoxes * unitsPerBox,
+          confirmed_units: leftUnits,
           delivery_date: item.delivery_date,
           shipping_date: item.shipping_date,
         },
@@ -10734,18 +9758,24 @@ function applyChangesAndClose() {
 .ped-body .view-pallets-minimal :deep(.el-table__row:hover td:first-child) {
   box-shadow: inset 3px 0 0 #0284c7;
 }
+/* パレット番号：背景色なし（行のグループ色を透過）・中央寄せ */
+.ped-body .pallet-number-editor {
+  justify-content: center;
+}
 .ped-body .prefix-label {
-  padding: 1px 7px;
-  border-radius: 6px;
+  padding: 0;
   font-weight: 700;
   color: #1e40af;
-  background: #eff6ff;
-  box-shadow: inset 0 0 0 1px #bfdbfe;
+  background: transparent;
 }
 .ped-body .serial-input :deep(.el-input__wrapper) {
-  box-shadow:
-    inset 0 0 0 1px #93c5fd,
-    0 1px 2px rgba(37, 99, 235, 0.12);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #93c5fd;
+}
+.ped-body .serial-input :deep(.el-input__wrapper:hover) {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px #3b82f6;
 }
 .ped-body .serial-input :deep(.el-input__wrapper.is-focus) {
   border-color: #2563eb;
@@ -10756,16 +9786,57 @@ function applyChangesAndClose() {
   font-weight: 800;
   color: #000;
 }
+.ped-body .serial-controls-inner {
+  border-left-color: #bfdbfe;
+}
+.ped-body .serial-btn {
+  color: #3b82f6;
+  background: transparent;
+}
+.ped-body .serial-btn-up {
+  border-bottom-color: #bfdbfe;
+}
 .ped-body .serial-btn:hover {
+  color: #fff;
   background: #0284c7;
 }
 .ped-body .serial-btn:active {
   background: #075985;
 }
 
-/* 操作ボタン：立体はグローバル標準、無効時は半透明にしない */
+/* 操作ボタン（編集＝amber / 複製＝blue / 削除＝rose）：淡色ティント、立体はグローバル標準 */
 .ped-body .view-pallets-minimal :deep(.el-button-group .el-button) {
   border-radius: 6px;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--warning.is-plain:not(.is-disabled)) {
+  color: #b45309;
+  background: linear-gradient(180deg, #fff 0%, #fffbeb 100%);
+  border-color: #fcd34d;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--warning.is-plain:not(.is-disabled):hover) {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--primary.is-plain:not(.is-disabled)) {
+  color: #1d4ed8;
+  background: linear-gradient(180deg, #fff 0%, #eff6ff 100%);
+  border-color: #93c5fd;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--primary.is-plain:not(.is-disabled):hover) {
+  color: #1e40af;
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--danger.is-plain:not(.is-disabled)) {
+  color: #be123c;
+  background: linear-gradient(180deg, #fff 0%, #fff1f2 100%);
+  border-color: #fda4af;
+}
+.ped-body .view-pallets-minimal :deep(.el-button--danger.is-plain:not(.is-disabled):hover) {
+  color: #9f1239;
+  background: #ffe4e6;
+  border-color: #f43f5e;
 }
 .ped-body .view-pallets-minimal :deep(.el-button:disabled) {
   opacity: 1;

@@ -11,140 +11,141 @@
         </div>
       </div>
 
-      <div class="pmp-toolbar__body">
-        <div class="pmp-toolbar__strip pmp-toolbar__strip--filter">
-          <span class="pmp-toolbar__strip-label">条件</span>
-          <el-date-picker
-            v-model="periodRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            format="YYYY/MM/DD"
-            range-separator="～"
-            start-placeholder="開始"
-            end-placeholder="終了"
-            size="small"
-            class="pmp-toolbar__range"
-            :clearable="false"
-            :shortcuts="periodRangeShortcuts"
-          />
-          <el-select
-            v-model="selectedProcesses"
-            multiple
-            collapse-tags
-            collapse-tags-tooltip
-            placeholder="全工程"
-            size="small"
-            class="pmp-toolbar__process"
-          >
-            <el-option
-              v-for="p in allProcessOptions"
-              :key="p.key"
-              :label="p.label"
-              :value="p.key"
-            />
-          </el-select>
-          <el-select
-            v-model="selectedMachines"
-            multiple
-            filterable
-            clearable
-            collapse-tags
-            collapse-tags-tooltip
-            :max-collapse-tags="1"
-            placeholder="設備"
-            size="small"
-            class="pmp-toolbar__machine"
-            :prefix-icon="Search"
-            no-data-text="設備データがありません"
-            no-match-text="一致する設備がありません"
-          >
-            <el-option-group
-              v-for="grp in machineOptionGroups"
-              :key="grp.key"
-              :label="grp.label"
-            >
-              <el-option
-                v-for="m in grp.machines"
-                :key="`${grp.key}__${m}`"
-                :label="m"
-                :value="m"
-              />
-            </el-option-group>
-          </el-select>
-        </div>
-
-        <div class="pmp-toolbar__strip pmp-toolbar__strip--view">
-          <el-radio-group v-model="viewMode" size="small" class="pmp-toolbar__view">
-            <el-radio-button value="summary">対比集計</el-radio-button>
-            <el-radio-button value="daily">日別明細</el-radio-button>
-            <el-radio-button value="trend">達成率</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div class="pmp-toolbar__strip pmp-toolbar__strip--plan-adj">
-          <span class="pmp-toolbar__strip-label">計画</span>
-          <el-radio-group
-            v-model="planDisplayMode"
-            size="small"
-            class="pmp-toolbar__plan-mode"
-            :disabled="!simulationResult"
-          >
-            <el-radio-button value="base">原計画</el-radio-button>
-            <el-radio-button value="adjusted">調整後</el-radio-button>
-            <el-radio-button value="diff">差異</el-radio-button>
-          </el-radio-group>
-          <el-select
-            v-model="currentScenarioId"
-            clearable
-            placeholder="保存方案"
-            size="small"
-            class="pmp-toolbar__scenario"
-            :loading="scenariosLoading"
-            @change="onScenarioSelect"
-          >
-            <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
-          </el-select>
-          <el-button
+      <div class="pmp-toolbar__actions">
+        <el-button
+          type="primary"
           size="small"
-          class="pmp-toolbar__btn pmp-toolbar__btn--adjust"
-          @click="adjustDrawerVisible = true"
+          class="pmp-toolbar__btn pmp-toolbar__btn--primary"
+          :loading="loading"
+          :icon="Refresh"
+          @click="loadData"
         >
-            計画調整
-          </el-button>
-        </div>
-
-        <div class="pmp-toolbar__strip pmp-toolbar__strip--actions">
-          <el-button
-            type="primary"
-            size="small"
-            class="pmp-toolbar__btn pmp-toolbar__btn--primary"
-            :loading="loading"
-            :icon="Refresh"
-            @click="loadData"
-          >
-            更新
-          </el-button>
-          <el-button
-            size="small"
-            class="pmp-toolbar__btn pmp-toolbar__btn--print"
-            :icon="Printer"
-            :disabled="printDisabled"
-            @click="handlePrint"
-          >
-            印刷
-          </el-button>
-          <el-button
-            size="small"
-            class="pmp-toolbar__btn pmp-toolbar__btn--excel"
-            :icon="Download"
-            :disabled="loading || filteredSummary.length === 0"
-            @click="exportExcel"
-          >
-            Excel
-          </el-button>
-        </div>
+          更新
+        </el-button>
+        <el-button
+          size="small"
+          class="pmp-toolbar__btn pmp-toolbar__btn--print"
+          :icon="Printer"
+          :disabled="printDisabled"
+          @click="handlePrint"
+        >
+          印刷
+        </el-button>
+        <el-button
+          size="small"
+          class="pmp-toolbar__btn pmp-toolbar__btn--excel"
+          :icon="Download"
+          :disabled="loading || filteredSummary.length === 0"
+          @click="exportExcel"
+        >
+          Excel
+        </el-button>
       </div>
     </header>
+
+    <!-- 絞り込み条件 -->
+    <section class="pmp-filter" aria-label="絞り込み条件">
+      <div class="pmp-toolbar__strip pmp-toolbar__strip--filter">
+        <span class="pmp-toolbar__strip-label">条件</span>
+        <el-date-picker
+          v-model="periodRange"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          format="YYYY/MM/DD"
+          range-separator="～"
+          start-placeholder="開始"
+          end-placeholder="終了"
+          size="small"
+          class="pmp-toolbar__range"
+          :clearable="false"
+          :shortcuts="periodRangeShortcuts"
+        />
+        <el-select
+          v-model="selectedProcesses"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          placeholder="全工程"
+          size="small"
+          class="pmp-toolbar__process"
+        >
+          <el-option
+            v-for="p in allProcessOptions"
+            :key="p.key"
+            :label="p.label"
+            :value="p.key"
+          />
+        </el-select>
+        <el-select
+          v-model="selectedMachines"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          :max-collapse-tags="1"
+          placeholder="設備"
+          size="small"
+          class="pmp-toolbar__machine"
+          :prefix-icon="Search"
+          no-data-text="設備データがありません"
+          no-match-text="一致する設備がありません"
+        >
+          <el-option-group
+            v-for="grp in machineOptionGroups"
+            :key="grp.key"
+            :label="grp.label"
+          >
+            <el-option
+              v-for="m in grp.machines"
+              :key="`${grp.key}__${m}`"
+              :label="m"
+              :value="m"
+            />
+          </el-option-group>
+        </el-select>
+      </div>
+
+      <div class="pmp-toolbar__strip pmp-toolbar__strip--view">
+        <el-radio-group v-model="viewMode" size="small" class="pmp-toolbar__view">
+          <el-radio-button value="summary">対比集計</el-radio-button>
+          <el-radio-button value="daily">日別明細</el-radio-button>
+          <el-radio-button value="trend">達成率</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <div class="pmp-toolbar__strip pmp-toolbar__strip--plan-adj">
+        <span class="pmp-toolbar__strip-label">計画</span>
+        <el-radio-group
+          v-model="planDisplayMode"
+          size="small"
+          class="pmp-toolbar__plan-mode"
+          :disabled="!simulationResult"
+        >
+          <el-radio-button value="base">原計画</el-radio-button>
+          <el-radio-button value="adjusted">調整後</el-radio-button>
+          <el-radio-button value="diff">差異</el-radio-button>
+        </el-radio-group>
+        <el-select
+          v-model="currentScenarioId"
+          clearable
+          placeholder="保存方案"
+          size="small"
+          class="pmp-toolbar__scenario"
+          :loading="scenariosLoading"
+          @change="onScenarioSelect"
+        >
+          <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
+        </el-select>
+        <el-button
+        size="small"
+        class="pmp-toolbar__btn pmp-toolbar__btn--adjust"
+        @click="adjustDrawerVisible = true"
+      >
+          計画調整
+        </el-button>
+      </div>
+    </section>
 
     <main class="pmp-main">
     <!-- 概要カード -->
@@ -565,7 +566,7 @@
       :title="drillTitle"
       width="860px"
       top="6vh"
-      class="pmp-drill-dialog"
+      class="pmp-drill-dialog pb-std"
       append-to-body
     >
       <template #header>
@@ -636,7 +637,7 @@
       v-model="adjustDrawerVisible"
       title="計画調整（試算）"
       size="480px"
-      class="pmp-adj-drawer-shell"
+      class="pmp-adj-drawer-shell pb-std"
       :close-on-click-modal="false"
     >
       <div class="pmp-adj-drawer">
@@ -2511,9 +2512,8 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(15, 23, 42, 0.05);
   font-variant-numeric: tabular-nums;
 }
-.pmp-toolbar__body {
-  flex: 1;
-  min-width: 0;
+.pmp-filter {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -2611,11 +2611,12 @@ onBeforeUnmount(() => {
 .pmp-adj-footer__name {
   flex: 1;
 }
-.pmp-toolbar__strip--actions {
-  gap: 5px;
-  padding: 3px 5px;
+.pmp-toolbar__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-left: auto;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 .pmp-toolbar__range {
   width: 218px;
@@ -3445,10 +3446,6 @@ onBeforeUnmount(() => {
   .pmp-toolbar {
     flex-wrap: wrap;
   }
-  .pmp-toolbar__body {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-  }
   .pmp-toolbar__strip--filter {
     flex: 1 1 100%;
     flex-wrap: wrap;
@@ -3513,7 +3510,10 @@ onBeforeUnmount(() => {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  padding: 8px 10px;
+  flex-shrink: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(125deg, #0c1f4a 0%, #1e40af 38%, #0e7490 72%, #059669 100%);
@@ -3531,40 +3531,36 @@ onBeforeUnmount(() => {
 .pmp-modern .pmp-toolbar__brand {
   flex-direction: row;
   align-items: center;
-  gap: 10px;
-  padding: 2px 14px 2px 4px;
-  border-right-color: rgba(255, 255, 255, 0.22);
+  gap: 12px;
+  padding: 0;
+  border-right: none;
 }
 .pmp-modern .pmp-toolbar__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   font-size: 20px;
   color: #fff;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 3px 0 rgba(12, 31, 74, 0.6),
-    0 10px 18px -8px rgba(12, 31, 74, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(12, 31, 74, 0.3);
   flex-shrink: 0;
 }
 .pmp-modern .pmp-toolbar__brand-text {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
 }
 .pmp-modern .pmp-toolbar__title {
   padding-left: 0;
-  font-size: 17px;
   letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(12, 31, 74, 0.35);
 }
 .pmp-modern .pmp-toolbar__title::before {
   display: none;
@@ -3577,15 +3573,30 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-/* ストリップ：不透明の白キーキャップ（条件＝sky / 表示＝indigo / 計画＝amber） */
+/* ---------- 絞り込み条件カード ---------- */
+.pmp-modern .pmp-filter {
+  position: relative;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #dbe4f3;
+  border-top: 3px solid #0e7490;
+  background: linear-gradient(90deg, #ecfeff 0%, #fff 45%);
+  box-shadow:
+    0 10px 24px -18px rgba(30, 64, 175, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* ストリップ：各色の淡色ティント（条件＝sky / 表示＝indigo / 計画＝amber） */
 .pmp-modern .pmp-toolbar__strip {
   --st: #0284c7;
   --st-rgb: 2, 132, 199;
-  background: #fff;
-  border-color: #fff;
+  padding: 4px 8px;
+  background: rgba(var(--st-rgb), 0.05);
+  border: 1px solid rgba(var(--st-rgb), 0.22);
   box-shadow:
-    0 2px 0 rgba(12, 31, 74, 0.45),
-    0 8px 16px -10px rgba(12, 31, 74, 0.6);
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(15, 23, 42, 0.05);
 }
 .pmp-modern .pmp-toolbar__strip--view {
   --st: #4f46e5;
@@ -3628,14 +3639,20 @@ onBeforeUnmount(() => {
   :deep(.pmp-toolbar__view .el-radio-button__original-radio:checked + .el-radio-button__inner) {
   background: linear-gradient(180deg, #818cf8 0%, #4f46e5 100%);
   border-color: #4338ca !important;
-  box-shadow: 0 2px 0 #3730a3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(55, 48, 163, 0.35),
+    0 3px 8px -4px rgba(79, 70, 229, 0.5);
 }
 .pmp-modern
   :deep(.pmp-toolbar__plan-mode .el-radio-button__original-radio:checked + .el-radio-button__inner) {
   color: #fff;
   background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
   border-color: #b45309;
-  box-shadow: 0 2px 0 #92400e;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(146, 64, 14, 0.35),
+    0 3px 8px -4px rgba(217, 119, 6, 0.5);
 }
 
 /* ボタン（更新＝blue / 印刷＝amber / Excel＝emerald / 計画調整＝orange） */
@@ -3646,54 +3663,101 @@ onBeforeUnmount(() => {
   --b-bg: #fff;
   --b-fg: #475569;
   --b-bd: #cbd5e1;
-  --b-edge: #94a3b8;
   font-weight: 700;
   color: var(--b-fg) !important;
   background: var(--b-bg) !important;
   border: 1px solid var(--b-bd) !important;
   border-radius: 7px;
-  box-shadow: 0 2px 0 var(--b-edge) !important;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease;
 }
 .pmp-toolbar__btn.pmp-toolbar__btn--primary {
-  --b-bg: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+  --k-rgb: 37 99 235;
+  --b-bg:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
   --b-fg: #fff;
   --b-bd: #1d4ed8;
-  --b-edge: #1e3a8a;
 }
 .pmp-toolbar__btn.pmp-toolbar__btn--print {
+  --k-rgb: 217 119 6;
   --b-bg: #fffbeb;
   --b-fg: #b45309;
   --b-bd: #fcd34d;
-  --b-edge: #f59e0b;
 }
 .pmp-toolbar__btn.pmp-toolbar__btn--excel {
+  --k-rgb: 5 150 105;
   --b-bg: #ecfdf5;
   --b-fg: #047857;
   --b-bd: #6ee7b7;
-  --b-edge: #10b981;
 }
 .pmp-toolbar__btn.pmp-toolbar__btn--adjust {
+  --k-rgb: 234 88 12;
   --b-bg: #fff7ed;
   --b-fg: #c2410c;
   --b-bd: #fdba74;
-  --b-edge: #f97316;
 }
-.pmp-toolbar__btn.pmp-toolbar__btn--primary:not(.is-disabled):hover,
-.pmp-toolbar__btn.pmp-toolbar__btn--print:not(.is-disabled):hover,
-.pmp-toolbar__btn.pmp-toolbar__btn--excel:not(.is-disabled):hover,
-.pmp-toolbar__btn.pmp-toolbar__btn--adjust:not(.is-disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 var(--b-edge) !important;
+
+/* ヒーロー上の操作ボタン：白地ピル（更新＝blue / 印刷＝amber / Excel＝emerald） */
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn {
+  --b-bg: linear-gradient(135deg, #fff 0%, #fff 40%, var(--k-tint) 100%);
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
 }
-.pmp-toolbar__btn.pmp-toolbar__btn--primary:not(.is-disabled):active,
-.pmp-toolbar__btn.pmp-toolbar__btn--print:not(.is-disabled):active,
-.pmp-toolbar__btn.pmp-toolbar__btn--excel:not(.is-disabled):active,
-.pmp-toolbar__btn.pmp-toolbar__btn--adjust:not(.is-disabled):active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 var(--b-edge) !important;
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn--primary {
+  --b-fg: #1d4ed8;
+  --b-bd: #bfdbfe;
+  --k-bd-h: #93c5fd;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+}
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn--print {
+  --b-fg: #b45309;
+  --b-bd: #fde68a;
+  --k-bd-h: #fcd34d;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #f59e0b;
+}
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn--excel {
+  --b-fg: #047857;
+  --b-bd: #a7f3d0;
+  --k-bd-h: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+}
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn:not(.is-disabled):hover {
+  background: linear-gradient(135deg, #fff 0%, var(--k-tint) 45%, var(--k-tint-h) 100%) !important;
+  border-color: var(--k-bd-h) !important;
+}
+.pmp-modern .pmp-toolbar .pmp-toolbar__btn:not(.is-disabled) :deep(.el-icon) {
+  color: var(--k-ico);
+}
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.pmp-page.pmp-modern.pb-std.pb-std
+  .pmp-toolbar
+  .pmp-toolbar__btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(12, 31, 74, 0.35) !important;
+}
+.pmp-page.pmp-modern.pb-std.pb-std
+  .pmp-toolbar
+  .pmp-toolbar__btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(12, 31, 74, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.pmp-page.pmp-modern.pb-std.pb-std
+  .pmp-toolbar
+  .pmp-toolbar__btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(12, 31, 74, 0.3) !important;
 }
 .pmp-toolbar__btn.pmp-toolbar__btn--primary.is-disabled,
 .pmp-toolbar__btn.pmp-toolbar__btn--print.is-disabled,
@@ -3706,20 +3770,24 @@ onBeforeUnmount(() => {
   box-shadow: none !important;
 }
 
-/* ---------- 概要カード：白キーキャップ ---------- */
+/* ---------- 概要カード：白地＋淡色ティント ---------- */
 .pmp-modern .pmp-card {
   --pmp-edge: #1d4ed8;
-  background: #fff;
+  background: linear-gradient(150deg, #fff 0%, #fff 45%, var(--pmp-accent-soft) 100%);
   border-color: color-mix(in srgb, var(--pmp-accent) 30%, #fff);
   box-shadow:
-    0 3px 0 var(--pmp-edge),
-    0 10px 18px -12px rgba(15, 23, 42, 0.35);
+    inset 0 -2px 0 color-mix(in srgb, var(--pmp-edge) 14%, transparent),
+    0 6px 14px -10px rgba(15, 23, 42, 0.35);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .pmp-modern .pmp-card:hover {
-  transform: translateY(-2px);
+  transform: none;
+  border-color: color-mix(in srgb, var(--pmp-accent) 50%, #fff);
   box-shadow:
-    0 5px 0 var(--pmp-edge),
-    0 14px 22px -12px rgba(15, 23, 42, 0.4);
+    inset 0 -2px 0 color-mix(in srgb, var(--pmp-edge) 20%, transparent),
+    0 10px 20px -12px rgba(15, 23, 42, 0.4);
 }
 .pmp-modern .pmp-card::after {
   display: none;
@@ -3741,7 +3809,10 @@ onBeforeUnmount(() => {
   color: #fff;
   background: linear-gradient(150deg, color-mix(in srgb, var(--pmp-accent) 65%, #fff), var(--pmp-accent));
   border: none;
-  box-shadow: 0 2px 0 var(--pmp-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 color-mix(in srgb, var(--pmp-edge) 45%, transparent),
+    0 3px 6px -3px color-mix(in srgb, var(--pmp-accent) 60%, transparent);
 }
 .pmp-modern .pmp-card__label {
   font-size: 11px;
@@ -3799,7 +3870,10 @@ onBeforeUnmount(() => {
   :deep(.pmp-panel__seg .el-radio-button__original-radio:checked + .el-radio-button__inner) {
   background: var(--pc);
   border-color: var(--pc) !important;
-  box-shadow: 0 2px 0 var(--pc-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 color-mix(in srgb, var(--pc-ink) 45%, transparent),
+    0 3px 8px -4px color-mix(in srgb, var(--pc) 60%, transparent);
 }
 
 /* テーブル見出し（パネル色に合わせる） */
@@ -3829,7 +3903,9 @@ onBeforeUnmount(() => {
 /* トレンド KPI・カード */
 .pmp-modern .pmp-trend-kpi {
   background: #fff;
-  box-shadow: 0 2px 0 #e2e8f0;
+  box-shadow:
+    inset 0 -2px 0 #eef2f7,
+    0 2px 6px -3px rgba(15, 23, 42, 0.12);
 }
 .pmp-modern .pmp-trend-chart-card,
 .pmp-modern .pmp-trend-table-card {
@@ -3891,7 +3967,9 @@ onBeforeUnmount(() => {
   font-size: 16px;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1));
   border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 rgba(12, 31, 74, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(12, 31, 74, 0.3);
 }
 .pmp-drill-hero__title {
   overflow: hidden;
@@ -3904,7 +3982,7 @@ onBeforeUnmount(() => {
 .pmp-drill-summary span {
   background: #fff;
   border-color: #dbe4f3;
-  box-shadow: 0 2px 0 #dbe4f3;
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.1);
 }
 .pmp-drill-summary b {
   font-weight: 800;
@@ -3946,11 +4024,4 @@ onBeforeUnmount(() => {
   border-radius: 8px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pmp-modern .pmp-card:hover,
-  .pmp-toolbar__btn:hover,
-  .pmp-toolbar__btn:active {
-    transform: none !important;
-  }
-}
 </style>

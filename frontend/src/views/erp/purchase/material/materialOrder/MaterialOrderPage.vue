@@ -10,22 +10,23 @@
           </div>
           <div class="title-text">
             <h1 class="main-title pb-hero-title">材料在庫管理(発注・使用)</h1>
-            <div class="header-chips">
-              <span v-if="activeTab !== 'sub' && activeTab !== 'unusedReceiving'" class="header-chip">
-                <el-icon><Calendar /></el-icon>
-                {{ headerDateRangeText }}
-              </span>
-              <span class="header-chip">
-                <el-icon><User /></el-icon>
-                仕入先 {{ searchForm.supplier.length ? `${searchForm.supplier.length}社` : '全て' }}
-              </span>
-              <span v-if="searchForm.keyword" class="header-chip">
-                <el-icon><Search /></el-icon>
-                {{ searchForm.keyword }}
-              </span>
-            </div>
+            <p class="subtitle pb-hero-desc">材料の在庫推移・使用実績・発注を一元管理</p>
           </div>
         </div>
+      </div>
+      <div class="header-chips">
+        <span v-if="activeTab !== 'sub' && activeTab !== 'unusedReceiving'" class="header-chip">
+          <el-icon><Calendar /></el-icon>
+          {{ headerDateRangeText }}
+        </span>
+        <span class="header-chip">
+          <el-icon><User /></el-icon>
+          仕入先 {{ searchForm.supplier.length ? `${searchForm.supplier.length}社` : '全て' }}
+        </span>
+        <span v-if="searchForm.keyword" class="header-chip">
+          <el-icon><Search /></el-icon>
+          {{ searchForm.keyword }}
+        </span>
       </div>
       <div class="header-actions">
         <el-button
@@ -57,7 +58,7 @@
 
     <!-- 統計カード -->
     <div class="stats-container">
-      <div class="stats-grid" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
+      <div class="stats-grid">
         <!-- 第一行統計 -->
         <div class="stat-card primary">
           <div class="stat-icon">
@@ -1075,6 +1076,7 @@
       v-model="orderConfirmDialogVisible"
       title="受注確認"
       width="800px"
+      class="pb-std"
       :destroy-on-close="true"
     >
       <div class="order-confirm-content">
@@ -1143,7 +1145,7 @@
       title="データ生成期間設定"
       width="450px"
       :close-on-click-modal="false"
-      class="data-generation-dialog"
+      class="data-generation-dialog pb-std"
     >
       <div class="data-generation-content-compact">
         <div class="form-sections-compact">
@@ -1223,7 +1225,7 @@
       :close-on-click-modal="false"
       align-center
       destroy-on-close
-      class="manual-order-dialog manual-order-dialog--compact manual-order-dialog--modern"
+      class="manual-order-dialog manual-order-dialog--compact manual-order-dialog--modern pb-std"
     >
       <template #header>
         <div class="manual-order-dialog__header">
@@ -1547,7 +1549,7 @@
       v-model="materialDetailDialogVisible"
       width="760px"
       :close-on-click-modal="false"
-      class="material-detail-dialog"
+      class="material-detail-dialog pb-std"
       align-center
     >
       <template #header>
@@ -1700,7 +1702,7 @@
       width="480px"
       destroy-on-close
       :close-on-click-modal="false"
-      class="sub-edit-dialog sub-edit-dialog--compact"
+      class="sub-edit-dialog sub-edit-dialog--compact pb-std"
       @close="resetSubEditForm"
     >
       <div class="sub-edit-content">
@@ -1842,6 +1844,7 @@
       v-model="transferDialogVisible"
       title="半端へ転送"
       width="400px"
+      class="pb-std"
       destroy-on-close
       @close="transferRow = null; transferQuantity = 1"
     >
@@ -1871,7 +1874,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+/** keep-alive の include はタブの route.name と一致させる */
+defineOptions({ name: 'MaterialOrder' })
+
+import { ref, reactive, onMounted, onActivated, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ShoppingCart,
@@ -2181,33 +2187,6 @@ const headerDateRangeText = computed(() => {
   if (start === end) return start
   return `${start || '—'} 〜 ${end || '—'}`
 })
-
-// 統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const card = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    if (el !== card) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!card) return
-  const rect = card.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  card.style.setProperty('--rx', `${((0.5 - py) * 16).toFixed(2)}deg`)
-  card.style.setProperty('--ry', `${((px - 0.5) * 16).toFixed(2)}deg`)
-  card.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  card.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-card').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 
 // 分页数据
 const pagination = reactive({
@@ -4382,6 +4361,16 @@ const handleConfirmManualOrder = async () => {
 onMounted(() => {
   fetchData()
   fetchSupplierOptions()
+})
+
+/** タブ切替で戻った時：絞り込み条件・ページはそのまま、一覧データのみ再取得 */
+let hasActivatedOnce = false
+onActivated(() => {
+  if (!hasActivatedOnce) {
+    hasActivatedOnce = true
+    return
+  }
+  refreshListForActiveTab()
 })
 
 /** 受入ログ API 戻りから list を取り出す */
@@ -8283,8 +8272,7 @@ ${groupBlocks}
 
 /* ---------- ヒーローヘッダー ---------- */
 .mo-modern .page-header {
-  isolation: isolate;
-  padding: 12px 18px;
+  gap: 12px;
   border-radius: 16px;
   background: linear-gradient(135deg, #3730a3 0%, #4f46e5 32%, #7c3aed 70%, #a855f7 100%);
   box-shadow:
@@ -8302,34 +8290,46 @@ ${groupBlocks}
   z-index: 0;
 }
 .mo-modern .header-left,
+.mo-modern .header-chips,
 .mo-modern .header-actions {
   position: relative;
   z-index: 1;
 }
+.mo-modern .title-section {
+  gap: 12px;
+  min-width: 0;
+}
+.mo-modern .title-text {
+  align-items: flex-start;
+  min-width: 0;
+}
 .mo-modern .title-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  font-size: 21px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.1) 100%);
   box-shadow:
-    0 10px 20px -8px rgba(30, 27, 75, 0.6),
-    0 2px 0 rgba(255, 255, 255, 0.35) inset,
-    0 -3px 0 rgba(67, 56, 202, 0.4) inset;
-  animation: moIconFloat 5.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 .mo-modern .main-title {
-  font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  text-shadow: 0 2px 6px rgba(30, 27, 75, 0.3);
+}
+.mo-modern .subtitle {
+  opacity: 1;
+  color: rgba(237, 233, 254, 0.9);
 }
 .mo-modern .header-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 5px;
+  min-width: 0;
+  margin-left: auto;
 }
 .mo-modern .header-chip {
   display: inline-flex;
@@ -8348,60 +8348,72 @@ ${groupBlocks}
   font-variant-numeric: tabular-nums;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 6px 14px -8px rgba(30, 27, 75, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* ヘッダー操作：3Dキーキャップ */
+/* ヘッダー操作：白地ピル（影・動きは共通ボタン標準） */
 .mo-modern .action-btn {
-  --btn-edge: rgba(30, 27, 75, 0.45);
-  --btn-glow: rgba(15, 23, 42, 0.3);
+  --k-rgb: 79 70 229;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #4f46e5;
   height: 34px;
   border-radius: 10px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  box-shadow:
-    0 3px 0 var(--btn-edge),
-    0 10px 18px -8px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.2s ease;
+  color: #3730a3;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
 }
 .mo-modern .action-btn.success-btn {
-  --btn-edge: #047857;
-  --btn-glow: rgba(5, 150, 105, 0.5);
-  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --k-rgb: 5 150 105;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #059669;
+  color: #065f46;
 }
 .mo-modern .action-btn.warning-btn {
-  --btn-edge: #b45309;
-  --btn-glow: rgba(217, 119, 6, 0.5);
-  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --k-rgb: 217 119 6;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+  color: #92400e;
 }
 .mo-modern .action-btn:hover,
 .mo-modern .action-btn:focus-visible {
-  color: #fff;
-  transform: translateY(-2px);
-  filter: brightness(1.05);
-  box-shadow:
-    0 5px 0 var(--btn-edge),
-    0 14px 22px -8px var(--btn-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: rgb(var(--k-rgb));
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%);
+  border-color: rgba(255, 255, 255, 0.95);
 }
-.mo-modern .action-btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--btn-edge),
-    0 4px 8px -4px var(--btn-glow);
+.mo-modern .action-btn :deep(.el-icon) {
+  color: var(--k-ico);
 }
 
-/* ---------- 統計カード：3Dチルト＋色分け ---------- */
-.mo-modern .stats-grid {
-  perspective: 900px;
+/* グローバル .pb-std ボタン標準の影を上書きするため詳細度を上げる */
+.material-order-container.mo-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(30, 27, 75, 0.35) !important;
 }
+.material-order-container.mo-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(30, 27, 75, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.75) !important;
+}
+.material-order-container.mo-modern.pb-std.pb-std
+  .page-header
+  .action-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active {
+  box-shadow:
+    inset 0 2px 4px rgb(var(--k-rgb) / 0.22),
+    0 1px 2px rgba(30, 27, 75, 0.3) !important;
+}
+
+/* ---------- 統計カード：色分け（カードは浮き上がらない） ---------- */
 .mo-modern .stat-card {
   --sc: #4f46e5;
   --sc-2: #818cf8;
@@ -8413,11 +8425,7 @@ ${groupBlocks}
   box-shadow:
     0 10px 22px -18px color-mix(in srgb, var(--sc) 70%, transparent),
     0 1px 0 rgba(255, 255, 255, 0.9) inset;
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transform-style: preserve-3d;
-  transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease;
+  transition: box-shadow 0.25s ease;
 }
 .mo-modern .stat-card.info {
   --sc: #0284c7;
@@ -8454,36 +8462,16 @@ ${groupBlocks}
   --sc-2: #a78bfa;
   --sc-edge: #5b21b6;
 }
-.mo-modern .stat-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at var(--mx, 50%) var(--my, 50%),
-    color-mix(in srgb, var(--sc) 16%, transparent) 0%,
-    transparent 60%
-  );
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
 .mo-modern .stat-card:hover {
+  transform: none;
   box-shadow:
-    0 18px 30px -16px color-mix(in srgb, var(--sc) 60%, transparent),
+    0 14px 26px -16px color-mix(in srgb, var(--sc) 60%, transparent),
     0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
-.mo-modern .stat-card:hover::after {
-  opacity: 1;
-}
 .mo-modern .stat-card .stat-icon {
-  transform: translateZ(18px);
   box-shadow:
-    0 3px 0 var(--sc-edge),
-    0 8px 14px -6px color-mix(in srgb, var(--sc) 70%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-.mo-modern .stat-card .stat-content {
-  transform: translateZ(10px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 color-mix(in srgb, var(--sc-edge) 45%, transparent);
 }
 .mo-modern .stat-card .stat-value {
   color: color-mix(in srgb, var(--sc) 50%, #0f172a);
@@ -8522,42 +8510,19 @@ ${groupBlocks}
   border-radius: 6px;
   color: #4f46e5;
   background: rgba(79, 70, 229, 0.1);
-  box-shadow:
-    0 2px 0 #c7d2fe,
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: transform 0.2s ease;
-}
-.mo-modern .filter-item:hover .filter-label .el-icon {
-  transform: translateY(-1px) rotate(-6deg);
+  box-shadow: inset 0 -1px 0 rgba(79, 70, 229, 0.18);
 }
 .mo-modern .date-nav-btn {
-  box-shadow: 0 2px 0 #e2e8f0;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    color 0.15s ease,
-    background 0.15s ease;
-}
-.mo-modern .date-nav-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 #c7d2fe;
-}
-.mo-modern .date-nav-btn:active {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #c7d2fe;
+  --k-rgb: 79 70 229;
 }
 .mo-modern .date-nav-btn.today-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  box-shadow:
-    0 2px 0 #3730a3,
-    0 6px 12px -6px rgba(99, 102, 241, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  border: 1px solid #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 }
 .mo-modern .date-nav-btn.today-btn:hover {
   color: #fff;
-  box-shadow:
-    0 3px 0 #3730a3,
-    0 10px 16px -6px rgba(99, 102, 241, 0.6);
 }
 
 /* ---------- テーブルエリア：タブ連動アクセント ---------- */
@@ -8591,83 +8556,56 @@ ${groupBlocks}
   border-bottom-color: color-mix(in srgb, var(--mo-tab) 16%, #e6e9f4);
 }
 
-/* タブ：3Dキーキャップ（下辺エッジ） */
+/* タブ：淡い立体（上ハイライト＋下ベベル）。hover は 1px 浮上のみ */
 .mo-modern .table-tabs {
   gap: 6px;
   padding: 2px 0 4px;
 }
 .mo-modern .tab-item {
   box-shadow:
-    0 2px 0 #e2e8f0,
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 .mo-modern .tab-item:hover {
+  transform: translateY(-1px);
   box-shadow:
-    0 4px 0 color-mix(in srgb, var(--tab-accent) 25%, #e2e8f0),
-    0 10px 16px -8px var(--tab-shadow);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 color-mix(in srgb, var(--tab-accent) 14%, transparent),
+    0 6px 14px -8px var(--tab-shadow);
+}
+.mo-modern .tab-item:active {
+  transform: translateY(1px);
 }
 .mo-modern .tab-item.active {
+  transform: none;
+  animation: none;
   box-shadow:
-    0 3px 0 color-mix(in srgb, var(--tab-grad-b) 70%, #000000),
-    0 10px 18px -8px var(--tab-shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18),
+    0 6px 14px -8px var(--tab-shadow);
 }
-.mo-modern .tab-item.active .el-icon {
-  animation: moTabIcon 0.5s ease-out;
+.mo-modern .tab-item.active:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.2),
+    0 8px 16px -8px var(--tab-shadow);
 }
 
-/* テーブル操作ボタン：キーキャップ */
-.mo-modern .table-actions .add-btn,
-.mo-modern .table-actions .print-btn,
-.mo-modern .table-actions .month-start-btn,
-.mo-modern .unused-receiving-btn-print,
-.mo-modern .unused-receiving-btn-refresh {
-  --k-edge: #3730a3;
-  --k-glow: rgba(79, 70, 229, 0.5);
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.15s ease;
-}
+/* テーブル操作ボタン：色は --k-rgb（影・動きは共通ボタン標準） */
 .mo-modern .table-actions .add-btn {
-  --k-edge: #047857;
-  --k-glow: rgba(5, 150, 105, 0.5);
+  --k-rgb: 5 150 105;
+}
+.mo-modern .table-actions .print-btn,
+.mo-modern .table-actions .month-start-btn {
+  --k-rgb: 79 70 229;
 }
 .mo-modern .unused-receiving-btn-print {
-  --k-edge: #115e59;
-  --k-glow: rgba(13, 148, 136, 0.5);
+  --k-rgb: 13 148 136;
 }
 .mo-modern .unused-receiving-btn-refresh {
-  --k-edge: #cbd5e1;
-  --k-glow: rgba(15, 23, 42, 0.2);
-}
-.mo-modern .table-actions .add-btn:hover,
-.mo-modern .table-actions .print-btn:hover,
-.mo-modern .table-actions .month-start-btn:hover,
-.mo-modern .unused-receiving-btn-print:hover:not(.is-disabled),
-.mo-modern .unused-receiving-btn-refresh:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-.mo-modern .table-actions .add-btn:active,
-.mo-modern .table-actions .print-btn:active,
-.mo-modern .table-actions .month-start-btn:active,
-.mo-modern .unused-receiving-btn-print:active:not(.is-disabled),
-.mo-modern .unused-receiving-btn-refresh:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--k-edge),
-    0 4px 8px -4px var(--k-glow);
-}
-.mo-modern .unused-receiving-btn-print.is-disabled {
-  box-shadow: none;
+  --k-rgb: 100 116 139;
 }
 
 /* 表ヘッダー：タブ色の淡いグラデーション */
@@ -8700,45 +8638,10 @@ ${groupBlocks}
   border-radius: 7px;
   background: linear-gradient(135deg, var(--mo-tab-2) 0%, var(--mo-tab) 100%);
   box-shadow:
-    0 2px 0 var(--mo-tab-edge),
-    0 6px 12px -6px var(--mo-tab);
-  transform: translateY(-1px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 color-mix(in srgb, var(--mo-tab-edge) 45%, transparent),
+    0 3px 8px -4px var(--mo-tab);
 }
-
-/* ---------- キーフレーム ---------- */
-@keyframes moIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
-  }
-}
-@keyframes moTabIcon {
-  0% {
-    transform: perspective(200px) rotateY(0deg) scale(1);
-  }
-  60% {
-    transform: perspective(200px) rotateY(200deg) scale(1.15);
-  }
-  100% {
-    transform: perspective(200px) rotateY(360deg) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mo-modern .title-icon,
-  .mo-modern .tab-item.active .el-icon {
-    animation: none;
-  }
-  .mo-modern .stat-card {
-    transform: none;
-    transition: none;
-  }
-}
-
-
 
 /* ============================================================
  * 页面美化：現代UI・3D動効・色分け（注文書印刷確認ダイアログ / violet・sky・amber）
@@ -8816,29 +8719,35 @@ ${groupBlocks}
   border-radius: 10px;
   font-size: 17px;
   color: #fff;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 3px 0 rgba(46, 16, 101, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(46, 16, 101, 0.3);
 }
 .pcd-hero .dialog-title {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(46, 16, 101, 0.4);
   white-space: nowrap;
 }
 
-/* 印刷実行：エメラルドのキーキャップ */
+/* 印刷実行：Hero 上の白地ピル（影・動きは共通ボタン標準） */
 .pcd-hero .confirm-btn-header,
-.pcd-hero .confirm-btn-header:hover,
 .pcd-hero .confirm-btn-header:focus {
-  color: #fff;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  --k-rgb: 5 150 105;
+  color: #065f46;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, #d1fae5 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+.pcd-hero .confirm-btn-header:hover {
+  color: #047857;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, #a7f3d0 100%);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.pcd-hero .confirm-btn-header :deep(.el-icon) {
+  color: #059669;
 }
 .pcd-hero .confirm-btn-header {
   margin-left: auto;
@@ -8847,28 +8756,24 @@ ${groupBlocks}
   border-radius: 9px;
   font-size: 12px;
   font-weight: 700;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow:
-    0 3px 0 #065f46,
-    0 10px 18px -8px rgba(5, 150, 105, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    filter 0.12s ease;
 }
-.pcd-hero .confirm-btn-header:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
+:global(.el-dialog.pcd-modern.pb-std.pb-std .pcd-hero .confirm-btn-header.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled)) {
   box-shadow:
-    0 5px 0 #065f46,
-    0 14px 22px -8px rgba(5, 150, 105, 0.75),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(5 150 105 / 0.12),
+    0 2px 6px -1px rgba(46, 16, 101, 0.35) !important;
 }
-.pcd-hero .confirm-btn-header:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #065f46;
+:global(.el-dialog.pcd-modern.pb-std.pb-std .pcd-hero .confirm-btn-header.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(5 150 105 / 0.14),
+    0 4px 8px -2px rgba(46, 16, 101, 0.3),
+    0 10px 22px -8px rgb(5 150 105 / 0.75) !important;
+}
+:global(.el-dialog.pcd-modern.pb-std.pb-std .pcd-hero .confirm-btn-header.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):active) {
+  box-shadow:
+    inset 0 2px 4px rgb(5 150 105 / 0.22),
+    0 1px 2px rgba(46, 16, 101, 0.3) !important;
 }
 
 /* セクション色分け（受注先＝sky / 承認・発行＝violet / 備考＝amber） */
@@ -8898,7 +8803,6 @@ ${groupBlocks}
     0 8px 18px -12px rgba(var(--sc-rgb), 0.55),
     0 1px 2px rgba(15, 23, 42, 0.04);
   transition:
-    transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
 }
@@ -8913,7 +8817,6 @@ ${groupBlocks}
   background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.25) 100%);
 }
 .print-confirm-content-compact .pcd-sec:hover {
-  transform: translateY(-1px);
   border-color: rgba(var(--sc-rgb), 0.4);
 }
 .print-confirm-content-compact .pcd-sec:focus-within {
@@ -8940,8 +8843,9 @@ ${groupBlocks}
   color: #fff;
   background: linear-gradient(135deg, rgba(var(--sc-rgb), 0.7) 0%, var(--sc) 100%);
   box-shadow:
-    0 2px 0 rgba(15, 23, 42, 0.18),
-    0 4px 8px -3px rgba(var(--sc-rgb), 0.65);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18),
+    0 3px 6px -3px rgba(var(--sc-rgb), 0.6);
 }
 .pcd-sec .section-title {
   font-weight: 700;
@@ -8997,13 +8901,6 @@ ${groupBlocks}
   box-shadow:
     0 0 0 1px var(--sc) inset,
     0 0 0 3px rgba(var(--sc-rgb), 0.15);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .print-confirm-content-compact .pcd-sec:hover,
-  .pcd-hero .confirm-btn-header:hover {
-    transform: none;
-  }
 }
 </style>
 

@@ -3,13 +3,11 @@
     <div class="plan-hd no-print pb-hero pb-hero--page">
       <div class="plan-hd-fx pb-bubbles" aria-hidden="true" />
       <div class="plan-hd-text">
-        <h2 class="plan-hd-title pb-hero-title">
-          <span class="plan-hd-title-inner">
-            <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
-            設備稼働時間表
-          </span>
-        </h2>
-        <p class="plan-hd-sub pb-hero-desc">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
+        <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
+        <div class="plan-hd-copy">
+          <h2 class="plan-hd-title pb-hero-title">設備稼働時間表</h2>
+          <p class="plan-hd-sub pb-hero-desc">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
+        </div>
       </div>
       <div class="plan-hd-meta">
         <span class="plan-hd-chip">
@@ -994,14 +992,12 @@ onMounted(async () => {
     justify-content: space-between;
     gap: 8px 16px;
     margin-bottom: 10px;
-    padding: 12px 16px;
     border-radius: 14px;
     color: #fff;
     background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 30%, #4f46e5 64%, #7c3aed 100%);
     box-shadow:
       0 14px 30px -16px rgba(55, 48, 163, 0.65),
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
-    animation: cmRise 0.45s ease-out backwards;
   }
   .cm-modern .plan-hd-fx {
     position: absolute;
@@ -1014,35 +1010,41 @@ onMounted(async () => {
     position: relative;
     z-index: 1;
   }
-  .cm-modern .plan-hd-title {
-    font-size: 17px;
-    color: #fff;
-    text-shadow: 0 2px 6px rgba(30, 27, 75, 0.35);
+  .cm-modern .plan-hd-text {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
   }
-  .cm-modern .plan-hd-title-inner {
-    gap: 10px;
+  .cm-modern .plan-hd-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+  }
+  .cm-modern .plan-hd-title {
+    color: #fff;
   }
   .cm-modern .plan-hd-title-icon {
-    width: 34px;
-    height: 34px;
-    font-size: 19px;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
     color: #fff;
-    border-radius: 10px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.1));
-    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 12px;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.42);
     box-shadow:
-      0 8px 16px -6px rgba(30, 27, 75, 0.55),
-      inset 0 -3px 0 rgba(30, 27, 75, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.45);
-    animation: cmIconFloat 4.5s ease-in-out infinite;
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(30, 27, 75, 0.3);
   }
   .cm-modern .plan-hd-sub {
-    margin-top: 4px;
-    color: rgba(255, 255, 255, 0.82);
+    color: rgba(255, 255, 255, 0.86);
   }
   .cm-modern .plan-hd-meta {
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 6px;
   }
@@ -1056,11 +1058,11 @@ onMounted(async () => {
     font-size: 12px;
     font-weight: 600;
     color: #fff;
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
     background: rgba(255, 255, 255, 0.16);
     border: 1px solid rgba(255, 255, 255, 0.3);
-    backdrop-filter: blur(6px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
   .cm-modern .plan-hd-chip--strong {
     background: rgba(255, 255, 255, 0.26);
@@ -1087,22 +1089,18 @@ onMounted(async () => {
     z-index: 1;
   }
   .cm-modern .filter-card--panel {
-    border-left: 1px solid color-mix(in srgb, var(--cm-c2) 14%, var(--el-border-color-lighter));
     padding: 12px 12px 10px;
     background: linear-gradient(
       105deg,
       color-mix(in srgb, var(--cm-c2) 6%, #fff) 0%,
       var(--el-bg-color) 55%
     );
-    animation: cmRise 0.45s ease-out 0.06s backwards;
   }
   .cm-modern .filter-card--panel::before {
     background: linear-gradient(90deg, var(--cm-c1), var(--cm-c2), var(--cm-c3));
   }
   .cm-modern .result-card--panel {
-    border-left: 1px solid color-mix(in srgb, var(--cm-c2) 14%, var(--el-border-color-lighter));
     padding: 10px 10px 8px;
-    animation: cmRise 0.45s ease-out 0.12s backwards;
   }
   .cm-modern .result-card--panel::before {
     background: linear-gradient(90deg, #059669, #0ea5e9, var(--cm-c2));
@@ -1114,7 +1112,9 @@ onMounted(async () => {
     color: #fff;
     font-size: 12px;
     background: linear-gradient(135deg, var(--cm-c1), var(--cm-c3));
-    box-shadow: 0 3px 8px -3px rgba(79, 70, 229, 0.6);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -2px 0 rgba(30, 27, 75, 0.3);
   }
   .cm-modern .filter-form__lbl {
     font-weight: 600;
@@ -1132,68 +1132,54 @@ onMounted(async () => {
       0 4px 10px -6px rgba(79, 70, 229, 0.5);
   }
 
-  /* ---- 3D キーキャップボタン ---- */
+  /* ---- ボタン：光沢グラデ（色分け）。影・動きは共通ボタン標準 ---- */
   .cm-modern .filter-form :deep(.el-button) {
-    --k-edge: #3730a3;
-    --k-glow: rgba(79, 70, 229, 0.5);
     border-radius: 8px;
     font-weight: 600;
-    border: none;
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease,
-      filter 0.15s ease;
-    box-shadow:
-      0 3px 0 var(--k-edge),
-      0 10px 18px -8px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
-  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):hover) {
-    transform: translateY(-2px);
-    filter: brightness(1.05);
-    box-shadow:
-      0 5px 0 var(--k-edge),
-      0 14px 22px -10px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  .cm-modern .filter-form :deep(.el-button:not(.is-disabled)) {
+    color: #fff;
+    border: 1px solid var(--k-edge);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, var(--k-from) 0%, var(--k-to) 100%);
   }
-  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):active) {
-    transform: translateY(2px);
-    box-shadow:
-      0 1px 0 var(--k-edge),
-      0 4px 8px -6px var(--k-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):hover),
+  .cm-modern .filter-form :deep(.el-button:not(.is-disabled):focus) {
+    color: #fff;
+    border-color: var(--k-edge);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, var(--k-to) 0%, var(--k-edge) 100%);
   }
   .cm-modern .filter-form :deep(.el-button.is-disabled) {
-    box-shadow: none;
-    transform: none;
+    color: #94a3b8;
+    border: 1px solid #d1d5db;
+    background: #e5e7eb;
   }
   .cm-modern .filter-form :deep(.capmx-btn-month-this) {
-    --k-edge: #1e40af;
-    --k-glow: rgba(37, 99, 235, 0.45);
-    color: #fff;
-    background: linear-gradient(180deg, #60a5fa, #2563eb);
+    --k-from: #60a5fa;
+    --k-to: #2563eb;
+    --k-edge: #1d4ed8;
+    --k-rgb: 37 99 235;
   }
   .cm-modern .filter-form :deep(.capmx-btn-month-next) {
+    --k-from: #34d399;
+    --k-to: #059669;
     --k-edge: #047857;
-    --k-glow: rgba(5, 150, 105, 0.45);
-    color: #fff;
-    background: linear-gradient(180deg, #34d399, #059669);
+    --k-rgb: 5 150 105;
   }
   .cm-modern .filter-form :deep(.capmx-btn-refresh) {
-    --k-edge: #3730a3;
-    --k-glow: rgba(79, 70, 229, 0.55);
-    color: #fff;
-    background: linear-gradient(180deg, #818cf8, #4f46e5 55%, #6d28d9);
+    --k-from: #818cf8;
+    --k-to: #4f46e5;
+    --k-edge: #4338ca;
+    --k-rgb: 79 70 229;
   }
   .cm-modern .filter-form :deep(.capmx-btn-print) {
-    --k-edge: #b45309;
-    --k-glow: rgba(217, 119, 6, 0.45);
-    color: #fff;
-    background: linear-gradient(180deg, #fbbf24, #f59e0b 55%, #ea580c);
-  }
-  .cm-modern .filter-form :deep(.capmx-btn-print.is-disabled) {
-    color: #fff;
-    opacity: 0.55;
+    --k-from: #fbbf24;
+    --k-to: #ea580c;
+    --k-edge: #c2410c;
+    --k-rgb: 234 88 12;
   }
 
   /* ---- 凡例 ---- */
@@ -1216,7 +1202,7 @@ onMounted(async () => {
     color: var(--el-text-color-regular);
     background: var(--el-fill-color-blank);
     border: 1px solid var(--el-border-color-lighter);
-    box-shadow: 0 2px 0 var(--el-border-color-lighter);
+    box-shadow: inset 0 -1px 0 var(--el-border-color-lighter);
   }
   .cm-modern .lg-sw {
     width: 12px;
@@ -1259,35 +1245,44 @@ onMounted(async () => {
   }
   .cm-modern .matrix-wrap::-webkit-scrollbar-thumb {
     border-radius: 8px;
-    background: linear-gradient(180deg, #818cf8, #6d28d9);
+    background: linear-gradient(180deg, #a5b4fc, #818cf8);
   }
   .cm-modern .matrix-wrap::-webkit-scrollbar-track {
     background: color-mix(in srgb, var(--cm-c2) 6%, #fff);
   }
+  /* 表ヘッダー：淡色（不透明・sticky のため背景は実色） */
   .cm-modern .matrix-table thead th {
-    color: #fff;
-    border-color: rgba(255, 255, 255, 0.18);
-    background: linear-gradient(180deg, #4f46e5 0%, #3730a3 100%);
-    box-shadow: inset 0 -2px 0 rgba(30, 27, 75, 0.35);
+    color: #3730a3;
+    border-color: #e0e7ff;
+    background: linear-gradient(180deg, #f8faff 0%, #eef2ff 100%);
+    box-shadow: inset 0 -2px 0 #c7d2fe;
   }
   .cm-modern .matrix-table thead th.sticky-col {
-    background: linear-gradient(180deg, #1d4ed8 0%, #312e81 100%);
+    color: #312e81;
+    background: linear-gradient(180deg, #f5f7ff 0%, #e0e7ff 100%);
   }
   .cm-modern .matrix-table thead .wd-hd {
-    color: rgba(255, 255, 255, 0.78);
+    color: #6366f1;
   }
   .cm-modern .matrix-table thead th.date-col.is-weekend {
-    background: linear-gradient(180deg, #f43f5e 0%, #be123c 100%);
+    background: linear-gradient(180deg, #fff7f8 0%, #ffe4e6 100%);
+    box-shadow: inset 0 -2px 0 #fecdd3;
   }
-  .cm-modern .matrix-table thead th.date-col.is-weekend .date-hd,
+  .cm-modern .matrix-table thead th.date-col.is-weekend .date-hd {
+    color: #be123c;
+  }
   .cm-modern .matrix-table thead th.date-col.is-weekend .wd-hd {
-    color: #fff;
+    color: #e11d48;
   }
   .cm-modern .matrix-table thead th.date-col.is-today {
-    background: linear-gradient(180deg, #06b6d4 0%, #0e7490 100%);
-    box-shadow:
-      inset 0 -3px 0 #fde047,
-      0 0 0 1px rgba(253, 224, 71, 0.6);
+    background: linear-gradient(180deg, #f0fdff 0%, #cffafe 100%);
+    box-shadow: inset 0 -3px 0 #06b6d4;
+  }
+  .cm-modern .matrix-table thead th.date-col.is-today .date-hd {
+    color: #0e7490;
+  }
+  .cm-modern .matrix-table thead th.date-col.is-today .wd-hd {
+    color: #0891b2;
   }
   .cm-modern .matrix-table tbody td.sticky-col {
     color: var(--el-text-color-primary);
@@ -1302,27 +1297,6 @@ onMounted(async () => {
       inset 3px 0 0 var(--cm-c2),
       1px 0 0 var(--el-border-color-light);
   }
-  .cm-modern .matrix-table tbody tr:hover td.cell {
-    filter: brightness(0.96) saturate(1.1);
-  }
-  .cm-modern .matrix-table td.cell {
-    transition: filter 0.15s ease;
-  }
-  .cm-modern .matrix-table tbody tr {
-    animation: cmRowIn 0.35s ease-out backwards;
-  }
-  .cm-modern .matrix-table tbody tr:nth-child(2) {
-    animation-delay: 0.03s;
-  }
-  .cm-modern .matrix-table tbody tr:nth-child(3) {
-    animation-delay: 0.06s;
-  }
-  .cm-modern .matrix-table tbody tr:nth-child(4) {
-    animation-delay: 0.09s;
-  }
-  .cm-modern .matrix-table tbody tr:nth-child(n + 5) {
-    animation-delay: 0.12s;
-  }
   .cm-modern .matrix-empty__icon {
     width: 72px;
     height: 72px;
@@ -1331,53 +1305,12 @@ onMounted(async () => {
     border-radius: 18px;
     background: linear-gradient(145deg, #818cf8, #6d28d9);
     box-shadow:
-      0 14px 24px -12px rgba(79, 70, 229, 0.7),
-      inset 0 -4px 0 rgba(30, 27, 75, 0.25);
-    animation: cmIconFloat 4.5s ease-in-out infinite;
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      inset 0 -3px 0 rgba(30, 27, 75, 0.3),
+      0 10px 20px -12px rgba(79, 70, 229, 0.6);
   }
   .cm-modern :deep(.el-loading-spinner .path) {
     stroke: var(--cm-c2);
-  }
-
-  @keyframes cmRise {
-    from {
-      opacity: 0;
-      transform: translate3d(0, 10px, 0);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-  @keyframes cmRowIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes cmIconFloat {
-    0%,
-    100% {
-      transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
-    }
-    50% {
-      transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
-    }
-  }
-}
-
-@media screen and (prefers-reduced-motion: reduce) {
-  .cm-modern .plan-hd,
-  .cm-modern .plan-card,
-  .cm-modern .plan-hd-title-icon,
-  .cm-modern .matrix-empty__icon,
-  .cm-modern .matrix-table tbody tr {
-    animation: none;
-  }
-  .cm-modern .filter-form :deep(.el-button) {
-    transition: none;
   }
 }
 </style>
