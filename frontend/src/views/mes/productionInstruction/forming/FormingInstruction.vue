@@ -5764,7 +5764,7 @@ const buildSetupSchedulePrintHtml = (data: {
       <style>
         @page {
           size: A4 landscape;
-          margin: 12mm;
+          margin: 12mm 12mm 5mm 12mm;
           /* 打印详细设定 */
           marks: none; /* 不显示裁剪标记 */
           bleed: 0mm; /* 无出血 */
@@ -5776,7 +5776,7 @@ const buildSetupSchedulePrintHtml = (data: {
         @media print {
           @page {
             size: A4 landscape;
-            margin: 12mm;
+            margin: 12mm 12mm 5mm 12mm;
             marks: none;
             bleed: 0mm;
           }

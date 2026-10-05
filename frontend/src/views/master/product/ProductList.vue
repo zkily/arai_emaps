@@ -267,7 +267,7 @@
         :scrollbar-always-on="true"
         @sort-change="handleSortChange"
       >
-      <el-table-column fixed prop="product_cd" label="製品CD" min-width="95" sortable="custom">
+      <el-table-column fixed prop="product_cd" label="製品CD" min-width="110" sortable="custom">
         <template #default="{ row }">
           <span class="code-chip">{{ row.product_cd }}</span>
         </template>
@@ -591,13 +591,13 @@
       </el-table-column>
       <el-table-column v-if="canEdit || canDelete" fixed="right" label="操作" width="180" align="center">
         <template #default="{ row }">
-          <el-button v-if="canEdit" size="small" type="primary" @click="handleEdit(row)">
+          <el-button v-if="canEdit" size="small" type="primary" @click="handleEdit(row as Product)">
             <el-icon>
               <Edit />
             </el-icon>
             編集
           </el-button>
-          <el-button v-if="canDelete" size="small" type="danger" @click="handleDelete(row)">
+          <el-button v-if="canDelete" size="small" type="danger" @click="handleDelete(row as Product)">
             <el-icon>
               <Delete />
             </el-icon>
@@ -949,7 +949,7 @@ const fetchList = async () => {
   }
 }
 
-const handleSortChange = ({ prop, order }: { prop: string; order: 'ascending' | 'descending' | null }) => {
+const handleSortChange = ({ prop, order }: { prop: string | null; order: string | null }) => {
   if (order && (prop === 'product_cd' || prop === 'product_name')) {
     sortState.sort_by = prop
     sortState.sort_order = order === 'descending' ? 'desc' : 'asc'
