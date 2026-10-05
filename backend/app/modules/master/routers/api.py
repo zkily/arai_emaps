@@ -144,6 +144,8 @@ async def get_product_list(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=10000, alias="pageSize"),
+    sort_by: Optional[str] = Query("product_name", description="並び替え項目: product_cd / product_name"),
+    sort_order: Optional[str] = Query("asc", description="asc / desc"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -203,7 +205,14 @@ async def get_product_list(
     total_res = await db.execute(count_q)
     total = total_res.scalar() or 0
 
-    query = query.order_by(Product.product_name.asc()).offset((page - 1) * page_size).limit(page_size)
+    sort_col = Product.product_cd if (sort_by or "").strip() == "product_cd" else Product.product_name
+    is_desc = (sort_order or "").strip().lower() == "desc"
+    primary = sort_col.desc() if is_desc else sort_col.asc()
+    query = (
+        query.order_by(primary, Product.product_cd.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(query)
     rows = result.scalars().all()
 

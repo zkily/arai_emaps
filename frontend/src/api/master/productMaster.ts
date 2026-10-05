@@ -19,6 +19,8 @@ export interface ProductListParams {
   process_name?: string
   page?: number
   pageSize?: number
+  sort_by?: 'product_cd' | 'product_name'
+  sort_order?: 'asc' | 'desc'
 }
 
 export interface ProductListResponse {

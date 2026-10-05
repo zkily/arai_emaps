@@ -732,6 +732,15 @@ def _csv_worker(csv_task_queue, in_queue_csv_paths):
 
 # 処理中に再検知された Excel（filename -> filepath）。処理完了後に再投入する（excel_lock で保護）
 _excel_rerun_pending: dict = {}
+# 正常処理済み Excel の mtime（filename -> mtime）。watchdog とポーリングの二重検知で同一版を再処理しない
+_excel_done_mtime: dict = {}
+
+
+def _safe_getmtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
 
 
 def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, excel_lock):
@@ -745,6 +754,8 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
             break
         filepath, filename = item if isinstance(item, (list, tuple)) and len(item) >= 2 else (None, None)
         owns_processing = False
+        start_mtime = None
+        processed_ok = False
         try:
             if filepath is None or filename is None:
                 continue
@@ -765,6 +776,12 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
             )
             if not os.path.isfile(filepath):
                 logger.warning("ファイルが存在しないためスキップ: %s", filename)
+                continue
+            start_mtime = _safe_getmtime(filepath)
+            with excel_lock:
+                done_mtime = _excel_done_mtime.get(filename)
+            if start_mtime is not None and done_mtime == start_mtime:
+                logger.info("[Excel] 前回処理以降変更なしのためスキップ: %s", filename)
                 continue
             logger.info("[Excel] 処理開始: %s", filename)
             if is_inspection_excel_file(filename):
@@ -854,14 +871,25 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
                 excel_processor.process_file(filepath)
             else:
                 logger.warning("[Excel] 未対応ファイルのためスキップ: %s", filename)
+            processed_ok = True
         except Exception as e:
             logger.error("[Excel] 処理失敗 %s: %s", filename, e, exc_info=True)
         finally:
             if owns_processing:
-                rerun_path = None
+                with excel_lock:
+                    if processed_ok and start_mtime is not None:
+                        _excel_done_mtime[filename] = start_mtime
+                    rerun_path = _excel_rerun_pending.pop(filename, None)
+                if (
+                    rerun_path
+                    and processed_ok
+                    and start_mtime is not None
+                    and _safe_getmtime(rerun_path) == start_mtime
+                ):
+                    rerun_path = None
                 with excel_lock:
                     processing_excel.discard(filename)
-                    rerun_path = _excel_rerun_pending.pop(filename, None)
+                    rerun_path = _excel_rerun_pending.pop(filename, None) or rerun_path
                     if rerun_path and filename not in in_queue_excel_filenames:
                         in_queue_excel_filenames.add(filename)
                     else:

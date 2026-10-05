@@ -265,13 +265,14 @@
         :cell-style="{ padding: '4px 8px' }"
         :default-sort="{ prop: 'product_name', order: 'ascending' }"
         :scrollbar-always-on="true"
+        @sort-change="handleSortChange"
       >
-      <el-table-column fixed prop="product_cd" label="製品CD" min-width="85">
+      <el-table-column fixed prop="product_cd" label="製品CD" min-width="95" sortable="custom">
         <template #default="{ row }">
           <span class="code-chip">{{ row.product_cd }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="product_name" label="製品名称" min-width="155" />
+      <el-table-column prop="product_name" label="製品名称" min-width="155" sortable="custom" />
       <el-table-column
         prop="part_number"
         label="品番"
@@ -747,6 +748,12 @@ const pagination = reactive({
   total: 0,
 })
 
+// 排序（サーバー側）
+const sortState = reactive<{ sort_by: 'product_cd' | 'product_name'; sort_order: 'asc' | 'desc' }>({
+  sort_by: 'product_name',
+  sort_order: 'asc',
+})
+
 // 数据
 const productList = ref<Product[]>([])
 const allProducts = ref<Product[]>([]) // 新增：用于统计全部产品
@@ -905,6 +912,8 @@ const fetchList = async () => {
       ...filters,
       page: pagination.page,
       pageSize: pagination.pageSize,
+      sort_by: sortState.sort_by,
+      sort_order: sortState.sort_order,
     }
     const response = await getProductList(params)
 
@@ -938,6 +947,18 @@ const fetchList = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSortChange = ({ prop, order }: { prop: string; order: 'ascending' | 'descending' | null }) => {
+  if (order && (prop === 'product_cd' || prop === 'product_name')) {
+    sortState.sort_by = prop
+    sortState.sort_order = order === 'descending' ? 'desc' : 'asc'
+  } else {
+    sortState.sort_by = 'product_name'
+    sortState.sort_order = 'asc'
+  }
+  pagination.page = 1
+  fetchList()
 }
 
 const FILTER_DEBOUNCE_MS = 400
