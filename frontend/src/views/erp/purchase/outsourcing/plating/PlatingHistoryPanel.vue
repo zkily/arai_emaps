@@ -144,8 +144,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { TableColumnCtx } from 'element-plus'
-import { getPlatingLedgerHistory, type PlatingLedgerRow } from '@/api/outsourcing'
+import { type PlatingLedgerRow } from '@/api/outsourcing'
+import { useLedger } from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
+
+const ledger = useLedger()
 
 const props = defineProps<{
   kind: 'order' | 'receiving'
@@ -357,7 +360,7 @@ async function load() {
   const seq = ++loadSeq
   loading.value = true
   try {
-    const res = await getPlatingLedgerHistory({
+    const res = await ledger.getHistory({
       kind: props.kind,
       startDate: props.startDate,
       endDate: props.endDate,

@@ -34,7 +34,9 @@ router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
 
 # 一括更新用分散ロック（他端末同時実行防止）
 BATCH_UPDATE_LOCK_KEY = "production_summary_batch_update"
-DEFAULT_LOCK_TTL_SECONDS = 300  # 5分で自動解放
+DEFAULT_LOCK_TTL_SECONDS = 900  # 一括更新全体が収まるよう 15 分で自動解放
+_PS_COLLATE = "utf8mb4_unicode_ci"
+_SAFE_COLUMN_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _sql_normalize_product_cd(column: str = "target_cd") -> str:
@@ -2439,6 +2441,78 @@ async def batch_update_lock_release(
     return {"code": 200, "data": {"released": True}, "message": "ロックを解放しました"}
 
 
+def _assert_safe_column(name: str) -> str:
+    if not _SAFE_COLUMN_RE.fullmatch(name or ""):
+        raise ValueError(f"invalid column: {name}")
+    return name
+
+
+def _ps_cd_eq(left: str, right: str) -> str:
+    return f"{left} COLLATE {_PS_COLLATE} = {right} COLLATE {_PS_COLLATE}"
+
+
+def _pivot_sum_sql(mapping: dict[str, str], quantity_sql: str = "quantity") -> tuple[list[str], str]:
+    """process_cd → 列 を SUM(CASE) に畳む。同一列へ複数工程が来る場合は加算。"""
+    by_col: dict[str, list[str]] = {}
+    for process_cd, col in mapping.items():
+        _assert_safe_column(col)
+        by_col.setdefault(col, []).append(process_cd)
+    cols = list(by_col.keys())
+    parts = []
+    for col, cds in by_col.items():
+        cond = " OR ".join(f"process_cd = '{cd}'" for cd in cds)
+        parts.append(
+            f"CAST(SUM(CASE WHEN {cond} THEN {quantity_sql} ELSE 0 END) AS SIGNED) AS `{col}`"
+        )
+    return cols, ",\n".join(parts)
+
+
+async def _sync_month_log_columns(
+    db: AsyncSession,
+    *,
+    transaction_type: str,
+    mapping: dict[str, str],
+    first_day: str,
+    month_end: str,
+) -> int:
+    """
+    当月（クリア済み期間）のログを 1 本の UPDATE JOIN で書き戻す。
+    集計は (製品CD末尾を 1 にそろえた値, 日付) 単位。期間外の行は変更しない。
+    """
+    if not mapping:
+        return 0
+    cols, pivot_sql = _pivot_sum_sql(mapping)
+    process_in = ", ".join(f"'{cd}'" for cd in mapping.keys())
+    pcd = _sql_normalize_product_cd("target_cd")
+    set_sql = ", ".join(f"ps.`{c}` = agg.`{c}`" for c in cols)
+    end_exclusive = datetime.strptime(month_end, "%Y-%m-%d").date() + timedelta(days=1)
+    sql = f"""
+        UPDATE production_summarys ps
+        INNER JOIN (
+            SELECT {pcd} AS product_cd,
+                   DATE(transaction_time) AS log_date,
+                   {pivot_sql}
+            FROM stock_transaction_logs
+            WHERE transaction_type = :tx_type
+              AND process_cd IN ({process_in})
+              AND target_cd IS NOT NULL AND target_cd <> '' AND LENGTH(target_cd) >= 1
+              AND transaction_time >= :start_dt
+              AND transaction_time < :end_dt
+            GROUP BY {pcd}, DATE(transaction_time)
+        ) agg ON {_ps_cd_eq("ps.product_cd", "agg.product_cd")} AND ps.date = agg.log_date
+        SET {set_sql}
+    """
+    res = await db.execute(
+        text(sql),
+        {
+            "tx_type": transaction_type,
+            "start_dt": f"{first_day} 00:00:00",
+            "end_dt": f"{end_exclusive.isoformat()} 00:00:00",
+        },
+    )
+    return int(res.rowcount or 0)
+
+
 @router.post("/update-from-order-daily")
 async def update_production_summarys_from_order_daily(
     body: UpdateFromOrderDailyBody,
@@ -2450,7 +2524,6 @@ async def update_production_summarys_from_order_daily(
     forecast_quantity / order_quantity を更新する。
     """
     from time import perf_counter
-    from app.modules.erp.models import OrderDaily
 
     start_time = perf_counter()
 
@@ -2478,28 +2551,29 @@ async def update_production_summarys_from_order_daily(
         else:
             period_start = today - timedelta(days=days - 1)
 
-    # order_daily から集計（product_cd 末尾を '1' にそろえてから集計）
-    od = OrderDaily
-    normalized_product_cd = _sa_normalize_product_cd(od.product_cd)
-
-    agg_query = (
-        select(
-            normalized_product_cd.label("product_cd"),
-            od.date.label("date"),
-            func.sum(func.coalesce(od.forecast_units, 0)).label("forecast_quantity"),
-            func.sum(func.coalesce(od.confirmed_units, 0)).label("order_quantity"),
-        )
-        .where(od.product_cd.isnot(None), od.product_cd != "")
-    )
+    # order_daily から集計（product_cd 末尾を '1' にそろえてから 1 本の UPDATE JOIN）
+    norm = "CONCAT(SUBSTRING(product_cd, 1, LENGTH(product_cd) - 1), '1')"
+    where_parts = [
+        "product_cd IS NOT NULL",
+        "product_cd <> ''",
+        "LENGTH(product_cd) >= 1",
+    ]
+    agg_params: dict = {}
     if period_start is not None:
-        agg_query = agg_query.where(od.date >= period_start)
+        where_parts.append("`date` >= :period_start")
+        agg_params["period_start"] = period_start
     if period_end is not None:
-        agg_query = agg_query.where(od.date <= period_end)
-
-    agg_query = agg_query.group_by(normalized_product_cd, od.date)
-
-    agg_result = await db.execute(agg_query)
-    agg_rows = agg_result.all()
+        where_parts.append("`date` <= :period_end")
+        agg_params["period_end"] = period_end
+    agg_sql = f"""
+        SELECT {norm} AS product_cd,
+               `date` AS log_date,
+               CAST(SUM(COALESCE(forecast_units, 0)) AS SIGNED) AS forecast_quantity,
+               CAST(SUM(COALESCE(confirmed_units, 0)) AS SIGNED) AS order_quantity
+        FROM order_daily
+        WHERE {" AND ".join(where_parts)}
+        GROUP BY {norm}, `date`
+    """
 
     # 更新前クリア（対象期間内の forecast/order を 0 にする）
     if body.clearBeforeUpdate:
@@ -2510,7 +2584,28 @@ async def update_production_summarys_from_order_daily(
             clear_stmt = clear_stmt.where(ProductionSummary.date <= period_end)
         await db.execute(clear_stmt)
 
-    total = len(agg_rows)
+    count_row = (
+        await db.execute(
+            text(
+                f"""
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN ps.id IS NULL THEN 1 ELSE 0 END) AS skipped,
+                       SUM(CASE WHEN ps.id IS NOT NULL
+                                 AND ps.forecast_quantity = agg.forecast_quantity
+                                 AND ps.order_quantity = agg.order_quantity
+                            THEN 1 ELSE 0 END) AS unchanged
+                FROM ({agg_sql}) agg
+                LEFT JOIN production_summarys ps
+                  ON {_ps_cd_eq("ps.product_cd", "agg.product_cd")}
+                 AND ps.`date` = agg.log_date
+                """
+            ),
+            agg_params,
+        )
+    ).mappings().one()
+    total = int(count_row["total"] or 0)
+    skipped = int(count_row["skipped"] or 0)
+    unchanged = int(count_row["unchanged"] or 0) if mode == "changed" else 0
     if total == 0:
         if body.clearBeforeUpdate:
             await db.commit()
@@ -2527,45 +2622,41 @@ async def update_production_summarys_from_order_daily(
             "message": "更新対象となる受注データがありませんでした。",
         }
 
-    # 既存の production_summarys を一括取得
-    key_list = [(r.product_cd, r.date) for r in agg_rows]
-    existing_stmt = select(ProductionSummary).where(
-        tuple_(ProductionSummary.product_cd, ProductionSummary.date).in_(key_list)
+    changed_filter = ""
+    if mode == "changed":
+        changed_filter = (
+            " WHERE ps.forecast_quantity <> agg.forecast_quantity"
+            " OR ps.order_quantity <> agg.order_quantity"
+        )
+    await db.execute(
+        text(
+            f"""
+            UPDATE production_summarys ps
+            INNER JOIN ({agg_sql}) agg
+              ON {_ps_cd_eq("ps.product_cd", "agg.product_cd")}
+             AND ps.`date` = agg.log_date
+            SET ps.forecast_quantity = agg.forecast_quantity,
+                ps.order_quantity = agg.order_quantity
+            {changed_filter}
+            """
+        ),
+        agg_params,
     )
-    existing_result = await db.execute(existing_stmt)
-    existing_rows = existing_result.scalars().all()
-    existing_map = {(r.product_cd, r.date): r for r in existing_rows}
+    updated = total - skipped - unchanged
+    if updated < 0:
+        updated = 0
 
-    updated = 0
-    skipped = 0
-    unchanged = 0
-
-    for r in agg_rows:
-        key = (r.product_cd, r.date)
-        ps = existing_map.get(key)
-        if not ps:
-            # production_summarys 側に存在しない (product_cd, date) はスキップ
-            skipped += 1
-            continue
-
-        new_forecast = int(r.forecast_quantity or 0)
-        new_order = int(r.order_quantity or 0)
-
-        if mode == "changed":
-            if ps.forecast_quantity == new_forecast and ps.order_quantity == new_order:
-                unchanged += 1
-                continue
-
-        ps.forecast_quantity = new_forecast
-        ps.order_quantity = new_order
-        updated += 1
+    cds_res = await db.execute(
+        text(f"SELECT DISTINCT product_cd FROM ({agg_sql}) agg WHERE product_cd IS NOT NULL LIMIT 50"),
+        agg_params,
+    )
+    affected_cds = [str(r[0]) for r in cds_res.all() if r[0]]
 
     await db.commit()
 
     try:
         from app.modules.database.lot_forecast_attribution_service import recompute_attribution
 
-        affected_cds = list({str(r.product_cd) for r in agg_rows if r.product_cd})
         if affected_cds:
             today = now_jst().date()
             await recompute_attribution(
@@ -2777,161 +2868,55 @@ async def update_production_summarys_actual(
         db, ACTUAL_CLEAR_COLUMNS, start_date_str
     )
 
-    # 2) 一般工程：実績+不良 集計（product_cd = target_cd 末尾を '1' にそろえる）
+    # 一般工程の実績+不良、KT13/KT15 の入庫−出庫を 1 本の UPDATE JOIN で書き戻す
     _pcd = _sql_normalize_product_cd("target_cd")
-    process_placeholders = ", ".join([":p%d" % i for i in range(len(GENERAL_PROCESS_CDS))])
-    general_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               process_cd,
-               SUM(quantity) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type IN ('実績', '不良')
-          AND process_cd IN ("""
-        + process_placeholders
-        + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND DATE(transaction_time) >= :start_date
-        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
-    """)
-    try:
-        params = {"p%d" % i: c for i, c in enumerate(GENERAL_PROCESS_CDS)}
-        params["start_date"] = start_date_str
-        res_general = await db.execute(general_sql, params)
-        actual_rows = res_general.mappings().all()
-    except Exception:
-        actual_rows = []
-
-    # 3) KT13 製品倉庫：入庫−出庫
-    kt13_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               SUM(CASE WHEN transaction_type = '入庫' THEN quantity WHEN transaction_type = '出庫' THEN -quantity ELSE 0 END) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT13'
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND DATE(transaction_time) >= :start_date
-        GROUP BY """ + _pcd + """, DATE(transaction_time)
-    """)
-    try:
-        res_kt13 = await db.execute(kt13_sql, {"start_date": start_date_str})
-        warehouse_rows = res_kt13.mappings().all()
-    except Exception:
-        warehouse_rows = []
-
-    # 4) KT15 外注倉庫：入庫−出庫
-    kt15_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               SUM(CASE WHEN transaction_type = '入庫' THEN quantity WHEN transaction_type = '出庫' THEN -quantity ELSE 0 END) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type IN ('入庫', '出庫') AND process_cd = 'KT15'
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND DATE(transaction_time) >= :start_date
-        GROUP BY """ + _pcd + """, DATE(transaction_time)
-    """)
-    try:
-        res_kt15 = await db.execute(kt15_sql, {"start_date": start_date_str})
-        outsourced_warehouse_rows = res_kt15.mappings().all()
-    except Exception:
-        outsourced_warehouse_rows = []
-
-    if not actual_rows and not warehouse_rows and not outsourced_warehouse_rows:
-        msg = f"{cleared_count}件のレコードをクリアしました（集計データなし）"
-        return {
-            "code": 200,
-            "data": {
-                "updated": 0,
-                "skipped": 0,
-                "cleared": cleared_count,
-                "clearPeriod": f"{start_date_str} ～",
-                "startDate": start_date_str,
-            },
-            "message": msg,
-        }
-
-    updated_count = 0
-    skipped_count = 0
-
-    for row in actual_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        process_cd = (row.get("process_cd") or "").strip()
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        field_name = PROCESS_ACTUAL_MAPPING.get(process_cd)
-        if not field_name:
-            skipped_count += 1
-            continue
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(**{field_name: qty})
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
-    for row in warehouse_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(warehouse_actual=qty)
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
-    for row in outsourced_warehouse_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(outsourced_warehouse_actual=qty)
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
+    general_cols, general_pivot = _pivot_sum_sql(
+        PROCESS_ACTUAL_MAPPING,
+        "CASE WHEN transaction_type IN ('実績', '不良') THEN quantity ELSE 0 END",
+    )
+    warehouse_expr = (
+        "CAST(SUM(CASE WHEN process_cd = 'KT13' AND transaction_type = '入庫' THEN quantity "
+        "WHEN process_cd = 'KT13' AND transaction_type = '出庫' THEN -quantity ELSE 0 END) AS SIGNED)"
+    )
+    outsourced_expr = (
+        "CAST(SUM(CASE WHEN process_cd = 'KT15' AND transaction_type = '入庫' THEN quantity "
+        "WHEN process_cd = 'KT15' AND transaction_type = '出庫' THEN -quantity ELSE 0 END) AS SIGNED)"
+    )
+    set_cols = general_cols + ["warehouse_actual", "outsourced_warehouse_actual"]
+    set_sql = ", ".join(f"ps.`{c}` = agg.`{c}`" for c in set_cols)
+    process_in = ", ".join(f"'{cd}'" for cd in GENERAL_PROCESS_CDS)
+    sync_sql = f"""
+        UPDATE production_summarys ps
+        INNER JOIN (
+            SELECT {_pcd} AS product_cd,
+                   DATE(transaction_time) AS log_date,
+                   {general_pivot},
+                   {warehouse_expr} AS `warehouse_actual`,
+                   {outsourced_expr} AS `outsourced_warehouse_actual`
+            FROM stock_transaction_logs
+            WHERE transaction_time >= :start_date
+              AND target_cd IS NOT NULL AND target_cd <> '' AND LENGTH(target_cd) >= 1
+              AND (
+                    (transaction_type IN ('実績', '不良') AND process_cd IN ({process_in}))
+                 OR (transaction_type IN ('入庫', '出庫') AND process_cd IN ('KT13', 'KT15'))
+              )
+            GROUP BY {_pcd}, DATE(transaction_time)
+        ) agg ON {_ps_cd_eq("ps.product_cd", "agg.product_cd")} AND ps.`date` = agg.log_date
+        SET {set_sql}
+    """
+    res_sync = await db.execute(text(sync_sql), {"start_date": start_date_str})
+    updated_count = int(res_sync.rowcount or 0)
     await db.commit()
-    message = f"{cleared_count}件のレコードをクリア後、{updated_count}件の実績データを更新しました（{skipped_count}件スキップ）"
+    if updated_count == 0:
+        message = f"{cleared_count}件のレコードをクリアしました（集計データなし）"
+    else:
+        message = f"{cleared_count}件のレコードをクリア後、{updated_count}件の実績データを更新しました（0件スキップ）"
     return {
         "code": 200,
         "data": {
             "updated": updated_count,
-            "skipped": skipped_count,
-            "total": len(actual_rows) + len(warehouse_rows) + len(outsourced_warehouse_rows),
+            "skipped": 0,
+            "total": updated_count,
             "cleared": cleared_count,
             "clearPeriod": f"{start_date_str} ～",
             "startDate": start_date_str,
@@ -2954,83 +2939,28 @@ async def update_production_summarys_defect(
         db, DEFECT_CLEAR_COLUMNS
     )
 
-    _pcd = _sql_normalize_product_cd("target_cd")
-    defect_placeholders = ", ".join([":d%d" % i for i in range(len(DEFECT_PROCESS_CDS))])
-    defect_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               process_cd,
-               SUM(quantity) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type = '不良'
-          AND process_cd IN ("""
-        + defect_placeholders
-        + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND transaction_time IS NOT NULL
-        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
-    """)
-    try:
-        params = {"d%d" % i: c for i, c in enumerate(DEFECT_PROCESS_CDS)}
-        res_defect = await db.execute(defect_sql, params)
-        defect_rows = res_defect.mappings().all()
-    except Exception:
-        defect_rows = []
-
-    if not defect_rows:
-        msg = f"{cleared_count}件のレコードの不良列をクリアしました（集計データなし）"
-        return {
-            "code": 200,
-            "data": {
-                "updated": 0,
-                "skipped": 0,
-                "total": 0,
-                "cleared": cleared_count,
-                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
-            },
-            "message": msg,
-        }
-
-    updated_count = 0
-    skipped_count = 0
-    for row in defect_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        process_cd = (row.get("process_cd") or "").strip()
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        field_name = PROCESS_DEFECT_MAPPING.get(process_cd)
-        if not field_name:
-            skipped_count += 1
-            continue
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(**{field_name: qty})
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
-    await db.commit()
-    message = (
-        f"{cleared_count}件のレコードをクリア後、{updated_count}件の不良データを更新しました"
-        f"（{skipped_count}件スキップ）"
+    updated_count = await _sync_month_log_columns(
+        db,
+        transaction_type="不良",
+        mapping=PROCESS_DEFECT_MAPPING,
+        first_day=first_day_str,
+        month_end=month_end_str,
     )
+    skipped_count = 0
+    await db.commit()
+    if updated_count == 0:
+        message = f"{cleared_count}件のレコードの不良列をクリアしました（集計データなし）"
+    else:
+        message = (
+            f"{cleared_count}件のレコードをクリア後、{updated_count}件の不良データを更新しました"
+            f"（{skipped_count}件スキップ）"
+        )
     return {
         "code": 200,
         "data": {
             "updated": updated_count,
             "skipped": skipped_count,
-            "total": len(defect_rows),
+            "total": updated_count,
             "cleared": cleared_count,
             "clearPeriod": f"{first_day_str} ～ {month_end_str}",
         },
@@ -3052,83 +2982,28 @@ async def update_production_summarys_scrap(
         db, SCRAP_CLEAR_COLUMNS
     )
 
-    _pcd = _sql_normalize_product_cd("target_cd")
-    scrap_placeholders = ", ".join([":s%d" % i for i in range(len(SCRAP_PROCESS_CDS))])
-    scrap_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               process_cd,
-               SUM(quantity) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type = '廃棄'
-          AND process_cd IN ("""
-        + scrap_placeholders
-        + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND transaction_time IS NOT NULL
-        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
-    """)
-    try:
-        params = {"s%d" % i: c for i, c in enumerate(SCRAP_PROCESS_CDS)}
-        res_scrap = await db.execute(scrap_sql, params)
-        scrap_rows = res_scrap.mappings().all()
-    except Exception:
-        scrap_rows = []
-
-    if not scrap_rows:
-        msg = f"{cleared_count}件のレコードの廃棄列をクリアしました（集計データなし）"
-        return {
-            "code": 200,
-            "data": {
-                "updated": 0,
-                "skipped": 0,
-                "total": 0,
-                "cleared": cleared_count,
-                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
-            },
-            "message": msg,
-        }
-
-    updated_count = 0
-    skipped_count = 0
-    for row in scrap_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        process_cd = (row.get("process_cd") or "").strip()
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        field_name = PROCESS_SCRAP_MAPPING.get(process_cd)
-        if not field_name:
-            skipped_count += 1
-            continue
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(**{field_name: qty})
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
-    await db.commit()
-    message = (
-        f"{cleared_count}件のレコードをクリア後、{updated_count}件の廃棄データを更新しました"
-        f"（{skipped_count}件スキップ）"
+    updated_count = await _sync_month_log_columns(
+        db,
+        transaction_type="廃棄",
+        mapping=PROCESS_SCRAP_MAPPING,
+        first_day=first_day_str,
+        month_end=month_end_str,
     )
+    skipped_count = 0
+    await db.commit()
+    if updated_count == 0:
+        message = f"{cleared_count}件のレコードの廃棄列をクリアしました（集計データなし）"
+    else:
+        message = (
+            f"{cleared_count}件のレコードをクリア後、{updated_count}件の廃棄データを更新しました"
+            f"（{skipped_count}件スキップ）"
+        )
     return {
         "code": 200,
         "data": {
             "updated": updated_count,
             "skipped": skipped_count,
-            "total": len(scrap_rows),
+            "total": updated_count,
             "cleared": cleared_count,
             "clearPeriod": f"{first_day_str} ～ {month_end_str}",
         },
@@ -3151,83 +3026,28 @@ async def update_production_summarys_on_hold(
         db, ON_HOLD_CLEAR_COLUMNS
     )
 
-    _pcd = _sql_normalize_product_cd("target_cd")
-    on_hold_placeholders = ", ".join([":h%d" % i for i in range(len(ON_HOLD_PROCESS_CDS))])
-    on_hold_sql = text("""
-        SELECT """ + _pcd + """ AS product_cd,
-               DATE(transaction_time) AS date,
-               process_cd,
-               SUM(quantity) AS quantity
-        FROM stock_transaction_logs
-        WHERE transaction_type = '保留'
-          AND process_cd IN ("""
-        + on_hold_placeholders
-        + """)
-          AND target_cd IS NOT NULL AND target_cd != '' AND LENGTH(target_cd) >= 1
-          AND transaction_time IS NOT NULL
-        GROUP BY """ + _pcd + """, DATE(transaction_time), process_cd
-    """)
-    try:
-        params = {"h%d" % i: c for i, c in enumerate(ON_HOLD_PROCESS_CDS)}
-        res_on_hold = await db.execute(on_hold_sql, params)
-        on_hold_rows = res_on_hold.mappings().all()
-    except Exception:
-        on_hold_rows = []
-
-    if not on_hold_rows:
-        msg = f"{cleared_count}件のレコードの保留列をクリアしました（集計データなし）"
-        return {
-            "code": 200,
-            "data": {
-                "updated": 0,
-                "skipped": 0,
-                "total": 0,
-                "cleared": cleared_count,
-                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
-            },
-            "message": msg,
-        }
-
-    updated_count = 0
-    skipped_count = 0
-    for row in on_hold_rows:
-        product_cd = (row.get("product_cd") or "").strip()
-        date_val = row.get("date")
-        process_cd = (row.get("process_cd") or "").strip()
-        qty = int(float(row.get("quantity") or 0))
-        if not product_cd or date_val is None:
-            skipped_count += 1
-            continue
-        date_str = date_val.isoformat()[:10] if hasattr(date_val, "isoformat") else str(date_val)[:10]
-        field_name = PROCESS_ON_HOLD_MAPPING.get(process_cd)
-        if not field_name:
-            skipped_count += 1
-            continue
-        try:
-            stmt = (
-                update(ProductionSummary)
-                .where(ProductionSummary.product_cd == product_cd, ProductionSummary.date == date_str)
-                .values(**{field_name: qty})
-            )
-            res = await db.execute(stmt)
-            if res.rowcount > 0:
-                updated_count += 1
-            else:
-                skipped_count += 1
-        except Exception:
-            skipped_count += 1
-
-    await db.commit()
-    message = (
-        f"{cleared_count}件のレコードをクリア後、{updated_count}件の保留データを更新しました"
-        f"（{skipped_count}件スキップ）"
+    updated_count = await _sync_month_log_columns(
+        db,
+        transaction_type="保留",
+        mapping=PROCESS_ON_HOLD_MAPPING,
+        first_day=first_day_str,
+        month_end=month_end_str,
     )
+    skipped_count = 0
+    await db.commit()
+    if updated_count == 0:
+        message = f"{cleared_count}件のレコードの保留列をクリアしました（集計データなし）"
+    else:
+        message = (
+            f"{cleared_count}件のレコードをクリア後、{updated_count}件の保留データを更新しました"
+            f"（{skipped_count}件スキップ）"
+        )
     return {
         "code": 200,
         "data": {
             "updated": updated_count,
             "skipped": skipped_count,
-            "total": len(on_hold_rows),
+            "total": updated_count,
             "cleared": cleared_count,
             "clearPeriod": f"{first_day_str} ～ {month_end_str}",
         },
@@ -4300,17 +4120,48 @@ async def _get_product_start_dates_for_summaries(db: AsyncSession) -> dict:
     return {str(row[0]).strip(): row[1] for row in rows if row[0]}
 
 
+def _production_summary_calc_column_names() -> list[str]:
+    """在庫・推移計算に必要な列だけ読む（全列の ORM ロードを避ける）。"""
+    cols = [
+        "id",
+        "product_cd",
+        "date",
+        "route_cd",
+        "order_quantity",
+        "forecast_quantity",
+        "safety_stock",
+    ]
+    for config in INVENTORY_PROCESS_CONFIG:
+        fields = config.get("fields") or {}
+        for name in fields.values():
+            if name:
+                cols.append(name)
+        actual = fields.get("actual")
+        if isinstance(actual, str) and actual.endswith("_actual"):
+            cols.append(actual[: -len("_actual")] + "_actual_plan")
+    seen: list[str] = []
+    for name in cols:
+        if name not in seen and hasattr(ProductionSummary, name):
+            seen.append(name)
+    return seen
+
+
 def _row_to_inventory_dict(row) -> dict:
-    """ORM 行を辞書に（数値は int、日付は文字列）"""
+    """ORM 行または列指定の Row を辞書に（数値は int、日付は文字列）"""
+    if hasattr(row, "__table__"):
+        items = ((c.name, getattr(row, c.name)) for c in row.__table__.columns)
+    else:
+        items = row._mapping.items()
     d = {}
-    for c in row.__table__.columns:
-        v = getattr(row, c.name)
+    for name, v in items:
         if hasattr(v, "isoformat"):
-            d[c.name] = v.isoformat()[:10] if v else None
+            d[name] = v.isoformat()[:10] if v else None
+        elif isinstance(v, Decimal):
+            d[name] = int(v)
         elif v is not None and isinstance(v, (int, float)):
-            d[c.name] = int(v)
+            d[name] = int(v)
         else:
-            d[c.name] = v
+            d[name] = v
     return d
 
 
@@ -4356,6 +4207,104 @@ async def _batch_case_update(db: AsyncSession, batch: list, columns: list):
     await db.execute(text(sql), params)
 
 
+async def _zero_summary_columns(
+    db: AsyncSession,
+    columns: list[str],
+    *,
+    start_d=None,
+    end_d=None,
+    ids: Optional[list] = None,
+) -> None:
+    """指定列を 0 にする。ids 指定時はその行だけ、否则は日付範囲。"""
+    safe = [_assert_safe_column(c) for c in columns]
+    if not safe:
+        return
+    set_sql = ", ".join(f"`{c}` = 0" for c in safe)
+    if ids is not None:
+        for i in range(0, len(ids), 5000):
+            chunk = ids[i : i + 5000]
+            if not chunk:
+                continue
+            placeholders = ", ".join(f":id{j}" for j in range(len(chunk)))
+            params = {f"id{j}": int(v) for j, v in enumerate(chunk)}
+            await db.execute(
+                text(f"UPDATE production_summarys SET {set_sql} WHERE id IN ({placeholders})"),
+                params,
+            )
+        return
+    if start_d is None:
+        return
+    if end_d is None:
+        await db.execute(
+            text(f"UPDATE production_summarys SET {set_sql} WHERE `date` >= :start_d"),
+            {"start_d": start_d},
+        )
+        return
+    await db.execute(
+        text(
+            f"UPDATE production_summarys SET {set_sql} WHERE `date` >= :start_d AND `date` <= :end_d"
+        ),
+        {"start_d": start_d, "end_d": end_d},
+    )
+
+
+async def _apply_staged_updates(db: AsyncSession, rows: list, columns: list[str]) -> int:
+    """計算結果を一時表へ投入し、1 回の JOIN で production_summarys を更新する。"""
+    safe_cols = [_assert_safe_column(c) for c in columns]
+    staged = [r for r in rows if r.get("id") is not None]
+    if not staged or not safe_cols:
+        return 0
+    await db.execute(text("DROP TEMPORARY TABLE IF EXISTS ps_calc_stage"))
+    col_defs = ", ".join(f"`{c}` INT NULL" for c in safe_cols)
+    await db.execute(
+        text(f"CREATE TEMPORARY TABLE ps_calc_stage (id INT NOT NULL PRIMARY KEY, {col_defs})")
+    )
+    try:
+        col_list = ", ".join(f"`{c}`" for c in safe_cols)
+        chunk_size = 400
+        for offset in range(0, len(staged), chunk_size):
+            chunk = staged[offset : offset + chunk_size]
+            values_sql = []
+            params = {}
+            for j, row in enumerate(chunk):
+                holders = [f":id_{j}"]
+                params[f"id_{j}"] = int(row["id"])
+                for col in safe_cols:
+                    key = f"c_{j}_{col}"
+                    holders.append(f":{key}")
+                    val = row.get(col, 0)
+                    if val is None:
+                        params[key] = None
+                    elif isinstance(val, Decimal):
+                        params[key] = int(val)
+                    elif isinstance(val, (int, float)):
+                        params[key] = int(val)
+                    else:
+                        try:
+                            params[key] = int(val)
+                        except (TypeError, ValueError):
+                            params[key] = 0
+                values_sql.append("(" + ", ".join(holders) + ")")
+            await db.execute(
+                text(f"INSERT INTO ps_calc_stage (id, {col_list}) VALUES {', '.join(values_sql)}"),
+                params,
+            )
+        set_sql = ", ".join(f"ps.`{c}` = st.`{c}`" for c in safe_cols)
+        await db.execute(
+            text(
+                "UPDATE production_summarys ps "
+                "INNER JOIN ps_calc_stage st ON ps.id = st.id "
+                f"SET {set_sql}"
+            )
+        )
+    finally:
+        try:
+            await db.execute(text("DROP TEMPORARY TABLE IF EXISTS ps_calc_stage"))
+        except Exception:
+            pass
+    return len(staged)
+
+
 async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float, trend_no_end_cap: bool = False):
     """在庫・推移共通: startDate からグローバル範囲を決め、行を取得して dict リスト化・product でグループ化。
     trend_no_end_cap=True かつ startDate 指定時は推移用に終了日を設けず date >= startDate の全行を対象とする。"""
@@ -4380,13 +4329,14 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
         global_start_d = min(product_start_dates.values())
         global_end_d = max(_parse_end_date(d, 3) for d in product_start_dates.values())
 
+    calc_cols = [getattr(ProductionSummary, name) for name in _production_summary_calc_column_names()]
     q = (
-        select(ProductionSummary)
+        select(*calc_cols)
         .where(ProductionSummary.date >= global_start_d, ProductionSummary.date <= global_end_d)
         .order_by(ProductionSummary.product_cd, ProductionSummary.date)
     )
     result = await db.execute(q)
-    rows = result.scalars().all()
+    rows = result.all()
     if not rows:
         return None, None, {}, {}, {}
 
@@ -4453,27 +4403,21 @@ async def update_production_summarys_inventory(
                 "message": "更新する在庫データがありません",
             }
 
-        # 一括で範囲内在庫列をクリア（全列を1条 SQL で）
+        # 範囲内の在庫列を 0 にする（開始日指定時は日付条件の 1 文、製品別起算時は対象 id のみ）
         all_ids = [r["id"] for rows in by_product.values() for r in rows]
-        clear_vals = {col: 0 for col in INVENTORY_COLUMNS}
-        CLEAR_BATCH = 5000
-        for i in range(0, len(all_ids), CLEAR_BATCH):
-            chunk = all_ids[i: i + CLEAR_BATCH]
-            await db.execute(update(ProductionSummary).where(ProductionSummary.id.in_(chunk)).values(**clear_vals))
+        if product_start_dates:
+            await _zero_summary_columns(db, INVENTORY_COLUMNS, ids=all_ids)
+        else:
+            await _zero_summary_columns(
+                db,
+                INVENTORY_COLUMNS,
+                start_d=global_start_d,
+                end_d=_parse_end_date(global_start_d, 3),
+            )
         await db.commit()
 
         route_sequences = {}
-        updated_count = 0
-        BATCH = 100
         updates_batch = []
-
-        async def _flush_batch():
-            nonlocal updates_batch, updated_count
-            if not updates_batch:
-                return
-            await _batch_case_update(db, updates_batch, INVENTORY_COLUMNS)
-            updated_count += len(updates_batch)
-            updates_batch = []
 
         for product_cd, product_rows in by_product.items():
             product_rows.sort(key=lambda x: (x.get("date") or ""))
@@ -4535,11 +4479,8 @@ async def update_production_summarys_inventory(
                     prev_outsourced_wh = ow_inv
 
                 updates_batch.append(r)
-                if len(updates_batch) >= BATCH:
-                    await _flush_batch()
-                    await db.commit()
 
-        await _flush_batch()
+        updated_count = await _apply_staged_updates(db, updates_batch, INVENTORY_COLUMNS)
         await db.commit()
         total = sum(len(v) for v in by_product.values())
         elapsed = round(time.perf_counter() - start_time, 2)
@@ -4588,27 +4529,16 @@ async def update_production_summarys_trend(
             all_trend_cols.add(f"{p}_actual_plan_trend")
         all_trend_cols = [c for c in all_trend_cols if hasattr(ProductionSummary, c)]
 
-        # 一括クリア
+        # 一括クリア（開始日指定時は date >= start の 1 文）
         all_ids = [r["id"] for rows in by_product.values() for r in rows]
-        clear_vals = {col: 0 for col in all_trend_cols}
-        CLEAR_BATCH = 5000
-        for i in range(0, len(all_ids), CLEAR_BATCH):
-            chunk = all_ids[i: i + CLEAR_BATCH]
-            await db.execute(update(ProductionSummary).where(ProductionSummary.id.in_(chunk)).values(**clear_vals))
+        if product_start_dates:
+            await _zero_summary_columns(db, all_trend_cols, ids=all_ids)
+        else:
+            await _zero_summary_columns(db, all_trend_cols, start_d=global_start_d)
         await db.commit()
 
         route_sequences = {}
-        updated_count = 0
-        BATCH = 100
         updates_batch = []
-
-        async def _flush_batch():
-            nonlocal updates_batch, updated_count
-            if not updates_batch:
-                return
-            await _batch_case_update(db, updates_batch, all_trend_cols)
-            updated_count += len(updates_batch)
-            updates_batch = []
 
         for product_cd, product_rows in by_product.items():
             product_rows.sort(key=lambda x: (x.get("date") or ""))
@@ -4637,11 +4567,8 @@ async def update_production_summarys_trend(
                     r[field] = day_val + prev
                     prev_actual_plan_trends[key] = r[field]
                 updates_batch.append(r)
-                if len(updates_batch) >= BATCH:
-                    await _flush_batch()
-                    await db.commit()
 
-        await _flush_batch()
+        updated_count = await _apply_staged_updates(db, updates_batch, all_trend_cols)
         await db.commit()
         total = sum(len(v) for v in by_product.values())
         elapsed = round(time.perf_counter() - start_time, 2)
@@ -4762,8 +4689,6 @@ async def update_production_summarys_safety_stock(
             qty = int(row[2]) if row[2] is not None else 0
             forecast_map[(pc, dt)] = qty
 
-        updated_count = 0
-        BATCH = 100
         updates_batch = []
 
         def _parse_row_date(r):
@@ -4793,15 +4718,8 @@ async def update_production_summarys_safety_stock(
                 safety_val = int(math.ceil(avg_daily * safety_days)) if avg_daily else 0
                 r["safety_stock"] = safety_val
                 updates_batch.append(r)
-                if len(updates_batch) >= BATCH:
-                    await _batch_case_update(db, updates_batch, ["safety_stock"])
-                    updated_count += len(updates_batch)
-                    updates_batch = []
-                    await db.commit()
 
-        if updates_batch:
-            await _batch_case_update(db, updates_batch, ["safety_stock"])
-            updated_count += len(updates_batch)
+        updated_count = await _apply_staged_updates(db, updates_batch, ["safety_stock"])
         await db.commit()
         elapsed = round(time.perf_counter() - start_time, 2)
         return {

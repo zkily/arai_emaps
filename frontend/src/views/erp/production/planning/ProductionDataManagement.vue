@@ -1331,33 +1331,41 @@
       v-model="showAllUpdateConfirmDialog"
       title="全部一括更新確認"
       width="520px"
-      class="all-update-confirm-dialog pb-std"
+      class="all-update-confirm-dialog pdm-auc-dialog pb-std"
       :close-on-click-modal="false"
+      :show-close="false"
     >
-      <div class="generate-confirm-content">
-        <div class="confirm-icon-wrapper">
-          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
-        </div>
-        <div class="confirm-info">
-          <h3 class="confirm-title">以下の順で一括更新します</h3>
-          <div class="confirm-details">
-            <ol class="all-update-steps-list">
-              <li>受注データ更新</li>
-              <li>実績データ更新</li>
-              <li>不良データ更新</li>
-              <li>廃棄データ更新</li>
-              <li>保留データ更新</li>
-              <li>計画データ更新</li>
-              <li>在庫・推移・安全在庫更新</li>
-            </ol>
-            <div class="detail-row" style="margin-top: 10px;">
-              <span class="detail-value">この処理には時間がかかる場合があります。</span>
-            </div>
+      <template #header>
+        <div class="auc-hero pb-hero">
+          <div class="pb-bubbles" aria-hidden="true" />
+          <span class="auc-hero-icon"><el-icon><Refresh /></el-icon></span>
+          <div class="auc-hero-copy">
+            <span class="auc-hero-title">全部一括更新確認</span>
+            <p class="auc-hero-desc">7 つの更新処理を上から順に実行します</p>
           </div>
+          <button type="button" class="auc-close" aria-label="閉じる" @click="showAllUpdateConfirmDialog = false">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+      </template>
+      <div class="auc-body">
+        <div class="auc-lead"><el-icon><InfoFilled /></el-icon>以下の順で一括更新します</div>
+        <ol class="all-update-steps-list">
+          <li>受注データ更新</li>
+          <li>実績データ更新</li>
+          <li>不良データ更新</li>
+          <li>廃棄データ更新</li>
+          <li>保留データ更新</li>
+          <li>計画データ更新</li>
+          <li>在庫・推移・安全在庫更新</li>
+        </ol>
+        <div class="auc-note">
+          <el-icon><Clock /></el-icon>
+          <span>この処理には時間がかかる場合があります。</span>
         </div>
       </div>
       <template #footer>
-        <div class="dialog-footer">
+        <div class="dialog-footer auc-footer">
           <el-button @click="showAllUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
           <!-- 本番ビルドで teleport 内の el-button @click が効かないため、原生 button で実行 -->
           <button type="button" class="el-button el-button--primary confirm-btn" @click="onAllUpdateConfirmClick">
@@ -2155,12 +2163,28 @@
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
-      class="progress-dialog progress-dialog--styled pb-std"
+      class="progress-dialog progress-dialog--styled pdm-prog-dialog pb-std"
     >
-      <div class="progress-content">
+      <template #header>
+        <div class="prg-hero pb-hero" :class="{ 'is-done': progressStatus === 'success' }">
+          <div class="pb-bubbles" aria-hidden="true" />
+          <span class="prg-hero-icon">
+            <el-icon v-if="progressStatus === 'success'"><CircleCheck /></el-icon>
+            <el-icon v-else><Refresh /></el-icon>
+          </span>
+          <div class="prg-hero-copy">
+            <span class="prg-hero-title">{{ progressDialogTitle }}</span>
+            <p class="prg-hero-desc">
+              {{ progressStatus === 'success' ? '処理が完了しました' : '完了するまで画面を閉じずにお待ちください' }}
+            </p>
+          </div>
+        </div>
+      </template>
+      <div class="progress-content prg-body" :class="{ 'is-done': progressStatus === 'success' }">
         <div class="progress-info">
           <div class="progress-icon-wrap">
-            <el-icon class="progress-icon"><Loading /></el-icon>
+            <el-icon v-if="progressStatus === 'success'" class="progress-icon"><CircleCheck /></el-icon>
+            <el-icon v-else class="progress-icon is-loading"><Loading /></el-icon>
           </div>
           <span class="progress-text">{{ progressText }}</span>
         </div>
@@ -2169,9 +2193,7 @@
             class="progress-fill"
             :class="{ 'progress-fill--success': progressStatus === 'success' }"
             :style="{ width: Math.min(100, Math.round(progressPercentage)) + '%' }"
-          >
-            <span class="progress-shine" />
-          </div>
+          />
         </div>
         <div class="progress-details">
           <span class="detail-label">進捗</span>
@@ -2416,6 +2438,7 @@ import {
   CircleCheck,
   DataBoard,
   Edit,
+  Close,
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import {
@@ -3667,7 +3690,7 @@ const handleUpdateProductionDates = async () => {
  *
  * 七、批处理与写回
  * -----------------------------------------------------------------------------
- * - 每 100 行一批，用 CASE id 批量 UPDATE 各 *_trend、*_actual_plan_trend 列
+ * - 計算結果を一時表へまとめて投入し、1 回の JOIN UPDATE で各 *_trend、*_actual_plan_trend 列を書き戻す
  * - 允许 trend 为负数
  */
 
@@ -4088,7 +4111,7 @@ const confirmAllUpdate = async () => {
   showAllUpdateConfirmDialog.value = false
   const lockValue = getRandomUUID()
   try {
-    await acquireBatchUpdateLock(lockValue)
+    await acquireBatchUpdateLock(lockValue, 900)
   } catch (e: unknown) {
     const status = (e as { response?: { status?: number } })?.response?.status
     if (status === 423) {
@@ -8740,119 +8763,425 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 10px;
 }
-.all-update-steps-list {
+/* 全部一括更新確認ダイアログ（append 先で scope 属性が付かないため外枠は :global で指定） */
+:global(.el-dialog.pdm-auc-dialog) {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -16px rgba(49, 46, 129, 0.42),
+    0 0 0 1px rgba(79, 70, 229, 0.12);
+}
+:global(.el-dialog.pdm-auc-dialog .el-dialog__header) {
+  padding: 0;
   margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.85rem;
-  color: #334155;
-  line-height: 1.6;
 }
-
-/* データ生成・一括更新進度ダイアログ（在庫不足管理と同様のスタイル） */
-.progress-dialog--styled .el-dialog__body {
-  padding: 20px 24px 24px;
+:global(.el-dialog.pdm-auc-dialog .el-dialog__body) {
+  padding: 14px 18px 12px;
+  background: linear-gradient(180deg, #f7f8ff 0%, #f8fafc 100%);
 }
-.progress-content {
-  padding: 4px 0;
+:global(.el-dialog.pdm-auc-dialog .el-dialog__footer) {
+  padding: 12px 18px 14px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
 }
-.progress-info {
+.auc-hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 34%, #6366f1 68%, #0ea5e9 100%);
 }
-.progress-icon-wrap {
+.auc-hero-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
-  animation: progress-icon-pulse 1.5s ease-in-out infinite;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
-.progress-icon {
-  font-size: 20px;
-  color: #6366f1;
-  animation: progress-icon-spin 0.9s linear infinite;
+.auc-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
-.progress-text {
-  font-size: 14px;
-  color: #334155;
-  font-weight: 500;
-  transition: opacity 0.25s ease;
+.auc-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
 }
-.progress-track {
-  height: 14px;
-  border-radius: 999px;
-  background: #f1f5f9;
+.auc-hero-desc {
+  margin: 0;
   overflow: hidden;
-  margin-bottom: 12px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
 }
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  background-size: 200% 100%;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+.auc-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 16px;
+  color: #fff;
+  cursor: pointer;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+.auc-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+.auc-close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+}
+.auc-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #312e81;
+}
+.auc-lead .el-icon {
+  font-size: 16px;
+  color: #6366f1;
+}
+
+/* 手順：番号バッジ＋縦の接続線（工程ごとに色分け） */
+.auc-body .all-update-steps-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: auc-step;
+}
+.auc-body .all-update-steps-list li {
+  --accent: #2563eb;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 5px 12px 5px 8px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, #fff) 0%, #fff 60%);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  counter-increment: auc-step;
+}
+.auc-body .all-update-steps-list li::before {
+  content: counter(auc-step);
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 55%),
+    var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18);
+}
+.auc-body .all-update-steps-list li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: calc(100% + 1px);
+  width: 2px;
+  height: 6px;
+  background: color-mix(in srgb, var(--accent) 35%, #fff);
+}
+.auc-body .all-update-steps-list li:nth-child(2) {
+  --accent: #16a34a;
+}
+.auc-body .all-update-steps-list li:nth-child(3) {
+  --accent: #dc2626;
+}
+.auc-body .all-update-steps-list li:nth-child(4) {
+  --accent: #64748b;
+}
+.auc-body .all-update-steps-list li:nth-child(5) {
+  --accent: #d97706;
+}
+.auc-body .all-update-steps-list li:nth-child(6) {
+  --accent: #7c3aed;
+}
+.auc-body .all-update-steps-list li:nth-child(7) {
+  --accent: #0891b2;
+}
+.auc-note {
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
-}
-.progress-fill--success {
-  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
-}
-.progress-shine {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.35) 50%,
-    transparent 100%
-  );
-  animation: progress-shine 1.8s ease-in-out infinite;
-}
-.progress-details {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px 8px 15px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+.auc-note::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #fcd34d, #d97706);
+}
+.auc-note .el-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  color: #d97706;
+}
+.auc-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.auc-footer .cancel-btn {
+  --k-rgb: 100 116 139;
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #d6dde8;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+.auc-footer .cancel-btn:hover,
+.auc-footer .cancel-btn:focus-visible {
+  color: #334155;
+  border-color: #cbd5e1;
+  background: #fff;
+}
+.auc-footer .confirm-btn {
+  --k-rgb: 79 70 229;
+  height: 32px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  border: 1px solid #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+}
+.auc-footer .confirm-btn:hover,
+.auc-footer .confirm-btn:focus-visible {
+  color: #fff;
+  border-color: #3730a3;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #818cf8, #4f46e5);
+}
+
+/* 一括更新進度ダイアログ（append 先で scope 属性が付かないため外枠は :global で指定） */
+:global(.el-dialog.pdm-prog-dialog) {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -16px rgba(15, 23, 42, 0.38),
+    0 0 0 1px rgba(79, 70, 229, 0.12);
+}
+:global(.el-dialog.pdm-prog-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+:global(.el-dialog.pdm-prog-dialog .el-dialog__body) {
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, #f7f8ff 0%, #f8fafc 100%);
+}
+.prg-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 34%, #6366f1 68%, #0ea5e9 100%);
+  transition: background 0.3s ease;
+}
+.prg-hero.is-done {
+  background: linear-gradient(125deg, #065f46 0%, #059669 38%, #10b981 72%, #34d399 100%);
+}
+.prg-hero-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.2);
+}
+.prg-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.prg-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+}
+.prg-hero-desc {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
+}
+.prg-body {
+  --accent: #4f46e5;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prg-body.is-done {
+  --accent: #059669;
+}
+.prg-body .progress-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.prg-body .progress-icon-wrap {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.prg-body .progress-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+.prg-body .progress-text {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #1e293b;
+  white-space: pre-line;
+}
+.prg-body .progress-track {
+  height: 12px;
+  margin: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 7%, #eef2f7);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, #e2e8f0),
+    inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.prg-body .progress-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(90deg, #818cf8, #4f46e5);
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.prg-body .progress-fill--success {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(90deg, #34d399, #059669);
+}
+.prg-body .progress-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
   color: #64748b;
 }
-.progress-details .detail-label {
-  font-weight: 500;
-}
-.progress-details .detail-value {
+.prg-body .progress-details .detail-label {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
   font-weight: 700;
-  color: #6366f1;
-  font-variant-numeric: tabular-nums;
-  transition: transform 0.2s ease, color 0.3s ease;
+  color: color-mix(in srgb, var(--accent) 75%, #0f172a);
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 20%, transparent);
 }
-.progress-details .detail-value.progress-percent {
-  min-width: 2.5em;
+.prg-body .progress-details .progress-percent {
+  min-width: 3em;
   text-align: right;
-}
-.progress-dialog--styled .progress-content:has(.progress-fill--success) .detail-value {
-  color: #059669;
-}
-@keyframes progress-icon-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes progress-icon-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.9; }
-}
-@keyframes progress-shine {
-  0% { left: -100%; }
-  60%, 100% { left: 100%; }
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 初期在庫一括登録ダイアログ */

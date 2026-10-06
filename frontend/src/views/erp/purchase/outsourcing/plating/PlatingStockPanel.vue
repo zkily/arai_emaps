@@ -94,14 +94,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { TableColumnCtx } from 'element-plus'
-import {
-  getPlatingLedgerStock,
-  getPlatingLedgerStockTrend,
-  type PlatingStockItem,
-  type PlatingStockTrendItem,
-} from '@/api/outsourcing'
+import { type PlatingStockItem, type PlatingStockTrendItem } from '@/api/outsourcing'
+import { useLedger } from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
 import PlatingStockAnalysis from './PlatingStockAnalysis.vue'
+
+const ledger = useLedger()
 
 const props = defineProps<{
   asOf: string
@@ -172,8 +170,8 @@ async function load() {
   }
   try {
     const [res, trendRes] = await Promise.all([
-      getPlatingLedgerStock(params),
-      getPlatingLedgerStockTrend(params),
+      ledger.getStock(params),
+      ledger.getStockTrend(params),
     ])
     if (seq !== loadSeq) return
     rows.value = res?.data || []

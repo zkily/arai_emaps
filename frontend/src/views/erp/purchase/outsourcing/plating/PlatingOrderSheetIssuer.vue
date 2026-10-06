@@ -2,15 +2,26 @@
   <div class="sheet-issuer">
     <span class="issuer-label"><el-icon><Printer /></el-icon>注文書</span>
     <el-date-picker
-      v-model="orderDate"
-      type="date"
+      v-model="orderRange"
+      type="daterange"
       value-format="YYYY-MM-DD"
       format="YYYY/MM/DD"
-      placeholder="注文日"
+      range-separator="〜"
+      start-placeholder="注文日(開始)"
+      end-placeholder="注文日(終了)"
       :clearable="false"
       size="small"
       class="issuer-date"
     />
+    <el-button-group class="issuer-quick">
+      <el-button size="small" title="前日（期間ごと1日前へ）" @click="shiftRange(-1)">
+        <el-icon><ArrowLeft /></el-icon>前日
+      </el-button>
+      <el-button size="small" title="今日" @click="setToday">今日</el-button>
+      <el-button size="small" title="翌日（期間ごと1日後へ）" @click="shiftRange(1)">
+        翌日<el-icon class="el-icon--right"><ArrowRight /></el-icon>
+      </el-button>
+    </el-button-group>
     <el-select
       v-model="supplierCd"
       placeholder="外注先"
@@ -38,7 +49,9 @@
           <span class="sid-icon"><el-icon><Printer /></el-icon></span>
           <div class="sid-copy">
             <span class="sid-title">注文書印刷確認</span>
-            <p class="sid-desc">{{ sheetSupplierName }}・{{ sheetDateLabel }} の注文書を印刷</p>
+            <p class="sid-desc">
+              {{ sheetSupplierName }}・{{ sheetPeriodLabel }} の注文書を印刷（1日1ページ・{{ sheetPages.length }} ページ）
+            </p>
           </div>
           <el-button size="small" class="sid-print-btn" @click="confirmPrint">
             <el-icon><Printer /></el-icon>印刷実行
@@ -50,7 +63,7 @@
       <div class="sid-summary">
         <div class="sid-summary-item">
           <span class="sid-summary-label">注文日</span>
-          <span class="sid-summary-value">{{ sheetDateLabel }}</span>
+          <span class="sid-summary-value" :title="sheetPeriodLabel">{{ sheetPeriodShort }}</span>
         </div>
         <div class="sid-summary-item">
           <span class="sid-summary-label">外注先</span>
@@ -58,7 +71,7 @@
         </div>
         <div class="sid-summary-item">
           <span class="sid-summary-label">件数</span>
-          <span class="sid-summary-value">{{ sheetItems.length }} 件</span>
+          <span class="sid-summary-value">{{ sheetItems.length }} 件・{{ sheetPages.length }} 頁</span>
         </div>
         <div class="sid-summary-item">
           <span class="sid-summary-label">総注文数</span>
@@ -119,45 +132,62 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Box, Close, EditPen, Printer, User, WarningFilled } from '@element-plus/icons-vue'
+import dayjs from 'dayjs'
 import {
-  getPlatingLedgerOptions,
-  getPlatingLedgerOrderSheet,
-  markPlatingOrderSheetIssued,
-  type PlatingLedgerRow,
-  type PlatingOrderSheetItem,
-} from '@/api/outsourcing'
+  ArrowLeft,
+  ArrowRight,
+  Box,
+  Close,
+  EditPen,
+  Printer,
+  User,
+  WarningFilled,
+} from '@element-plus/icons-vue'
+import { type PlatingLedgerRow, type PlatingOrderSheetItem } from '@/api/outsourcing'
 import { recordPrintHistory } from '@/api/shipping/printHistory'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+import { useLedger } from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
 
+const ledger = useLedger()
+
 const props = defineProps<{
-  defaultDate?: string
+  /** 台帳の表示期間と双方向で連動（v-model:range） */
+  range?: [string, string]
   defaultSupplierCd?: string
 }>()
 
 const emit = defineEmits<{
   issued: [rows: PlatingLedgerRow[]]
+  'update:range': [range: [string, string]]
 }>()
 
 const PERSON_OPTIONS = ['篠田', '小森', '趙', '青山', '孫', '竹村', '東條']
 
 const { canExport } = usePurchaseOperationPermission()
 
-const orderDate = ref(props.defaultDate || '')
+const localRange = ref<string[]>([])
+const orderRange = computed<string[]>({
+  get: () => (props.range?.length === 2 ? props.range : localRange.value),
+  set: (v) => {
+    localRange.value = v || []
+    if (v?.length === 2 && v[0] && v[1]) emit('update:range', [v[0], v[1]])
+  },
+})
 const supplierCd = ref(props.defaultSupplierCd || '')
 const supplierOptions = ref<{ value: string; label: string }[]>([])
 const fetching = ref(false)
 const dialogVisible = ref(false)
 const sheetItems = ref<PlatingOrderSheetItem[]>([])
 const sheetSupplierName = ref('')
-const sheetDate = ref('')
+const sheetStart = ref('')
+const sheetEnd = ref('')
 
 const printForm = reactive({
   recipientCompany: '',
   approver: '小森',
-  issuer: '竹村',
+  issuer: ledger.sheetDefaultIssuer,
   note1: '1.納品書と請求書には必ずこの注文番号をご記入下さい。',
   note2: '2.支払期日には法定税率による消費税額及び地方消費税分を加算して支払います。',
   note3:
@@ -183,14 +213,64 @@ function formatJpDate(ymd: string): string {
   return `${y}年${m}月${d}日`
 }
 
-const sheetDateLabel = computed(() => formatJpDate(sheetDate.value))
+function formatSlashDate(ymd: string, withYear = true): string {
+  if (!ymd) return ''
+  const [y, m, d] = ymd.split('-')
+  return withYear ? `${y}/${m}/${d}` : `${m}/${d}`
+}
 
-watch(
-  () => props.defaultDate,
-  (v) => {
-    if (v) orderDate.value = v
-  },
+const sheetPeriodLabel = computed(() =>
+  sheetStart.value === sheetEnd.value
+    ? formatJpDate(sheetStart.value)
+    : `${formatJpDate(sheetStart.value)}〜${formatJpDate(sheetEnd.value)}`,
 )
+
+const sheetPeriodShort = computed(() => {
+  if (sheetStart.value === sheetEnd.value) return formatSlashDate(sheetStart.value)
+  const sameYear = sheetStart.value.slice(0, 4) === sheetEnd.value.slice(0, 4)
+  return `${formatSlashDate(sheetStart.value)}〜${formatSlashDate(sheetEnd.value, !sameYear)}`
+})
+
+/** 注文日ごとに 1 ページ（注文のない日はページを作らない） */
+const sheetPages = computed(() => {
+  const byDate = new Map<string, PlatingOrderSheetItem[]>()
+  for (const r of sheetItems.value) {
+    const key = r.order_date || ''
+    const list = byDate.get(key) ?? []
+    list.push(r)
+    byDate.set(key, list)
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, items]) => ({
+      date,
+      items: [...items].sort((a, b) =>
+        (a.product_name || '').localeCompare(b.product_name || '', 'ja-JP', {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+      ),
+    }))
+})
+
+function setToday() {
+  const today = dayjs().format('YYYY-MM-DD')
+  orderRange.value = [today, today]
+}
+
+/** 期間の長さを保ったまま前後へずらす（未指定なら今日基準の1日） */
+function shiftRange(days: number) {
+  const [start, end] = orderRange.value || []
+  if (!start || !end) {
+    const d = dayjs().add(days, 'day').format('YYYY-MM-DD')
+    orderRange.value = [d, d]
+    return
+  }
+  orderRange.value = [
+    dayjs(start).add(days, 'day').format('YYYY-MM-DD'),
+    dayjs(end).add(days, 'day').format('YYYY-MM-DD'),
+  ]
+}
 
 watch(
   () => props.defaultSupplierCd,
@@ -201,7 +281,7 @@ watch(
 
 async function loadSuppliers() {
   try {
-    const res = await getPlatingLedgerOptions()
+    const res = await ledger.getOptions()
     const map = new Map<string, string>()
     for (const o of res?.data || []) {
       if (!map.has(o.supplier_cd)) map.set(o.supplier_cd, o.supplier_name || o.supplier_cd)
@@ -216,8 +296,9 @@ async function loadSuppliers() {
 
 async function openIssue() {
   if (!guardPurchaseOperation(canExport)) return
-  if (!orderDate.value) {
-    ElMessage.warning('注文日を指定してください')
+  const [start, end] = orderRange.value || []
+  if (!start || !end) {
+    ElMessage.warning('注文日の期間を指定してください')
     return
   }
   if (!supplierCd.value) {
@@ -226,18 +307,19 @@ async function openIssue() {
   }
   fetching.value = true
   try {
-    const res = await getPlatingLedgerOrderSheet(orderDate.value, supplierCd.value)
+    const res = await ledger.getOrderSheet(start, end, supplierCd.value)
     const items = res?.data?.items || []
     if (items.length === 0) {
-      ElMessage.warning('指定した注文日・外注先の注文データがありません')
+      ElMessage.warning('指定した期間・外注先の注文データがありません')
       return
     }
     sheetItems.value = items
-    sheetDate.value = orderDate.value
+    sheetStart.value = start
+    sheetEnd.value = end
     sheetSupplierName.value = res.data.supplier_name || supplierCd.value
     printForm.recipientCompany = `${sheetSupplierName.value} 御中`
     printForm.approver = '小森'
-    printForm.issuer = '竹村'
+    printForm.issuer = ledger.sheetDefaultIssuer
     dialogVisible.value = true
   } catch (error: any) {
     notifyLedgerError(error, '注文データの取得に失敗しました')
@@ -255,15 +337,17 @@ function esc(value: unknown): string {
 }
 
 function buildSheetHtml(): string {
+  return sheetPages.value.map((p) => buildPageHtml(p.date, p.items)).join('')
+}
+
+function buildPageHtml(orderDate: string, items: PlatingOrderSheetItem[]): string {
   const fmtNum = (v: number | null | undefined) => (v == null || isNaN(v) ? '0' : v.toLocaleString('ja-JP'))
   const fmtCurrency = (v: number | null | undefined) =>
     v == null || isNaN(v)
       ? '¥0.00'
       : `¥${v.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const items = [...sheetItems.value].sort((a, b) =>
-    (a.product_name || '').localeCompare(b.product_name || '', 'ja-JP', { numeric: true, sensitivity: 'base' }),
-  )
+  const pageQty = items.reduce((sum, r) => sum + (r.order_qty || 0), 0)
   const first = items[0]
   const rowsHtml = items
     .map(
@@ -282,7 +366,7 @@ function buildSheetHtml(): string {
 
   return `
     <div class="order-sheet">
-      <div class="issued-info">注文日: ${esc(formatJpDate(sheetDate.value))}</div>
+      <div class="issued-info">注文日: ${esc(formatJpDate(orderDate))}</div>
       <div class="title">注 文 書</div>
       <div class="header">
         <div class="recipient-block"><div>${esc(printForm.recipientCompany || '外注先会社名 御中')}</div></div>
@@ -319,7 +403,7 @@ function buildSheetHtml(): string {
         <tbody>${rowsHtml}</tbody>
       </table>
       <div class="summary-row">
-        <div class="summary-item">総注文数  ${fmtNum(totalQty.value)} 本</div>
+        <div class="summary-item">総注文数  ${fmtNum(pageQty)} 本</div>
       </div>
       <div class="notes">
         <p>${esc(printForm.note1)}</p>
@@ -335,6 +419,7 @@ const SHEET_STYLE = `
   .delivery-meta-left, .delivery-meta-right { background: #f8f9fa; padding: 4px 8px; border-radius: 4px; border: 1px solid #e5e7eb; }
   .order-note { margin: 3mm 0 2mm; font-size: 11pt; font-weight: 600; }
   .order-sheet { width: 100%; margin: 0 auto; position: relative; min-height: 281mm; height: 281mm; box-sizing: border-box; page-break-inside: avoid; }
+  .order-sheet + .order-sheet { page-break-before: always; break-before: page; }
   .header { margin-bottom: 1mm; position: relative; display: flex; flex-direction: column; gap: 4mm; }
   .issued-info { text-align: left; font-size: 13pt; font-weight: 600; margin-bottom: 1mm; }
   .title { text-align: center; font-size: 30pt; font-weight: bold; margin: 1mm 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); letter-spacing: 2px; }
@@ -384,7 +469,7 @@ async function confirmPrint() {
   }
 
   try {
-    const res = await markPlatingOrderSheetIssued(sheetItems.value.map((r) => r.id))
+    const res = await ledger.markIssued(sheetItems.value.map((r) => r.id))
     emit('issued', res?.data?.rows || [])
   } catch (error: any) {
     notifyLedgerError(error, '発行記録の保存に失敗しました')
@@ -392,10 +477,11 @@ async function confirmPrint() {
 
   try {
     await recordPrintHistory({
-      report_type: 'plating_order',
-      report_title: '外注メッキ注文書',
+      report_type: ledger.sheetReportType,
+      report_title: ledger.sheetReportTitle,
       filters: {
-        orderDate: sheetDate.value,
+        startDate: sheetStart.value,
+        endDate: sheetEnd.value,
         supplier: supplierCd.value,
         orderNos: sheetItems.value.map((r) => r.order_no).filter(Boolean),
       },
@@ -436,11 +522,41 @@ onMounted(loadSuppliers)
 }
 
 .issuer-date {
-  width: 130px !important;
+  width: 250px !important;
+  flex: 0 0 250px;
 }
 
 .issuer-supplier {
   width: 170px;
+}
+
+.issuer-quick {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.issuer-quick .el-button {
+  height: 24px;
+  padding: 0 8px;
+  font-weight: 700;
+  color: #0f766e;
+  border-color: #cfe6e3;
+  background: #fff;
+}
+
+.issuer-quick .el-button:hover,
+.issuer-quick .el-button:focus-visible {
+  color: #115e59;
+  border-color: #7dd3c8;
+  background: #ecfdf9;
+}
+
+.issuer-quick .el-button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.issuer-quick .el-button:last-child {
+  border-radius: 0 8px 8px 0;
 }
 
 /* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */

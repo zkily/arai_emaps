@@ -1,19 +1,34 @@
 """
 外注管理 データベースモデル（outsourcing_suppliers / welding_orders / welding_receivings）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Date, Numeric, ForeignKey, UniqueConstraint
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Text,
+    Boolean,
+    Date,
+    Numeric,
+    ForeignKey,
+    UniqueConstraint,
+)
 from sqlalchemy.sql import func
 from app.core.database import Base
 
 
 class OutsourcingSupplier(Base):
     """外注先マスタテーブル（outsourcing_suppliers）"""
+
     __tablename__ = "outsourcing_suppliers"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     supplier_cd = Column(String(10), unique=True, nullable=False, index=True)
     supplier_name = Column(String(50), nullable=False)
-    supplier_type = Column(String(20), nullable=False, default="plating", index=True)  # plating, welding, cutting, forming, parts_processing
+    supplier_type = Column(
+        String(20), nullable=False, default="plating", index=True
+    )  # plating, welding, cutting, forming, parts_processing
     postal_code = Column(String(10))
     address = Column(String(50))
     phone = Column(String(20))
@@ -30,6 +45,7 @@ class OutsourcingSupplier(Base):
 
 class WeldingOrder(Base):
     """外注溶接注文（outsourcing_welding_orders）"""
+
     __tablename__ = "outsourcing_welding_orders"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -49,7 +65,9 @@ class WeldingOrder(Base):
     category = Column(String(50))
     content = Column(Text)
     received_qty = Column(Integer, default=0)
-    status = Column(String(20), default="pending", index=True)  # pending, ordered, partial, completed, cancelled
+    status = Column(
+        String(20), default="pending", index=True
+    )  # pending, ordered, partial, completed, cancelled
     remarks = Column(Text)
     created_by = Column(String(50))
     created_at = Column(DateTime, default=func.now())
@@ -58,10 +76,13 @@ class WeldingOrder(Base):
 
 class OutsourcingProcessProduct(Base):
     """外注工程製品マスタ（outsourcing_process_products）"""
+
     __tablename__ = "outsourcing_process_products"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    process_type = Column(String(30), nullable=False, index=True)  # cutting, forming, plating, welding, inspection, processing
+    process_type = Column(
+        String(30), nullable=False, index=True
+    )  # cutting, forming, plating, welding, inspection, processing
     supplier_cd = Column(String(20), nullable=False, index=True)
     supplier_name = Column(String(100))
     product_cd = Column(String(50), nullable=False, index=True)
@@ -82,6 +103,7 @@ class OutsourcingProcessProduct(Base):
 
 class PlatingOrder(Base):
     """外注メッキ注文（outsourcing_plating_orders）"""
+
     __tablename__ = "outsourcing_plating_orders"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -100,7 +122,9 @@ class PlatingOrder(Base):
     content = Column(String(50))
     specification = Column(String(50))
     received_qty = Column(Integer, default=0)
-    status = Column(String(20), default="pending", index=True)  # pending, ordered, partial, completed, cancelled
+    status = Column(
+        String(20), default="pending", index=True
+    )  # pending, ordered, partial, completed, cancelled
     remarks = Column(Text)
     created_by = Column(String(50))
     created_at = Column(DateTime, default=func.now())
@@ -109,12 +133,18 @@ class PlatingOrder(Base):
 
 class PlatingReceiving(Base):
     """外注メッキ受入（outsourcing_plating_receivings）"""
+
     __tablename__ = "outsourcing_plating_receivings"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     receiving_no = Column(String(30), unique=True, nullable=False, index=True)
     receiving_date = Column(Date, nullable=False, index=True)
-    order_id = Column(Integer, ForeignKey("outsourcing_plating_orders.id", ondelete="RESTRICT"), nullable=False, index=True)
+    order_id = Column(
+        Integer,
+        ForeignKey("outsourcing_plating_orders.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     order_no = Column(String(30), nullable=False, index=True)
     supplier_cd = Column(String(10), nullable=False, index=True)
     product_cd = Column(String(50), nullable=False)
@@ -138,6 +168,7 @@ class PlatingReceiving(Base):
 
 class PlatingStock(Base):
     """外注メッキ品在庫（outsourcing_plating_stock）"""
+
     __tablename__ = "outsourcing_plating_stock"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -159,6 +190,7 @@ class PlatingStock(Base):
 
 class WeldingStock(Base):
     """外注溶接品在庫（outsourcing_welding_stock）"""
+
     __tablename__ = "outsourcing_welding_stock"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -180,6 +212,7 @@ class WeldingStock(Base):
 
 class PlatingLedger(Base):
     """外注メッキ日別台帳（注文・受入・外注在庫を1行で管理）"""
+
     __tablename__ = "outsourcing_plating_ledger"
     __table_args__ = (
         UniqueConstraint("order_date", "supplier_cd", "product_cd", name="uk_plating_ledger_day"),
@@ -209,8 +242,41 @@ class PlatingLedger(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class WeldingLedger(Base):
+    """外注溶接日別台帳（注文・受入・外注在庫を1行で管理）"""
+
+    __tablename__ = "outsourcing_welding_ledger"
+    __table_args__ = (
+        UniqueConstraint("order_date", "supplier_cd", "product_cd", name="uk_welding_ledger_day"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    order_date = Column(Date, nullable=False, index=True)
+    supplier_cd = Column(String(20), nullable=False, index=True)
+    supplier_name = Column(String(100))
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    unit_price = Column(Numeric(12, 2), default=0)
+    lead_time_days = Column(Integer, default=7)
+    delivery_date = Column(Date)
+    order_qty = Column(Integer, default=0)
+    order_no = Column(String(30), unique=True, nullable=True, index=True)
+    order_amount = Column(Numeric(14, 2), default=0)
+    order_sheet_issued_at = Column(DateTime, nullable=True)
+    order_sheet_issued_by = Column(String(100), nullable=True)
+    receiving_qty = Column(Integer, default=0)
+    receiving_no = Column(String(30), unique=True, nullable=True)
+    defect_qty = Column(Integer, default=0)
+    disposal_no = Column(String(30), unique=True, nullable=True)
+    initial_stock = Column(Integer, default=0)
+    current_stock = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class OutsourcingStockTransaction(Base):
     """外注入出庫履歴（outsourcing_stock_transactions）"""
+
     __tablename__ = "outsourcing_stock_transactions"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -230,12 +296,18 @@ class OutsourcingStockTransaction(Base):
 
 class WeldingReceiving(Base):
     """外注溶接受入（outsourcing_welding_receivings）"""
+
     __tablename__ = "outsourcing_welding_receivings"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     receiving_no = Column(String(30), unique=True, nullable=False, index=True)
     receiving_date = Column(Date, nullable=False, index=True)
-    order_id = Column(Integer, ForeignKey("outsourcing_welding_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    order_id = Column(
+        Integer,
+        ForeignKey("outsourcing_welding_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     order_no = Column(String(30), nullable=False, index=True)
     supplier_cd = Column(String(20), nullable=False, index=True)
     product_cd = Column(String(50), nullable=False)

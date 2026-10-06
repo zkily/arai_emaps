@@ -2990,6 +2990,82 @@ const getEfficiencyRate = (machineName: string, productName: string): number | n
 // ========================================
 
 /**
+ * A4横の印刷領域（上6mm・下5mmを除く）に収める。
+ * 表が1ページを超えるときだけ行の上下余白を詰め、その後は行高を伸ばして上下いっぱいにする。
+ */
+const fitSetupSchedulePage = (doc: Document) => {
+  const pageH = (210 - 6 - 5) * (96 / 25.4) - 4
+  const header = doc.querySelector('.print-header') as HTMLElement | null
+  const table = doc.querySelector('.main-table') as HTMLElement | null
+  const view = doc.defaultView
+  if (!header || !table || !view) return
+  const headerStyle = view.getComputedStyle(header)
+  const available =
+    pageH - header.getBoundingClientRect().height - (parseFloat(headerStyle.marginBottom) || 0)
+  table.style.height = 'auto'
+  const bodyCells = Array.from(table.querySelectorAll('tbody td')) as HTMLElement[]
+  const headCells = Array.from(table.querySelectorAll('thead th')) as HTMLElement[]
+  let pad = 2
+  let line = 1.25
+  let guard = 0
+  while (table.getBoundingClientRect().height > available && guard < 20) {
+    guard += 1
+    if (pad <= 0 && line <= 1.02) break
+    pad = Math.max(0, Math.round((pad - 0.25) * 100) / 100)
+    line = Math.max(1.02, Math.round((line - 0.03) * 100) / 100)
+    bodyCells.forEach((cell) => {
+      cell.style.paddingTop = `${pad}px`
+      cell.style.paddingBottom = `${pad}px`
+      cell.style.lineHeight = String(line)
+      cell.style.height = 'auto'
+    })
+    headCells.forEach((cell) => {
+      cell.style.paddingTop = `${pad}px`
+      cell.style.paddingBottom = `${pad}px`
+      cell.style.height = 'auto'
+    })
+  }
+  const remain = available - table.getBoundingClientRect().height
+  const rows = Array.from(table.querySelectorAll('tbody tr')) as HTMLElement[]
+  if (remain > 1 && rows.length) {
+    const add = remain / rows.length
+    rows.forEach((row) => {
+      row.style.height = `${row.getBoundingClientRect().height + add}px`
+    })
+    const overflow = table.getBoundingClientRect().height - available
+    if (overflow > 0.5) {
+      const cut = (overflow + 2) / rows.length
+      rows.forEach((row) => {
+        const current = parseFloat(row.style.height) || 0
+        row.style.height = `${Math.max(current - cut, 0)}px`
+      })
+    }
+  }
+}
+
+/** 印刷領域と同じ幅の隠しiframeで組版し、1ページに収めてから印刷する */
+const printSetupScheduleHtml = (printContent: string) => {
+  const mmToPx = 96 / 25.4
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = `position:fixed;left:0;top:0;border:0;opacity:0;pointer-events:none;z-index:-1;width:${(297 - 24) * mmToPx}px;height:${(210 - 11) * mmToPx}px`
+  document.body.appendChild(iframe)
+  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
+  if (!iframeDoc || !iframe.contentWindow) {
+    document.body.removeChild(iframe)
+    throw new Error('print init failed')
+  }
+  iframeDoc.open()
+  iframeDoc.write(printContent)
+  iframeDoc.close()
+  fitSetupSchedulePage(iframeDoc)
+  iframe.contentWindow.focus()
+  iframe.contentWindow.print()
+  setTimeout(() => {
+    if (document.body.contains(iframe)) document.body.removeChild(iframe)
+  }, 1000)
+}
+
+/**
  * 段取予定表を印刷
  * 生産計画データを取得し、段取予定表を生成して印刷する
  */
@@ -3012,70 +3088,10 @@ const printSetupSchedule = async () => {
     // 生成数据并构建打印用HTML
     const data = await generateSetupScheduleContent(fullPlanData)
     const printContent = buildSetupSchedulePrintHtml(data)
-
-    // 使用隐藏的iframe进行直接打印（A4横向，单面）
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    iframe.style.visibility = 'hidden'
-    document.body.appendChild(iframe)
-
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!iframeDoc) {
-      ElMessage.error('印刷機能の初期化に失敗しました')
-      document.body.removeChild(iframe)
+    printSetupScheduleHtml(printContent)
+    setTimeout(() => {
       printingSetupSchedule.value = false
-      return
-    }
-
-    iframeDoc.open()
-    iframeDoc.write(printContent)
-    iframeDoc.close()
-
-    // 防止重复打印的标志
-    let hasPrinted = false
-
-    // 打印函数
-    const doPrint = () => {
-      if (hasPrinted) return
-      hasPrinted = true
-
-      try {
-        const iframeWindow = iframe.contentWindow
-        if (iframeWindow && iframeDoc.body) {
-          // 直接调用打印，浏览器会自动应用@page样式（A4横向）
-          iframeWindow.focus()
-          iframeWindow.print()
-
-          // 打印完成后移除iframe
-          setTimeout(() => {
-            if (document.body.contains(iframe)) {
-              document.body.removeChild(iframe)
-            }
-            printingSetupSchedule.value = false
-          }, 1000)
-        }
-      } catch (error) {
-        console.error('印刷実行エラー:', error)
-        ElMessage.error('印刷の実行に失敗しました')
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe)
-        }
-        printingSetupSchedule.value = false
-      }
-    }
-
-    // 等待内容加载完成后直接打印
-    iframe.onload = () => {
-      setTimeout(doPrint, 500)
-    }
-
-    // 如果onload没有触发，也尝试打印（某些浏览器可能不会触发onload）
-    setTimeout(doPrint, 1500)
+    }, 1000)
   } catch (error) {
     console.error('段取予定表印刷失败:', error)
     ElMessage.error('段取予定表の印刷に失敗しました')
@@ -3245,27 +3261,12 @@ const printFromSetupSchedulePreview = () => {
     ...meta,
     tableRows: setupSchedulePreviewTableRows.value,
   })
-  const iframe = document.createElement('iframe')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
-  document.body.appendChild(iframe)
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
-  if (!iframeDoc) {
-    document.body.removeChild(iframe)
-    return
-  }
-  iframeDoc.open()
-  iframeDoc.write(printContent)
-  iframeDoc.close()
   try {
-    iframe.contentWindow?.focus()
-    iframe.contentWindow?.print()
+    printSetupScheduleHtml(printContent)
   } catch (e) {
     console.error(e)
     ElMessage.error('印刷の実行に失敗しました')
   }
-  setTimeout(() => {
-    if (document.body.contains(iframe)) document.body.removeChild(iframe)
-  }, 1000)
 }
 
 // ==================== 工具函数和缓存 ====================
@@ -5686,14 +5687,19 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       remainingLessThan2,
       day1SaturdayWithPlan,
     )
-    // 下下日与下一日用同一套判断，基准是下一日当天的品种
+    // 下下日与下一日用同一套判断，基准是下一日当天的品种。
+    // 下下日が土曜日で計画があるときは、下一日の土曜日と同じく品名と計画数を出す。
     const day2Baseline = nextDayGroups.map((group) => group.name)
+    const day2SaturdayWithPlan =
+      JapanDateUtils.isSaturday(nextScheduleDate2) &&
+      listProductGroupsOnDate(dateIndex, nextScheduleDate2).length > 0
     const day2Display = resolveVarietyColumn(
       dateIndex,
       nextScheduleDate2,
       dayAfterNext2Product.name,
       day2Baseline,
       remainingLessThan2,
+      day2SaturdayWithPlan,
     )
 
     const displayNextProductName = day1Display.name
@@ -5876,16 +5882,11 @@ const buildSetupSchedulePrintHtml = (data: {
 
         .print-container {
           width: 100%;
-          height: 100%;
           position: relative;
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
         }
 
         .table-wrapper {
-          flex: 1;
-          overflow: hidden;
+          overflow: visible;
         }
 
         .print-header {
@@ -6022,7 +6023,6 @@ const buildSetupSchedulePrintHtml = (data: {
           background-color: #f0f0f0;
           font-weight: bold;
           font-size: 10px;
-          height: 20px;
           line-height: 1.1;
         }
 
@@ -6048,8 +6048,7 @@ const buildSetupSchedulePrintHtml = (data: {
 
         .main-table td {
           font-size: 10px;
-          height: 19px;
-          line-height: 1.5;
+          line-height: 1.25;
         }
 
         .main-table th {

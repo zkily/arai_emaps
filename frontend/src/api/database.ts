@@ -411,9 +411,12 @@ export function releaseBatchUpdateLock(lockValue: string) {
   )
 }
 
+/** 生産サマリ一括更新。ブラウザ・開発プロキシ・本番プロキシとも最大 10 分待つ */
+const SUMMARY_UPDATE_TIMEOUT = 10 * 60 * 1000
+
 /** 受注データから forecast_quantity / order_quantity を更新 */
 export function updateProductionSummarysFromOrderDaily(params?: UpdateFromOrderDailyParams) {
-  return request.post(`${BASE}/update-from-order-daily`, params || {})
+  return request.post(`${BASE}/update-from-order-daily`, params || {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 繰越フィールドを全件 0 にクリア */
@@ -437,7 +440,7 @@ export function updateProductionSummarysActual(startDate?: string) {
       startDate?: string
     }
     message?: string
-  }>(`${BASE}/update-actual`, startDate ? { startDate } : {})
+  }>(`${BASE}/update-actual`, startDate ? { startDate } : {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 不良データ更新：当月（JST）1 日～当月末日の各工程 *_defect を 0 クリア後、stock_transaction_logs の不良を集計して反映 */
@@ -451,7 +454,7 @@ export function updateProductionSummarysDefect() {
       clearPeriod?: string
     }
     message?: string
-  }>(`${BASE}/update-defect`)
+  }>(`${BASE}/update-defect`, {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 廃棄データ更新：当月（JST）1 日～当月末日の各工程 *_scrap を 0 クリア後、stock_transaction_logs の廃棄を集計して反映 */
@@ -465,7 +468,7 @@ export function updateProductionSummarysScrap() {
       clearPeriod?: string
     }
     message?: string
-  }>(`${BASE}/update-scrap`)
+  }>(`${BASE}/update-scrap`, {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 保留データ更新：当月（JST）1 日～当月末日の各工程 *_on_hold を 0 クリア後、stock_transaction_logs の保留を集計して反映 */
@@ -479,7 +482,7 @@ export function updateProductionSummarysOnHold() {
       clearPeriod?: string
     }
     message?: string
-  }>(`${BASE}/update-on-hold`)
+  }>(`${BASE}/update-on-hold`, {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 生産計画日更新：product_process_bom のリードタイムで production_summarys の各工程 *_production_date を営業日逆算で更新 */
@@ -492,7 +495,7 @@ export function updateProductionSummarysProductionDates() {
 
 /** 計算フィールド（在庫・推移・actual_plan_trend）を date >= startDate で 0 にクリア */
 export function clearProductionSummarysCalculatedFields(startDate: string) {
-  return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate })
+  return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate }, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
 /** 計画列（_plan / _actual_plan）を date >= startDate ～ +5ヶ月 で 0 にクリア（計画データ更新前初期化用） */
@@ -521,11 +524,11 @@ export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
     message?: string
-  }>(`${BASE}/update-plan`, startDate != null ? { startDate } : {})
+  }>(`${BASE}/update-plan`, startDate != null ? { startDate } : {}, { timeout: SUMMARY_UPDATE_TIMEOUT })
 }
 
-/** 在庫・推移更新は処理時間がかかるため 5 分タイムアウト */
-const LONG_REQUEST_TIMEOUT = 5 * 60 * 1000
+/** 在庫・推移更新は処理時間がかかるため長めに待つ */
+const LONG_REQUEST_TIMEOUT = SUMMARY_UPDATE_TIMEOUT
 
 /** 在庫・推移・安全在庫の計算開始日（初期ログの最新 transaction_time の日付、無ければ当月月初JST） */
 export function getInventoryTrendCalcStartDate() {

@@ -17,6 +17,14 @@ if (!platingCodes.includes('ERP_OUTSOURCING_PLATING_RECEIVING')) {
   pathToCodes.set(platingPath, platingCodes)
 }
 
+// 旧「外注溶接受入」権限でも統合後の外注溶接画面を開ける
+const weldingPath = '/erp/purchase/outsourcing/welding-order'
+const weldingCodes = pathToCodes.get(weldingPath) ?? []
+if (!weldingCodes.includes('ERP_OUTSOURCING_WELDING_RECEIVING')) {
+  weldingCodes.push('ERP_OUTSOURCING_WELDING_RECEIVING')
+  pathToCodes.set(weldingPath, weldingCodes)
+}
+
 /** 同一路由可能对应多个菜单 code（各模块ホーム等） */
 export function codesForPath(path: string): string[] {
   return pathToCodes.get(path) ?? []

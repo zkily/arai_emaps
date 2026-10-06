@@ -227,10 +227,29 @@
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
+      class="il-prog-dialog pb-std"
     >
-      <div class="progress-content">
+      <template #header>
+        <div class="prg-hero pb-hero" :class="{ 'is-done': progressStatus === 'success' }">
+          <div class="pb-bubbles" aria-hidden="true" />
+          <span class="prg-hero-icon">
+            <el-icon v-if="progressStatus === 'success'"><CircleCheck /></el-icon>
+            <el-icon v-else><Refresh /></el-icon>
+          </span>
+          <div class="prg-hero-copy">
+            <span class="prg-hero-title">在庫更新中</span>
+            <p class="prg-hero-desc">
+              {{ progressStatus === 'success' ? '処理が完了しました' : '完了するまで画面を閉じずにお待ちください' }}
+            </p>
+          </div>
+        </div>
+      </template>
+      <div class="progress-content prg-body" :class="{ 'is-done': progressStatus === 'success' }">
         <div class="progress-info">
-          <el-icon class="progress-icon"><Loading /></el-icon>
+          <div class="progress-icon-wrap">
+            <el-icon v-if="progressStatus === 'success'" class="progress-icon"><CircleCheck /></el-icon>
+            <el-icon v-else class="progress-icon is-loading"><Loading /></el-icon>
+          </div>
           <span class="progress-text">{{ progressText }}</span>
         </div>
         <div class="progress-track">
@@ -240,7 +259,10 @@
             :style="{ width: Math.min(100, Math.round(progressPercentage)) + '%' }"
           />
         </div>
-        <span class="progress-percent">{{ Math.round(progressPercentage) }}%</span>
+        <div class="progress-details">
+          <span class="detail-label">進捗</span>
+          <span class="detail-value progress-percent">{{ Math.round(progressPercentage) }}%</span>
+        </div>
       </div>
     </el-dialog>
   </div>
@@ -249,7 +271,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { List, Download, Refresh, Loading, Calendar, Goods, Tickets } from '@element-plus/icons-vue'
+import { List, Download, Refresh, Loading, Calendar, Goods, Tickets, CircleCheck } from '@element-plus/icons-vue'
 import {
   getProductionSummarysList,
   getProductionSummarysProducts,
@@ -1178,14 +1200,170 @@ onMounted(() => {
 
 /* 在庫更新確認・進度ダイアログ */
 .confirm-message { margin: 0; font-size: 14px; color: #334155; }
-.progress-content { padding: 8px 0; }
-.progress-info { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.progress-icon { font-size: 20px; color: #409eff; }
-.progress-text { font-size: 14px; color: #334155; white-space: pre-line; }
-.progress-track { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
-.progress-fill { height: 100%; background: #409eff; border-radius: 4px; transition: width 0.3s ease; }
-.progress-fill--success { background: #67c23a; }
-.progress-percent { font-size: 12px; color: #64748b; }
+/* 一括更新進度ダイアログ（append 先で scope 属性が付かないため外枠は :global で指定） */
+:global(.el-dialog.il-prog-dialog) {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -16px rgba(15, 23, 42, 0.38),
+    0 0 0 1px rgba(8, 145, 178, 0.12);
+}
+:global(.el-dialog.il-prog-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+:global(.el-dialog.il-prog-dialog .el-dialog__body) {
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, #f2fbfb 0%, #f8fafc 100%);
+}
+.prg-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #0f766e 0%, #0d9488 34%, #0891b2 66%, #2563eb 100%);
+  transition: background 0.3s ease;
+}
+.prg-hero.is-done {
+  background: linear-gradient(125deg, #065f46 0%, #059669 38%, #10b981 72%, #34d399 100%);
+}
+.prg-hero-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.2);
+}
+.prg-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.prg-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+}
+.prg-hero-desc {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
+}
+.prg-body {
+  --accent: #0891b2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prg-body.is-done {
+  --accent: #059669;
+}
+.prg-body .progress-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.prg-body .progress-icon-wrap {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.prg-body .progress-icon {
+  font-size: 18px;
+  color: var(--accent);
+}
+.prg-body .progress-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #1e293b;
+  white-space: pre-line;
+}
+.prg-body .progress-track {
+  height: 12px;
+  margin: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 7%, #eef2f7);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, #e2e8f0),
+    inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.prg-body .progress-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(90deg, #2dd4bf, #0891b2);
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.prg-body .progress-fill--success {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(90deg, #34d399, #059669);
+}
+.prg-body .progress-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #64748b;
+}
+.prg-body .progress-details .detail-label {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 75%, #0f172a);
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.prg-body .progress-details .progress-percent {
+  min-width: 3em;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
 
 /* 页面美化：現代UI・3D動効・色分け（仕掛品・製品在庫照会 / 在庫 teal→cyan→blue） */
 .il-modern {
@@ -1616,35 +1794,6 @@ onMounted(() => {
   stroke: var(--il-c2);
 }
 
-/* ---- 在庫更新ダイアログ ---- */
-.il-modern .progress-icon {
-  color: var(--il-c2);
-  animation: ilSpin 1s linear infinite;
-}
-.il-modern .progress-track {
-  height: 10px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
-}
-.il-modern .progress-fill {
-  border-radius: 999px;
-  background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.22) 0 8px,
-      transparent 8px 16px
-    ),
-    linear-gradient(90deg, #14b8a6, #0891b2, #2563eb);
-  background-size:
-    22px 22px,
-    100% 100%;
-  animation: ilStripe 0.8s linear infinite;
-}
-.il-modern .progress-fill--success {
-  background: linear-gradient(90deg, #10b981, #059669);
-  animation: none;
-}
 @keyframes ilIconFloat {
   0%,
   100% {
@@ -1654,28 +1803,9 @@ onMounted(() => {
     transform: perspective(300px) rotateX(-4deg) rotateY(12deg) translateY(-2px);
   }
 }
-@keyframes ilStripe {
-  from {
-    background-position:
-      0 0,
-      0 0;
-  }
-  to {
-    background-position:
-      22px 0,
-      0 0;
-  }
-}
-@keyframes ilSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .il-modern .header-icon,
-  .il-modern .progress-fill,
-  .il-modern .progress-icon,
   .il-modern .bg-orb {
     animation: none;
   }

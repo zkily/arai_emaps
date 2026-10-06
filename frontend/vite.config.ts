@@ -110,6 +110,9 @@ export default defineConfig(({ mode }) => {
           target: apiProxyTarget,
           changeOrigin: true,
           secure: false,
+          // 生産データ一括更新など、集計が 30 秒を超える API が途中で切れないようにする
+          timeout: 660_000,
+          proxyTimeout: 660_000,
         },
         '/ws': {
           target: wsProxyTarget,

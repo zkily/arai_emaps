@@ -5,7 +5,9 @@
         <span class="analysis-icon"><el-icon><DataAnalysis /></el-icon></span>
         <div class="analysis-copy">
           <h3>在庫分析</h3>
-          <p>{{ monthLabel }}1日〜基準日 {{ asOf }}・北九州ケミカルを除く</p>
+          <p>
+            {{ monthLabel }}1日〜基準日 {{ asOf }}<template v-if="ledger.stockScopeNote">・{{ ledger.stockScopeNote }}</template>
+          </p>
         </div>
       </div>
       <div class="insights">
@@ -156,6 +158,9 @@ import {
 import echarts from '@/utils/echarts'
 import type { EChartsOption } from '@/utils/echarts'
 import type { PlatingStockItem, PlatingStockTrendItem } from '@/api/outsourcing'
+import { useLedger } from './ledgerContext'
+
+const ledger = useLedger()
 
 const props = defineProps<{
   rows: PlatingStockItem[]

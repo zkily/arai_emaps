@@ -17,53 +17,6 @@ export interface OutsourcingSupplier {
   [key: string]: unknown
 }
 
-export interface WeldingOrder {
-  id?: number
-  order_no?: string
-  order_date?: string
-  supplier_cd?: string
-  product_cd?: string
-  product_name?: string
-  welding_type?: string
-  quantity?: number
-  unit_price?: number
-  delivery_date?: string
-  status?: string
-  [key: string]: unknown
-}
-
-export interface WeldingReceiving {
-  id?: number
-  receiving_no?: string
-  receiving_date?: string
-  order_id?: number
-  order_no?: string
-  supplier_cd?: string
-  product_cd?: string
-  product_name?: string
-  welding_type?: string
-  order_qty?: number
-  receiving_qty?: number
-  good_qty?: number
-  defect_qty?: number
-  status?: string
-  inspector?: string
-  [key: string]: unknown
-}
-
-// ========== ダッシュボード ==========
-export function getOutsourcingDashboard() {
-  return request.get<{ success: boolean; data: Record<string, unknown> }>(`${BASE}/dashboard`)
-}
-
-export function getUpcomingDeliveries(days: number) {
-  return request.get<{ success: boolean; data: unknown[] }>(`${BASE}/upcoming-deliveries`, { params: { days } })
-}
-
-export function getSupplierSummary() {
-  return request.get<{ success: boolean; data: unknown[] }>(`${BASE}/suppliers/summary`)
-}
-
 // ========== 外注先マスタ ==========
 export function getSuppliers(params?: { type?: string; isActive?: boolean }) {
   return request.get<{ success?: boolean; data?: OutsourcingSupplier[] }>(`${BASE}/suppliers`, { params })
@@ -248,79 +201,101 @@ export interface PlatingOrderSheetItem extends PlatingLedgerRow {
   content: string
 }
 
-export function getPlatingLedgerOrderSheet(orderDate: string, supplierCd: string) {
+export function getPlatingLedgerOrderSheet(startDate: string, endDate: string, supplierCd: string) {
   return request.get(`${BASE}/plating/ledger/order-sheet`, {
-    params: { orderDate, supplierCd },
+    params: { orderDate: startDate, endDate, supplierCd },
   }) as unknown as Promise<{
     success: boolean
     data: { supplier_cd: string; supplier_name: string; items: PlatingOrderSheetItem[] }
   }>
 }
-// ========== 溶接注文 ==========
-export function getWeldingOrders(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: WeldingOrder[] }>(`${BASE}/welding/orders`, { params })
+
+export type OutsourcingLedgerRow = PlatingLedgerRow
+
+/** 溶接日別台帳。戻り値の形はメッキ台帳と同じ。 */
+const weldingLedgerRoot = `${BASE}/welding/ledger`
+
+export function getWeldingLedgerOptions() {
+  return request.get(`${weldingLedgerRoot}/options`) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerOption[]
+  }>
 }
 
-export function createWeldingOrder(data: Partial<WeldingOrder>) {
-  return request.post<{ success: boolean; data: WeldingOrder }>(`${BASE}/welding/orders`, data)
+export function getWeldingLedger(params: Parameters<typeof getPlatingLedger>[0]) {
+  return request.get(weldingLedgerRoot, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerRow[]
+    total: number
+  }>
 }
 
-/** 溶接注文一括新規登録（1リクエストで複数件、order_no 重複を防ぐ） */
-export function createWeldingOrdersBatch(orders: Partial<WeldingOrder>[]) {
-  return request.post<{ success: boolean; data: WeldingOrder[]; count: number }>(
-    `${BASE}/welding/orders/batch`,
-    { orders },
-  )
+export function generateWeldingLedger(startDate: string, endDate: string) {
+  return request.post(`${weldingLedgerRoot}/generate`, {
+    start_date: startDate,
+    end_date: endDate,
+  }) as unknown as Promise<{
+    success: boolean
+    data: { generated_count: number; skipped_count: number }
+  }>
 }
 
-export function updateWeldingOrder(id: number, data: Partial<WeldingOrder>) {
-  return request.put<{ success: boolean; data: WeldingOrder }>(`${BASE}/welding/orders/${id}`, data)
+export function calculateWeldingLedger() {
+  return request.post(`${weldingLedgerRoot}/calculate`) as unknown as Promise<{
+    success: boolean
+    data: { calculated_count: number }
+  }>
 }
 
-export function deleteWeldingOrder(id: number) {
-  return request.delete(`${BASE}/welding/orders/${id}`)
+export function refreshWeldingLedgerMaster(data: Parameters<typeof refreshPlatingLedgerMaster>[0]) {
+  return request.post(`${weldingLedgerRoot}/refresh-master`, data) as unknown as Promise<{
+    success: boolean
+    data: { updated_count: number; missing_count: number }
+  }>
 }
 
-export function getWeldingOrdersByOrderNo(orderNo: string) {
-  return request.get<{ success?: boolean; data?: WeldingOrder[] }>(`${BASE}/welding/orders/by-order-no`, { params: { order_no: orderNo } })
+export function markWeldingOrderSheetIssued(ids: number[]) {
+  return request.post(`${weldingLedgerRoot}/order-sheet/issued`, { ids }) as unknown as Promise<{
+    success: boolean
+    data: { updated_count: number; rows: PlatingLedgerRow[] }
+  }>
 }
 
-export function batchOrderWelding(ids: number[]) {
-  return request.post<{ success: boolean; message?: string }>(`${BASE}/welding/orders/batch-order`, { ids })
+export function updateWeldingLedger(id: number, data: Parameters<typeof updatePlatingLedger>[1]) {
+  return request.put(`${weldingLedgerRoot}/${id}`, data) as unknown as Promise<{
+    success: boolean
+    data: { row: PlatingLedgerRow; affected: PlatingLedgerRow[] }
+  }>
 }
 
-// ========== 溶接受入 ==========
-export function getWeldingReceivings(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: WeldingReceiving[] }>(`${BASE}/welding/receivings`, { params })
+export function getWeldingLedgerHistory(params: Parameters<typeof getPlatingLedgerHistory>[0]) {
+  return request.get(`${weldingLedgerRoot}/history`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerRow[]
+  }>
 }
 
-export function createWeldingReceiving(data: Partial<WeldingReceiving>) {
-  return request.post<{ success: boolean; data: WeldingReceiving }>(`${BASE}/welding/receivings`, data)
+export function getWeldingLedgerStock(params: Parameters<typeof getPlatingLedgerStock>[0]) {
+  return request.get(`${weldingLedgerRoot}/stock`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingStockItem[]
+  }>
 }
 
-export function updateWeldingReceiving(id: number, data: Partial<WeldingReceiving>) {
-  return request.put<{ success: boolean; data: WeldingReceiving }>(`${BASE}/welding/receivings/${id}`, data)
+export function getWeldingLedgerStockTrend(params: Parameters<typeof getPlatingLedgerStockTrend>[0]) {
+  return request.get(`${weldingLedgerRoot}/stock-trend`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingStockTrendItem[]
+  }>
 }
 
-export function deleteWeldingReceiving(id: number) {
-  return request.delete<{ success: boolean; message?: string }>(`${BASE}/welding/receivings/${id}`)
-}
-
-export function getPendingWeldingOrders() {
-  return request.get<{ success?: boolean; data?: WeldingOrder[] }>(`${BASE}/welding/orders/pending`)
-}
-
-// ========== 外注在庫・履歴 ==========
-export function getPlatingStock(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: unknown[] }>(`${BASE}/plating/stock`, { params })
-}
-
-export function getWeldingStock(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: unknown[] }>(`${BASE}/welding/stock`, { params })
-}
-
-export function getOutsourcingStockHistory(params: { processType: string; productCd: string; supplierCd: string; weldingType?: string }) {
-  return request.get<{ success?: boolean; data?: unknown[] }>(`${BASE}/stock/history`, { params })
+export function getWeldingLedgerOrderSheet(startDate: string, endDate: string, supplierCd: string) {
+  return request.get(`${weldingLedgerRoot}/order-sheet`, {
+    params: { orderDate: startDate, endDate, supplierCd },
+  }) as unknown as Promise<{
+    success: boolean
+    data: { supplier_cd: string; supplier_name: string; items: PlatingOrderSheetItem[] }
+  }>
 }
 
 // ========== 外注工程製品マスタ（一覧・統計・CRUD） ==========

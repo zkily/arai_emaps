@@ -1,5 +1,5 @@
 """
-外注メッキ日別台帳。
+外注溶接日別台帳。
 材料在庫と同じく日付×品目の空行を先に生成し、注文数・受入数・不良数・初期在庫を後から入力する。
 3数量は stock_transaction_logs へ上書き同期する（0 で該当ログを消す）。
 初期在庫は毎月1日の行にのみ入力できる。
@@ -25,25 +25,25 @@ from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.outsourcing.models import (
     OutsourcingProcessProduct,
     OutsourcingSupplier,
-    PlatingLedger,
-    PlatingOrder,
+    WeldingLedger,
+    WeldingOrder,
 )
 
 router = APIRouter()
 
-SOURCE_FILE = "outsourcing_plating_ledger"
+SOURCE_FILE = "outsourcing_welding_ledger"
 STOCK_TYPE = "仕掛品"
-UNIT = "個"
+UNIT = "本"
 
 # (数量フィールド, 工程, 操作種別, 保管場所)
 LOG_SPECS = (
-    ("order_qty", "KT06", "実績", "外注倉庫"),
-    ("receiving_qty", "KT17", "実績", "仕上倉庫"),
-    ("defect_qty", "KT17", "不良", "仕上倉庫"),
+    ("order_qty", "KT08", "実績", "外注倉庫"),
+    ("receiving_qty", "KT16", "実績", "仕上倉庫"),
+    ("defect_qty", "KT16", "不良", "仕上倉庫"),
 )
 
-# 現在庫タブに出さない外注先（OS-004=北九州ケミカル）
-STOCK_EXCLUDED_SUPPLIERS = ("OS-004",)
+# 現在庫タブから除外する外注先（溶接は対象外なし）
+STOCK_EXCLUDED_SUPPLIERS: tuple[str, ...] = ()
 
 
 class GenerateBody(BaseModel):
@@ -97,7 +97,7 @@ def _money(qty: int, unit_price) -> float:
     return round(qty * price, 2)
 
 
-def _row_dict(r: PlatingLedger) -> dict:
+def _row_dict(r: WeldingLedger) -> dict:
     return {
         "id": r.id,
         "order_date": r.order_date.isoformat() if r.order_date else None,
@@ -173,12 +173,12 @@ async def _max_seq(db: AsyncSession, col, prefix: str) -> int:
 
 async def _next_order_seq(db: AsyncSession, prefix: str) -> int:
     seq = 0
-    for col in (PlatingLedger.order_no, PlatingOrder.order_no):
+    for col in (WeldingLedger.order_no, WeldingOrder.order_no):
         seq = max(seq, await _max_seq(db, col, prefix))
     return seq + 1
 
 
-async def _assign_order_no(db: AsyncSession, row: PlatingLedger) -> None:
+async def _assign_order_no(db: AsyncSession, row: WeldingLedger) -> None:
     """注文数 > 0 のとき番号を採番、0 なら番号を外す。受入数・不良数とは無関係。"""
     if int(row.order_qty or 0) > 0:
         if row.order_no:
@@ -197,7 +197,7 @@ MGMT_NO_SPECS = {
 }
 
 
-async def _assign_mgmt_no(db: AsyncSession, row: PlatingLedger, field: str) -> None:
+async def _assign_mgmt_no(db: AsyncSession, row: WeldingLedger, field: str) -> None:
     """受入・不良の管理番号。数量 > 0 で採番、0 で外す。注文番号とは独立。"""
     no_field, head = MGMT_NO_SPECS[field]
     if int(getattr(row, field) or 0) <= 0:
@@ -206,11 +206,11 @@ async def _assign_mgmt_no(db: AsyncSession, row: PlatingLedger, field: str) -> N
     if getattr(row, no_field):
         return
     prefix = f"{head}{row.supplier_cd}{row.order_date.strftime('%Y%m%d')}-"
-    seq = await _max_seq(db, getattr(PlatingLedger, no_field), prefix)
+    seq = await _max_seq(db, getattr(WeldingLedger, no_field), prefix)
     setattr(row, no_field, f"{prefix}{seq + 1:02d}")
 
 
-def _mgmt_no(row: PlatingLedger, field: str) -> Optional[str]:
+def _mgmt_no(row: WeldingLedger, field: str) -> Optional[str]:
     if field == "order_qty":
         return row.order_no
     return getattr(row, MGMT_NO_SPECS[field][0])
@@ -219,7 +219,7 @@ def _mgmt_no(row: PlatingLedger, field: str) -> Optional[str]:
 async def recalculate_current_stock(
     db: AsyncSession,
     keys: Optional[list[tuple[str, str]]] = None,
-) -> list[PlatingLedger]:
+) -> list[WeldingLedger]:
     """
     外注先手元の在庫。
     初期在庫は毎月1日の行だけが有効。初期在庫 > 0 の最終月の1日を起点にし、
@@ -227,21 +227,21 @@ async def recalculate_current_stock(
     当天 = 初期在庫 + 注文数 - (受入数 + 不良数) + 前日現在庫
     戻り値は現在庫が変わった行のみ。
     """
-    q = select(PlatingLedger)
+    q = select(WeldingLedger)
     if keys:
         conds = [
-            (PlatingLedger.supplier_cd == supplier) & (PlatingLedger.product_cd == product)
+            (WeldingLedger.supplier_cd == supplier) & (WeldingLedger.product_cd == product)
             for supplier, product in keys
         ]
-        q = q.where(or_(*conds)) if conds else q.where(PlatingLedger.id == -1)
+        q = q.where(or_(*conds)) if conds else q.where(WeldingLedger.id == -1)
     rows = list(
-        (await db.execute(q.order_by(PlatingLedger.order_date, PlatingLedger.id))).scalars().all()
+        (await db.execute(q.order_by(WeldingLedger.order_date, WeldingLedger.id))).scalars().all()
     )
-    grouped: dict[tuple[str, str], list[PlatingLedger]] = {}
+    grouped: dict[tuple[str, str], list[WeldingLedger]] = {}
     for row in rows:
         grouped.setdefault((row.supplier_cd, row.product_cd), []).append(row)
 
-    touched: list[PlatingLedger] = []
+    touched: list[WeldingLedger] = []
     for items in grouped.values():
         items.sort(key=lambda r: (r.order_date, r.id))
         with_initial = [r for r in items if r.order_date.day == 1 and int(r.initial_stock or 0) > 0]
@@ -267,26 +267,24 @@ async def recalculate_current_stock(
     return touched
 
 
-def _log_remarks(row: PlatingLedger, kind: str) -> str:
+def _log_remarks(row: WeldingLedger, kind: str) -> str:
     name = row.product_name or ""
     if kind == "order_qty":
-        return (
-            f"外注メッキ注文: {name} | 注文番号: {row.order_no or ''} | 外注先: {row.supplier_cd}"
-        )
+        return f"外注溶接注文: {name} | 注文番号: {row.order_no or ''} | 外注先: {row.supplier_cd}"
     if kind == "defect_qty":
         return (
-            f"外注メッキ不良: {name} | 不良番号: {row.disposal_no or ''}"
+            f"外注溶接不良: {name} | 不良番号: {row.disposal_no or ''}"
             f" | 不良数: {int(row.defect_qty or 0)} | 外注先: {row.supplier_cd}"
         )
     return (
-        f"外注メッキ受入: {name} | 受入番号: {row.receiving_no or ''}"
+        f"外注溶接受入: {name} | 受入番号: {row.receiving_no or ''}"
         f" | 受入数: {int(row.receiving_qty or 0)} | 外注先: {row.supplier_cd}"
     )
 
 
 async def sync_stock_logs(
     db: AsyncSession,
-    row: PlatingLedger,
+    row: WeldingLedger,
     operator_name: Optional[str],
     fields: Optional[Iterable[str]] = None,
 ) -> None:
@@ -355,11 +353,11 @@ def _operator(user: User) -> str:
 
 
 @router.get("/ledger/options")
-async def plating_ledger_options(
+async def welding_ledger_options(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フィルタ用の外注先×製品。台帳の既存行と有効な外注メッキ製品マスタを合わせる。"""
+    """フィルタ用の外注先×製品。台帳の既存行と有効な外注溶接製品マスタを合わせる。"""
     pairs: dict[tuple[str, str], dict] = {}
     supplier_names: dict[str, str] = {}
 
@@ -377,7 +375,7 @@ async def plating_ledger_options(
                 OutsourcingSupplier.supplier_cd == OutsourcingProcessProduct.supplier_cd,
             )
             .where(
-                OutsourcingProcessProduct.process_type == "plating",
+                OutsourcingProcessProduct.process_type == "welding",
                 OutsourcingProcessProduct.is_active == True,  # noqa: E712
             )
         )
@@ -395,10 +393,10 @@ async def plating_ledger_options(
     ledger_rows = (
         await db.execute(
             select(
-                PlatingLedger.supplier_cd,
-                PlatingLedger.supplier_name,
-                PlatingLedger.product_cd,
-                PlatingLedger.product_name,
+                WeldingLedger.supplier_cd,
+                WeldingLedger.supplier_name,
+                WeldingLedger.product_cd,
+                WeldingLedger.product_name,
             ).distinct()
         )
     ).all()
@@ -424,7 +422,7 @@ async def plating_ledger_options(
 
 
 @router.get("/ledger/order-sheet")
-async def plating_ledger_order_sheet(
+async def welding_ledger_order_sheet(
     orderDate: str = Query(...),
     supplierCd: str = Query(...),
     endDate: Optional[str] = Query(None),
@@ -446,15 +444,15 @@ async def plating_ledger_order_sheet(
     rows = (
         (
             await db.execute(
-                select(PlatingLedger)
+                select(WeldingLedger)
                 .where(
-                    PlatingLedger.order_date >= start,
-                    PlatingLedger.order_date <= end,
-                    PlatingLedger.supplier_cd == supplier_cd,
-                    PlatingLedger.order_qty > 0,
+                    WeldingLedger.order_date >= start,
+                    WeldingLedger.order_date <= end,
+                    WeldingLedger.supplier_cd == supplier_cd,
+                    WeldingLedger.order_qty > 0,
                 )
                 .order_by(
-                    PlatingLedger.order_date, PlatingLedger.product_name, PlatingLedger.product_cd
+                    WeldingLedger.order_date, WeldingLedger.product_name, WeldingLedger.product_cd
                 )
             )
         )
@@ -466,7 +464,7 @@ async def plating_ledger_order_sheet(
         (
             await db.execute(
                 select(OutsourcingProcessProduct).where(
-                    OutsourcingProcessProduct.process_type == "plating",
+                    OutsourcingProcessProduct.process_type == "welding",
                     OutsourcingProcessProduct.supplier_cd == supplier_cd,
                 )
             )
@@ -503,7 +501,7 @@ async def plating_ledger_order_sheet(
 
 
 @router.post("/ledger/order-sheet/issued")
-async def mark_plating_order_sheet_issued(
+async def mark_welding_order_sheet_issued(
     body: IssuedBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("export")),
@@ -514,8 +512,8 @@ async def mark_plating_order_sheet_issued(
     rows = (
         (
             await db.execute(
-                select(PlatingLedger).where(
-                    PlatingLedger.id.in_(body.ids), PlatingLedger.order_qty > 0
+                select(WeldingLedger).where(
+                    WeldingLedger.id.in_(body.ids), WeldingLedger.order_qty > 0
                 )
             )
         )
@@ -535,7 +533,7 @@ async def mark_plating_order_sheet_issued(
 
 
 @router.get("/ledger/history")
-async def plating_ledger_history(
+async def welding_ledger_history(
     kind: str = Query(..., pattern="^(order|receiving)$"),
     startDate: str = Query(...),
     endDate: str = Query(...),
@@ -551,29 +549,29 @@ async def plating_ledger_history(
         raise HTTPException(status_code=400, detail="開始日は終了日より前である必要があります")
     if (end - start).days > 366:
         raise HTTPException(status_code=400, detail="期間は366日以内にしてください")
-    q = select(PlatingLedger).where(
-        PlatingLedger.order_date >= start, PlatingLedger.order_date <= end
+    q = select(WeldingLedger).where(
+        WeldingLedger.order_date >= start, WeldingLedger.order_date <= end
     )
     if kind == "order":
-        q = q.where(PlatingLedger.order_qty > 0)
+        q = q.where(WeldingLedger.order_qty > 0)
     else:
-        q = q.where(or_(PlatingLedger.receiving_qty > 0, PlatingLedger.defect_qty > 0))
+        q = q.where(or_(WeldingLedger.receiving_qty > 0, WeldingLedger.defect_qty > 0))
     if supplierCd and supplierCd.strip():
-        q = q.where(PlatingLedger.supplier_cd == supplierCd.strip())
+        q = q.where(WeldingLedger.supplier_cd == supplierCd.strip())
     if productCd and productCd.strip():
-        q = q.where(PlatingLedger.product_cd == productCd.strip())
+        q = q.where(WeldingLedger.product_cd == productCd.strip())
     q = q.order_by(
-        PlatingLedger.order_date,
-        PlatingLedger.supplier_name,
-        PlatingLedger.product_name,
-        PlatingLedger.product_cd,
+        WeldingLedger.order_date,
+        WeldingLedger.supplier_name,
+        WeldingLedger.product_name,
+        WeldingLedger.product_cd,
     )
     rows = (await db.execute(q)).scalars().all()
     return {"success": True, "data": [_row_dict(r) for r in rows]}
 
 
 @router.get("/ledger/stock")
-async def plating_ledger_stock(
+async def welding_ledger_stock(
     asOf: str = Query(...),
     supplierCd: Optional[str] = Query(None),
     productCd: Optional[str] = Query(None),
@@ -583,16 +581,17 @@ async def plating_ledger_stock(
     """外注先×製品ごとの基準日時点の現在庫と、基準日の月の注文・受入・不良累計。"""
     as_of = _parse_date(asOf)
     month_start = as_of.replace(day=1)
-    q = select(PlatingLedger).where(
-        PlatingLedger.order_date <= as_of,
-        PlatingLedger.order_date >= as_of - timedelta(days=366),
-        PlatingLedger.supplier_cd.notin_(STOCK_EXCLUDED_SUPPLIERS),
+    q = select(WeldingLedger).where(
+        WeldingLedger.order_date <= as_of,
+        WeldingLedger.order_date >= as_of - timedelta(days=366),
     )
+    if STOCK_EXCLUDED_SUPPLIERS:
+        q = q.where(WeldingLedger.supplier_cd.notin_(STOCK_EXCLUDED_SUPPLIERS))
     if supplierCd and supplierCd.strip():
-        q = q.where(PlatingLedger.supplier_cd == supplierCd.strip())
+        q = q.where(WeldingLedger.supplier_cd == supplierCd.strip())
     if productCd and productCd.strip():
-        q = q.where(PlatingLedger.product_cd == productCd.strip())
-    rows = (await db.execute(q.order_by(PlatingLedger.order_date))).scalars().all()
+        q = q.where(WeldingLedger.product_cd == productCd.strip())
+    rows = (await db.execute(q.order_by(WeldingLedger.order_date))).scalars().all()
 
     items: dict[tuple[str, str], dict] = {}
     for r in rows:
@@ -633,7 +632,7 @@ async def plating_ledger_stock(
 
 
 @router.get("/ledger/stock-trend")
-async def plating_ledger_stock_trend(
+async def welding_ledger_stock_trend(
     asOf: str = Query(...),
     supplierCd: Optional[str] = Query(None),
     productCd: Optional[str] = Query(None),
@@ -644,21 +643,22 @@ async def plating_ledger_stock_trend(
     as_of = _parse_date(asOf)
     month_start = as_of.replace(day=1)
     q = select(
-        PlatingLedger.order_date,
-        func.sum(PlatingLedger.order_qty),
-        func.sum(PlatingLedger.receiving_qty),
-        func.sum(PlatingLedger.defect_qty),
-        func.sum(PlatingLedger.current_stock),
+        WeldingLedger.order_date,
+        func.sum(WeldingLedger.order_qty),
+        func.sum(WeldingLedger.receiving_qty),
+        func.sum(WeldingLedger.defect_qty),
+        func.sum(WeldingLedger.current_stock),
     ).where(
-        PlatingLedger.order_date >= month_start,
-        PlatingLedger.order_date <= as_of,
-        PlatingLedger.supplier_cd.notin_(STOCK_EXCLUDED_SUPPLIERS),
+        WeldingLedger.order_date >= month_start,
+        WeldingLedger.order_date <= as_of,
     )
+    if STOCK_EXCLUDED_SUPPLIERS:
+        q = q.where(WeldingLedger.supplier_cd.notin_(STOCK_EXCLUDED_SUPPLIERS))
     if supplierCd and supplierCd.strip():
-        q = q.where(PlatingLedger.supplier_cd == supplierCd.strip())
+        q = q.where(WeldingLedger.supplier_cd == supplierCd.strip())
     if productCd and productCd.strip():
-        q = q.where(PlatingLedger.product_cd == productCd.strip())
-    q = q.group_by(PlatingLedger.order_date)
+        q = q.where(WeldingLedger.product_cd == productCd.strip())
+    q = q.group_by(WeldingLedger.order_date)
     by_date = {r[0]: r for r in (await db.execute(q)).all()}
 
     data = []
@@ -683,7 +683,7 @@ async def plating_ledger_stock_trend(
 
 
 @router.get("/ledger")
-async def list_plating_ledger(
+async def list_welding_ledger(
     startDate: str = Query(...),
     endDate: str = Query(...),
     supplierCd: Optional[str] = Query(None),
@@ -700,46 +700,46 @@ async def list_plating_ledger(
     end = _parse_date(endDate)
     if start > end:
         raise HTTPException(status_code=400, detail="開始日は終了日より前である必要があります")
-    q = select(PlatingLedger).where(
-        PlatingLedger.order_date >= start, PlatingLedger.order_date <= end
+    q = select(WeldingLedger).where(
+        WeldingLedger.order_date >= start, WeldingLedger.order_date <= end
     )
     if supplierCd and supplierCd.strip():
-        q = q.where(PlatingLedger.supplier_cd == supplierCd.strip())
+        q = q.where(WeldingLedger.supplier_cd == supplierCd.strip())
     if productCd and productCd.strip():
-        q = q.where(PlatingLedger.product_cd == productCd.strip())
+        q = q.where(WeldingLedger.product_cd == productCd.strip())
     if firstDayOnly:
-        q = q.where(func.dayofmonth(PlatingLedger.order_date) == 1)
+        q = q.where(func.dayofmonth(WeldingLedger.order_date) == 1)
     # 数量のある行だけ：order=注文数 / receiving=受入数・不良数 / any=いずれか（初期在庫含む）
     if nonZero == "order":
-        q = q.where(PlatingLedger.order_qty > 0)
+        q = q.where(WeldingLedger.order_qty > 0)
     elif nonZero == "receiving":
-        q = q.where(or_(PlatingLedger.receiving_qty > 0, PlatingLedger.defect_qty > 0))
+        q = q.where(or_(WeldingLedger.receiving_qty > 0, WeldingLedger.defect_qty > 0))
     elif nonZero == "any":
         q = q.where(
             or_(
-                PlatingLedger.order_qty > 0,
-                PlatingLedger.receiving_qty > 0,
-                PlatingLedger.defect_qty > 0,
-                PlatingLedger.initial_stock > 0,
+                WeldingLedger.order_qty > 0,
+                WeldingLedger.receiving_qty > 0,
+                WeldingLedger.defect_qty > 0,
+                WeldingLedger.initial_stock > 0,
             )
         )
     if keyword and keyword.strip():
         kw = f"%{keyword.strip()}%"
         q = q.where(
             or_(
-                PlatingLedger.product_cd.like(kw),
-                PlatingLedger.product_name.like(kw),
-                PlatingLedger.order_no.like(kw),
-                PlatingLedger.supplier_name.like(kw),
+                WeldingLedger.product_cd.like(kw),
+                WeldingLedger.product_name.like(kw),
+                WeldingLedger.order_no.like(kw),
+                WeldingLedger.supplier_name.like(kw),
             )
         )
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar() or 0
     q = q.order_by(
-        PlatingLedger.order_date,
-        PlatingLedger.supplier_name,
-        PlatingLedger.product_name,
-        PlatingLedger.product_cd,
-        PlatingLedger.id,
+        WeldingLedger.order_date,
+        WeldingLedger.supplier_name,
+        WeldingLedger.product_name,
+        WeldingLedger.product_cd,
+        WeldingLedger.id,
     )
     q = q.offset((page - 1) * pageSize).limit(pageSize)
     rows = (await db.execute(q)).scalars().all()
@@ -747,12 +747,12 @@ async def list_plating_ledger(
 
 
 @router.post("/ledger/generate")
-async def generate_plating_ledger(
+async def generate_welding_ledger(
     body: GenerateBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("create")),
 ):
-    """有効な外注メッキ製品 × 期間の空行を作る。既存行はスキップし、入力済み数量は保持する。"""
+    """有効な外注溶接製品 × 期間の空行を作る。既存行はスキップし、入力済み数量は保持する。"""
     start = _parse_date(body.start_date)
     end = _parse_date(body.end_date)
     if start > end:
@@ -768,7 +768,7 @@ async def generate_plating_ledger(
                 OutsourcingSupplier.supplier_cd == OutsourcingProcessProduct.supplier_cd,
             )
             .where(
-                OutsourcingProcessProduct.process_type == "plating",
+                OutsourcingProcessProduct.process_type == "welding",
                 OutsourcingProcessProduct.is_active == True,  # noqa: E712
                 OutsourcingSupplier.is_active == True,  # noqa: E712
             )
@@ -781,10 +781,10 @@ async def generate_plating_ledger(
     existing_rows = (
         await db.execute(
             select(
-                PlatingLedger.order_date, PlatingLedger.supplier_cd, PlatingLedger.product_cd
+                WeldingLedger.order_date, WeldingLedger.supplier_cd, WeldingLedger.product_cd
             ).where(
-                PlatingLedger.order_date >= start,
-                PlatingLedger.order_date <= end,
+                WeldingLedger.order_date >= start,
+                WeldingLedger.order_date <= end,
             )
         )
     ).all()
@@ -804,7 +804,7 @@ async def generate_plating_ledger(
                 skipped += 1
                 continue
             lead = _lead_days(product, supplier)
-            row = PlatingLedger(
+            row = WeldingLedger(
                 order_date=cur,
                 supplier_cd=product.supplier_cd,
                 supplier_name=supplier.supplier_name or product.supplier_name,
@@ -833,7 +833,7 @@ async def generate_plating_ledger(
 
 
 @router.post("/ledger/calculate")
-async def calculate_plating_ledger(
+async def calculate_welding_ledger(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
@@ -842,7 +842,7 @@ async def calculate_plating_ledger(
 
 
 @router.post("/ledger/refresh-master")
-async def refresh_plating_ledger_master(
+async def refresh_welding_ledger_master(
     body: RefreshMasterBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
@@ -858,16 +858,16 @@ async def refresh_plating_ledger_master(
     if (end - start).days > 366:
         raise HTTPException(status_code=400, detail="期間は366日以内にしてください")
 
-    not_ordered = or_(PlatingLedger.order_qty == 0, PlatingLedger.order_qty.is_(None))
-    q = select(PlatingLedger).where(
-        PlatingLedger.order_date >= start, PlatingLedger.order_date <= end
+    not_ordered = or_(WeldingLedger.order_qty == 0, WeldingLedger.order_qty.is_(None))
+    q = select(WeldingLedger).where(
+        WeldingLedger.order_date >= start, WeldingLedger.order_date <= end
     )
     if body.supplier_cd and body.supplier_cd.strip():
-        q = q.where(PlatingLedger.supplier_cd == body.supplier_cd.strip())
+        q = q.where(WeldingLedger.supplier_cd == body.supplier_cd.strip())
     if body.product_cd and body.product_cd.strip():
-        q = q.where(PlatingLedger.product_cd == body.product_cd.strip())
+        q = q.where(WeldingLedger.product_cd == body.product_cd.strip())
     if body.include_ordered:
-        q = q.where(or_(not_ordered, PlatingLedger.order_sheet_issued_at.is_(None)))
+        q = q.where(or_(not_ordered, WeldingLedger.order_sheet_issued_at.is_(None)))
     else:
         q = q.where(not_ordered)
     rows = (await db.execute(q)).scalars().all()
@@ -881,7 +881,7 @@ async def refresh_plating_ledger_master(
                 OutsourcingSupplier,
                 OutsourcingSupplier.supplier_cd == OutsourcingProcessProduct.supplier_cd,
             )
-            .where(OutsourcingProcessProduct.process_type == "plating")
+            .where(OutsourcingProcessProduct.process_type == "welding")
         )
     ).all()
     masters: dict[tuple[str, str], tuple[OutsourcingProcessProduct, OutsourcingSupplier]] = {}
@@ -925,7 +925,7 @@ async def refresh_plating_ledger_master(
 
 
 @router.put("/ledger/{row_id}")
-async def update_plating_ledger(
+async def update_welding_ledger(
     row_id: int,
     body: UpdateBody,
     db: AsyncSession = Depends(get_db),
@@ -947,7 +947,7 @@ async def update_plating_ledger(
 
 async def _apply_update(db: AsyncSession, row_id: int, body: UpdateBody, operator: str) -> dict:
     row = (
-        await db.execute(select(PlatingLedger).where(PlatingLedger.id == row_id))
+        await db.execute(select(WeldingLedger).where(WeldingLedger.id == row_id))
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="データが見つかりません")

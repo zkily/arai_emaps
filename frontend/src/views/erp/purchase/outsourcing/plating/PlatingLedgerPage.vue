@@ -1,11 +1,13 @@
 <template>
-  <div class="plating-ledger-page pl-modern pb-std">
+  <div class="plating-ledger-page pl-modern pb-std" :class="{ 'is-welding': ledger.process === 'welding' }">
     <div class="page-header pb-hero pb-hero--page">
       <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
-        <div class="title-icon"><el-icon><Brush /></el-icon></div>
+        <div class="title-icon">
+          <el-icon><Brush v-if="ledger.process === 'plating'" /><Connection v-else /></el-icon>
+        </div>
         <div class="title-text">
-          <h2 class="title pb-hero-title">外注メッキ</h2>
+          <h2 class="title pb-hero-title">{{ ledger.title }}</h2>
           <p class="subtitle pb-hero-desc">
             日付×外注先×製品の行を先に生成し、注文数・受入数・不良数・初期在庫を入力します。現在庫は外注先手元です。
           </p>
@@ -229,7 +231,7 @@
       </div>
       <div v-else-if="activeTab === 'order'" class="initial-bar">
         <PlatingOrderSheetIssuer
-          :default-date="dateRange[0]"
+          v-model:range="dateRange"
           :default-supplier-cd="supplierCd"
           @issued="applyAffected"
         />
@@ -487,7 +489,7 @@
         </el-form-item>
       </el-form>
       <ul class="gen-notes">
-        <li>有効な外注メッキ製品ごとに、1日1行を作ります。</li>
+        <li>有効な{{ ledger.productKind }}ごとに、1日1行を作ります。</li>
         <li>すでにある行はスキップし、入力済みの数量は残します。</li>
         <li>納期は外注先のリードタイムで、土日と会社休を飛ばして計算します。</li>
         <li>注文番号は注文数を入れたときに付きます。</li>
@@ -559,7 +561,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -570,6 +572,7 @@ import {
   Calendar,
   Close,
   Coin,
+  Connection,
   Download,
   ShoppingCart,
   Document,
@@ -584,20 +587,25 @@ import {
   Tickets,
 } from '@element-plus/icons-vue'
 import {
-  calculatePlatingLedger,
-  generatePlatingLedger,
-  getPlatingLedger,
-  getPlatingLedgerOptions,
-  refreshPlatingLedgerMaster,
-  updatePlatingLedger,
   type PlatingLedgerOption,
   type PlatingLedgerRow,
 } from '@/api/outsourcing'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import {
+  LEDGER_KEY,
+  platingLedgerContext,
+  weldingLedgerContext,
+} from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
 import PlatingHistoryPanel from './PlatingHistoryPanel.vue'
 import PlatingOrderSheetIssuer from './PlatingOrderSheetIssuer.vue'
 import PlatingStockPanel from './PlatingStockPanel.vue'
+
+const props = withDefaults(defineProps<{ process?: 'plating' | 'welding' }>(), {
+  process: 'plating',
+})
+const ledger = props.process === 'welding' ? weldingLedgerContext : platingLedgerContext
+provide(LEDGER_KEY, ledger)
 
 const { canCreate, canEdit } = usePurchaseOperationPermission()
 
@@ -795,7 +803,7 @@ const productOptions = computed(() => {
 
 async function loadFilterOptions() {
   try {
-    const res = await getPlatingLedgerOptions()
+    const res = await ledger.getOptions()
     filterOptions.value = Array.isArray(res?.data) ? res.data : []
   } catch {
     filterOptions.value = []
@@ -814,7 +822,7 @@ async function load() {
   const seq = ++loadSeq
   loading.value = true
   try {
-    const res = await getPlatingLedger({
+    const res = await ledger.getList({
       startDate,
       endDate,
       supplierCd: supplierCd.value || undefined,
@@ -878,7 +886,7 @@ async function runGenerate() {
   if (!genStart.value || !genEnd.value) return
   generating.value = true
   try {
-    const res = await generatePlatingLedger(genStart.value, genEnd.value)
+    const res = await ledger.generate(genStart.value, genEnd.value)
     const data = res?.data
     ElMessage.success(`生成 ${data?.generated_count ?? 0} 件、スキップ ${data?.skipped_count ?? 0} 件`)
     generateVisible.value = false
@@ -904,7 +912,7 @@ async function runRefreshMaster() {
   if (!refreshStart.value || !refreshEnd.value) return
   refreshing.value = true
   try {
-    const res = await refreshPlatingLedgerMaster({
+    const res = await ledger.refreshMaster({
       start_date: refreshStart.value,
       end_date: refreshEnd.value,
       supplier_cd: supplierCd.value || undefined,
@@ -926,7 +934,7 @@ async function runRefreshMaster() {
 async function runCalculate() {
   calculating.value = true
   try {
-    const res = await calculatePlatingLedger()
+    const res = await ledger.calculate()
     ElMessage.success(`在庫を再計算しました（変更 ${res?.data?.calculated_count ?? 0} 行）`)
     await load()
   } catch (error: any) {
@@ -950,7 +958,7 @@ function saveField(row: PlatingLedgerRow, field: QtyField, val: number | null | 
   pendingEdits.set(key, { id, field, value: next })
   saveChain = saveChain.then(async () => {
     try {
-      const res = await updatePlatingLedger(id, { [field]: next })
+      const res = await ledger.update(id, { [field]: next })
       if (pendingEdits.get(key)?.value === next) pendingEdits.delete(key)
       // affected は現在庫が変わった行のみなので、保存した行自体も反映する
       const saved = res?.data?.row
@@ -2128,6 +2136,27 @@ onMounted(() => {
   color: #94a3b8;
   border-color: #d1d5db;
   background: #e5e7eb;
+}
+
+/* 外注溶接：ヒーローだけオレンジ系にしてメッキと区別する（列の色分けは共通） */
+.plating-ledger-page.is-welding {
+  background: linear-gradient(180deg, #fff4e6 0%, #f8fafc 30%, #f8fafc 100%);
+}
+
+.plating-ledger-page.is-welding .page-header,
+.plating-ledger-page.is-welding .gen-hero {
+  background: linear-gradient(125deg, #9a3412 0%, #c2410c 34%, #ea580c 66%, #d97706 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(194, 65, 12, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.plating-ledger-page.is-welding .filter-card {
+  border-color: #fed7aa;
+}
+
+.plating-ledger-page.is-welding .filter-card::before {
+  background: linear-gradient(90deg, #ea580c 0%, #f59e0b 55%, #14b8a6 100%);
 }
 
 /* ---------- レスポンシブ ---------- */

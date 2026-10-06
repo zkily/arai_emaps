@@ -616,6 +616,15 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self._safe_write(payload)
     
+    def _proxy_read_timeout(self) -> float:
+        """通常 API は 30 秒。生産サマリの一括更新系は集計完了まで待つ。"""
+        path = (self.path or "").split("?", 1)[0]
+        if path.startswith("/api/database/production-summarys/") and (
+            "/update-" in path or "/clear-" in path or path.endswith("/generate")
+        ):
+            return 660
+        return 30
+
     def _proxy_to_backend(self):
         """APIリクエストをバックエンドにプロキシ（Content-Length で返すとブラウザが正しく JSON を解釈する）"""
         import urllib.request
@@ -641,7 +650,7 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = _ssl.CERT_NONE
 
-            open_kw = {"timeout": 30}
+            open_kw = {"timeout": self._proxy_read_timeout()}
             if ssl_ctx is not None:
                 open_kw["context"] = ssl_ctx
             with urllib.request.urlopen(req, **open_kw) as response:

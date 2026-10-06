@@ -1,25 +1,26 @@
 <template>
   <div class="supply-purchase-page pb-std">
-    <div class="page-header">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-lead">
         <div class="title-icon"><el-icon><Box /></el-icon></div>
-        <div>
-          <h1>備品購入</h1>
-          <p>仕入先を選び、カタログから備品を複数選択して発注します</p>
+        <div class="title-copy">
+          <h1 class="pb-hero-title">備品購入</h1>
+          <p class="pb-hero-desc">仕入先を選び、カタログから備品を複数選択して発注します</p>
         </div>
       </div>
       <div class="header-stats">
         <div class="stat-card stat-card--blue">
           <span class="stat-number">{{ items.length }}</span>
-          <span class="stat-label">カタログ</span>
+          <span class="stat-label"><i class="stat-dot" />カタログ</span>
         </div>
         <div class="stat-card stat-card--amber">
           <span class="stat-number">{{ cart.length }}</span>
-          <span class="stat-label">発注明細</span>
+          <span class="stat-label"><i class="stat-dot" />発注明細</span>
         </div>
         <div class="stat-card stat-card--violet">
           <span class="stat-number">{{ orders.length }}</span>
-          <span class="stat-label">履歴</span>
+          <span class="stat-label"><i class="stat-dot" />履歴</span>
         </div>
       </div>
       <div class="header-actions">
@@ -37,7 +38,6 @@
           type="primary"
           size="small"
           class="order-btn"
-          :class="{ 'is-ready': cart.length > 0 }"
           :icon="ShoppingCart"
           :loading="orderSubmitting"
           :disabled="cart.length === 0"
@@ -255,20 +255,23 @@
     <el-dialog
       v-model="itemDialogVisible"
       width="600px"
-      class="item-form-dialog"
+      class="spb-item-dialog pb-std"
       align-center
       destroy-on-close
+      :show-close="false"
       :close-on-click-modal="false"
     >
       <template #header>
-        <div class="item-dialog-header">
+        <div class="item-dialog-header pb-hero" :class="itemForm.id ? 'is-edit' : 'is-new'">
+          <div class="pb-bubbles" aria-hidden="true" />
           <div class="item-dialog-icon">
             <el-icon><Box /></el-icon>
           </div>
-          <div>
+          <div class="item-dialog-copy">
             <h3>{{ itemForm.id ? '備品を編集' : '備品を登録' }}</h3>
             <p>{{ itemForm.id ? 'カタログ情報を更新します' : '自動採番のCDで新しい備品を登録します' }}</p>
           </div>
+          <el-icon class="spb-close" @click="itemDialogVisible = false"><Close /></el-icon>
         </div>
       </template>
       <div class="item-dialog-body">
@@ -349,7 +352,23 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="detailVisible" title="発注明細" size="480px">
+    <el-drawer
+      v-model="detailVisible"
+      size="480px"
+      :show-close="false"
+      class="spb-drawer pb-std"
+    >
+      <template #header>
+        <div class="spb-drawer-hero pb-hero">
+          <div class="pb-bubbles" aria-hidden="true" />
+          <span class="spb-hero-icon"><el-icon><Tickets /></el-icon></span>
+          <div class="spb-hero-copy">
+            <span class="spb-hero-title">発注明細</span>
+            <p class="spb-hero-desc">{{ orderDetail?.order_no || '—' }}・{{ orderDetail?.supplier_name || '' }}</p>
+          </div>
+          <el-icon class="spb-close" @click="detailVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <template v-if="orderDetail">
         <el-descriptions :column="1" size="small" border>
           <el-descriptions-item label="発注番号">{{ orderDetail.order_no }}</el-descriptions-item>
@@ -375,19 +394,22 @@
       v-model="printConfirmDialogVisible"
       width="650px"
       :close-on-click-modal="false"
-      class="print-confirm-dialog pcd-modern pb-std"
+      :show-close="false"
+      class="spb-print-dialog pb-std"
     >
       <template #header>
         <div class="dialog-header-with-button pcd-hero pb-hero">
           <div class="pcd-hero-fx pb-bubbles" aria-hidden="true" />
-          <div class="pcd-hero-left">
-            <span class="pcd-hero-icon"><el-icon><Printer /></el-icon></span>
+          <span class="pcd-hero-icon"><el-icon><Printer /></el-icon></span>
+          <div class="pcd-hero-copy">
             <span class="dialog-title">注文書印刷確認</span>
+            <p class="pcd-hero-desc">{{ printTarget?.order_no || '—' }}・{{ printTarget?.supplier_name || '' }}</p>
           </div>
-          <el-button type="primary" size="small" class="confirm-btn-header" :loading="printLoading" @click="confirmPrint">
+          <el-button size="small" class="confirm-btn-header" :loading="printLoading" @click="confirmPrint">
             <el-icon><Printer /></el-icon>
             印刷実行
           </el-button>
+          <el-icon class="spb-close" @click="printConfirmDialogVisible = false"><Close /></el-icon>
         </div>
       </template>
       <div class="print-confirm-content-compact">
@@ -460,7 +482,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type TableInstance } from 'element-plus'
-import { Box, Check, EditPen, OfficeBuilding, Plus, Printer, Refresh, Search, ShoppingCart, User } from '@element-plus/icons-vue'
+import {
+  Box,
+  Check,
+  Close,
+  EditPen,
+  OfficeBuilding,
+  Plus,
+  Printer,
+  Refresh,
+  Search,
+  ShoppingCart,
+  Tickets,
+  User,
+} from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { getSupplierList } from '@/api/master/supplierMaster'
 import {
@@ -964,33 +999,25 @@ onMounted(async () => {
   gap: 10px;
   min-height: 100%;
   background:
-    radial-gradient(1200px 280px at 8% -10%, rgba(59, 130, 246, 0.16), transparent 55%),
-    radial-gradient(900px 240px at 92% 0%, rgba(245, 158, 11, 0.14), transparent 50%),
-    linear-gradient(180deg, #eef4ff 0%, #f8fafc 42%, #f1f5f9 100%);
-  animation: page-in 0.45s ease;
+    radial-gradient(1200px 280px at 8% -10%, rgba(59, 130, 246, 0.1), transparent 55%),
+    radial-gradient(900px 240px at 92% 0%, rgba(245, 158, 11, 0.08), transparent 50%),
+    linear-gradient(180deg, #f1f6ff 0%, #f8fafc 42%, #f5f7fb 100%);
 }
-@keyframes page-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
+
+/* ---------- タイトル領域 ---------- */
 .page-header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 42%, #0ea5e9 100%);
-  box-shadow:
-    0 14px 32px rgba(37, 99, 235, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
   color: #fff;
+  background: linear-gradient(125deg, #1d4ed8 0%, #2563eb 40%, #0ea5e9 78%, #38bdf8 100%);
+  box-shadow:
+    0 10px 24px -14px rgba(37, 99, 235, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .header-lead {
   display: flex;
@@ -999,121 +1026,170 @@ onMounted(async () => {
   min-width: 0;
 }
 .title-icon {
-  width: 42px;
-  height: 42px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08));
-  box-shadow:
-    0 8px 16px rgba(15, 23, 42, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
   font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.28);
+}
+.title-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .page-header h1 {
-  margin: 0;
-  font-size: 20px;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   color: #fff;
 }
 .page-header p {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.88);
 }
+
+/* 統計：白ピル＋同色ドット */
 .header-stats {
   display: flex;
   gap: 8px;
   margin-left: auto;
 }
 .stat-card {
+  --accent: #2563eb;
   min-width: 78px;
-  padding: 7px 12px;
+  padding: 5px 12px;
   border-radius: 12px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: transform 0.2s ease, background 0.2s ease;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 16%, transparent),
+    0 4px 10px -6px rgba(15, 23, 42, 0.35);
 }
-.stat-card:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.24);
+.stat-card--amber {
+  --accent: #d97706;
+}
+.stat-card--violet {
+  --accent: #7c3aed;
 }
 .stat-number {
   display: block;
-  font-size: 18px;
   font-weight: 800;
-  line-height: 1.1;
+  color: color-mix(in srgb, var(--accent) 82%, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 .stat-label {
-  font-size: 11px;
-  opacity: 0.88;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #475569;
 }
-.stat-card--blue {
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-.stat-card--amber {
-  background: rgba(251, 191, 36, 0.22);
-}
-.stat-card--violet {
-  background: rgba(167, 139, 250, 0.22);
+.stat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .header-actions {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
 }
+
+/* 備品登録：ヒーロー上の白ピル */
 .ghost-btn {
-  background: rgba(255, 255, 255, 0.16) !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
-  color: #fff !important;
+  --k-rgb: 37 99 235;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #1d4ed8;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
 }
-.ghost-btn:hover {
-  background: rgba(255, 255, 255, 0.28) !important;
+.ghost-btn:not(.is-disabled):hover,
+.ghost-btn:not(.is-disabled):focus-visible {
+  color: #1e40af;
+  border-color: #fff;
+  background: #fff;
 }
+
+/* 発注する：アンバーの立体ボタン */
 .order-btn {
-  border: none !important;
-  background: linear-gradient(135deg, #f59e0b, #ea580c) !important;
-  box-shadow: 0 8px 16px rgba(234, 88, 12, 0.32);
+  --k-rgb: 234 88 12;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 800;
+  color: #fff;
+  border: 1px solid #c2410c;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fbbf24, #ea580c);
 }
-.order-btn.is-ready {
-  animation: cta-pulse 1.8s ease-in-out infinite;
+.order-btn:not(.is-disabled):hover,
+.order-btn:not(.is-disabled):focus-visible {
+  color: #fff;
+  border-color: #9a3412;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fcd34d, #f97316);
 }
-@keyframes cta-pulse {
-  0%,
-  100% {
-    box-shadow: 0 8px 16px rgba(234, 88, 12, 0.32);
-  }
-  50% {
-    box-shadow: 0 10px 22px rgba(234, 88, 12, 0.5);
-  }
+.supply-purchase-page .ghost-btn.is-disabled,
+.supply-purchase-page .order-btn.is-disabled,
+.supply-purchase-page .search-btn.is-disabled,
+.supply-purchase-page .add-cart-btn.is-disabled {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
 }
+
+/* ---------- 絞り込み ---------- */
 .filter-bar {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(191, 219, 254, 0.9);
-  border-radius: 14px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(10px);
+  padding: 10px 12px 10px 15px;
+  background: #fff;
+  border: 1px solid #dbe7fb;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.filter-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
 }
 .filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #eff6ff;
   color: #1d4ed8;
   font-size: 12px;
   font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 #bfdbfe;
 }
 .filter-supplier {
   width: 280px;
@@ -1121,50 +1197,91 @@ onMounted(async () => {
 .filter-keyword {
   width: 220px;
 }
-.search-btn {
-  background: linear-gradient(135deg, #2563eb, #0284c7) !important;
-  border: none !important;
-  color: #fff !important;
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.25);
+.filter-bar :deep(.el-input__wrapper),
+.filter-bar :deep(.el-select__wrapper),
+.cart-meta :deep(.el-input__wrapper),
+.cart-meta :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #d6e2f5 inset;
 }
+.filter-bar :deep(.el-input__wrapper:hover),
+.filter-bar :deep(.el-select__wrapper:hover),
+.cart-meta :deep(.el-input__wrapper:hover),
+.cart-meta :deep(.el-textarea__inner:hover) {
+  box-shadow: 0 0 0 1px #93c5fd inset;
+}
+.filter-bar :deep(.el-input__wrapper.is-focus),
+.filter-bar :deep(.el-select__wrapper.is-focused),
+.cart-meta :deep(.el-input__wrapper.is-focus),
+.cart-meta :deep(.el-textarea__inner:focus) {
+  box-shadow:
+    0 0 0 1px #2563eb inset,
+    0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+.filter-bar :deep(.el-input.is-disabled .el-input__wrapper) {
+  background-color: #f1f5f9;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.search-btn,
+.add-cart-btn {
+  --k-rgb: 37 99 235;
+  border-radius: 8px;
+  font-weight: 700;
+  color: #fff;
+  border: 1px solid #1d4ed8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+.search-btn:not(.is-disabled):hover,
+.search-btn:not(.is-disabled):focus-visible,
+.add-cart-btn:not(.is-disabled):hover,
+.add-cart-btn:not(.is-disabled):focus-visible {
+  color: #fff;
+  border-color: #1e40af;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #60a5fa, #2563eb);
+}
+
+/* ---------- パネル ---------- */
 .work-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
   gap: 10px;
 }
 .panel-card {
-  border: 0 !important;
-  border-radius: 16px !important;
+  --accent: #3b82f6;
+  position: relative;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
   overflow: hidden;
   background: #fff;
-  box-shadow:
-    0 12px 28px rgba(15, 23, 42, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.8) inset;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-.panel-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
-}
-.catalog-card {
-  border-top: 4px solid #3b82f6 !important;
+.panel-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, #fff));
 }
 .cart-card {
-  border-top: 4px solid #f59e0b !important;
+  --accent: #f59e0b;
 }
 .history-card {
-  border-top: 4px solid #8b5cf6 !important;
+  --accent: #8b5cf6;
 }
-.catalog-card :deep(.el-card__header),
-.cart-card :deep(.el-card__header),
-.history-card :deep(.el-card__header) {
-  padding: 10px 12px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
-  border-bottom: 1px solid #e2e8f0;
+.panel-card :deep(.el-card__header) {
+  padding: 10px 12px 9px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, #fff), #fff);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 14%, #e2e8f0);
 }
-.catalog-card :deep(.el-card__body),
-.cart-card :deep(.el-card__body),
-.history-card :deep(.el-card__body) {
+.panel-card :deep(.el-card__body) {
   padding: 10px 12px;
 }
 .card-head {
@@ -1180,14 +1297,17 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
 }
+.card-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .tone-dot {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
-}
-.tone-dot--blue {
   background: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
 }
 .tone-dot--amber {
   background: #f59e0b;
@@ -1200,17 +1320,70 @@ onMounted(async () => {
 .muted {
   color: #94a3b8;
 }
-.add-cart-btn {
-  background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
-  border: none !important;
-  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.22);
+
+/* 表：淡色・行ホバーのみ */
+.modern-table {
+  border-radius: 8px;
+  overflow: hidden;
+  --el-table-border-color: #e8eef7;
 }
+.modern-table :deep(.el-table__row:hover > td) {
+  background: rgba(59, 130, 246, 0.06) !important;
+}
+.history-card .modern-table :deep(.el-table__row:hover > td) {
+  background: rgba(139, 92, 246, 0.06) !important;
+}
+
+/* 行操作：小さなピル */
+.modern-table :deep(.el-button.is-link),
+.cart-row :deep(.el-button.is-link) {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.modern-table :deep(.el-button.is-link + .el-button.is-link) {
+  margin-left: 4px;
+}
+.modern-table :deep(.el-button--primary.is-link:hover) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+.modern-table :deep(.el-button--danger.is-link),
+.cart-row :deep(.el-button--danger.is-link) {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+}
+.modern-table :deep(.el-button--danger.is-link:hover),
+.cart-row :deep(.el-button--danger.is-link:hover) {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ---------- 発注明細（カート） ---------- */
 .cart-meta {
-  margin-bottom: 6px;
-  padding: 8px;
-  border-radius: 12px;
+  margin-bottom: 8px;
+  padding: 8px 8px 0;
+  border-radius: 10px;
   background: linear-gradient(180deg, #fffbeb, #fff);
   border: 1px solid #fde68a;
+}
+.cart-meta :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+.cart-meta :deep(.el-form-item__label) {
+  font-weight: 700;
+  color: #92400e;
 }
 .cart-list {
   display: flex;
@@ -1219,26 +1392,26 @@ onMounted(async () => {
   max-height: 260px;
   overflow: auto;
 }
-.card-head__actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .cart-row {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr 110px 72px auto;
   gap: 6px;
   align-items: center;
-  padding: 8px;
-  background: linear-gradient(180deg, #fff, #fff7ed);
-  border: 1px solid #fed7aa;
-  border-radius: 10px;
-  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.08);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  padding: 7px 8px 7px 11px;
+  background: #fff;
+  border: 1px solid #fde4c3;
+  border-radius: 9px;
 }
-.cart-row:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.16);
+.cart-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #fcd34d, #f59e0b);
 }
 .cart-item-enter-active,
 .cart-item-leave-active {
@@ -1255,6 +1428,9 @@ onMounted(async () => {
   min-width: 0;
   font-size: 12px;
 }
+.cart-row__name strong {
+  color: #0f172a;
+}
 .cart-row__name span {
   color: #64748b;
   overflow: hidden;
@@ -1270,27 +1446,42 @@ onMounted(async () => {
 }
 .cart-total {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
   font-size: 13px;
-  color: #fff;
-  background: linear-gradient(135deg, #ea580c, #f59e0b);
-  box-shadow: 0 8px 16px rgba(234, 88, 12, 0.22);
+  font-weight: 700;
+  color: #9a3412;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fdba74;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgba(234, 88, 12, 0.12);
 }
 .cart-total strong {
-  font-size: 16px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #c2410c;
+  font-variant-numeric: tabular-nums;
 }
-.refresh-btn {
-  color: #6d28d9 !important;
+
+.refresh-btn.el-button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+  background: #f5f3ff;
 }
-.modern-table :deep(.el-table__row:hover > td) {
-  background: rgba(59, 130, 246, 0.06) !important;
+.refresh-btn.el-button:hover {
+  color: #5b21b6;
+  border-color: #c4b5fd;
+  background: #ede9fe;
 }
-.detail-table {
-  margin-top: 10px;
-}
+
 @media (max-width: 1100px) {
   .work-grid {
     grid-template-columns: 1fr;
@@ -1303,158 +1494,130 @@ onMounted(async () => {
   }
 }
 
-.print-confirm-dialog :deep(.el-dialog__header) {
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-.dialog-header-with-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-.dialog-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: rgb(10, 10, 10);
-}
-.confirm-btn-header {
-  border-radius: 5px;
-  padding: 5px 12px;
-  font-weight: 600;
-  font-size: 11px;
-  background: rgba(23, 241, 158, 0.589);
-  border: 1px solid rgba(8, 7, 7, 0.774);
-  color: rgb(7, 7, 7);
-  margin-left: 200px;
-}
-.print-confirm-dialog :deep(.el-dialog__body) {
-  padding: 0;
-}
-.print-confirm-content-compact {
-  padding: 10px 14px;
-}
-.form-sections-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.form-section-compact {
-  background: white;
-  border-radius: 5px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-}
-.section-header-compact {
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e5e7eb;
-  font-weight: 600;
-  color: #334155;
-  font-size: 11px;
-  gap: 5px;
-}
-.section-icon {
-  color: #667eea;
-  font-size: 13px;
-}
-.form-fields-compact {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.form-field-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.form-field-row .field-label {
-  min-width: 95px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #475569;
+/* ============================================================
+ * 共通：ダイアログ／ドロワーのヒーローと閉じるボタン
+ * （append 先で scope 属性が付かないため外枠は :global で指定）
+ * ============================================================ */
+.spb-close {
   flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
 }
-.form-input-compact,
-.form-textarea-compact {
-  flex: 1;
+.spb-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
 }
 
-.item-form-dialog :deep(.el-dialog) {
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.28);
-}
-.item-form-dialog :deep(.el-dialog__header) {
-  padding: 18px 20px 16px;
-  margin: 0;
-  background:
-    radial-gradient(circle at 88% -20%, rgba(255, 255, 255, 0.28), transparent 42%),
-    linear-gradient(135deg, #1d4ed8 0%, #2563eb 48%, #0ea5e9 100%);
-}
-.item-form-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: #fff;
-  font-size: 18px;
-}
-.item-form-dialog :deep(.el-dialog__body) {
+/* ---------- 備品登録／編集ダイアログ ---------- */
+:global(.el-dialog.spb-item-dialog) {
   padding: 0;
-  background: linear-gradient(180deg, #f8fbff, #f1f5f9);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -16px rgba(30, 58, 138, 0.4),
+    0 0 0 1px rgba(37, 99, 235, 0.1);
 }
-.item-form-dialog :deep(.el-dialog__footer) {
-  padding: 12px 18px 16px;
+:global(.el-dialog.spb-item-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+:global(.el-dialog.spb-item-dialog .el-dialog__body) {
+  padding: 0;
+  background: linear-gradient(180deg, #f8fbff, #f5f7fb);
+}
+:global(.el-dialog.spb-item-dialog .el-dialog__footer) {
+  padding: 12px 18px 14px;
   background: #fff;
   border-top: 1px solid #e2e8f0;
 }
 .item-dialog-header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 14px 18px;
   color: #fff;
-  padding-right: 24px;
+  background: linear-gradient(125deg, #1d4ed8 0%, #2563eb 40%, #0ea5e9 78%, #38bdf8 100%);
+}
+.item-dialog-header.is-edit {
+  background: linear-gradient(125deg, #b45309 0%, #d97706 40%, #f59e0b 76%, #fbbf24 100%);
 }
 .item-dialog-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 8px 16px rgba(15, 23, 42, 0.16);
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18);
+}
+.item-dialog-copy {
+  flex: 1;
+  min-width: 0;
 }
 .item-dialog-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
 }
 .item-dialog-header p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.84);
+  margin: 3px 0 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
 }
 .item-dialog-body {
-  padding: 16px 16px 10px;
+  padding: 14px 16px 6px;
 }
 .item-cd-banner {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  margin-bottom: 10px;
+  padding: 10px 14px 10px 17px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #eff6ff 0%, #fff 70%);
   border: 1px solid #bfdbfe;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.1);
+}
+.item-cd-banner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
 }
 .item-cd-banner__mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1462,9 +1625,12 @@ onMounted(async () => {
   font-weight: 800;
   letter-spacing: 0.06em;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.28);
-  flex-shrink: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
 }
 .item-cd-banner__meta {
   flex: 1;
@@ -1479,51 +1645,54 @@ onMounted(async () => {
 .item-cd-banner__value {
   display: block;
   margin-top: 2px;
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: 0.08em;
   color: #1d4ed8;
   font-family: Consolas, Monaco, monospace;
   line-height: 1.1;
 }
 .form-section {
+  --accent: #2563eb;
+  position: relative;
+  overflow: hidden;
   margin-bottom: 10px;
-  padding: 12px 14px 6px;
-  border-radius: 16px;
+  padding: 12px 14px 4px;
+  border-radius: 12px;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.form-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #fff));
 }
 .form-section--amber {
-  background: linear-gradient(180deg, #fffbeb, #fff);
-  border-color: #fde68a;
+  --accent: #f59e0b;
 }
 .form-section--slate {
-  background: linear-gradient(180deg, #f8fafc, #fff);
+  --accent: #64748b;
 }
 .form-section__title {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 10px;
   font-size: 12px;
   font-weight: 800;
-  color: #334155;
-  margin-bottom: 10px;
   letter-spacing: 0.06em;
+  color: #334155;
 }
 .form-section__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #2563eb;
-  box-shadow: 0 0 0 4px #dbeafe;
-}
-.form-section--amber .form-section__dot {
-  background: #f59e0b;
-  box-shadow: 0 0 0 4px #fef3c7;
-}
-.form-section--slate .form-section__dot {
-  background: #64748b;
-  box-shadow: 0 0 0 4px #e2e8f0;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .form-grid {
   display: grid;
@@ -1538,28 +1707,35 @@ onMounted(async () => {
   color: #475569;
   margin-bottom: 4px !important;
 }
-.item-form :deep(.el-input__wrapper),
-.item-form :deep(.el-select__wrapper) {
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px #e2e8f0 inset;
-}
-.item-form :deep(.el-textarea__inner) {
-  border-radius: 10px;
-}
 .item-form :deep(.el-input-number) {
   width: 100%;
 }
-.item-form :deep(.el-input-number .el-input__wrapper) {
-  border-radius: 10px;
+.item-form :deep(.el-input__wrapper),
+.item-form :deep(.el-select__wrapper),
+.item-form :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #d6e2f5 inset;
+}
+.item-form :deep(.el-input__wrapper:hover),
+.item-form :deep(.el-select__wrapper:hover),
+.item-form :deep(.el-textarea__inner:hover) {
+  box-shadow: 0 0 0 1px #93c5fd inset;
+}
+.item-form :deep(.el-input__wrapper.is-focus),
+.item-form :deep(.el-select__wrapper.is-focused),
+.item-form :deep(.el-textarea__inner:focus) {
+  box-shadow:
+    0 0 0 1px #2563eb inset,
+    0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 .status-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   margin-bottom: 10px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
 }
@@ -1578,149 +1754,212 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 8px;
 }
-.dialog-save {
-  min-width: 118px;
-  height: 36px;
-  border-radius: 10px !important;
-  font-weight: 700;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
-  border: none !important;
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.28);
-}
 .dialog-cancel {
-  height: 36px;
-  border-radius: 10px;
+  --k-rgb: 100 116 139;
+  height: 34px;
+  border-radius: 9px;
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #d6dde8;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+.dialog-save {
+  --k-rgb: 37 99 235;
+  min-width: 118px;
+  height: 34px;
+  border-radius: 9px;
+  font-weight: 800;
+  color: #fff;
+  border: 1px solid #1d4ed8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+.dialog-save:not(.is-disabled):hover,
+.dialog-save:not(.is-disabled):focus-visible {
+  color: #fff;
+  border-color: #1e40af;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #60a5fa, #2563eb);
+}
+.dialog-save .el-icon {
+  margin-right: 4px;
 }
 
-/* ============================================================
- * 页面美化：現代UI・3D動効・色分け（注文書印刷確認ダイアログ / violet・sky・amber）
- * ============================================================ */
-:global(.el-dialog.pcd-modern) {
+/* ---------- 発注明細ドロワー（violet） ---------- */
+:global(.el-drawer.spb-drawer .el-drawer__header) {
+  margin: 0;
+  padding: 0;
+}
+:global(.el-drawer.spb-drawer .el-drawer__body) {
+  padding: 14px 16px;
+  background: #f8fafc;
+}
+:global(.el-drawer.spb-drawer .el-descriptions__label) {
+  width: 96px;
+  font-weight: 700;
+  color: #5b21b6 !important;
+  background: #f5f3ff !important;
+}
+:global(.el-drawer.spb-drawer .el-descriptions__body) {
+  border-radius: 10px;
+  overflow: hidden;
+}
+:global(.el-drawer.spb-drawer .detail-table th.el-table__cell) {
+  font-weight: 700;
+  color: #4c1d95;
+  background: #f5f3ff;
+}
+.spb-drawer-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(125deg, #4c1d95 0%, #6d28d9 38%, #8b5cf6 72%, #a78bfa 100%);
+}
+.spb-hero-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(46, 16, 101, 0.3);
+}
+.spb-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.spb-hero-title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+}
+.spb-hero-desc {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
+}
+.detail-table {
+  margin-top: 10px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ---------- 注文書印刷確認ダイアログ（violet） ---------- */
+:global(.el-dialog.spb-print-dialog) {
   padding: 0;
   border-radius: 14px;
   overflow: hidden;
   box-shadow:
-    0 24px 48px -16px rgba(46, 16, 101, 0.45),
+    0 24px 48px -16px rgba(46, 16, 101, 0.42),
     0 0 0 1px rgba(124, 58, 237, 0.12);
 }
-:global(.el-dialog.pcd-modern .el-dialog__header) {
+:global(.el-dialog.spb-print-dialog .el-dialog__header) {
   padding: 0;
   margin: 0;
-  border-bottom: none;
-  background: none;
 }
-:global(.el-dialog.pcd-modern .el-dialog__body) {
+:global(.el-dialog.spb-print-dialog .el-dialog__body) {
   padding: 0;
   background: linear-gradient(180deg, #faf5ff 0%, #f8fafc 100%);
 }
-:global(.el-dialog.pcd-modern .el-dialog__headerbtn) {
-  top: 16px;
-  right: 14px;
-  z-index: 2;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  transition:
-    transform 0.2s ease,
-    background 0.2s ease;
-}
-:global(.el-dialog.pcd-modern .el-dialog__headerbtn:hover) {
-  background: rgba(255, 255, 255, 0.3);
-  transform: rotate(90deg);
-}
-:global(.el-dialog.pcd-modern .el-dialog__headerbtn .el-dialog__close) {
-  color: #fff;
-  font-size: 15px;
-}
-
 .pcd-hero {
   position: relative;
   overflow: hidden;
-  isolation: isolate;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 14px 56px 14px 18px;
-  background: linear-gradient(125deg, #2e1065 0%, #5b21b6 36%, #7c3aed 70%, #a78bfa 100%);
-}
-.pcd-hero-fx {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-}
-.pcd-hero-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+  width: 100%;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, #4c1d95 0%, #6d28d9 38%, #8b5cf6 72%, #a78bfa 100%);
 }
 .pcd-hero-icon {
-  display: inline-flex;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 17px;
+  font-size: 18px;
   color: #fff;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 3px 0 rgba(46, 16, 101, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: perspective(300px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(46, 16, 101, 0.3);
+}
+.pcd-hero-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 .pcd-hero .dialog-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
   color: #fff;
-  text-shadow: 0 2px 6px rgba(46, 16, 101, 0.4);
   white-space: nowrap;
 }
-
-/* 印刷実行：エメラルドのキーキャップ */
-.pcd-hero .confirm-btn-header,
-.pcd-hero .confirm-btn-header:hover,
-.pcd-hero .confirm-btn-header:focus {
-  color: #fff;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+.pcd-hero-desc {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
 }
+
+/* 印刷実行：ヒーロー上の白ピル */
 .pcd-hero .confirm-btn-header {
-  margin-left: auto;
+  --k-rgb: 124 58 237;
+  flex-shrink: 0;
   height: 30px;
   padding: 0 14px;
-  border-radius: 9px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow:
-    0 3px 0 #065f46,
-    0 10px 18px -8px rgba(5, 150, 105, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    filter 0.12s ease;
+  color: #6d28d9;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
 }
-.pcd-hero .confirm-btn-header:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
-  box-shadow:
-    0 5px 0 #065f46,
-    0 14px 22px -8px rgba(5, 150, 105, 0.75),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+.pcd-hero .confirm-btn-header:hover,
+.pcd-hero .confirm-btn-header:focus-visible {
+  color: #5b21b6;
+  border-color: #fff;
+  background: #fff;
 }
-.pcd-hero .confirm-btn-header:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #065f46;
+.pcd-hero .confirm-btn-header .el-icon {
+  margin-right: 4px;
+}
+
+.print-confirm-content-compact {
+  padding: 12px 14px 14px;
+}
+.form-sections-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* セクション色分け（受注先＝sky / 承認・発行＝violet / 備考＝amber） */
@@ -1736,25 +1975,18 @@ onMounted(async () => {
   --sc: #f59e0b;
   --sc-rgb: 245, 158, 11;
 }
-.print-confirm-content-compact {
-  padding: 12px 14px 14px;
-}
-.print-confirm-content-compact .form-sections-compact {
-  gap: 10px;
-}
-.print-confirm-content-compact .pcd-sec {
+.pcd-sec {
   position: relative;
-  border-radius: 11px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fff;
   border: 1px solid rgba(var(--sc-rgb), 0.22);
-  box-shadow:
-    0 8px 18px -12px rgba(var(--sc-rgb), 0.55),
-    0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
-.print-confirm-content-compact .pcd-sec::before {
+.pcd-sec::before {
   content: '';
   position: absolute;
   top: 0;
@@ -1764,97 +1996,79 @@ onMounted(async () => {
   z-index: 1;
   background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.25) 100%);
 }
-.print-confirm-content-compact .pcd-sec:hover {
-  transform: translateY(-1px);
-  border-color: rgba(var(--sc-rgb), 0.4);
+.pcd-sec:focus-within {
+  border-color: rgba(var(--sc-rgb), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--sc-rgb), 0.1);
 }
-.print-confirm-content-compact .pcd-sec:focus-within {
-  border-color: rgba(var(--sc-rgb), 0.55);
-  box-shadow:
-    0 0 0 3px rgba(var(--sc-rgb), 0.1),
-    0 10px 22px -12px rgba(var(--sc-rgb), 0.6);
-}
-.pcd-sec .section-header-compact {
+.section-header-compact {
+  display: flex;
+  align-items: center;
   gap: 8px;
   padding: 9px 12px 7px;
   font-size: 12px;
+  font-weight: 700;
   color: #1e293b;
-  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.12) 0%, rgba(var(--sc-rgb), 0.02) 100%);
-  border-bottom-color: rgba(var(--sc-rgb), 0.16);
+  background: linear-gradient(90deg, rgba(var(--sc-rgb), 0.1) 0%, rgba(var(--sc-rgb), 0.02) 100%);
+  border-bottom: 1px solid rgba(var(--sc-rgb), 0.16);
 }
-.pcd-sec .section-icon {
+.section-icon {
   width: 22px;
   height: 22px;
   padding: 4px;
   box-sizing: border-box;
-  border-radius: 7px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 13px;
   color: #fff;
   background: linear-gradient(135deg, rgba(var(--sc-rgb), 0.7) 0%, var(--sc) 100%);
   box-shadow:
-    0 2px 0 rgba(15, 23, 42, 0.18),
-    0 4px 8px -3px rgba(var(--sc-rgb), 0.65);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.16);
 }
-.pcd-sec .section-title {
-  font-weight: 700;
+.section-title {
   letter-spacing: 0.03em;
 }
-.pcd-sec .form-fields-compact {
+.form-fields-compact {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
 }
-.pcd-sec .field-label {
-  font-weight: 600;
+.form-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.form-field-row .field-label {
+  flex-shrink: 0;
+  min-width: 95px;
+  font-size: 11px;
+  font-weight: 700;
   color: #475569;
 }
+.form-input-compact,
+.form-textarea-compact {
+  flex: 1;
+}
 .pcd-sec :deep(.el-input__wrapper),
-.pcd-sec :deep(.el-select__wrapper) {
-  min-height: 28px;
-  border: none;
+.pcd-sec :deep(.el-select__wrapper),
+.pcd-sec :deep(.el-textarea__inner) {
   border-radius: 8px;
-  background-color: #f8fafc;
+  background-color: #fff;
   box-shadow: 0 0 0 1px #dfe3f0 inset;
-  transition:
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+}
+.pcd-sec :deep(.el-textarea__inner) {
+  font-size: 11px;
 }
 .pcd-sec :deep(.el-input__wrapper:hover),
-.pcd-sec :deep(.el-select__wrapper:hover) {
-  background-color: #fff;
+.pcd-sec :deep(.el-select__wrapper:hover),
+.pcd-sec :deep(.el-textarea__inner:hover) {
   box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
 }
 .pcd-sec :deep(.el-input__wrapper.is-focus),
-.pcd-sec :deep(.el-select__wrapper.is-focused) {
-  background-color: #fff;
-  box-shadow:
-    0 0 0 1px var(--sc) inset,
-    0 0 0 3px rgba(var(--sc-rgb), 0.15);
-}
-.pcd-sec :deep(.el-textarea__inner) {
-  border: none;
-  border-radius: 8px;
-  font-size: 11px;
-  background-color: #f8fafc;
-  box-shadow: 0 0 0 1px #dfe3f0 inset;
-  transition:
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
-}
-.pcd-sec :deep(.el-textarea__inner:hover) {
-  background-color: #fff;
-  box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
-}
+.pcd-sec :deep(.el-select__wrapper.is-focused),
 .pcd-sec :deep(.el-textarea__inner:focus) {
-  background-color: #fff;
   box-shadow:
     0 0 0 1px var(--sc) inset,
     0 0 0 3px rgba(var(--sc-rgb), 0.15);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .print-confirm-content-compact .pcd-sec:hover,
-  .pcd-hero .confirm-btn-header:hover {
-    transform: none;
-  }
 }
 </style>
