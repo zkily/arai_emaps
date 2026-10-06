@@ -14,11 +14,11 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button class="head-btn head-btn--link" @click="openPage('OutsourcingSuppliers')">
+        <el-button class="head-btn head-btn--link head-btn--sup" @click="openPage('OutsourcingSuppliers')">
           <el-icon><OfficeBuilding /></el-icon>
           外注先マスタ
         </el-button>
-        <el-button class="head-btn head-btn--link" @click="openPage('OutsourcingProcessProducts')">
+        <el-button class="head-btn head-btn--link head-btn--prod" @click="openPage('OutsourcingProcessProducts')">
           <el-icon><Goods /></el-icon>
           外注加工製品
         </el-button>
@@ -69,7 +69,7 @@
             :clearable="false"
             class="filter-control"
           />
-          <el-button-group class="month-shortcuts">
+          <el-button-group class="month-shortcuts month-shortcuts--day">
             <el-button class="month-btn" @click="shiftDay(-1)">
               <el-icon><ArrowLeft /></el-icon>前日
             </el-button>
@@ -85,7 +85,7 @@
               翌日<el-icon class="el-icon--right"><ArrowRight /></el-icon>
             </el-button>
           </el-button-group>
-          <el-button-group class="month-shortcuts">
+          <el-button-group class="month-shortcuts month-shortcuts--month">
             <el-button class="month-btn" @click="shiftMonth(-1)">
               <el-icon><ArrowLeft /></el-icon>前月
             </el-button>
@@ -498,7 +498,7 @@
         <el-button class="dlg-btn" @click="generateVisible = false">キャンセル</el-button>
         <el-button
           type="primary"
-          class="dlg-btn dlg-btn--run"
+          class="dlg-btn dlg-btn--run dlg-btn--gen"
           :disabled="!genStart || !genEnd"
           :loading="generating"
           @click="runGenerate"
@@ -548,7 +548,7 @@
         <el-button class="dlg-btn" @click="refreshVisible = false">キャンセル</el-button>
         <el-button
           type="primary"
-          class="dlg-btn dlg-btn--run"
+          class="dlg-btn dlg-btn--run dlg-btn--master"
           :disabled="!refreshStart || !refreshEnd"
           :loading="refreshing"
           @click="runRefreshMaster"
@@ -1109,38 +1109,42 @@ onMounted(() => {
   gap: 8px;
 }
 
-/* ヒーロー上の白ピル（文字色で役割を区別） */
+/* ヒーロー上の操作ボタン：役割ごとに色分けした立体ボタン（白縁で濃色ヒーローから分離） */
 .head-btn {
-  --hb-fg: #047857;
-  --hb-fg-h: #065f46;
-  --hb-bg: #ecfdf5;
+  --k-rgb: 5 150 105;
+  --hb-from: #34d399;
+  --hb-to: #059669;
+  --hb-from-h: #6ee7b7;
+  --hb-to-h: #10b981;
   height: 30px;
   margin: 0;
   padding: 0 14px;
   border-radius: 999px;
   font-weight: 700;
-  color: var(--hb-fg);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  background: linear-gradient(180deg, #ffffff 0%, var(--hb-bg) 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--hb-from), var(--hb-to));
 }
 
 .head-btn:not(.is-disabled):hover,
 .head-btn:focus-visible {
-  color: var(--hb-fg-h);
+  color: #fff;
   border-color: #fff;
-  background: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--hb-from-h), var(--hb-to-h));
 }
 
 .head-btn .el-icon {
   margin-right: 4px;
 }
 
-.head-btn--gen {
-  --k-rgb: 5 150 105;
-}
-
-/* 関連マスタへのリンク（半透明で操作ボタンと区別） */
+/* 関連マスタへのリンク（半透明＋色付きアイコンで操作ボタンと区別） */
 .head-btn--link {
+  --hb-ic: #0284c7;
+  padding-left: 6px;
   color: #fff;
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.14);
@@ -1148,9 +1152,36 @@ onMounted(() => {
 
 .head-btn--link:not(.is-disabled):hover,
 .head-btn--link:focus-visible {
-  color: #0f766e;
+  color: var(--hb-ic);
   border-color: #fff;
   background: #fff;
+}
+
+.head-btn--link .el-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 50%;
+  font-size: 12px;
+  color: var(--hb-ic);
+  background: #fff;
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.12);
+}
+
+.head-btn--link:not(.is-disabled):hover .el-icon,
+.head-btn--link:focus-visible .el-icon {
+  color: #fff;
+  background: var(--hb-ic);
+}
+
+.head-btn--sup {
+  --k-rgb: 2 132 199;
+  --hb-ic: #0284c7;
+}
+
+.head-btn--prod {
+  --k-rgb: 192 38 211;
+  --hb-ic: #c026d3;
 }
 
 .head-divider {
@@ -1163,16 +1194,18 @@ onMounted(() => {
 
 .head-btn--master {
   --k-rgb: 37 99 235;
-  --hb-fg: #1d4ed8;
-  --hb-fg-h: #1e40af;
-  --hb-bg: #eff6ff;
+  --hb-from: #60a5fa;
+  --hb-to: #1d4ed8;
+  --hb-from-h: #93c5fd;
+  --hb-to-h: #2563eb;
 }
 
 .head-btn--calc {
-  --k-rgb: 217 119 6;
-  --hb-fg: #b45309;
-  --hb-fg-h: #92400e;
-  --hb-bg: #fffbeb;
+  --k-rgb: 124 58 237;
+  --hb-from: #a78bfa;
+  --hb-to: #6d28d9;
+  --hb-from-h: #c4b5fd;
+  --hb-to-h: #7c3aed;
 }
 
 .head-btn.is-disabled {
@@ -1284,41 +1317,62 @@ onMounted(() => {
     0 0 0 3px rgba(13, 148, 136, 0.14);
 }
 
-/* 月ショートカット：セグメント */
+/* 日・月ショートカット：セグメント（日＝スカイ、月＝インディゴで区別） */
 .month-shortcuts {
+  --ms: #0284c7;
+  --ms-deep: #075985;
+  --ms-from: #38bdf8;
+  --ms-to: #0284c7;
+  --ms-from-h: #7dd3fc;
+  --ms-to-h: #0ea5e9;
+  --ms-soft: #e0f2fe;
+  --ms-line: #bae6fd;
+  --ms-rgb: 2 132 199;
   display: inline-flex;
   gap: 2px;
   padding: 2px;
   border-radius: 10px;
-  background: #e6f4f2;
-  box-shadow: inset 0 1px 2px rgba(15, 118, 110, 0.1);
+  background: var(--ms-soft);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.month-shortcuts--month {
+  --ms: #4f46e5;
+  --ms-deep: #3730a3;
+  --ms-from: #818cf8;
+  --ms-to: #4f46e5;
+  --ms-from-h: #a5b4fc;
+  --ms-to-h: #6366f1;
+  --ms-soft: #e0e7ff;
+  --ms-line: #c7d2fe;
+  --ms-rgb: 79 70 229;
 }
 
 .month-shortcuts .month-btn {
-  --k-rgb: 13 148 136;
+  --k-rgb: var(--ms-rgb);
   height: 28px;
   margin: 0;
   padding: 0 10px;
   border-radius: 8px !important;
   font-weight: 700;
-  color: #0f766e;
-  border: 1px solid #cdeae6 !important;
-  background: linear-gradient(180deg, #ffffff 0%, #f3fbfa 100%);
+  color: var(--ms-deep);
+  border: 1px solid var(--ms-line) !important;
+  background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--ms-soft) 45%, #fff) 100%);
 }
 
 .month-shortcuts .month-btn:hover,
 .month-shortcuts .month-btn:focus-visible {
-  color: #115e59;
-  border-color: #7dd3c8 !important;
+  color: var(--ms);
+  border-color: color-mix(in srgb, var(--ms) 45%, #fff) !important;
   background: #fff;
 }
 
 .month-shortcuts .month-btn.is-active {
   color: #fff;
-  border-color: #0f766e !important;
+  border-color: var(--ms-deep) !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #14b8a6, #0f766e);
+    linear-gradient(135deg, var(--ms-from), var(--ms-to));
 }
 
 .month-shortcuts .month-btn.is-active:hover,
@@ -1326,7 +1380,7 @@ onMounted(() => {
   color: #fff;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #2dd4bf, #0d9488);
+    linear-gradient(135deg, var(--ms-from-h), var(--ms-to-h));
 }
 
 .nonzero-switch {
@@ -2129,6 +2183,39 @@ onMounted(() => {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
     linear-gradient(135deg, #2dd4bf, #0d9488);
+}
+
+/* 実行ボタンは起動元のヒーローボタンと同色（生成＝エメラルド、マスタ反映＝ブルー） */
+.dlg-btn--gen {
+  --k-rgb: 5 150 105;
+  border-color: #047857;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #34d399, #059669);
+}
+
+.dlg-btn--gen:hover,
+.dlg-btn--gen:focus-visible {
+  border-color: #065f46;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6ee7b7, #10b981);
+}
+
+.dlg-btn--master {
+  --k-rgb: 37 99 235;
+  border-color: #1d4ed8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #60a5fa, #1d4ed8);
+}
+
+.dlg-btn--master:hover,
+.dlg-btn--master:focus-visible {
+  border-color: #1e40af;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #93c5fd, #2563eb);
 }
 
 .dlg-btn--run.is-disabled,

@@ -33,6 +33,8 @@ export interface LedgerContext {
   sheetReportTitle: string
   /** 注文書の発行者（初期値） */
   sheetDefaultIssuer: string
+  /** 注文書の外注先（初期値）。空なら絞り込みの外注先を使う */
+  sheetDefaultSupplierCd: string
   /** 現在庫分析の見出し注記。空なら表示しない */
   stockScopeNote: string
   getOptions: typeof getPlatingLedgerOptions
@@ -55,6 +57,7 @@ export const platingLedgerContext: LedgerContext = {
   sheetReportType: 'plating_order',
   sheetReportTitle: '外注メッキ注文書',
   sheetDefaultIssuer: '竹村',
+  sheetDefaultSupplierCd: '',
   stockScopeNote: '北九州ケミカルを除く',
   getOptions: getPlatingLedgerOptions,
   getList: getPlatingLedger,
@@ -76,6 +79,8 @@ export const weldingLedgerContext: LedgerContext = {
   sheetReportType: 'welding_order',
   sheetReportTitle: '外注溶接注文書',
   sheetDefaultIssuer: '東條',
+  // 共栄工業(株)
+  sheetDefaultSupplierCd: 'OS-005',
   stockScopeNote: '',
   getOptions: getWeldingLedgerOptions,
   getList: getWeldingLedger,

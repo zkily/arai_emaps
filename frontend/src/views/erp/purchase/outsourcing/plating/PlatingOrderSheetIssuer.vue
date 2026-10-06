@@ -175,7 +175,7 @@ const orderRange = computed<string[]>({
     if (v?.length === 2 && v[0] && v[1]) emit('update:range', [v[0], v[1]])
   },
 })
-const supplierCd = ref(props.defaultSupplierCd || '')
+const supplierCd = ref(props.defaultSupplierCd || ledger.sheetDefaultSupplierCd)
 const supplierOptions = ref<{ value: string; label: string }[]>([])
 const fetching = ref(false)
 const dialogVisible = ref(false)
@@ -276,6 +276,7 @@ watch(
   () => props.defaultSupplierCd,
   (v) => {
     if (v) supplierCd.value = v
+    else if (ledger.sheetDefaultSupplierCd) supplierCd.value = ledger.sheetDefaultSupplierCd
   },
 )
 
@@ -535,20 +536,22 @@ onMounted(loadSuppliers)
   display: inline-flex;
 }
 
+/* 日送り（台帳の日ショートカットと同じスカイ系） */
 .issuer-quick .el-button {
+  --k-rgb: 2 132 199;
   height: 24px;
   padding: 0 8px;
   font-weight: 700;
-  color: #0f766e;
-  border-color: #cfe6e3;
-  background: #fff;
+  color: #075985;
+  border-color: #bae6fd;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
 }
 
 .issuer-quick .el-button:hover,
 .issuer-quick .el-button:focus-visible {
-  color: #115e59;
-  border-color: #7dd3c8;
-  background: #ecfdf9;
+  color: #0284c7;
+  border-color: #7dd3fc;
+  background: #fff;
 }
 
 .issuer-quick .el-button:first-child {
@@ -579,26 +582,27 @@ onMounted(loadSuppliers)
     0 0 0 3px rgba(13, 148, 136, 0.14);
 }
 
+/* 発行（印刷系はアンバーで統一） */
 .issuer-btn {
-  --k-rgb: 13 148 136;
+  --k-rgb: 217 119 6;
   height: 26px;
   padding: 0 12px;
   border-radius: 8px;
   font-weight: 700;
   color: #fff;
-  border: 1px solid #0f766e;
+  border: 1px solid #b45309;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #14b8a6, #0f766e);
+    linear-gradient(135deg, #fbbf24, #d97706);
 }
 
 .issuer-btn:hover,
 .issuer-btn:focus-visible {
   color: #fff;
-  border-color: #115e59;
+  border-color: #92400e;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #2dd4bf, #0d9488);
+    linear-gradient(135deg, #fcd34d, #f59e0b);
 }
 
 .issuer-btn .el-icon {
@@ -672,24 +676,28 @@ onMounted(loadSuppliers)
   color: rgba(255, 255, 255, 0.88);
 }
 
-/* ヒーロー上の白ピル */
+/* 印刷実行：「発行」と同じアンバーの立体ピル（白縁でヒーローから分離） */
 .sheet-issue-dialog .sid-print-btn {
-  --k-rgb: 13 148 136;
+  --k-rgb: 217 119 6;
   flex-shrink: 0;
   height: 30px;
   padding: 0 14px;
   border-radius: 999px;
   font-weight: 700;
-  color: #0f766e;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  background: linear-gradient(180deg, #ffffff 0%, #ecfdf9 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fbbf24, #d97706);
 }
 
 .sheet-issue-dialog .sid-print-btn:hover,
 .sheet-issue-dialog .sid-print-btn:focus-visible {
-  color: #115e59;
+  color: #fff;
   border-color: #fff;
-  background: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fcd34d, #f59e0b);
 }
 
 .sheet-issue-dialog .sid-print-btn .el-icon {
