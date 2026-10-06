@@ -1,7 +1,7 @@
 """
 外注管理 データベースモデル（outsourcing_suppliers / welding_orders / welding_receivings）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Date, Numeric, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Date, Numeric, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -174,6 +174,37 @@ class WeldingStock(Base):
     min_stock = Column(Integer, default=0)
     last_receive_date = Column(Date)
     last_issue_date = Column(Date)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class PlatingLedger(Base):
+    """外注メッキ日別台帳（注文・受入・外注在庫を1行で管理）"""
+    __tablename__ = "outsourcing_plating_ledger"
+    __table_args__ = (
+        UniqueConstraint("order_date", "supplier_cd", "product_cd", name="uk_plating_ledger_day"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    order_date = Column(Date, nullable=False, index=True)
+    supplier_cd = Column(String(20), nullable=False, index=True)
+    supplier_name = Column(String(100))
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    unit_price = Column(Numeric(12, 2), default=0)
+    lead_time_days = Column(Integer, default=7)
+    delivery_date = Column(Date)
+    order_qty = Column(Integer, default=0)
+    order_no = Column(String(30), unique=True, nullable=True, index=True)
+    order_amount = Column(Numeric(14, 2), default=0)
+    order_sheet_issued_at = Column(DateTime, nullable=True)
+    order_sheet_issued_by = Column(String(100), nullable=True)
+    receiving_qty = Column(Integer, default=0)
+    receiving_no = Column(String(30), unique=True, nullable=True)
+    defect_qty = Column(Integer, default=0)
+    disposal_no = Column(String(30), unique=True, nullable=True)
+    initial_stock = Column(Integer, default=0)
+    current_stock = Column(Integer, default=0)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

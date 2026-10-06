@@ -1,18 +1,13 @@
 <template>
-  <div class="budget-page">
-    <div class="dynamic-background" aria-hidden="true">
-      <div class="gradient-orb orb-1" />
-      <div class="gradient-orb orb-2" />
-      <div class="gradient-orb orb-3" />
-    </div>
-
-    <header class="page-head page-head--glass">
+  <div class="budget-page bm-modern pb-std">
+    <header class="page-head pb-hero pb-hero--page">
+      <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="page-head-icon">
-        <el-icon :size="26"><Coin /></el-icon>
+        <el-icon><Coin /></el-icon>
       </div>
       <div class="page-head-text">
-        <h1 class="page-head-title">予算管理</h1>
-        <p class="page-head-sub">
+        <h1 class="page-head-title pb-hero-title">予算管理</h1>
+        <p class="page-head-sub pb-hero-desc">
           見直し予算CSVを取込み、品番→製品マスタ（製品CD末尾1）を紐付けて工程・設備・原価を分析
         </p>
       </div>
@@ -32,7 +27,7 @@
             :value="`${m.year}-${m.month}`"
           />
         </el-select>
-        <el-button size="small" :icon="Refresh" @click="reloadAll">更新</el-button>
+        <el-button size="small" :icon="Refresh" class="head-btn" @click="reloadAll">更新</el-button>
       </div>
     </header>
 
@@ -438,9 +433,21 @@
       title="月次稼働日の設定"
       width="720px"
       destroy-on-close
-      class="working-days-dialog"
+      class="working-days-dialog pb-std"
+      :show-close="false"
       @opened="onWorkingDaysDialogOpened"
     >
+      <template #header>
+        <div class="wd-hero pb-hero">
+          <div class="head-fx pb-bubbles" aria-hidden="true" />
+          <span class="wd-hero__icon"><el-icon><Calendar /></el-icon></span>
+          <div class="wd-hero__copy">
+            <span class="wd-hero__title">月次稼働日の設定</span>
+            <p class="wd-hero__desc">共通デフォルトと工程別の稼働日数を月ごとに設定</p>
+          </div>
+          <el-icon class="wd-hero__close" @click="workingDaysDialogVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <p class="wd-dialog-desc">
         共通稼働日をデフォルトとし、工程ごとに上書きできます。未指定の工程・月は共通値を使います。
         <br />
@@ -596,6 +603,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import {
   Clock,
+  Close,
   Coin,
   Calendar,
   Document,
@@ -1620,41 +1628,6 @@ function onListPageSizeChange() {
   overflow: hidden;
 }
 
-.dynamic-background {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-}
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.35;
-}
-.orb-1 {
-  width: 320px;
-  height: 320px;
-  top: -80px;
-  right: -40px;
-  background: radial-gradient(circle, #93c5fd 0%, transparent 70%);
-}
-.orb-2 {
-  width: 280px;
-  height: 280px;
-  bottom: 10%;
-  left: -60px;
-  background: radial-gradient(circle, #c4b5fd 0%, transparent 70%);
-}
-.orb-3 {
-  width: 220px;
-  height: 220px;
-  top: 40%;
-  right: 20%;
-  background: radial-gradient(circle, #99f6e4 0%, transparent 70%);
-}
-
 .page-head,
 .kpi-row,
 .budget-tabs,
@@ -1672,7 +1645,6 @@ function onListPageSizeChange() {
   padding: 12px 14px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.25);
   box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
 }
@@ -2142,6 +2114,457 @@ function onListPageSizeChange() {
   }
   .page-head {
     flex-wrap: wrap;
+  }
+}
+
+/* ============================================================
+ * 页面美化：現代UI・色分け（予算管理 / blue→teal）
+ * ============================================================ */
+.budget-page.bm-modern {
+  padding: 8px 10px 14px;
+  background:
+    radial-gradient(1000px 360px at 0% 0%, rgba(37, 99, 235, 0.09), transparent 60%),
+    radial-gradient(900px 360px at 100% 0%, rgba(13, 148, 136, 0.08), transparent 60%),
+    #f2f6fb;
+}
+
+/* ---------- ヒーロー ---------- */
+.bm-modern .page-head {
+  position: relative;
+  overflow: hidden;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 36%, #2563eb 66%, #0d9488 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(30, 64, 175, 0.6),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.bm-modern .page-head-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
+}
+
+.bm-modern .page-head-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.bm-modern .page-head-title {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.bm-modern .page-head-sub {
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.02em;
+}
+
+.bm-modern .page-head-filters .ym-select :deep(.el-select__wrapper) {
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.bm-modern .page-head-filters .ym-select :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #fff inset,
+    0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+
+/* 濃色ヒーロー上の白ピル */
+.bm-modern .head-btn {
+  --k-rgb: 30 64 175;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #1d4ed8;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.bm-modern .head-btn:not(.is-disabled):hover,
+.bm-modern .head-btn:focus-visible {
+  color: #1e3a8a;
+  border-color: #fff;
+  background: #fff;
+}
+
+/* ---------- KPI（色分け・動きなし） ---------- */
+.bm-modern .kpi-row {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.bm-modern .kpi-card {
+  --kc: #2563eb;
+  position: relative;
+  overflow: hidden;
+  padding: 8px 12px 8px 15px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--kc) 18%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--kc) 7%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px -16px color-mix(in srgb, var(--kc) 70%, transparent);
+}
+
+.bm-modern .kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--kc) 45%, #fff), var(--kc));
+}
+
+.bm-modern .kpi-card--blue { --kc: #2563eb; }
+.bm-modern .kpi-card--violet { --kc: #7c3aed; }
+.bm-modern .kpi-card--green { --kc: #059669; }
+.bm-modern .kpi-card--amber { --kc: #d97706; }
+.bm-modern .kpi-card--slate { --kc: #64748b; }
+
+.bm-modern .kpi-card__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.bm-modern .kpi-card__value {
+  font-size: 20px;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--kc) 40%, #0f172a);
+}
+
+.bm-modern .kpi-card__value--sm {
+  font-size: 17px;
+}
+
+/* ---------- タブ：セグメント型ピル ---------- */
+.bm-modern .budget-tabs :deep(.el-tabs__header) {
+  margin: 0 0 8px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px -16px rgba(30, 64, 175, 0.45);
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__nav-wrap::after),
+.bm-modern .budget-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__nav) {
+  gap: 4px;
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__item) {
+  height: 30px;
+  padding: 0 14px !important;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__item:not(.is-active):hover) {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__item.is-active) {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3),
+    0 4px 10px -4px rgba(37, 99, 235, 0.55);
+}
+
+.bm-modern .budget-tabs :deep(.el-tabs__item:focus-visible) {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+/* ---------- パネル ---------- */
+.bm-modern .panel {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 8px;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(30, 64, 175, 0.45);
+}
+
+.bm-modern .panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb 0%, #0ea5e9 60%, #14b8a6 100%);
+}
+
+.bm-modern .guide-panel::before {
+  background: linear-gradient(90deg, #94a3b8 0%, #cbd5e1 100%);
+}
+
+.bm-modern .panel__title {
+  gap: 8px;
+  color: #1e3a8a;
+}
+
+.bm-modern .panel__title > .el-icon,
+.bm-modern .trend-panel__title-left > .el-icon {
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  color: #fff;
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
+}
+
+.bm-modern .guide-panel .panel__title > .el-icon {
+  background: linear-gradient(145deg, #94a3b8 0%, #64748b 100%);
+}
+
+.bm-modern .trend-panel__title-left {
+  gap: 8px;
+}
+
+.bm-modern .trend-panel__meta {
+  color: #1e40af;
+}
+
+/* ---------- CSV取込 ---------- */
+.bm-modern .budget-uploader :deep(.el-upload-dragger) {
+  border-radius: 12px;
+  border: 1.5px dashed #93c5fd;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.bm-modern .budget-uploader :deep(.el-upload-dragger:hover) {
+  transform: none;
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.bm-modern .selected-file {
+  background: #f5f9ff;
+  box-shadow: inset 0 0 0 1px #dbeafe;
+}
+
+.bm-modern .upload-result__grid div {
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 1px #eef2f7;
+}
+
+/* ---------- 入力枠：枠線は wrapper の内側リングのみ ---------- */
+.bm-modern .toolbar :deep(.el-input__wrapper),
+.bm-modern .toolbar :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #d4def2 inset;
+}
+
+.bm-modern .toolbar :deep(.el-input__wrapper:hover),
+.bm-modern .toolbar :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #93c5fd inset;
+}
+
+.bm-modern .toolbar :deep(.el-input__wrapper.is-focus),
+.bm-modern .toolbar :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #3b82f6 inset,
+    0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.bm-modern .toolbar {
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+/* ---------- テーブル ---------- */
+.bm-modern :deep(.el-table) {
+  --el-table-border-color: #eef2f7;
+  --el-table-row-hover-bg-color: #f3f8ff;
+  color: #1e293b;
+  border-radius: 8px;
+}
+
+.bm-modern :deep(.el-table__header-wrapper th.el-table__cell) {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1e40af;
+  background: linear-gradient(180deg, #f7faff 0%, #eaf3ff 100%);
+  border-bottom: 1px solid #bfdbfe;
+}
+
+.bm-modern :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: #f9fbff;
+}
+
+.bm-modern :deep(.el-table__body tr.el-table__row:hover > td.el-table__cell) {
+  background: #f3f8ff !important;
+}
+
+.bm-modern .pager {
+  margin-top: 6px;
+}
+
+/* ---------- 工程別推移カード ---------- */
+.bm-modern .process-trend-card {
+  border-radius: 12px;
+  border: 1px solid #e0ecff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.bm-modern .process-trend-card__rank {
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
+}
+
+/* ---------- 月次稼働日ダイアログ ---------- */
+.wd-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, #1e3a8a 0%, #1d4ed8 36%, #2563eb 66%, #0d9488 100%);
+}
+
+.wd-hero__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #fff;
+  border-radius: 11px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.3);
+}
+
+.wd-hero__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wd-hero__title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+.wd-hero__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.wd-hero__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.wd-hero__close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+:global(.el-dialog.working-days-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:global(.el-dialog.working-days-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+:global(.el-dialog.working-days-dialog .el-dialog__body) {
+  padding: 12px 16px;
+}
+
+:global(.el-dialog.working-days-dialog .el-dialog__footer) {
+  padding: 10px 16px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+@media (max-width: 1100px) {
+  .bm-modern .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .bm-modern .kpi-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

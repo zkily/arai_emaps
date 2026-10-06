@@ -221,15 +221,11 @@
       <div class="quick-buttons">
         <router-link to="/erp/purchase/outsourcing/plating-order" class="quick-btn plating">
           <Star class="quick-icon" />
-          <span>メッキ注文</span>
+          <span>外注メッキ</span>
         </router-link>
         <router-link to="/erp/purchase/outsourcing/welding-order" class="quick-btn welding">
           <TrendCharts class="quick-icon" />
           <span>溶接注文</span>
-        </router-link>
-        <router-link to="/erp/purchase/outsourcing/plating-receiving" class="quick-btn receiving">
-          <CircleCheck class="quick-icon" />
-          <span>メッキ受入</span>
         </router-link>
         <router-link to="/erp/purchase/outsourcing/welding-receiving" class="quick-btn receiving">
           <CircleCheck class="quick-icon" />

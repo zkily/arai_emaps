@@ -1,15 +1,18 @@
 <template>
-  <div class="material-forecast-container">
+  <div class="material-forecast-container mf-modern pb-std">
     <!-- ページヘッダー -->
-    <div class="page-header">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="title-section">
           <div class="title-icon">
             <el-icon><TrendCharts /></el-icon>
           </div>
           <div class="title-text">
-            <h1 class="main-title">材料内示管理</h1>
-            <p class="subtitle">Material Forecast Management</p>
+            <h1 class="main-title pb-hero-title">材料内示管理</h1>
+            <p class="subtitle pb-hero-desc">
+              年月・仕入先で材料内示を絞り込み、製品別一覧と材料別集計を確認・印刷
+            </p>
           </div>
         </div>
       </div>
@@ -1213,62 +1216,79 @@ onMounted(() => {
 
 <style scoped>
 .material-forecast-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100%;
   padding: 12px;
+  background: linear-gradient(180deg, #f5f3ff 0%, #f8fafc 38%, #f8fafc 100%);
 }
 
-/* 页面头部 */
+/* ============================================================ */
+/* 页面美化：现代 UI / 颜色区分（材料内示＝バイオレット系）         */
+/* ============================================================ */
+
+/* ---------- ヒーロー ---------- */
 .page-header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(10px);
+  gap: 12px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #4c51bf 0%, #5a67d8 36%, #667eea 62%, #764ba2 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(102, 126, 234, 0.65),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .title-section {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .title-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 24px;
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
-  flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3);
+}
+
+.title-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .main-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a202c;
   margin: 0;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.04em;
 }
 
 .subtitle {
-  font-size: 0.8rem;
-  color: #718096;
-  margin: 2px 0 0 0;
-  font-weight: 400;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.02em;
 }
 
 .header-actions {
@@ -1277,97 +1297,121 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* ヒーロー上の白ピル（文字色で役割を区別） */
 .action-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  border: none;
+  --ab-fg: #4338ca;
+  --ab-fg-h: #3730a3;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
   white-space: nowrap;
+  color: var(--ab-fg);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f3f1ff 100%);
+}
+
+.action-btn:not(.is-disabled):hover,
+.action-btn:focus-visible {
+  color: var(--ab-fg-h);
+  border-color: #fff;
+  background: #fff;
 }
 
 .refresh-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border: none;
-  color: white;
-}
-
-.refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  --ab-fg: #5b21b6;
+  --ab-fg-h: #4c1d95;
+  --k-rgb: 124 58 237;
 }
 
 .print-btn {
-  background: linear-gradient(135deg, #ff8c00, #ffa500);
-  border: none;
-  color: white;
+  --ab-fg: #b45309;
+  --ab-fg-h: #92400e;
+  --k-rgb: 217 119 6;
 }
 
-.print-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+.action-btn.is-disabled,
+.action-btn:disabled {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
 }
 
-/* 统计卡片 */
+/* ---------- KPI カード（色分け・動きなし） ---------- */
 .stats-container {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 10px;
-  padding: 14px 16px;
+  --accent: #6366f1;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s ease;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 7%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px -16px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  border-color: rgba(102, 126, 234, 0.2);
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
+}
+
+.stat-card.primary {
+  --accent: #6366f1;
+}
+
+.stat-card.info {
+  --accent: #0891b2;
+}
+
+.stat-card.warning {
+  --accent: #db2777;
+}
+
+.stat-card.success {
+  --accent: #059669;
+}
+
+.stat-card.amount {
+  --accent: #d97706;
 }
 
 .stat-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  color: white;
-  flex-shrink: 0;
-}
-
-.stat-card.primary .stat-icon {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.stat-card.info .stat-icon {
-  background: linear-gradient(135deg, #00b8d9, #43e97b);
-}
-
-.stat-card.warning .stat-icon {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-}
-
-.stat-card.success .stat-icon {
-  background: linear-gradient(135deg, #11998e, #38ef7d);
-}
-
-.stat-card.amount .stat-icon {
-  background: linear-gradient(135deg, #ff8c00, #ffa500);
+  border-radius: 10px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--accent) 70%, #fff) 0%,
+    var(--accent) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 60%, #000 20%);
 }
 
 .stat-content {
@@ -1376,57 +1420,80 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #1a202c;
+  font-size: 20px;
+  font-weight: 800;
   line-height: 1.2;
-  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-value .unit {
-  font-size: 0.75rem;
-  color: #718096;
   margin-left: 3px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #718096;
   margin-top: 2px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
 }
 
-/* 搜索区域 */
+/* ---------- 検索カード ---------- */
 .search-section {
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 10px;
+  padding: 12px 16px 10px;
+  border-radius: 12px;
+  border: 1px solid #e4e1fb;
+  background: linear-gradient(180deg, #ffffff 0%, #faf9ff 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(91, 33, 182, 0.45);
+}
+
+.search-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #8b5cf6 60%, #a78bfa 100%);
 }
 
 .search-row {
   display: grid;
   grid-template-columns: auto auto auto 1fr auto;
   gap: 12px;
-  align-items: end;
+  align-items: center;
 }
 
 .search-group {
   display: flex;
-  flex-direction: row;
   align-items: center;
   gap: 8px;
 }
 
 .search-label {
-  font-size: 0.8rem;
-  color: #4a5568;
-  font-weight: 600;
-  white-space: nowrap;
+  height: 22px;
   min-width: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #4c1d95;
+  background: #f1eefe;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 #ddd6fe;
 }
 
 .search-select {
@@ -1450,13 +1517,45 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.reset-btn {
-  padding: 8px 16px;
-  font-size: 0.875rem;
-  height: 32px;
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+.search-section :deep(.el-input__wrapper),
+.search-section :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #dcd7f7 inset;
 }
 
-/* 月份导航按钮组 */
+.search-section :deep(.el-input__wrapper:hover),
+.search-section :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+
+.search-section :deep(.el-input__wrapper.is-focus),
+.search-section :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #7c3aed inset,
+    0 0 0 3px rgba(124, 58, 237, 0.14);
+}
+
+.reset-btn {
+  --k-rgb: 100 116 139;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+
+.reset-btn:hover,
+.reset-btn:focus-visible {
+  color: #334155;
+  border-color: #94a3b8;
+  background: #fff;
+}
+
+/* 月ナビ */
 .month-control-wrapper {
   display: flex;
   align-items: center;
@@ -1470,195 +1569,196 @@ onMounted(() => {
 }
 
 .month-nav-btn {
+  --k-rgb: 124 58 237;
+  min-width: 32px;
+  height: 32px;
+  margin: 0;
   padding: 0;
-  border-radius: 6px;
-  border: 1px solid #dcdfe6;
-  background: #ffffff;
-  color: #606266;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 32px;
+  border-radius: 8px;
+  color: #5b21b6;
+  border: 1px solid #ddd6fe;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
 }
 
 .month-nav-btn.prev-btn,
 .month-nav-btn.next-btn {
   width: 32px;
-  padding: 0;
+}
+
+.month-nav-btn:not(:disabled):hover,
+.month-nav-btn:focus-visible {
+  color: #4c1d95;
+  border-color: #a78bfa;
+  background: #fff;
 }
 
 .month-nav-btn.current-btn {
-  padding: 0 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: #ffffff;
-  font-weight: 500;
-  font-size: 0.875rem;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  border: 1px solid #6d28d9;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #8b5cf6, #6d28d9);
 }
 
-.month-nav-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  color: #667eea;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+.month-nav-btn.current-btn:hover,
+.month-nav-btn.current-btn:focus-visible {
+  color: #fff;
+  border-color: #5b21b6;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #9b70f8, #7c3aed);
 }
 
-.month-nav-btn.current-btn:hover {
-  background: linear-gradient(135deg, #5568d3 0%, #653a8f 100%);
-  color: #ffffff;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-}
-
-.month-nav-btn:disabled {
-  opacity: 0.4;
+.month-nav-btn:disabled,
+.month-nav-btn.is-disabled {
   cursor: not-allowed;
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
 }
 
-/* 标签页 */
+/* ---------- タブ（セグメントピル） ---------- */
 .tab-section {
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 10px 10px 0 0;
-  padding: 0 18px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  padding: 8px 12px 6px;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid #e4e1fb;
   border-bottom: none;
+  background: #fff;
 }
 
 .custom-tabs :deep(.el-tabs__header) {
-  margin-bottom: 0;
+  margin: 0;
 }
 
-.custom-tabs :deep(.el-tabs__nav-wrap::after) {
+.custom-tabs :deep(.el-tabs__nav-wrap::after),
+.custom-tabs :deep(.el-tabs__active-bar) {
   display: none;
 }
 
+.custom-tabs :deep(.el-tabs__nav) {
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f1eefe;
+  box-shadow: inset 0 1px 2px rgba(76, 29, 149, 0.08);
+}
+
 .custom-tabs :deep(.el-tabs__item) {
-  padding: 0 20px;
-  height: 44px;
-  line-height: 44px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  height: 30px;
+  padding: 0 16px !important;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 30px;
+  color: #6b5b95;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.custom-tabs :deep(.el-tabs__item:hover) {
+  color: #5b21b6;
 }
 
 .custom-tabs :deep(.el-tabs__item.is-active) {
-  color: #667eea;
-  font-weight: 600;
-}
-
-.custom-tabs :deep(.el-tabs__active-bar) {
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  height: 2.5px;
-  border-radius: 2px;
+  color: #4c1d95;
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 #ddd6fe,
+    0 2px 6px -2px rgba(91, 33, 182, 0.3);
 }
 
 .tab-label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.875rem;
 }
 
-/* 表格区域 */
+/* ---------- テーブル ---------- */
 .table-section {
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 0 0 10px 10px;
   padding: 0 12px 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 0 0 12px 12px;
+  border: 1px solid #e4e1fb;
   border-top: none;
+  background: #fff;
+  box-shadow: 0 10px 24px -20px rgba(91, 33, 182, 0.4);
 }
 
 .data-table {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.data-table :deep(.el-table__header-wrapper) {
-  border-radius: 8px 8px 0 0;
+  --el-table-border-color: #ece9f8;
 }
 
 .data-table :deep(.el-table__header th) {
-  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%) !important;
-  font-weight: 700;
-  font-size: 0.75rem;
   padding: 8px 6px;
-  color: #2d3748;
-  border-bottom: 2px solid #e2e8f0;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.3;
+  color: #4c1d95;
+  background: #f5f3ff !important;
+  border-bottom: 1px solid #ddd6fe;
 }
 
 .data-table :deep(.even-row) {
-  background: #fafbfc;
-}
-
-.data-table :deep(.odd-row) {
   background: #ffffff;
 }
 
+.data-table :deep(.odd-row) {
+  background: #fcfbff;
+}
+
 .data-table :deep(.el-table__row:hover > td) {
-  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important;
-  transition: background 0.2s ease;
+  background: #f3f0ff !important;
 }
 
 .data-table :deep(.el-table__body td) {
-  padding: 6px 6px;
-  font-size: 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  transition: all 0.2s ease;
+  padding: 6px;
+  font-size: 12px;
   line-height: 1.4;
+  border-bottom: 1px solid #f1eff9;
 }
 
 .data-table :deep(.el-table__body tr:last-child td) {
   border-bottom: none;
 }
 
-/* 合计行样式 */
-.data-table :deep(.el-table__footer-wrapper) {
-  border-top: 3px solid #667eea;
-  border-radius: 0 0 8px 8px;
-  overflow: hidden;
-}
-
-.data-table :deep(.el-table__footer) {
-  background: linear-gradient(135deg, #f0f4ff 0%, #e6edff 100%);
-}
-
+/* 合計行 */
 .data-table :deep(.el-table__footer td) {
-  background: linear-gradient(135deg, #f0f4ff 0%, #e6edff 100%) !important;
+  padding: 9px 6px;
+  font-size: 12.5px;
   font-weight: 700;
-  font-size: 0.8rem;
-  color: #2d3748;
-  padding: 10px 6px;
-  border-top: 3px solid #667eea;
-  border-bottom: none;
   line-height: 1.4;
+  color: #334155;
+  background: #f7f5ff !important;
+  border-top: 2px solid #c4b5fd;
+  border-bottom: none;
 }
 
 .data-table :deep(.el-table__footer td:first-child) {
-  font-weight: 700;
-  color: #667eea;
-  font-size: 0.85rem;
+  color: #5b21b6;
 }
 
 .data-table :deep(.el-table__footer td[class*='is-right']) {
-  color: #667eea;
-  font-size: 0.85rem;
+  color: #5b21b6;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 表格滚动条样式 */
 .data-table :deep(.el-table__body-wrapper) {
   overflow-y: auto;
 }
 
-/* 确保表格有固定高度并显示滚动条 */
+/* el-table の height 属性と揃えること */
 .detail-table,
 .summary-table {
   height: 650px;
@@ -1669,32 +1769,26 @@ onMounted(() => {
   height: 100%;
 }
 
-.data-table :deep(.el-scrollbar__bar) {
-  opacity: 0.6;
-}
-
 .data-table :deep(.el-scrollbar__thumb) {
-  background-color: rgba(102, 126, 234, 0.3);
   border-radius: 4px;
+  background-color: rgba(124, 58, 237, 0.3);
 }
 
 .data-table :deep(.el-scrollbar__thumb:hover) {
-  background-color: rgba(102, 126, 234, 0.5);
+  background-color: rgba(124, 58, 237, 0.5);
 }
 
-/* 减少行高 */
-.data-table :deep(.el-table__row) {
-  height: auto;
-}
-
-.data-table :deep(.el-table__row td) {
-  padding-top: 6px;
-  padding-bottom: 6px;
+.data-table :deep(.el-tag--info) {
+  border-radius: 999px;
+  font-weight: 700;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+  background: #f5f3ff;
 }
 
 .supplier-cell {
   font-weight: 600;
-  color: #667eea;
+  color: #5b21b6;
 }
 
 .product-cell,
@@ -1706,59 +1800,60 @@ onMounted(() => {
 .product-name,
 .material-name {
   font-weight: 500;
-  color: #303133;
+  color: #1e293b;
 }
 
 .product-cd,
 .material-cd {
-  font-size: 0.7rem;
-  color: #a0aec0;
   margin-top: 2px;
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .number-cell {
   font-family: 'Roboto Mono', 'Consolas', monospace;
+  font-size: 12.5px;
   font-weight: 500;
-  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
 }
 
 .number-cell.highlight {
-  color: #667eea;
-  font-weight: 600;
+  font-weight: 700;
+  color: #6d28d9;
 }
 
 .number-cell.highlight-total {
-  color: #e6a23c;
-  font-weight: 700;
-  font-size: 1.05em;
+  font-size: 13px;
+  font-weight: 800;
+  color: #b45309;
 }
 
 .number-cell.no-data {
-  color: #c0c4cc;
+  color: #cbd5e1;
 }
 
-/* 分页 */
 .pagination-container {
   display: flex;
   justify-content: center;
-  padding: 8px 0 0;
   margin-top: 4px;
+  padding: 8px 0 0;
 }
 
-/* 响应式 */
+/* ---------- レスポンシブ ---------- */
 @media (max-width: 1400px) {
   .stats-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1024px) {
   .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
@@ -1781,8 +1876,7 @@ onMounted(() => {
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
-    gap: 16px;
-    text-align: center;
+    align-items: flex-start;
   }
 
   .stats-grid {
@@ -1791,7 +1885,7 @@ onMounted(() => {
 
   .header-actions {
     width: 100%;
-    justify-content: center;
+    justify-content: flex-end;
   }
 }
 </style>

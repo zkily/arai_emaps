@@ -22,6 +22,12 @@ export function canAccessMenuCode(user: User | null | undefined, code: string): 
   if (code === 'DASHBOARD') return true
   if (isAdminUser(user)) return true
   if (code === 'SYSTEM' || code.startsWith('SYSTEM_')) return false
+  if (code === 'ERP_OUTSOURCING_PLATING_ORDER') {
+    return (
+      hasMenuCode(user, 'ERP_OUTSOURCING_PLATING_ORDER') ||
+      hasMenuCode(user, 'ERP_OUTSOURCING_PLATING_RECEIVING')
+    )
+  }
   return hasMenuCode(user, code)
 }
 

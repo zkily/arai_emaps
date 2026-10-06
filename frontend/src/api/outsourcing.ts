@@ -17,40 +17,6 @@ export interface OutsourcingSupplier {
   [key: string]: unknown
 }
 
-export interface PlatingOrder {
-  id?: number
-  order_no?: string
-  order_date?: string
-  supplier_cd?: string
-  product_cd?: string
-  product_name?: string
-  plating_type?: string
-  quantity?: number
-  unit_price?: number
-  delivery_date?: string
-  status?: string
-  [key: string]: unknown
-}
-
-export interface PlatingReceiving {
-  id?: number
-  receiving_no?: string
-  receiving_date?: string
-  order_id?: number
-  order_no?: string
-  supplier_cd?: string
-  product_cd?: string
-  product_name?: string
-  plating_type?: string
-  order_qty?: number
-  receiving_qty?: number
-  good_qty?: number
-  defect_qty?: number
-  status?: string
-  inspector?: string
-  [key: string]: unknown
-}
-
 export interface WeldingOrder {
   id?: number
   order_no?: string
@@ -115,48 +81,181 @@ export function deleteSupplier(id: number) {
   return request.delete<{ success: boolean; message?: string }>(`${BASE}/suppliers/${id}`)
 }
 
-// ========== メッキ注文 ==========
-export function getPlatingOrders(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: PlatingOrder[] }>(`${BASE}/plating/orders`, { params })
+export interface PlatingLedgerRow {
+  id: number
+  order_date: string
+  supplier_cd: string
+  supplier_name: string
+  product_cd: string
+  product_name: string
+  unit_price: number
+  lead_time_days: number
+  delivery_date: string | null
+  order_qty: number
+  order_no: string | null
+  order_amount: number
+  order_sheet_issued_at: string | null
+  order_sheet_issued_by: string | null
+  receiving_qty: number
+  receiving_no: string | null
+  defect_qty: number
+  disposal_no: string | null
+  initial_stock: number
+  current_stock: number
 }
 
-export function createPlatingOrder(data: Partial<PlatingOrder>) {
-  return request.post<{ success: boolean; data: PlatingOrder }>(`${BASE}/plating/orders`, data)
+export interface PlatingLedgerOption {
+  supplier_cd: string
+  supplier_name: string
+  product_cd: string
+  product_name: string
 }
 
-export function updatePlatingOrder(id: number, data: Partial<PlatingOrder>) {
-  return request.put<{ success: boolean; data: PlatingOrder }>(`${BASE}/plating/orders/${id}`, data)
+// request のレスポンスインターセプターは body を返すため、戻り値は body 型で宣言する
+export function getPlatingLedgerOptions() {
+  return request.get(`${BASE}/plating/ledger/options`) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerOption[]
+  }>
 }
 
-export function deletePlatingOrder(id: number) {
-  return request.delete(`${BASE}/plating/orders/${id}`)
+export function getPlatingLedger(params: {
+  startDate: string
+  endDate: string
+  supplierCd?: string
+  productCd?: string
+  keyword?: string
+  firstDayOnly?: boolean
+  /** 数量のある行のみ：order=注文数 / receiving=受入数・不良数 / any=いずれか */
+  nonZero?: 'order' | 'receiving' | 'any'
+  page?: number
+  pageSize?: number
+}) {
+  return request.get(`${BASE}/plating/ledger`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerRow[]
+    total: number
+  }>
 }
 
-export function getPlatingOrdersByOrderNo(orderNo: string) {
-  return request.get<{ success?: boolean; data?: PlatingOrder[] }>(`${BASE}/plating/orders/by-order-no`, { params: { order_no: orderNo } })
+export function generatePlatingLedger(startDate: string, endDate: string) {
+  return request.post(`${BASE}/plating/ledger/generate`, {
+    start_date: startDate,
+    end_date: endDate,
+  }) as unknown as Promise<{
+    success: boolean
+    data: { generated_count: number; skipped_count: number }
+  }>
 }
 
-export function batchOrderPlating(orderIds: number[]) {
-  return request.post<{ success: boolean }>(`${BASE}/plating/orders/batch-order`, { order_ids: orderIds })
+export function calculatePlatingLedger() {
+  return request.post(`${BASE}/plating/ledger/calculate`) as unknown as Promise<{
+    success: boolean
+    data: { calculated_count: number }
+  }>
 }
 
-// ========== メッキ受入 ==========
-export function getPlatingReceivings(params?: Record<string, unknown>) {
-  return request.get<{ success?: boolean; data?: PlatingReceiving[] }>(`${BASE}/plating/receivings`, { params })
+export function refreshPlatingLedgerMaster(data: {
+  start_date: string
+  end_date: string
+  supplier_cd?: string
+  product_cd?: string
+  include_ordered?: boolean
+}) {
+  return request.post(`${BASE}/plating/ledger/refresh-master`, data) as unknown as Promise<{
+    success: boolean
+    data: { updated_count: number; missing_count: number }
+  }>
 }
 
-export function createPlatingReceiving(data: Partial<PlatingReceiving>) {
-  return request.post<{ success: boolean; data: PlatingReceiving }>(`${BASE}/plating/receivings`, data)
+export function markPlatingOrderSheetIssued(ids: number[]) {
+  return request.post(`${BASE}/plating/ledger/order-sheet/issued`, { ids }) as unknown as Promise<{
+    success: boolean
+    data: { updated_count: number; rows: PlatingLedgerRow[] }
+  }>
 }
 
-export function updatePlatingReceiving(id: number, data: Partial<PlatingReceiving>) {
-  return request.put<{ success: boolean; data: PlatingReceiving }>(`${BASE}/plating/receivings/${id}`, data)
+export function updatePlatingLedger(
+  id: number,
+  data: Partial<Pick<PlatingLedgerRow, 'order_qty' | 'receiving_qty' | 'defect_qty' | 'initial_stock'>>,
+) {
+  return request.put(`${BASE}/plating/ledger/${id}`, data) as unknown as Promise<{
+    success: boolean
+    data: { row: PlatingLedgerRow; affected: PlatingLedgerRow[] }
+  }>
 }
 
-export function getPendingPlatingOrders() {
-  return request.get<{ success?: boolean; data?: PlatingOrder[] }>(`${BASE}/plating/orders/pending`)
+export function getPlatingLedgerHistory(params: {
+  kind: 'order' | 'receiving'
+  startDate: string
+  endDate: string
+  supplierCd?: string
+  productCd?: string
+}) {
+  return request.get(`${BASE}/plating/ledger/history`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingLedgerRow[]
+  }>
 }
 
+export interface PlatingStockItem {
+  supplier_cd: string
+  supplier_name: string
+  product_cd: string
+  product_name: string
+  month_initial: number
+  month_order_qty: number
+  month_receiving_qty: number
+  month_defect_qty: number
+  current_stock: number
+  last_order_date: string | null
+  last_receiving_date: string | null
+}
+
+export function getPlatingLedgerStock(params: {
+  asOf: string
+  supplierCd?: string
+  productCd?: string
+}) {
+  return request.get(`${BASE}/plating/ledger/stock`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingStockItem[]
+  }>
+}
+
+export interface PlatingStockTrendItem {
+  date: string
+  order_qty: number
+  receiving_qty: number
+  defect_qty: number
+  current_stock: number
+}
+
+export function getPlatingLedgerStockTrend(params: {
+  asOf: string
+  supplierCd?: string
+  productCd?: string
+}) {
+  return request.get(`${BASE}/plating/ledger/stock-trend`, { params }) as unknown as Promise<{
+    success: boolean
+    data: PlatingStockTrendItem[]
+  }>
+}
+
+export interface PlatingOrderSheetItem extends PlatingLedgerRow {
+  delivery_location: string
+  category: string
+  content: string
+}
+
+export function getPlatingLedgerOrderSheet(orderDate: string, supplierCd: string) {
+  return request.get(`${BASE}/plating/ledger/order-sheet`, {
+    params: { orderDate, supplierCd },
+  }) as unknown as Promise<{
+    success: boolean
+    data: { supplier_cd: string; supplier_name: string; items: PlatingOrderSheetItem[] }
+  }>
+}
 // ========== 溶接注文 ==========
 export function getWeldingOrders(params?: Record<string, unknown>) {
   return request.get<{ success?: boolean; data?: WeldingOrder[] }>(`${BASE}/welding/orders`, { params })

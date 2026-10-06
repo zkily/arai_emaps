@@ -354,7 +354,7 @@ export default {
     ERP_PURCHASE_SUPPLIES: 'Mua đồ dùng',
     ERP_OUTSOURCING_HOME: 'Trang gia công',
     ERP_OUTSOURCING_DASHBOARD: 'Dashboard gia công',
-    ERP_OUTSOURCING_PLATING_ORDER: 'Đơn mạ',
+    ERP_OUTSOURCING_PLATING_ORDER: 'Mạ gia công',
     ERP_OUTSOURCING_PLATING_RECEIVING: 'Nhận mạ',
     ERP_OUTSOURCING_WELDING_ORDER: 'Đơn hàn',
     ERP_OUTSOURCING_WELDING_RECEIVING: 'Nhận hàn',

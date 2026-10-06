@@ -1,14 +1,17 @@
 <template>
-  <div class="part-logs-container">
-    <header class="page-hero">
+  <div class="part-logs-container pr-modern pb-std">
+    <header class="page-hero pb-hero pb-hero--page">
+      <div class="hero-fx pb-bubbles" aria-hidden="true" />
       <div class="page-hero__main">
         <div class="page-hero__brand">
           <div class="page-hero__icon" aria-hidden="true">
-            <el-icon :size="20"><Document /></el-icon>
+            <el-icon><Document /></el-icon>
           </div>
           <div class="page-hero__titles">
-            <h1 class="page-hero__title">部品受入履歴</h1>
-            <p class="page-hero__sub">部品の受入を管理します</p>
+            <h1 class="page-hero__title pb-hero-title">部品受入履歴</h1>
+            <p class="page-hero__sub pb-hero-desc">
+              キーワード・期間・仕入先で部品の受入ログを検索し、CSV読取・印刷・列表示を設定
+            </p>
           </div>
         </div>
         <div class="page-hero__stats" role="status">
@@ -37,10 +40,15 @@
           <span>検索・フィルター</span>
         </div>
         <div class="filter-card__actions">
-          <el-button size="small" @click="clearFilters" icon="Refresh">クリア</el-button>
-          <el-button size="small" @click="showColumnSettings" icon="Setting">列設定</el-button>
+          <el-button size="small" class="fc-btn fc-btn--clear" @click="clearFilters" icon="Refresh">
+            クリア
+          </el-button>
+          <el-button size="small" class="fc-btn fc-btn--cols" @click="showColumnSettings" icon="Setting">
+            列設定
+          </el-button>
           <el-button
             size="small"
+            class="fc-btn fc-btn--print"
             @click="handlePrint"
             :loading="printLoading"
             :disabled="printLoading || !totalCount"
@@ -51,6 +59,7 @@
           <el-button
             type="primary"
             size="small"
+            class="fc-btn fc-btn--import"
             @click="importCSVData"
             :loading="importLoading"
             icon="Upload"
@@ -390,10 +399,22 @@
       v-model="detailVisible"
       title="部品ログ詳細"
       width="520px"
-      class="logs-dialog"
+      class="logs-dialog prh-dialog pb-std"
       align-center
       destroy-on-close
+      :show-close="false"
     >
+      <template #header>
+        <div class="ld-hero pb-hero">
+          <div class="hero-fx pb-bubbles" aria-hidden="true" />
+          <span class="ld-hero__icon"><el-icon><Document /></el-icon></span>
+          <div class="ld-hero__copy">
+            <span class="ld-hero__title">部品ログ詳細</span>
+            <p class="ld-hero__desc">選択した受入ログの内容を確認</p>
+          </div>
+          <el-icon class="ld-hero__close" @click="detailVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <div v-if="selectedLog" class="detail-content">
         <div class="detail-row">
           <label>項目:</label>
@@ -429,7 +450,7 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="detailVisible = false">閉じる</el-button>
+        <el-button class="dlg-btn" @click="detailVisible = false">閉じる</el-button>
       </template>
     </el-dialog>
 
@@ -437,10 +458,22 @@
       v-model="columnSettingsVisible"
       title="列表示設定"
       width="480px"
-      class="logs-dialog logs-dialog--columns"
+      class="logs-dialog logs-dialog--columns prh-dialog pb-std"
       align-center
       destroy-on-close
+      :show-close="false"
     >
+      <template #header>
+        <div class="ld-hero ld-hero--columns pb-hero">
+          <div class="hero-fx pb-bubbles" aria-hidden="true" />
+          <span class="ld-hero__icon"><el-icon><Setting /></el-icon></span>
+          <div class="ld-hero__copy">
+            <span class="ld-hero__title">列表示設定</span>
+            <p class="ld-hero__desc">一覧に表示する列を選択（保存するとブラウザに記憶）</p>
+          </div>
+          <el-icon class="ld-hero__close" @click="columnSettingsVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <div class="column-settings">
         <div class="column-group">
           <h4>基本情報</h4>
@@ -486,9 +519,11 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="resetColumnSettings">リセット</el-button>
-        <el-button @click="columnSettingsVisible = false">キャンセル</el-button>
-        <el-button type="primary" @click="saveColumnSettings">保存</el-button>
+        <el-button class="dlg-btn dlg-btn--reset" @click="resetColumnSettings">リセット</el-button>
+        <el-button class="dlg-btn" @click="columnSettingsVisible = false">キャンセル</el-button>
+        <el-button type="primary" class="dlg-btn dlg-btn--save" @click="saveColumnSettings">
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -507,6 +542,8 @@ import {
   List,
   Sort,
   Printer,
+  Setting,
+  Close,
 } from '@element-plus/icons-vue'
 import { getPartLogs, importPartLogsFromCSV, getPartSupplierList } from '@/api/part'
 import type { PartLog, PartLogSearchParams } from '@/types/part'
@@ -971,38 +1008,31 @@ onMounted(() => {
   --ml-text: #0f172a;
   --ml-accent: #4f46e5;
   --ml-accent-soft: #eef2ff;
-  --ml-radius: 10px;
+  --ml-radius: 12px;
   --ml-radius-sm: 8px;
-  --ml-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.06);
 
   min-height: auto;
-  background: #f1f5f9;
   padding: 8px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   box-sizing: border-box;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 34%, #f8fafc 100%);
 }
 
+/* ============================================================ */
+/* 页面美化：现代 UI / 颜色区分（部品受入＝インディゴ〜スカイ系）    */
+/* ============================================================ */
+
+/* ---------- ヒーロー ---------- */
 .page-hero {
-  background: var(--ml-surface);
-  border-radius: var(--ml-radius);
-  border: 1px solid var(--ml-border);
-  box-shadow: var(--ml-shadow);
-  padding: 10px 14px;
   position: relative;
   overflow: hidden;
-}
-
-.page-hero::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, var(--ml-accent) 0%, #7c3aed 100%);
-  border-radius: var(--ml-radius) 0 0 var(--ml-radius);
+  border-radius: 14px;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 34%, #4f46e5 62%, #0284c7 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(79, 70, 229, 0.65),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .page-hero__main {
@@ -1011,49 +1041,53 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px 16px;
-  position: relative;
-  z-index: 1;
 }
 
 .page-hero__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .page-hero__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--ml-radius-sm);
-  background: var(--ml-accent-soft);
-  color: var(--ml-accent);
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
 }
 
 .page-hero__titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
 }
 
 .page-hero__title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ml-text);
-  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
 }
 
 .page-hero__sub {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--ml-muted);
-  line-height: 1.35;
+  margin: 0;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.86);
 }
 
+/* 統計：濃色ヒーロー上の白ピル */
 .page-hero__stats {
   display: flex;
   flex-wrap: wrap;
@@ -1062,28 +1096,43 @@ onMounted(() => {
 }
 
 .stat-pill {
+  --sp: #4f46e5;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--ml-border);
-  background: #f8fafc;
-  min-height: 36px;
+  min-height: 40px;
+  padding: 4px 14px 4px 6px;
   box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5ff 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(148, 163, 184, 0.25),
+    0 6px 14px -10px rgba(15, 23, 42, 0.45);
+}
+
+.stat-pill--total {
+  --sp: #6d28d9;
+}
+
+.stat-pill--page {
+  --sp: #0369a1;
 }
 
 .stat-pill__ico {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
   font-size: 16px;
-  color: var(--ml-muted);
-}
-
-.stat-pill--total .stat-pill__ico {
-  color: #7c3aed;
-}
-
-.stat-pill--page .stat-pill__ico {
-  color: #0284c7;
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--sp) 65%, #fff) 0%, var(--sp) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 color-mix(in srgb, var(--sp) 60%, #000 20%);
 }
 
 .stat-pill__text {
@@ -1093,25 +1142,42 @@ onMounted(() => {
 }
 
 .stat-pill__num {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ml-text);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--sp);
   font-variant-numeric: tabular-nums;
 }
 
 .stat-pill__lbl {
-  font-size: 11px;
-  color: var(--ml-muted);
   margin-top: 1px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ml-muted);
 }
 
+/* ---------- カード共通 ---------- */
 .filter-card,
 .table-card {
-  background: var(--ml-surface);
-  border-radius: var(--ml-radius);
-  border: 1px solid var(--ml-border);
-  box-shadow: var(--ml-shadow);
+  position: relative;
   overflow: hidden;
+  border-radius: var(--ml-radius);
+  border: 1px solid #e0e7ff;
+  background: var(--ml-surface);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(67, 56, 202, 0.45);
+}
+
+.filter-card::before,
+.table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 50%, #0ea5e9 100%);
 }
 
 .filter-card__bar,
@@ -1121,19 +1187,40 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px 10px;
-  padding: 8px 12px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid var(--ml-border);
+  padding: 10px 12px 8px;
+  background: linear-gradient(180deg, #f8f9ff 0%, #f3f5ff 100%);
+  border-bottom: 1px solid #e0e7ff;
 }
 
 .filter-card__title,
 .table-card__title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: #334155;
+  font-weight: 700;
+  color: #312e81;
+}
+
+.filter-card__title > .el-icon,
+.table-card__title > .el-icon {
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  color: #fff;
+  background: linear-gradient(135deg, #818cf8, #4f46e5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3);
+}
+
+.table-card__title > .el-icon {
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(7, 89, 133, 0.3);
 }
 
 .filter-card__actions {
@@ -1143,13 +1230,96 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
+/* ツールバーボタン（色で役割を区別） */
+.fc-btn {
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: var(--ml-radius-sm);
+  font-weight: 700;
+}
+
+.fc-btn--clear {
+  --k-rgb: 100 116 139;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+
+.fc-btn--clear:not(.is-disabled):hover,
+.fc-btn--clear:focus-visible {
+  color: #334155;
+  border-color: #94a3b8;
+  background: #fff;
+}
+
+.fc-btn--cols {
+  --k-rgb: 79 70 229;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+}
+
+.fc-btn--cols:not(.is-disabled):hover,
+.fc-btn--cols:focus-visible {
+  color: #3730a3;
+  border-color: #a5b4fc;
+  background: #fff;
+}
+
+.fc-btn--print {
+  --k-rgb: 217 119 6;
+  color: #fff;
+  border: 1px solid #d97706;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fbbf24, #d97706);
+}
+
+.fc-btn--print:not(.is-disabled):hover,
+.fc-btn--print:focus-visible {
+  color: #fff;
+  border-color: #b45309;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fcc93a, #e08a0b);
+}
+
+.fc-btn--import {
+  --k-rgb: 79 70 229;
+  color: #fff;
+  border: 1px solid #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.fc-btn--import:not(.is-disabled):hover,
+.fc-btn--import:focus-visible {
+  color: #fff;
+  border-color: #3730a3;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #7477f3, #4f46e5);
+}
+
+.fc-btn.is-disabled,
+.fc-btn.is-disabled:hover {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
+}
+
+/* ---------- 検索フィールド ---------- */
 .filter-card__body {
   padding: 10px 12px 12px;
 }
 
 .filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) minmax(220px, 1fr) minmax(160px, 1fr) minmax(200px, 0.95fr);
+  grid-template-columns:
+    minmax(180px, 1.4fr) minmax(220px, 1fr) minmax(160px, 1fr)
+    minmax(200px, 0.95fr);
   gap: 8px 10px;
   align-items: end;
 }
@@ -1157,7 +1327,7 @@ onMounted(() => {
 .filter-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -1170,20 +1340,24 @@ onMounted(() => {
 }
 
 .field-label {
+  align-self: flex-start;
+  height: 20px;
+  padding: 0 9px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  border-radius: 999px;
   font-size: 11px;
-  font-weight: 600;
-  color: var(--ml-muted);
-  text-transform: none;
+  font-weight: 700;
   letter-spacing: 0.01em;
+  color: #3730a3;
+  background: #eef2ff;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 #c7d2fe;
 }
 
-.field-control {
-  width: 100%;
-}
-
+.field-control,
 .field-control--date {
   width: 100%;
 }
@@ -1204,6 +1378,38 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+.filter-card :deep(.el-input__wrapper),
+.filter-card :deep(.el-select__wrapper),
+.filter-card :deep(.el-range-editor.el-input__wrapper) {
+  border-radius: var(--ml-radius-sm);
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #d6dcf5 inset;
+}
+
+.filter-card :deep(.el-input__wrapper:hover),
+.filter-card :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #a5b4fc inset;
+}
+
+.filter-card :deep(.el-input__wrapper.is-focus),
+.filter-card :deep(.el-input__wrapper.is-active),
+.filter-card :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #6366f1 inset,
+    0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.filter-card :deep(.el-select__wrapper.is-disabled) {
+  background-color: #f1f5f9;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+
+.filter-card :deep(.el-input__inner) {
+  font-size: 12px;
+}
+
+/* ---------- テーブル ---------- */
 .table-card {
   flex: 1;
   display: flex;
@@ -1213,7 +1419,13 @@ onMounted(() => {
 
 .table-card__tag {
   margin-left: 2px;
-  font-weight: 600;
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #0369a1;
+  border-color: #bae6fd;
+  background: #f0f9ff;
 }
 
 .table-card__body {
@@ -1227,31 +1439,49 @@ onMounted(() => {
 .modern-table {
   flex: 1;
   width: 100%;
+  --el-table-border-color: #eef0fb;
+  --el-table-row-hover-bg-color: #eef2ff;
+  --el-table-current-row-bg-color: #e0e7ff;
 }
 
-.modern-table :deep(.el-table__header-wrapper) {
-  background: #f1f5f9;
+.modern-table :deep(th.el-table__cell) {
+  padding: 7px 8px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #3730a3 !important;
+  background: #f3f5ff !important;
+  border-bottom: 1px solid #dfe4fb !important;
 }
 
-.modern-table :deep(.el-table th.el-table__cell) {
-  padding: 6px 8px;
-}
-
-.modern-table :deep(.el-table td.el-table__cell) {
+.modern-table :deep(td.el-table__cell) {
   padding: 5px 8px;
   font-size: 12px;
   color: #1e293b;
+  border-bottom-color: #f1f3fb;
 }
 
 .modern-table :deep(.el-table__row) {
   cursor: pointer;
-  transition: background-color 0.15s ease;
+}
+
+.modern-table :deep(.el-table__row--striped td.el-table__cell) {
+  background: #fafbff;
 }
 
 .modern-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background-color: #f8fafc !important;
+  background-color: #eef2ff !important;
 }
 
+.modern-table :deep(.el-table__body tr.current-row > td.el-table__cell) {
+  background-color: #e0e7ff !important;
+}
+
+.modern-table :deep(.el-tag) {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* ---------- ページャー ---------- */
 .pagination-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1259,35 +1489,209 @@ onMounted(() => {
   justify-content: space-between;
   gap: 8px 12px;
   padding: 8px 12px;
-  border-top: 1px solid var(--ml-border);
-  background: #f8fafc;
+  border-top: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #fafbff 0%, #f3f5ff 100%);
 }
 
 .pagination-bar__info {
   font-size: 12px;
-  color: var(--ml-muted);
+  font-weight: 600;
+  color: #4338ca;
   font-variant-numeric: tabular-nums;
 }
 
-.modern-pagination :deep(.el-pagination) {
+.modern-pagination {
   font-weight: 500;
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 4px;
 }
 
-.modern-pagination :deep(.el-pager li) {
-  border-radius: 6px;
-  margin: 0 1px;
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
   min-width: 26px;
   height: 26px;
-  line-height: 26px;
+  margin: 0 2px;
+  border-radius: 7px;
   font-size: 12px;
+  line-height: 26px;
+  color: #4338ca;
+  border: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
+}
+
+.modern-pagination :deep(.el-pager li:not(.is-active):hover) {
+  border-color: #a5b4fc;
+  background: #fff;
 }
 
 .modern-pagination :deep(.el-pager li.is-active) {
-  background: var(--ml-accent);
   color: #fff;
+  border-color: #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.35),
+    0 4px 10px -6px rgba(79, 70, 229, 0.7);
+}
+
+.modern-pagination :deep(.btn-prev:disabled),
+.modern-pagination :deep(.btn-next:disabled) {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
+}
+
+/* ---------- ダイアログ ---------- */
+.ld-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 40%, #4f46e5 70%, #0284c7 100%);
+}
+
+.ld-hero--columns {
+  background: linear-gradient(125deg, #3730a3 0%, #4f46e5 40%, #6d28d9 100%);
+}
+
+.ld-hero__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
+}
+
+.ld-hero__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ld-hero__title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+.ld-hero__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.ld-hero__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.ld-hero__close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+:global(.el-dialog.prh-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:global(.el-dialog.prh-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+:global(.el-dialog.prh-dialog .el-dialog__body) {
+  padding: 12px 16px;
+}
+
+:global(.el-dialog.prh-dialog .el-dialog__footer) {
+  padding: 10px 16px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.dlg-btn {
+  --k-rgb: 100 116 139;
+  height: 30px;
+  padding: 0 16px;
+  border-radius: var(--ml-radius-sm);
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+
+.dlg-btn:hover,
+.dlg-btn:focus-visible {
+  color: #334155;
+  border-color: #94a3b8;
+  background: #fff;
+}
+
+.dlg-btn--reset {
+  --k-rgb: 217 119 6;
+  color: #b45309;
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+}
+
+.dlg-btn--reset:hover,
+.dlg-btn--reset:focus-visible {
+  color: #92400e;
+  border-color: #fbbf24;
+  background: #fff;
+}
+
+.dlg-btn--save {
+  --k-rgb: 79 70 229;
+  color: #fff;
+  border-color: #4338ca;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.dlg-btn--save:hover,
+.dlg-btn--save:focus-visible {
+  color: #fff;
+  border-color: #3730a3;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #7477f3, #4f46e5);
 }
 
 .detail-content {
@@ -1297,25 +1701,37 @@ onMounted(() => {
 }
 
 .detail-row {
+  position: relative;
   display: grid;
   grid-template-columns: 88px 1fr;
   gap: 8px;
   align-items: start;
-  padding: 8px 10px;
-  background: #f8fafc;
+  padding: 8px 10px 8px 13px;
+  overflow: hidden;
   border-radius: var(--ml-radius-sm);
-  border: 1px solid var(--ml-border);
+  border: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%);
+}
+
+.detail-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #a5b4fc, #4f46e5);
 }
 
 .detail-row label {
-  font-weight: 600;
-  color: #475569;
   font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
 }
 
 .detail-row span {
-  color: var(--ml-text);
   font-size: 13px;
+  color: var(--ml-text);
   word-break: break-word;
 }
 
@@ -1326,11 +1742,23 @@ onMounted(() => {
 }
 
 .column-group {
+  position: relative;
   margin-bottom: 8px;
-  padding: 8px 10px;
-  background: #f8fafc;
-  border-radius: var(--ml-radius-sm);
-  border: 1px solid var(--ml-border);
+  padding: 10px 10px 8px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%);
+}
+
+.column-group::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #818cf8, #6d28d9);
 }
 
 .column-group:last-child {
@@ -1339,27 +1767,33 @@ onMounted(() => {
 
 .column-group h4 {
   margin: 0 0 6px;
-  color: var(--ml-text);
+  padding-bottom: 5px;
   font-size: 12px;
-  font-weight: 700;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--ml-border);
+  font-weight: 800;
+  color: #3730a3;
+  border-bottom: 1px dashed #c7d2fe;
 }
 
 .column-group :deep(.el-checkbox) {
   display: flex;
+  align-items: center;
+  height: auto;
   margin: 0;
   padding: 4px 6px;
   border-radius: 6px;
   font-size: 12px;
-  height: auto;
-  align-items: center;
 }
 
 .column-group :deep(.el-checkbox:hover) {
   background: #eef2ff;
 }
 
+.column-group :deep(.el-checkbox.is-checked .el-checkbox__label) {
+  font-weight: 700;
+  color: #3730a3;
+}
+
+/* ---------- レスポンシブ ---------- */
 @media (max-width: 1200px) {
   .filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1394,7 +1828,7 @@ onMounted(() => {
     text-align: center;
   }
 
-  .modern-pagination :deep(.el-pagination) {
+  .modern-pagination {
     justify-content: center;
   }
 }
@@ -1403,10 +1837,6 @@ onMounted(() => {
   .part-logs-container {
     padding: 6px;
     gap: 6px;
-  }
-
-  .page-hero {
-    padding: 8px 12px;
   }
 
   .stat-pill {
@@ -1422,57 +1852,8 @@ onMounted(() => {
     justify-content: stretch;
   }
 
-  .filter-card__actions :deep(.el-button) {
+  .filter-card__actions .fc-btn {
     flex: 1;
   }
-}
-
-:deep(.el-button) {
-  border-radius: var(--ml-radius-sm);
-  font-weight: 500;
-}
-
-:deep(.el-button--primary) {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  border-color: transparent;
-}
-
-:deep(.el-button--primary:hover) {
-  filter: brightness(1.05);
-}
-
-:deep(.el-input__wrapper),
-:deep(.el-select .el-input__wrapper) {
-  border-radius: var(--ml-radius-sm);
-  box-shadow: none;
-}
-
-:deep(.el-input__inner) {
-  font-size: 12px;
-}
-
-:deep(.el-tag) {
-  border-radius: 6px;
-  font-weight: 500;
-}
-
-.logs-dialog :deep(.el-dialog__header) {
-  padding: 12px 16px 8px;
-  margin-right: 0;
-}
-
-.logs-dialog :deep(.el-dialog__title) {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.logs-dialog :deep(.el-dialog__body) {
-  padding: 8px 16px 12px;
-}
-
-.logs-dialog :deep(.el-dialog__footer) {
-  padding: 8px 16px 12px;
-  border-top: 1px solid #e2e8f0;
 }
 </style>

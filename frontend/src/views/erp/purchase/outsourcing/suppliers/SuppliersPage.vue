@@ -1,18 +1,22 @@
 <template>
-  <div class="suppliers-page">
+  <div class="suppliers-page sp-modern pb-std">
     <!-- 页面头部 -->
-    <div class="page-header">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon-wrap">
           <OfficeBuilding class="header-icon" />
         </div>
         <div class="header-text">
-          <h1 class="page-title">外注先マスタ</h1>
-          <span class="page-subtitle">外注業者の登録・管理</span>
+          <h1 class="page-title pb-hero-title">外注先マスタ</h1>
+          <p class="page-subtitle pb-hero-desc">
+            メッキ・溶接・切断などの外注業者を種別・状態で絞り込み、登録・編集・有効切替
+          </p>
         </div>
       </div>
       <div class="header-right">
         <div class="stat-pill">
+          <span class="stat-dot" aria-hidden="true" />
           <span class="stat-num">{{ tableData.length }}</span>
           <span class="stat-label">件</span>
         </div>
@@ -111,11 +115,12 @@
         <el-table-column label="操作" width="120" align="center" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
-              <el-button type="primary" link size="small" @click="handleEdit(row)">
+              <el-button class="ra-btn ra-btn--edit" size="small" @click="handleEdit(row)">
                 <el-icon><Edit /></el-icon>編集
               </el-button>
-              <el-divider direction="vertical" />
-              <el-button type="danger" link size="small" @click="handleDelete(row)">削除</el-button>
+              <el-button class="ra-btn ra-btn--delete" size="small" @click="handleDelete(row)">
+                削除
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -128,13 +133,14 @@
       :title="dialogTitle"
       width="680px"
       destroy-on-close
-      class="supplier-dialog"
+      class="supplier-dialog osp-dialog pb-std"
       :close-on-click-modal="false"
       :show-close="false"
       align-center
     >
       <template #header>
-        <div class="dialog-header">
+        <div class="dialog-header pb-hero" :class="isEdit ? 'is-edit' : 'is-new'">
+          <div class="head-fx pb-bubbles" aria-hidden="true" />
           <div class="dh-icon-wrap">
             <OfficeBuilding class="dh-icon" />
           </div>
@@ -145,6 +151,7 @@
           <div class="dh-badge" :class="isEdit ? 'edit' : 'new'">
             {{ isEdit ? '編集' : '新規' }}
           </div>
+          <el-icon class="dh-close" @click="dialogVisible = false"><Close /></el-icon>
         </div>
       </template>
 
@@ -259,8 +266,14 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false" size="small">キャンセル</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="submitting" size="small">
+          <el-button class="dlg-btn" @click="dialogVisible = false" size="small">キャンセル</el-button>
+          <el-button
+            type="primary"
+            class="dlg-btn dlg-btn--save"
+            @click="handleSubmit"
+            :loading="submitting"
+            size="small"
+          >
             <el-icon v-if="!submitting"><Check /></el-icon>
             {{ isEdit ? '更新' : '登録' }}
           </el-button>
@@ -273,7 +286,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
-import { OfficeBuilding, Plus, Search, Edit, Check, Warning } from '@element-plus/icons-vue'
+import { OfficeBuilding, Plus, Search, Edit, Check, Warning, Close } from '@element-plus/icons-vue'
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '@/api/outsourcing'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
@@ -543,40 +556,53 @@ onMounted(() => { fetchData() })
 /* ===== 页面容器 ===== */
 .suppliers-page {
   padding: 10px 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f3f1ff 0%, #f8fafc 34%, #f8fafc 100%);
 }
 
-/* ===== 页面头部 ===== */
+/* ============================================================ */
+/* 页面美化：现代 UI / 颜色区分（外注先＝インディゴ〜バイオレット系） */
+/* ============================================================ */
+
+/* ===== ヒーロー ===== */
 .page-header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255,255,255,0.97);
-  border-radius: 10px;
-  padding: 10px 16px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.10);
-  backdrop-filter: blur(12px);
+  gap: 12px;
+  border-radius: 14px;
+  background: linear-gradient(125deg, #4c51bf 0%, #5a67d8 36%, #667eea 62%, #764ba2 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(102, 126, 234, 0.65),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 
   .header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    min-width: 0;
   }
 
   .header-icon-wrap {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(102,126,234,0.35);
-    flex-shrink: 0;
+    border-radius: 12px;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(49, 46, 129, 0.3);
+
     .header-icon {
       width: 20px;
       height: 20px;
@@ -587,106 +613,183 @@ onMounted(() => { fetchData() })
   .header-text {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    align-items: flex-start;
+    min-width: 0;
   }
 
   .page-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #1a1a2e;
     margin: 0;
-    line-height: 1.3;
-    letter-spacing: 0.2px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
   }
 
   .page-subtitle {
-    font-size: 0.78rem;
-    color: #888;
-    line-height: 1;
+    margin: 0;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.86);
   }
 
   .header-right {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
+  /* 件数：白ピル＋同色ドット */
   .stat-pill {
     display: flex;
-    align-items: baseline;
-    gap: 2px;
-    background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.08));
-    border: 1px solid rgba(102,126,234,0.18);
-    border-radius: 20px;
-    padding: 3px 12px;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    padding: 0 14px 0 12px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, #ffffff 0%, #f3f1ff 100%);
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      inset 0 -2px 0 rgba(148, 163, 184, 0.25),
+      0 6px 14px -10px rgba(15, 23, 42, 0.45);
+
+    .stat-dot {
+      width: 7px;
+      height: 7px;
+      margin-right: 3px;
+      border-radius: 50%;
+      background: #6d28d9;
+      box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.15);
+    }
 
     .stat-num {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #667eea;
+      font-size: 16px;
+      font-weight: 800;
+      color: #5b21b6;
+      font-variant-numeric: tabular-nums;
     }
+
     .stat-label {
-      font-size: 0.75rem;
-      color: #888;
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
     }
   }
 
+  /* 新規登録：白ピル（緑文字） */
   .add-btn {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border: none;
-    box-shadow: 0 2px 8px rgba(102,126,234,0.35);
-    font-weight: 600;
-    transition: all 0.25s ease;
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(102,126,234,0.45);
+    --k-rgb: 5 150 105;
+    height: 30px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    color: #047857;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
+
+    &:hover,
+    &:focus-visible {
+      color: #065f46;
+      border-color: #fff;
+      background: #fff;
     }
   }
 }
 
-/* ===== 搜索过滤区 ===== */
+/* ===== 検索カード ===== */
 .filter-bar {
-  background: rgba(255,255,255,0.97);
-  border-radius: 10px;
-  padding: 8px 14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  padding: 11px 14px 8px;
+  border-radius: 12px;
+  border: 1px solid #e4e1fb;
+  background: linear-gradient(180deg, #ffffff 0%, #faf9ff 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(91, 33, 182, 0.45);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea 0%, #8b5cf6 60%, #a78bfa 100%);
+  }
 
   .filter-form {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0;
+    gap: 6px 0;
     margin: 0;
 
     :deep(.el-form-item) {
       margin-bottom: 0;
-      margin-right: 10px;
+      margin-right: 12px;
     }
+
     :deep(.el-form-item__label) {
-      font-size: 0.82rem;
-      color: #555;
-      padding-right: 6px;
+      height: 22px;
+      margin: auto 8px auto 0;
+      padding: 0 10px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 22px;
+      color: #4c1d95;
+      background: #f1eefe;
+      box-shadow:
+        inset 0 1px 0 #ffffff,
+        inset 0 -1px 0 #ddd6fe;
     }
+
+    /* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
     :deep(.el-input__wrapper),
-    :deep(.el-select .el-input__wrapper) {
-      border-radius: 6px;
-      box-shadow: 0 0 0 1px #dcdfe6 inset;
-      &:hover { box-shadow: 0 0 0 1px #c0c4cc inset; }
-      &.is-focus { box-shadow: 0 0 0 1px #667eea inset; }
+    :deep(.el-select__wrapper) {
+      border-radius: 8px;
+      background-color: #fff;
+      box-shadow: 0 0 0 1px #dcd7f7 inset;
+
+      &:hover {
+        box-shadow: 0 0 0 1px #c4b5fd inset;
+      }
+
+      &.is-focus,
+      &.is-focused {
+        box-shadow:
+          0 0 0 1px #7c3aed inset,
+          0 0 0 3px rgba(124, 58, 237, 0.14);
+      }
     }
   }
 }
 
-/* ===== 表格容器 ===== */
+/* ===== テーブルカード ===== */
 .table-card {
-  background: rgba(255,255,255,0.98);
-  border-radius: 10px;
-  padding: 10px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.09);
-  backdrop-filter: blur(10px);
+  position: relative;
   flex: 1;
   overflow: hidden;
+  padding: 12px 10px 10px;
+  border-radius: 12px;
+  border: 1px solid #e4e1fb;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(91, 33, 182, 0.4);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea 0%, #8b5cf6 60%, #a78bfa 100%);
+  }
 }
 
 .empty-state {
@@ -694,47 +797,92 @@ onMounted(() => { fetchData() })
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 50px 20px;
   gap: 12px;
+  padding: 50px 20px;
 
-  .empty-icon { font-size: 3.5rem; opacity: 0.4; }
-  .empty-text { font-size: 0.9rem; color: #909399; }
+  .empty-icon {
+    font-size: 3.5rem;
+    opacity: 0.45;
+  }
+
+  .empty-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+  }
+
+  :deep(.el-button--primary) {
+    --k-rgb: 124 58 237;
+    border: 1px solid #6d28d9;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, #8b5cf6, #6d28d9);
+  }
 }
 
-/* ===== 表格样式 ===== */
+/* ===== テーブル ===== */
 .supplier-table {
-  :deep(.el-table__header-wrapper) {
-    th { border-bottom: 2px solid #e2e8f5 !important; }
+  border-radius: 10px;
+  --el-table-border-color: #ece9f8;
+  --el-table-row-hover-bg-color: #f3f0ff;
+  --el-table-current-row-bg-color: #ede9fe;
+
+  :deep(th.el-table__cell) {
+    color: #4c1d95 !important;
+    font-weight: 700 !important;
+    background: #f5f3ff !important;
+    border-bottom: 1px solid #ddd6fe !important;
   }
-  :deep(.el-table__body-wrapper) {
-    tr { transition: background 0.15s; }
-    td { border-bottom: 1px solid #f3f4f6 !important; }
+
+  :deep(td.el-table__cell) {
+    color: #1e293b;
+    border-bottom: 1px solid #f1eff9 !important;
   }
-  :deep(.el-table__fixed-right) { box-shadow: -2px 0 8px rgba(0,0,0,0.05); }
-  :deep(.el-table__fixed) { box-shadow: 2px 0 8px rgba(0,0,0,0.05); }
+
+  :deep(.el-table__row--striped td.el-table__cell) {
+    background: #fcfbff;
+  }
+
+  :deep(.el-table__body tr:hover > td.el-table__cell) {
+    background-color: #f3f0ff !important;
+  }
+
+  :deep(.el-table__body tr.current-row > td.el-table__cell) {
+    background-color: #ede9fe !important;
+  }
+
+  :deep(.el-switch.is-checked .el-switch__core) {
+    border-color: #10b981;
+    background-color: #10b981;
+  }
 }
 
 .code-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-family: 'Consolas', 'Courier New', monospace;
   font-size: 11.5px;
-  font-family: 'Courier New', monospace;
-  font-weight: 600;
-  color: #5b6de0;
-  background: rgba(91,109,224,0.07);
-  border-radius: 4px;
-  padding: 1px 6px;
+  font-weight: 700;
   letter-spacing: 0.3px;
+  color: #5b21b6;
+  background: #f3f0ff;
+  box-shadow:
+    inset 0 0 0 1px #ddd6fe,
+    inset 0 -1px 0 #c4b5fd;
 }
 
 .lead-time-badge {
   font-size: 13px;
-  font-weight: 700;
-  color: #667eea;
+  font-weight: 800;
+  color: #6d28d9;
+  font-variant-numeric: tabular-nums;
+
   em {
+    margin-left: 1px;
     font-style: normal;
     font-size: 11px;
-    font-weight: 400;
-    color: #999;
-    margin-left: 1px;
+    font-weight: 500;
+    color: #94a3b8;
   }
 }
 
@@ -742,139 +890,208 @@ onMounted(() => { fetchData() })
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
   font-size: 11.5px;
   font-weight: 600;
-  border-radius: 10px;
-  padding: 2px 8px;
 
   &::before {
     content: '';
+    flex-shrink: 0;
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    flex-shrink: 0;
   }
 
   &.active {
     color: #26a65b;
-    background: rgba(38,166,91,0.09);
-    &::before { background: #26a65b; }
+    background: rgba(38, 166, 91, 0.09);
+
+    &::before {
+      background: #26a65b;
+    }
   }
+
   &.inactive {
     color: #909399;
-    background: rgba(144,147,153,0.09);
-    &::before { background: #c0c4cc; }
+    background: rgba(144, 147, 153, 0.09);
+
+    &::before {
+      background: #c0c4cc;
+    }
   }
 }
 
+/* 行操作：淡色ピル */
 .row-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 4px;
 
-  :deep(.el-divider--vertical) {
-    height: 14px;
-    margin: 0 2px;
-    border-color: #e4e7ed;
+  .ra-btn {
+    height: 22px;
+    margin: 0;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+
+    .el-icon {
+      margin-right: 2px;
+    }
   }
-  :deep(.el-button) {
-    padding: 0 5px;
-    font-size: 12px;
+
+  .ra-btn--edit {
+    --k-rgb: 79 70 229;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+
+    &:hover,
+    &:focus-visible {
+      color: #3730a3;
+      border-color: #a5b4fc;
+      background: #fff;
+    }
+  }
+
+  .ra-btn--delete {
+    --k-rgb: 225 29 72;
+    color: #be123c;
+    border: 1px solid #fecdd3;
+    background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);
+
+    &:hover,
+    &:focus-visible {
+      color: #9f1239;
+      border-color: #fda4af;
+      background: #fff;
+    }
   }
 }
 
-/* ===== 对话框 ===== */
-.supplier-dialog {
-  :deep(.el-dialog) {
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-  }
-  :deep(.el-dialog__header) {
-    padding: 0;
-    border-bottom: none;
-  }
-  :deep(.el-dialog__headerbtn) {
-    top: 14px;
-    right: 14px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    &:hover { background: rgba(255,255,255,0.35); }
-    .el-dialog__close { color: #fff; font-size: 16px; }
-  }
-  :deep(.el-dialog__body) {
-    padding: 0;
-    max-height: 70vh;
-    overflow-y: auto;
-    &::-webkit-scrollbar { width: 5px; }
-    &::-webkit-scrollbar-track { background: #f5f5f5; }
-    &::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 3px; }
-  }
-  :deep(.el-dialog__footer) {
-    padding: 10px 18px;
-    border-top: 1px solid #ebeef5;
-    background: #fafbfc;
-  }
+/* ===== ダイアログ ===== */
+:global(.el-dialog.osp-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
 }
 
-/* 对话框头部 */
+:global(.el-dialog.osp-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+}
+
+:global(.el-dialog.osp-dialog .el-dialog__body) {
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+:global(.el-dialog.osp-dialog .el-dialog__footer) {
+  padding: 10px 18px 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
 .dialog-header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 18px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(125deg, #4c51bf 0%, #5a67d8 36%, #667eea 62%, #764ba2 100%);
+
+  &.is-edit {
+    background: linear-gradient(125deg, #b45309 0%, #d97706 45%, #f59e0b 100%);
+  }
 
   .dh-icon-wrap {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.2);
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
-    .dh-icon { width: 18px; height: 18px; color: #fff; }
+    border-radius: 11px;
+    background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(30, 27, 75, 0.25);
+
+    .dh-icon {
+      width: 18px;
+      height: 18px;
+      color: #fff;
+    }
   }
 
   .dh-text {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 3px;
   }
 
   .dh-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
     line-height: 1.3;
+    letter-spacing: 0.03em;
+    color: #fff;
   }
 
   .dh-sub {
-    font-size: 0.75rem;
-    color: rgba(255,255,255,0.75);
-    line-height: 1;
+    font-size: 11px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.86);
   }
 
   .dh-badge {
-    font-size: 0.7rem;
-    font-weight: 700;
-    border-radius: 6px;
-    padding: 3px 9px;
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
     letter-spacing: 0.5px;
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: #fff;
+
     &.new {
-      background: rgba(255,255,255,0.25);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.4);
+      color: #4338ca;
     }
+
     &.edit {
-      background: rgba(255,200,80,0.25);
-      color: #ffe07a;
-      border: 1px solid rgba(255,200,80,0.4);
+      color: #b45309;
+    }
+  }
+
+  .dh-close {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    padding: 6px;
+    box-sizing: border-box;
+    border-radius: 9px;
+    font-size: 18px;
+    color: #fff;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    transition:
+      transform 0.2s ease,
+      background 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
     }
   }
 }
@@ -884,13 +1101,26 @@ onMounted(() => { fetchData() })
   padding: 14px 18px 6px;
 
   .form-group {
-    margin-bottom: 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f0f2f5;
+    position: relative;
+    margin-bottom: 10px;
+    padding: 12px 12px 10px;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid #e4e1fb;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfaff 100%);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #a5b4fc, #8b5cf6);
+    }
+
     &.last {
       margin-bottom: 0;
-      padding-bottom: 0;
-      border-bottom: none;
     }
   }
 
@@ -898,68 +1128,100 @@ onMounted(() => { fetchData() })
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #667eea;
-    letter-spacing: 0.5px;
     margin-bottom: 8px;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #4c1d95;
 
     .gl-bar {
+      flex-shrink: 0;
       width: 3px;
       height: 13px;
       border-radius: 2px;
       background: linear-gradient(180deg, #667eea, #764ba2);
-      flex-shrink: 0;
     }
   }
 
   :deep(.el-form-item) {
     margin-bottom: 8px;
-    &:last-child { margin-bottom: 0; }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   :deep(.el-form-item__label) {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: #555;
-    line-height: 28px;
     padding-right: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 28px;
+    color: #475569;
   }
 
-  :deep(.el-form-item__content) { line-height: 28px; }
+  :deep(.el-form-item__content) {
+    line-height: 28px;
+  }
 
   :deep(.el-form-item__error) {
-    font-size: 0.72rem;
     padding-top: 2px;
+    font-size: 11px;
   }
 
   :deep(.el-input),
   :deep(.el-select),
-  :deep(.el-input-number) { width: 100%; }
-
-  :deep(.el-input__wrapper),
-  :deep(.el-select .el-input__wrapper) {
-    box-shadow: 0 0 0 1px #dcdfe6 inset;
-    border-radius: 6px;
-    transition: all 0.2s;
-    padding: 0 9px;
-    &:hover { box-shadow: 0 0 0 1px #c0c4cc inset; background: #fafafa; }
-    &.is-focus { box-shadow: 0 0 0 1px #667eea inset, 0 0 0 3px rgba(102,126,234,0.1); }
+  :deep(.el-input-number) {
+    width: 100%;
   }
 
-  :deep(.el-input-number .el-input__wrapper) { padding-right: 0; }
+  :deep(.el-input__wrapper),
+  :deep(.el-select__wrapper) {
+    padding: 0 9px;
+    border-radius: 8px;
+    box-shadow: 0 0 0 1px #dcd7f7 inset;
+    transition:
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+
+    &:hover {
+      box-shadow: 0 0 0 1px #c4b5fd inset;
+    }
+
+    &.is-focus,
+    &.is-focused {
+      box-shadow:
+        0 0 0 1px #7c3aed inset,
+        0 0 0 3px rgba(124, 58, 237, 0.14);
+    }
+  }
+
+  :deep(.el-input.is-disabled .el-input__wrapper) {
+    background-color: #f1f5f9;
+    box-shadow: 0 0 0 1px #e2e8f0 inset;
+  }
+
+  :deep(.el-input-number .el-input__wrapper) {
+    padding-right: 0;
+  }
 
   :deep(.el-textarea .el-textarea__inner) {
-    border-radius: 6px;
-    box-shadow: 0 0 0 1px #dcdfe6 inset;
-    padding: 7px 10px;
-    font-size: 0.82rem;
-    resize: vertical;
     min-height: 56px;
-    transition: all 0.2s;
-    &:hover { box-shadow: 0 0 0 1px #c0c4cc inset; }
-    &:focus { box-shadow: 0 0 0 1px #667eea inset, 0 0 0 3px rgba(102,126,234,0.1); }
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    resize: vertical;
+    box-shadow: 0 0 0 1px #dcd7f7 inset;
+    transition: box-shadow 0.2s ease;
+
+    &:hover {
+      box-shadow: 0 0 0 1px #c4b5fd inset;
+    }
+
+    &:focus {
+      box-shadow:
+        0 0 0 1px #7c3aed inset,
+        0 0 0 3px rgba(124, 58, 237, 0.14);
+    }
   }
 
   :deep(.is-error-input .el-input__wrapper) {
@@ -971,10 +1233,12 @@ onMounted(() => { fetchData() })
     align-items: center;
     gap: 4px;
     margin-top: 3px;
-    font-size: 0.72rem;
-    color: #f56c6c;
-    animation: fadeSlideIn 0.25s ease;
-    .el-icon { font-size: 12px; }
+    font-size: 11px;
+    color: #e11d48;
+
+    .el-icon {
+      font-size: 12px;
+    }
   }
 
   .unit-input-wrap {
@@ -982,13 +1246,17 @@ onMounted(() => { fetchData() })
     align-items: center;
     gap: 6px;
     width: 100%;
+
     .unit-label {
-      font-size: 0.82rem;
-      color: #888;
-      font-weight: 500;
+      font-size: 12.5px;
+      font-weight: 600;
       white-space: nowrap;
+      color: #64748b;
     }
-    :deep(.el-input-number) { flex: 1; }
+
+    :deep(.el-input-number) {
+      flex: 1;
+    }
   }
 }
 
@@ -998,23 +1266,42 @@ onMounted(() => { fetchData() })
   justify-content: flex-end;
   gap: 8px;
 
-  :deep(.el-button) {
-    min-width: 80px;
-    font-weight: 600;
-    transition: all 0.25s ease;
-    &:hover { transform: translateY(-1px); }
-  }
-  :deep(.el-button--primary) {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border: none;
-    box-shadow: 0 2px 8px rgba(102,126,234,0.35);
-    &:hover { box-shadow: 0 4px 14px rgba(102,126,234,0.45); }
-  }
-}
+  .dlg-btn {
+    --k-rgb: 100 116 139;
+    min-width: 84px;
+    height: 30px;
+    margin: 0;
+    border-radius: 8px;
+    font-weight: 700;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
 
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(-3px); }
-  to { opacity: 1; transform: translateY(0); }
+    &:hover,
+    &:focus-visible {
+      color: #334155;
+      border-color: #94a3b8;
+      background: #fff;
+    }
+  }
+
+  .dlg-btn--save {
+    --k-rgb: 124 58 237;
+    color: #fff;
+    border-color: #6d28d9;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+      linear-gradient(135deg, #8b5cf6, #6d28d9);
+
+    &:hover,
+    &:focus-visible {
+      color: #fff;
+      border-color: #5b21b6;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+        linear-gradient(135deg, #9b70f8, #7c3aed);
+    }
+  }
 }
 
 /* ===== 响应式 ===== */
@@ -1022,14 +1309,24 @@ onMounted(() => { fetchData() })
   .page-header {
     flex-wrap: wrap;
     gap: 8px;
-    .header-right { width: 100%; justify-content: flex-end; }
+
+    .header-right {
+      width: 100%;
+      justify-content: flex-end;
+    }
   }
+
   .filter-bar .filter-form {
     flex-direction: column;
     align-items: stretch;
-    :deep(.el-form-item) { width: 100%; margin-right: 0; }
+
+    :deep(.el-form-item) {
+      width: 100%;
+      margin-right: 0;
+    }
   }
-  .supplier-dialog :deep(.el-dialog) {
+
+  :global(.el-dialog.osp-dialog) {
     width: 95% !important;
     margin: 5vh auto !important;
   }

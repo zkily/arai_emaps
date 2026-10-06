@@ -1,16 +1,15 @@
 <template>
   <div class="order-daily-list od-modern pb-std">
-    <div class="page-hero">
-      <div class="hero-orb orb-a" aria-hidden="true" />
-      <div class="hero-orb orb-b" aria-hidden="true" />
-      <div class="hero-grid" aria-hidden="true" />
+    <div class="page-hero pb-hero pb-hero--page">
+      <div class="hero-fx pb-bubbles" aria-hidden="true" />
       <div class="page-hero-top">
         <div class="hero-title-block">
           <div class="hero-icon-wrap">
             <el-icon><Calendar /></el-icon>
           </div>
           <div class="hero-title-text">
-            <h1 class="toolbar-title">日受注管理</h1>
+            <h1 class="toolbar-title pb-hero-title">日受注管理</h1>
+            <p class="hero-desc pb-hero-desc">日別の受注（内示・確定）を期間・納入先・製品で絞り込み、登録・編集・CSV出力</p>
           </div>
         </div>
         <div class="hero-actions">
@@ -28,56 +27,57 @@
           </el-button>
         </div>
       </div>
-      <div class="filter-inline">
-        <div class="fi-group fi-quick">
-          <span class="dq-label">期間</span>
-          <el-button-group class="date-quick-btns">
-            <el-button size="small" @click="applyQuickRange('today')">今日</el-button>
-            <el-button size="small" @click="applyQuickRange('week')">今週</el-button>
-            <el-button size="small" @click="applyQuickRange('month')">今月</el-button>
-            <el-button size="small" @click="applyQuickRange('lastMonth')">先月</el-button>
-          </el-button-group>
-        </div>
-        <div class="fi-sep"></div>
-        <div class="fi-group">
-          <el-icon class="fi-icon"><Calendar /></el-icon>
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            range-separator="～"
-            start-placeholder="開始日"
-            end-placeholder="終了日"
-            value-format="YYYY-MM-DD"
-            clearable
-            class="fi-date-range"
-          />
-        </div>
-        <div class="fi-sep"></div>
-        <div class="fi-group">
-          <el-select v-model="filters.destination_cd" placeholder="納入先" clearable filterable class="fi-dest" popper-class="destination-select-popper">
-            <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} | ${d.name}`" :value="d.cd" />
-          </el-select>
-        </div>
-        <div class="fi-group fi-group--grow">
-          <el-select v-model="filters.keyword" placeholder="製品" clearable filterable class="fi-product">
-            <el-option
-              v-for="p in productOptions"
-              :key="p.cd"
-              :value="p.cd"
-              :label="`${p.cd} | ${p.name} | ${p.destination_name || p.destination_cd || '-'}`"
-            >
-              <div class="product-option-row">
-                <span class="product-option-cd">{{ p.cd }}</span>
-                <span class="product-option-name">{{ p.name }}</span>
-                <span class="product-option-dest">{{ p.destination_name || p.destination_cd || '－' }}</span>
-              </div>
-            </el-option>
-          </el-select>
-        </div>
+    </div>
+
+    <div class="filter-inline">
+      <div class="fi-group fi-quick">
+        <span class="dq-label">期間</span>
+        <el-button-group class="date-quick-btns">
+          <el-button size="small" @click="applyQuickRange('today')">今日</el-button>
+          <el-button size="small" @click="applyQuickRange('week')">今週</el-button>
+          <el-button size="small" @click="applyQuickRange('month')">今月</el-button>
+          <el-button size="small" @click="applyQuickRange('lastMonth')">先月</el-button>
+        </el-button-group>
+      </div>
+      <div class="fi-sep"></div>
+      <div class="fi-group">
+        <el-icon class="fi-icon"><Calendar /></el-icon>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="～"
+          start-placeholder="開始日"
+          end-placeholder="終了日"
+          value-format="YYYY-MM-DD"
+          clearable
+          class="fi-date-range"
+        />
+      </div>
+      <div class="fi-sep"></div>
+      <div class="fi-group">
+        <el-select v-model="filters.destination_cd" placeholder="納入先" clearable filterable class="fi-dest" popper-class="destination-select-popper">
+          <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} | ${d.name}`" :value="d.cd" />
+        </el-select>
+      </div>
+      <div class="fi-group fi-group--grow">
+        <el-select v-model="filters.keyword" placeholder="製品" clearable filterable class="fi-product">
+          <el-option
+            v-for="p in productOptions"
+            :key="p.cd"
+            :value="p.cd"
+            :label="`${p.cd} | ${p.name} | ${p.destination_name || p.destination_cd || '-'}`"
+          >
+            <div class="product-option-row">
+              <span class="product-option-cd">{{ p.cd }}</span>
+              <span class="product-option-name">{{ p.name }}</span>
+              <span class="product-option-dest">{{ p.destination_name || p.destination_cd || '－' }}</span>
+            </div>
+          </el-option>
+        </el-select>
       </div>
     </div>
 
-    <div class="kpi-strip" @mousemove="handleKpiTilt" @mouseleave="resetKpiTilt">
+    <div class="kpi-strip">
       <div class="kpi-card kpi-count">
         <span class="kpi-icon"><el-icon><Document /></el-icon></span>
         <div class="kpi-body">
@@ -205,7 +205,7 @@
       width="540px" 
       destroy-on-close 
       @close="resetForm"
-      class="daily-order-dialog compact-dialog"
+      class="daily-order-dialog compact-dialog pb-std"
       :show-close="false"
     >
       <template #header>
@@ -215,8 +215,15 @@
             <span class="dialog-header-add-btn" :title="editId ? '編集' : '新規追加'">
               <el-icon><EditPen v-if="editId" /><Plus v-else /></el-icon>
             </span>
-            <span class="dialog-header-title">{{ editId ? '日別受注編集' : '新規受注追加' }}</span>
-            <span v-if="!editId" class="odd-badge">試作品・補給品等</span>
+            <div class="odd-head-copy">
+              <div class="odd-head-row">
+                <span class="dialog-header-title">{{ editId ? '日別受注編集' : '新規受注追加' }}</span>
+                <span v-if="!editId" class="odd-badge">試作品・補給品等</span>
+              </div>
+              <p class="odd-head-desc">
+                {{ editId ? '登録済みの日別受注の内容を修正して保存' : '出荷日・納入先・製品・数量を入力して日別受注を追加' }}
+              </p>
+            </div>
           </div>
           <el-icon class="dialog-header-close" @click="dialogVisible = false"><Close /></el-icon>
         </div>
@@ -574,35 +581,6 @@ function fmtCell(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === '') return ''
   const n = Number(v)
   return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(v)
-}
-
-// KPI カードの 3D チルト（イベント委譲）
-let tiltKpi: HTMLElement | null = null
-
-function clearKpiTilt(el: HTMLElement): void {
-  el.style.removeProperty('--rx')
-  el.style.removeProperty('--ry')
-  el.style.removeProperty('--mx')
-  el.style.removeProperty('--my')
-}
-
-function handleKpiTilt(e: MouseEvent): void {
-  const card = (e.target as HTMLElement).closest<HTMLElement>('.kpi-card')
-  if (tiltKpi && tiltKpi !== card) clearKpiTilt(tiltKpi)
-  tiltKpi = card
-  if (!card) return
-  const rect = card.getBoundingClientRect()
-  const x = (e.clientX - rect.left) / rect.width - 0.5
-  const y = (e.clientY - rect.top) / rect.height - 0.5
-  card.style.setProperty('--rx', `${(-y * 12).toFixed(2)}deg`)
-  card.style.setProperty('--ry', `${(x * 12).toFixed(2)}deg`)
-  card.style.setProperty('--mx', `${((x + 0.5) * 100).toFixed(1)}%`)
-  card.style.setProperty('--my', `${((y + 0.5) * 100).toFixed(1)}%`)
-}
-
-function resetKpiTilt(): void {
-  if (tiltKpi) clearKpiTilt(tiltKpi)
-  tiltKpi = null
 }
 
 function escapeCsvCell(v: unknown): string {
@@ -1924,159 +1902,163 @@ onUnmounted(() => {
 }
 
 /* ============================================================ */
-/* 页面美化：现代 UI / 3D 动效 / 颜色区分（受注＝インディゴ系）      */
+/* 页面美化：现代 UI / 颜色区分（受注＝インディゴ系）               */
 /* ============================================================ */
 
 /* ---------- ヒーロー ---------- */
 .od-modern .page-hero {
   position: relative;
   overflow: hidden;
-  isolation: isolate;
+  border: none;
+  background: linear-gradient(125deg, #3730a3 0%, #4f46e5 38%, #7c3aed 74%, #8b5cf6 100%);
   box-shadow:
-    0 14px 34px -14px rgba(79, 70, 229, 0.6),
-    0 2px 8px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    0 12px 28px -18px rgba(79, 70, 229, 0.6),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
-.od-modern .page-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.13) 50%, transparent 65%);
-  background-size: 250% 100%;
-  animation: odSheen 7s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.od-modern .page-hero > :not(.hero-orb):not(.hero-grid) {
-  position: relative;
-  z-index: 1;
-}
-
-.od-modern .hero-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(22px);
-  pointer-events: none;
-  z-index: 0;
-  animation: odOrbFloat 12s ease-in-out infinite;
-}
-
-.od-modern .hero-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
-  mask-image: linear-gradient(180deg, #000 0%, transparent 55%);
-  pointer-events: none;
-  z-index: 0;
+.od-modern .page-hero-top {
+  align-items: center;
 }
 
 .od-modern .hero-title-block {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .od-modern .hero-icon-wrap {
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
+  border-radius: 12px;
   font-size: 20px;
   color: #fff;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.06));
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 8px 18px -6px rgba(15, 23, 42, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -3px 0 rgba(15, 23, 42, 0.15);
-  animation: odIconFloat 4.5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 27, 75, 0.3);
+}
+
+.od-modern .hero-title-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
 }
 
 .od-modern .toolbar-title {
+  font-weight: 800;
   letter-spacing: 0.04em;
-  text-shadow: 0 2px 10px rgba(15, 23, 42, 0.3);
 }
 
-/* ツールバーボタン：3D キーキャップ */
+.od-modern .hero-desc {
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.02em;
+}
+
+/* ツールバーボタン：濃色ヒーロー上の白ピル（文字色で役割を区別） */
 .od-modern .tb-btn {
-  --edge: rgba(15, 23, 42, 0.35);
-  --glow: rgba(15, 23, 42, 0.25);
-  border-radius: 10px;
-  box-shadow:
-    0 3px 0 var(--edge),
-    0 10px 18px -8px var(--glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  --tb-fg: #4338ca;
+  --tb-fg-h: #3730a3;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--tb-fg);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5ff 100%);
 }
 
-.od-modern .tb-btn::before {
+.od-modern .tb-btn:not(.is-disabled):hover,
+.od-modern .tb-btn:focus-visible {
+  color: var(--tb-fg-h);
+  border-color: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 100%);
+}
+
+.od-modern .tb-btn-refresh {
+  --tb-fg: #0369a1;
+  --tb-fg-h: #075985;
+  --k-rgb: 2 132 199;
+}
+
+.od-modern .tb-btn-export {
+  --tb-fg: #b45309;
+  --tb-fg-h: #92400e;
+  --k-rgb: 217 119 6;
+}
+
+.od-modern .tb-btn-create {
+  --tb-fg: #047857;
+  --tb-fg-h: #065f46;
+  --k-rgb: 5 150 105;
+}
+
+.od-modern .tb-btn.is-disabled,
+.od-modern .tb-btn:disabled {
+  opacity: 1;
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
+}
+
+/* ---------- フィルタバー（ヒーローの下に独立カード） ---------- */
+.od-modern .filter-inline {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 8px;
+  padding: 10px 10px 7px;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8f9ff 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(67, 56, 202, 0.45);
+}
+
+.od-modern .filter-inline::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%) no-repeat;
-  background-size: 250% 100%;
-  background-position: 150% 0;
-  transition: background-position 0.6s ease;
-  pointer-events: none;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 60%, #a78bfa 100%);
 }
 
-.od-modern .tb-btn:hover:not(.is-disabled) {
-  color: #fff;
-  transform: translateY(-2px);
+.od-modern .dq-label {
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: #3730a3;
+  background: #eef2ff;
   box-shadow:
-    0 5px 0 var(--edge),
-    0 16px 24px -10px var(--glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 #c7d2fe;
 }
 
-.od-modern .tb-btn:hover:not(.is-disabled)::before {
-  background-position: -50% 0;
+.od-modern .date-quick-btns {
+  gap: 2px;
+  border-radius: 10px;
 }
-
-.od-modern .tb-btn:active:not(.is-disabled) {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 var(--edge),
-    0 4px 8px -4px var(--glow);
-}
-
-.od-modern .tb-btn-refresh { --edge: #075985; --glow: rgba(14, 165, 233, 0.6); }
-.od-modern .tb-btn-export { --edge: #92400e; --glow: rgba(245, 158, 11, 0.6); }
-.od-modern .tb-btn-create { --edge: #065f46; --glow: rgba(16, 185, 129, 0.6); }
 
 .od-modern .date-quick-btns :deep(.el-button) {
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  --k-rgb: 79 70 229;
+  height: 24px;
+  color: #4338ca;
+  border: 1px solid #e0e7ff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
 }
 
-.od-modern .date-quick-btns :deep(.el-button:hover) {
-  z-index: 1;
-  transform: translateY(-1px);
-  box-shadow:
-    0 2px 0 #c7d2fe,
-    0 6px 12px -6px rgba(79, 70, 229, 0.45);
-}
-
-.od-modern .date-quick-btns :deep(.el-button:active) {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-.od-modern .filter-inline {
-  box-shadow:
-    0 8px 20px -12px rgba(15, 23, 42, 0.45),
-    inset 0 1px 0 #fff;
+.od-modern .date-quick-btns :deep(.el-button:hover),
+.od-modern .date-quick-btns :deep(.el-button:focus-visible) {
+  color: #3730a3;
+  border-color: #a5b4fc !important;
+  background: #fff;
 }
 
 .od-modern .fi-icon {
@@ -2087,39 +2069,38 @@ onUnmounted(() => {
   color: #fff;
   background: linear-gradient(135deg, #818cf8, #6366f1);
   box-shadow:
-    0 2px 0 #4338ca,
-    0 6px 12px -4px rgba(99, 102, 241, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3);
 }
 
+.od-modern .fi-sep {
+  background: #e0e7ff;
+}
+
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
 .od-modern .filter-inline :deep(.el-input__wrapper),
 .od-modern .filter-inline :deep(.el-select__wrapper) {
-  border-radius: 9px;
-  background-color: #f8fafc;
-  box-shadow:
-    0 0 0 1px #dfe3f0 inset,
-    0 1px 2px rgba(15, 23, 42, 0.05);
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #d6dcf5 inset;
 }
 
 .od-modern .filter-inline :deep(.el-input__wrapper:hover),
 .od-modern .filter-inline :deep(.el-select__wrapper:hover) {
-  background-color: #fff;
-  box-shadow:
-    0 0 0 1px #a5b4fc inset,
-    0 4px 10px -4px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 0 1px #a5b4fc inset;
 }
 
+.od-modern .filter-inline :deep(.el-input__wrapper.is-active),
 .od-modern .filter-inline :deep(.el-input__wrapper.is-focus),
 .od-modern .filter-inline :deep(.el-select__wrapper.is-focused) {
-  background-color: #fff;
   box-shadow:
     0 0 0 1px #6366f1 inset,
-    0 0 0 3px rgba(99, 102, 241, 0.16);
+    0 0 0 3px rgba(99, 102, 241, 0.14);
 }
 
-/* ---------- KPI カード（3D チルト） ---------- */
+/* ---------- KPI カード（色分け・動きなし） ---------- */
 .od-modern .kpi-strip {
   gap: 8px;
-  perspective: 900px;
 }
 
 .od-modern .kpi-card {
@@ -2130,54 +2111,22 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-left-width: 1px;
-  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 7%, #fff) 0%, #fff 70%);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 10px 22px -16px rgba(15, 23, 42, 0.3);
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
-  animation: odCardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+    0 8px 18px -16px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .od-modern .kpi-card::before {
   content: '';
   position: absolute;
   top: 0;
+  bottom: 0;
   left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, transparent));
-}
-
-.od-modern .kpi-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    circle at var(--mx, 50%) var(--my, 0%),
-    color-mix(in srgb, var(--accent) 16%, transparent),
-    transparent 60%
-  );
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
-}
-
-.od-modern .kpi-card:hover {
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-3px);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 18px 30px -16px color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-.od-modern .kpi-card:hover::after {
-  opacity: 1;
+  width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
 }
 
 .od-modern .kpi-icon {
@@ -2190,16 +2139,11 @@ onUnmounted(() => {
   border-radius: 9px;
   font-size: 16px;
   color: #fff;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 60%, #fff) 0%, var(--accent) 100%);
   box-shadow:
-    0 2px 0 color-mix(in srgb, var(--accent) 70%, #000),
-    0 6px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1);
-}
-
-.od-modern .kpi-card:hover .kpi-icon {
-  transform: rotate(-8deg) scale(1.08);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15),
+    0 4px 10px -4px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .od-modern .kpi-body {
@@ -2209,23 +2153,33 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.od-modern .kpi-count { --accent: #64748b; background: rgba(255, 255, 255, 0.85); }
-.od-modern .kpi-units { --accent: #6366f1; background: rgba(255, 255, 255, 0.85); }
-.od-modern .kpi-boxes { --accent: #0d9488; background: rgba(255, 255, 255, 0.85); }
-.od-modern .kpi-forecast { --accent: #8b5cf6; background: rgba(255, 255, 255, 0.85); }
+.od-modern .kpi-label {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
 
-.od-modern .kpi-card:nth-child(1) { animation-delay: 0.05s; }
-.od-modern .kpi-card:nth-child(2) { animation-delay: 0.12s; }
-.od-modern .kpi-card:nth-child(3) { animation-delay: 0.19s; }
-.od-modern .kpi-card:nth-child(4) { animation-delay: 0.26s; }
+.od-modern .kpi-value {
+  font-size: 19px;
+  letter-spacing: 0;
+  color: color-mix(in srgb, var(--accent) 40%, #0f172a);
+}
+
+.od-modern .kpi-count { --accent: #64748b; }
+.od-modern .kpi-units { --accent: #4f46e5; }
+.od-modern .kpi-boxes { --accent: #0d9488; }
+.od-modern .kpi-forecast { --accent: #7c3aed; }
 
 /* ---------- 一覧テーブル ---------- */
 .od-modern .table-section {
   position: relative;
   overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  background: #fff;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
-    0 14px 32px -18px rgba(79, 70, 229, 0.35);
+    0 10px 24px -20px rgba(67, 56, 202, 0.45);
 }
 
 .od-modern .table-section::before {
@@ -2235,17 +2189,21 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+  z-index: 3;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 60%, #a78bfa 100%);
 }
 
 .od-modern .table-section-head {
+  align-items: center;
   padding-top: 10px;
+  border-bottom-color: #eef2ff;
 }
 
 .od-modern .table-section-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: #312e81;
 }
 
 .od-modern .table-title-icon {
@@ -2257,20 +2215,35 @@ onUnmounted(() => {
   border-radius: 7px;
   font-size: 13px;
   color: #fff;
-  background: linear-gradient(135deg, #818cf8, #6366f1);
+  background: linear-gradient(145deg, #818cf8 0%, #4f46e5 100%);
   box-shadow:
-    0 2px 0 #4338ca,
-    0 6px 12px -4px rgba(99, 102, 241, 0.55);
-  transform: perspective(200px) rotateX(8deg) rotateY(-10deg);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3);
+}
+
+.od-modern .data-table {
+  --el-table-border-color: #eef2f7;
+  --el-table-row-hover-bg-color: #f5f7ff;
+}
+
+.od-modern .data-table :deep(.el-table__header-wrapper th.el-table__cell) {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #3730a3 !important;
+  background: linear-gradient(180deg, #f8f9ff 0%, #eef2ff 100%) !important;
+  border-bottom: 1px solid #c7d2fe !important;
+}
+
+.od-modern .data-table :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: #fafbff;
+}
+
+.od-modern .data-table :deep(.el-table__body tr.el-table__row:hover > td.el-table__cell) {
+  background: #f5f7ff !important;
 }
 
 .od-modern .data-table :deep(.el-table__row > td.el-table__cell:first-child) {
   box-shadow: inset 3px 0 0 var(--row-accent, transparent);
-  transition: box-shadow 0.2s ease;
-}
-
-.od-modern .data-table :deep(.el-table__row:hover > td.el-table__cell:first-child) {
-  box-shadow: inset 5px 0 0 var(--row-accent, transparent);
 }
 
 .od-modern .data-table :deep(.el-table__row.row-status-info) { --row-accent: #cbd5e1; }
@@ -2302,21 +2275,22 @@ onUnmounted(() => {
 }
 
 .od-modern .weekday-badge.is-sat {
-  color: #fff;
-  background: linear-gradient(135deg, #60a5fa, #2563eb);
-  box-shadow: 0 2px 6px -2px rgba(37, 99, 235, 0.6);
+  color: #1d4ed8;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px #bfdbfe;
 }
 
 .od-modern .weekday-badge.is-sun {
-  color: #fff;
-  background: linear-gradient(135deg, #fb7185, #e11d48);
-  box-shadow: 0 2px 6px -2px rgba(225, 29, 72, 0.6);
+  color: #be123c;
+  background: #fff1f2;
+  box-shadow: inset 0 0 0 1px #fecdd3;
 }
 
 .od-modern .cell-code {
   display: inline-block;
   padding: 1px 7px;
   border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-weight: 700;
   color: #4338ca;
   background: #eef2ff;
@@ -2355,112 +2329,70 @@ onUnmounted(() => {
 .od-modern :deep(.el-tag--warning) { --tag-bg: #fffbeb; --tag-fg: #b45309; --tag-ring: #fde68a; }
 .od-modern :deep(.el-tag--danger) { --tag-bg: #fff1f2; --tag-fg: #be123c; --tag-ring: #fecdd3; }
 
-/* 行内操作：ピル型 → ホバーでグラデーション */
+/* 行内操作：淡いピル（hover は淡色の塗りを濃くするだけ） */
 .od-modern .data-table :deep(.row-act-btn.el-button.is-link) {
-  --act: #6366f1;
-  --act-to: #4f46e5;
+  --act: #4f46e5;
   height: 22px;
   padding: 2px 10px;
   border-radius: 999px;
   font-weight: 700;
   color: var(--act);
-  background: color-mix(in srgb, var(--act) 9%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, transparent);
+  background: color-mix(in srgb, var(--act) 8%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, #fff);
   transition:
-    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.18s ease,
-    background 0.18s ease,
-    color 0.18s ease;
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
 }
 
 .od-modern .data-table :deep(.row-act-btn.el-button.is-link + .row-act-btn) {
   margin-left: 4px;
 }
 
-.od-modern .data-table :deep(.row-act-btn.row-act-edit.el-button.is-link) { --act: #6366f1; --act-to: #4338ca; }
-.od-modern .data-table :deep(.row-act-btn.row-act-del.el-button.is-link) { --act: #f43f5e; --act-to: #be123c; }
+.od-modern .data-table :deep(.row-act-btn.row-act-edit.el-button.is-link) { --act: #4f46e5; }
+.od-modern .data-table :deep(.row-act-btn.row-act-del.el-button.is-link) { --act: #e11d48; }
 
-.od-modern .data-table :deep(.row-act-btn.el-button.is-link:hover) {
-  color: #fff;
-  background: linear-gradient(135deg, var(--act), var(--act-to));
-  transform: translateY(-1px);
-  box-shadow: 0 6px 12px -4px var(--act-to);
+.od-modern .data-table :deep(.row-act-btn.el-button.is-link:hover),
+.od-modern .data-table :deep(.row-act-btn.el-button.is-link:focus-visible) {
+  color: color-mix(in srgb, var(--act) 80%, #000);
+  background: color-mix(in srgb, var(--act) 16%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 40%, #fff);
+}
+
+.od-modern .pagination-container {
+  padding-top: 6px;
 }
 
 .od-modern .page-range-text {
   padding: 3px 10px;
   border-radius: 999px;
   color: #4338ca;
-  background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  background: #eef2ff;
   box-shadow: inset 0 0 0 1px #e0e7ff;
 }
 
+.od-modern .pagination-container :deep(.el-pagination.is-background .el-pager li) {
+  border-radius: 7px;
+}
+
 .od-modern .pagination-container :deep(.el-pagination.is-background .el-pager li.is-active) {
-  background: linear-gradient(135deg, #818cf8, #6366f1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
   box-shadow:
-    0 2px 0 #4338ca,
-    0 4px 10px -3px rgba(99, 102, 241, 0.55);
-}
-
-/* ---------- アニメーション ---------- */
-@keyframes odSheen {
-  0% {
-    background-position: 150% 0;
-  }
-  60%,
-  100% {
-    background-position: -50% 0;
-  }
-}
-
-@keyframes odOrbFloat {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(24px, 10px) scale(1.12);
-  }
-}
-
-@keyframes odIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(0);
-  }
-  50% {
-    transform: perspective(300px) rotateX(-6deg) rotateY(14deg) translateY(-3px);
-  }
-}
-
-@keyframes odCardIn {
-  from {
-    opacity: 0;
-    transform: perspective(600px) rotateX(-30deg) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .od-modern .page-hero::after,
-  .od-modern .hero-orb,
-  .od-modern .hero-icon-wrap,
-  .od-modern .kpi-card {
-    animation: none;
-  }
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(49, 46, 129, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.55);
 }
 
 /* ============================================================
- * 页面美化：現代UI・3D動効・色分け（新規受注追加ダイアログ / 新規＝indigo・編集＝amber）
+ * 页面美化：現代UI・色分け（新規受注追加ダイアログ / 新規＝indigo・編集＝amber）
  * ============================================================ */
 .odd-hero {
-  --m1: #1e1b4b;
-  --m2: #4338ca;
+  --m1: #3730a3;
+  --m2: #4f46e5;
   --m3: #7c3aed;
-  --m4: #a855f7;
+  --m4: #8b5cf6;
   position: relative;
   overflow: hidden;
   padding: 14px 18px;
@@ -2468,15 +2400,10 @@ onUnmounted(() => {
 }
 
 .odd-hero--edit {
-  --m1: #451a03;
+  --m1: #92400e;
   --m2: #b45309;
-  --m3: #f59e0b;
-  --m4: #fbbf24;
-}
-
-.odd-hero > :not(.page-header-fx) {
-  position: relative;
-  z-index: 1;
+  --m3: #d97706;
+  --m4: #f59e0b;
 }
 
 .odd-hero .page-header-fx {
@@ -2486,35 +2413,63 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.odd-hero .dialog-header-left {
+  gap: 12px;
+  min-width: 0;
+}
+
 .odd-hero .dialog-header-add-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 17px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.38);
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 3px 0 rgba(15, 23, 42, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.25);
   cursor: default;
-  animation: odIconFloat 4.5s ease-in-out infinite;
 }
 
 .odd-hero .dialog-header-add-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+}
+
+.odd-head-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.odd-head-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .odd-hero .dialog-header-title {
   font-size: 16px;
   font-weight: 800;
+  line-height: 1.3;
   letter-spacing: 0.03em;
-  text-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.odd-head-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+  letter-spacing: 0.02em;
 }
 
 .odd-badge {
   display: inline-flex;
   align-items: center;
-  height: 22px;
+  height: 20px;
   padding: 0 9px;
   border-radius: 999px;
   font-size: 11px;
@@ -2522,17 +2477,20 @@ onUnmounted(() => {
   color: #fff;
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 2px 0 rgba(15, 23, 42, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
   white-space: nowrap;
 }
 
 .odd-hero .dialog-header-close {
+  flex-shrink: 0;
   width: 30px;
   height: 30px;
   padding: 6px;
   box-sizing: border-box;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition:
     transform 0.2s ease,
     background 0.2s ease;
@@ -2540,7 +2498,7 @@ onUnmounted(() => {
 
 .odd-hero .dialog-header-close:hover {
   background: rgba(255, 255, 255, 0.3);
-  transform: rotate(90deg);
+  transform: translateY(-1px);
 }
 
 /* フォーム本体：セクション色分け（日付＝sky / 基本＝indigo / 数量＝emerald） */
@@ -2567,10 +2525,9 @@ onUnmounted(() => {
   border-radius: 12px;
   border: 1px solid rgba(var(--sc-rgb), 0.22);
   box-shadow:
-    0 8px 18px -12px rgba(var(--sc-rgb), 0.55),
+    0 8px 18px -14px rgba(var(--sc-rgb), 0.5),
     0 1px 2px rgba(15, 23, 42, 0.04);
   transition:
-    transform 0.2s ease,
     box-shadow 0.2s ease,
     border-color 0.2s ease;
 }
@@ -2586,15 +2543,11 @@ onUnmounted(() => {
   background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.25) 100%);
 }
 
-.odd-modern .odd-sec:hover {
-  transform: translateY(-1px);
-}
-
 .odd-modern .odd-sec:focus-within {
   border-color: rgba(var(--sc-rgb), 0.5);
   box-shadow:
     0 0 0 3px rgba(var(--sc-rgb), 0.1),
-    0 10px 22px -12px rgba(var(--sc-rgb), 0.6);
+    0 10px 22px -14px rgba(var(--sc-rgb), 0.55);
 }
 
 .odd-modern .compact-header {
@@ -2613,8 +2566,8 @@ onUnmounted(() => {
   color: #fff;
   background: linear-gradient(135deg, rgba(var(--sc-rgb), 0.7) 0%, var(--sc) 100%);
   box-shadow:
-    0 2px 0 rgba(15, 23, 42, 0.18),
-    0 4px 8px -3px rgba(var(--sc-rgb), 0.65);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.15);
 }
 
 .odd-modern .section-title {
@@ -2630,23 +2583,19 @@ onUnmounted(() => {
 
 .odd-modern .odd-sec :deep(.el-input__wrapper),
 .odd-modern .odd-sec :deep(.el-select__wrapper) {
-  border-radius: 9px;
-  background-color: #f8fafc;
+  border-radius: 8px;
+  background-color: #fff;
   box-shadow: 0 0 0 1px #dfe3f0 inset;
-  transition:
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
 .odd-modern .odd-sec :deep(.el-input__wrapper:hover),
 .odd-modern .odd-sec :deep(.el-select__wrapper:hover) {
-  background-color: #fff;
   box-shadow: 0 0 0 1px rgba(var(--sc-rgb), 0.55) inset;
 }
 
 .odd-modern .odd-sec :deep(.el-input__wrapper.is-focus),
 .odd-modern .odd-sec :deep(.el-select__wrapper.is-focused) {
-  background-color: #fff;
   box-shadow:
     0 0 0 1px var(--sc) inset,
     0 0 0 3px rgba(var(--sc-rgb), 0.15);
@@ -2688,92 +2637,49 @@ onUnmounted(() => {
   box-shadow: inset 3px 0 0 #3b82f6;
 }
 
-/* フッター：キーキャップ（保存はモード色） */
+/* フッター：軽い立体（影・動きは共通ボタン標準、保存はモード色） */
 .odd-footer {
-  --m2: #4f46e5;
-  --m3: #7c3aed;
-  --m-edge: #312e81;
-  --m-glow: rgba(99, 102, 241, 0.55);
+  --m-from: #818cf8;
+  --m-to: #4f46e5;
+  --m-edge: #4338ca;
+  --m-rgb: 79 70 229;
   background: #f8fafc;
   border-top-color: #e2e8f0;
 }
 
 .odd-footer--edit {
-  --m2: #d97706;
-  --m3: #f59e0b;
-  --m-edge: #92400e;
-  --m-glow: rgba(245, 158, 11, 0.55);
-}
-
-.odd-footer .btn-cancel,
-.odd-footer .btn-save {
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.12s ease,
-    filter 0.12s ease;
+  --m-from: #fbbf24;
+  --m-to: #d97706;
+  --m-edge: #b45309;
+  --m-rgb: 217 119 6;
 }
 
 .odd-footer .btn-cancel {
-  border-color: #cbd5e1;
+  --k-rgb: 100 116 139;
   color: #334155;
   font-weight: 600;
-  box-shadow:
-    0 3px 0 #cbd5e1,
-    inset 0 1px 0 #fff;
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
-.odd-footer .btn-cancel:hover {
-  transform: translateY(-2px);
-  background: #fff;
-  box-shadow:
-    0 5px 0 #cbd5e1,
-    0 10px 16px -8px rgba(15, 23, 42, 0.25),
-    inset 0 1px 0 #fff;
+.odd-footer .btn-cancel:hover,
+.odd-footer .btn-cancel:focus-visible {
+  color: #1e293b;
+  border-color: #94a3b8;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
 }
 
 .odd-footer .btn-save,
 .odd-footer .btn-save:hover,
 .odd-footer .btn-save:focus {
+  --k-rgb: var(--m-rgb);
+  color: #fff;
   font-weight: 700;
   opacity: 1;
-  background: linear-gradient(180deg, var(--m3) 0%, var(--m2) 100%);
-}
-
-.odd-footer .btn-save {
-  box-shadow:
-    0 3px 0 var(--m-edge),
-    0 10px 18px -8px var(--m-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.odd-footer .btn-save:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
-  box-shadow:
-    0 5px 0 var(--m-edge),
-    0 14px 22px -8px var(--m-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.odd-footer .btn-cancel:active,
-.odd-footer .btn-save:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #cbd5e1;
-}
-
-.odd-footer .btn-save:active {
-  box-shadow: 0 1px 0 var(--m-edge);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .odd-hero .dialog-header-add-btn {
-    animation: none;
-  }
-  .odd-modern .odd-sec:hover,
-  .odd-footer .btn-cancel:hover,
-  .odd-footer .btn-save:hover {
-    transform: none;
-  }
+  border: 1px solid var(--m-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--m-from) 0%, var(--m-to) 100%);
 }
 </style>
 

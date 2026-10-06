@@ -1,16 +1,19 @@
 <template>
-  <div class="supplied-material-stock-page">
+  <div class="supplied-material-stock-page sms-modern pb-std">
     <!-- 页面头部 -->
-    <div class="page-header">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="title-section">
-          <h2 class="title">
-            <div class="title-icon">
-              <el-icon><Box /></el-icon>
-            </div>
-            <span class="title-text">支給材料在庫管理</span>
-          </h2>
-          <p class="subtitle">外注先に支給した材料の在庫状況を管理します</p>
+          <div class="title-icon">
+            <el-icon><Box /></el-icon>
+          </div>
+          <div class="title-copy">
+            <h2 class="title pb-hero-title">支給材料在庫管理</h2>
+            <p class="subtitle pb-hero-desc">
+              外注先に支給した材料の在庫を外注先別に確認し、僅少在庫と支給・使用履歴をチェック
+            </p>
+          </div>
         </div>
         <div class="header-stats">
           <div class="stat-item">
@@ -75,11 +78,16 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch" :loading="loading">
+          <el-button
+            type="primary"
+            class="sms-btn sms-btn--search"
+            @click="handleSearch"
+            :loading="loading"
+          >
             <el-icon><Search /></el-icon>
             検索
           </el-button>
-          <el-button @click="resetFilters">
+          <el-button class="sms-btn sms-btn--reset" @click="resetFilters">
             <el-icon><Refresh /></el-icon>
             リセット
           </el-button>
@@ -90,11 +98,11 @@
     <!-- 操作按钮栏 -->
     <div class="action-bar">
       <div class="left-actions">
-        <el-button type="warning" @click="exportData">
+        <el-button type="warning" class="sms-btn sms-btn--excel" @click="exportData">
           <el-icon><Download /></el-icon>
           Excel出力
         </el-button>
-        <el-button type="info" @click="refreshStock">
+        <el-button type="info" class="sms-btn sms-btn--refresh" @click="refreshStock">
           <el-icon><Refresh /></el-icon>
           在庫更新
         </el-button>
@@ -185,7 +193,24 @@
     </div>
 
     <!-- 履歴对话框 -->
-    <el-dialog v-model="historyVisible" :title="historyTitle" width="800px">
+    <el-dialog
+      v-model="historyVisible"
+      :title="historyTitle"
+      width="800px"
+      class="sms-dialog pb-std"
+      :show-close="false"
+    >
+      <template #header>
+        <div class="sms-dlg-hero pb-hero">
+          <div class="head-fx pb-bubbles" aria-hidden="true" />
+          <span class="sms-dlg-hero__icon"><el-icon><View /></el-icon></span>
+          <div class="sms-dlg-hero__copy">
+            <span class="sms-dlg-hero__title">{{ historyTitle }}</span>
+            <p class="sms-dlg-hero__desc">支給・使用の推移と在庫残を確認</p>
+          </div>
+          <el-icon class="sms-dlg-hero__close" @click="historyVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <el-table :data="historyData" border stripe>
         <el-table-column prop="date" label="日付" width="100" />
         <el-table-column prop="type" label="種別" width="80" align="center">
@@ -227,6 +252,7 @@ import {
   Warning,
   Upload,
   View,
+  Close,
 } from '@element-plus/icons-vue'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
@@ -512,265 +538,619 @@ onMounted(() => {
 
 <style scoped>
 .supplied-material-stock-page {
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
   min-height: 100vh;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #e9faf3 0%, #f8fafc 32%, #f8fafc 100%);
 }
 
+/* ============================================================ */
+/* 页面美化：现代 UI / 颜色区分（支給材料＝エメラルド〜ティール系）  */
+/* ============================================================ */
+
+/* ---------- ヒーロー ---------- */
 .page-header {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  border-radius: 12px;
-  padding: 20px 24px;
-  margin-bottom: 16px;
-  color: white;
-  box-shadow: 0 4px 20px rgba(67, 233, 123, 0.3);
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(125deg, #047857 0%, #059669 38%, #10b981 68%, #14b8a6 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(5, 150, 105, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .header-content {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
 }
 
 .title-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.title {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
 }
 
 .title-icon {
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(6, 78, 59, 0.3);
+}
+
+.title-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.title {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
 }
 
 .subtitle {
   margin: 0;
-  font-size: 13px;
-  opacity: 0.9;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.88);
 }
 
+/* 統計：濃色ヒーロー上の白カード（数字色で区別） */
 .header-stats {
   display: flex;
-  gap: 12px;
+  gap: 6px;
 }
 
 .stat-item {
+  --sc: #047857;
+  min-width: 64px;
+  padding: 5px 12px;
   text-align: center;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.15);
   border-radius: 10px;
-  min-width: 65px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #effcf6 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(148, 163, 184, 0.25),
+    0 6px 14px -10px rgba(15, 23, 42, 0.45);
+}
+
+.stat-item:nth-child(2) {
+  --sc: #0f766e;
 }
 
 .stat-item.warning {
-  background: rgba(255, 152, 0, 0.3);
+  --sc: #b45309;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
 }
 
 .stat-value {
   display: block;
-  font-size: 20px;
-  font-weight: 700;
+  font-weight: 800;
+  color: var(--sc);
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
-  font-size: 11px;
-  opacity: 0.9;
+  font-weight: 700;
+  color: #64748b;
 }
 
+/* ---------- 検索カード ---------- */
 .filter-card {
-  margin-bottom: 16px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #d1f2e4;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(4, 120, 87, 0.45);
+}
+
+.filter-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 3px;
+  background: linear-gradient(90deg, #059669 0%, #10b981 55%, #2dd4bf 100%);
 }
 
 .filter-card :deep(.el-card__header) {
-  padding: 12px 16px;
-  background: #fafbfc;
+  padding: 10px 14px 8px;
+  background: linear-gradient(180deg, #f6fdf9 0%, #eefbf5 100%);
+  border-bottom: 1px solid #d1f2e4;
+}
+
+.filter-card :deep(.el-card__body) {
+  padding: 12px 14px;
 }
 
 .filter-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 13px;
+  font-weight: 800;
+  color: #065f46;
 }
 
 .filter-icon {
-  color: #43e97b;
+  width: 24px;
+  height: 24px;
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #34d399, #059669);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(6, 78, 59, 0.3);
 }
 
 .filter-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 8px 12px;
 }
 
 .filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
+  margin: 0;
 }
 
+.filter-form :deep(.el-form-item__label) {
+  height: 22px;
+  margin: auto 8px auto 0;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 22px;
+  color: #065f46;
+  background: #ecfdf5;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -1px 0 #a7f3d0;
+}
+
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+.filter-form :deep(.el-input__wrapper),
+.filter-form :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #cdeedf inset;
+}
+
+.filter-form :deep(.el-input__wrapper:hover),
+.filter-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #6ee7b7 inset;
+}
+
+.filter-form :deep(.el-input__wrapper.is-focus),
+.filter-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #059669 inset,
+    0 0 0 3px rgba(5, 150, 105, 0.14);
+}
+
+/* ---------- ボタン（色で役割を区別） ---------- */
+.sms-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.sms-btn .el-icon {
+  margin-right: 4px;
+}
+
+.sms-btn--search {
+  --k-rgb: 5 150 105;
+  color: #fff;
+  border: 1px solid #047857;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #34d399, #059669);
+}
+
+.sms-btn--search:hover,
+.sms-btn--search:focus-visible {
+  color: #fff;
+  border-color: #065f46;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #4ade80, #10b981);
+}
+
+.sms-btn--reset,
+.sms-btn--excel,
+.sms-btn--refresh {
+  --sb-fg: #475569;
+  --sb-bd: #cbd5e1;
+  --sb-bg: #f1f5f9;
+  --sb-hv: #94a3b8;
+  color: var(--sb-fg);
+  border: 1px solid var(--sb-bd);
+  background: linear-gradient(180deg, #ffffff 0%, var(--sb-bg) 100%);
+}
+
+.sms-btn--reset:hover,
+.sms-btn--excel:hover,
+.sms-btn--refresh:hover,
+.sms-btn--reset:focus-visible,
+.sms-btn--excel:focus-visible,
+.sms-btn--refresh:focus-visible {
+  color: var(--sb-fg);
+  border-color: var(--sb-hv);
+  background: #fff;
+}
+
+.sms-btn--reset {
+  --k-rgb: 100 116 139;
+}
+
+.sms-btn--excel {
+  --k-rgb: 217 119 6;
+  --sb-fg: #b45309;
+  --sb-bd: #fde68a;
+  --sb-bg: #fffbeb;
+  --sb-hv: #fbbf24;
+}
+
+.sms-btn--refresh {
+  --k-rgb: 13 148 136;
+  --sb-fg: #0f766e;
+  --sb-bd: #99f6e4;
+  --sb-bg: #f0fdfa;
+  --sb-hv: #2dd4bf;
+}
+
+/* ---------- 操作バー ---------- */
 .action-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #d1f2e4;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fdfa 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .left-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+.left-actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .alert-tag {
   display: flex;
   align-items: center;
   gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #b45309;
+  border-color: #fde68a;
+  background: #fffbeb;
 }
 
+/* ---------- 外注先別カード ---------- */
 .supplier-cards {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .supplier-card {
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #d1f2e4;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(4, 120, 87, 0.4);
+}
+
+.supplier-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 3px;
+  background: linear-gradient(90deg, #059669 0%, #10b981 55%, #2dd4bf 100%);
 }
 
 .supplier-card.has-warning {
-  border-left: 3px solid #e6a23c;
+  border-color: #fde68a;
 }
 
-.supplier-card:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+.supplier-card.has-warning::before {
+  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 55%, #fcd34d 100%);
 }
 
 .supplier-card :deep(.el-card__header) {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  padding: 10px 14px 8px;
+  background: linear-gradient(180deg, #f6fdf9 0%, #ffffff 100%);
+  border-bottom: 1px solid #e3f6ed;
+}
+
+.supplier-card.has-warning :deep(.el-card__header) {
+  background: linear-gradient(180deg, #fffcf0 0%, #ffffff 100%);
 }
 
 .supplier-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .supplier-info {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .supplier-icon {
-  font-size: 20px;
-  color: #43e97b;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #34d399, #059669);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(6, 78, 59, 0.3);
 }
 
 .supplier-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 15px;
+  font-weight: 800;
+  color: #064e3b;
 }
 
 .supplier-badges {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+}
+
+.supplier-badges :deep(.el-tag) {
+  border-radius: 999px;
+  font-weight: 700;
 }
 
 .supplier-card :deep(.el-card__body) {
   padding: 0;
 }
 
+.supplier-card :deep(.el-table) {
+  --el-table-border-color: #e6f4ed;
+  --el-table-row-hover-bg-color: #ecfdf5;
+}
+
+.supplier-card :deep(.el-table th.el-table__cell) {
+  font-weight: 700;
+  color: #065f46;
+  background: #f0fbf6;
+  border-bottom: 1px solid #cdeedf;
+}
+
+.supplier-card :deep(.el-table td.el-table__cell) {
+  color: #1e293b;
+}
+
+.supplier-card :deep(.el-table .el-tag) {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
 .supplier-card :deep(.warning-row) {
-  background-color: #fef9e7;
+  background-color: #fffbeb;
 }
 
 .supplier-card :deep(.empty-row) {
-  background-color: #fdecea;
+  background-color: #fef2f2;
 }
 
 .stock-normal {
-  color: #67c23a;
-  font-weight: 600;
+  font-weight: 700;
+  color: #16a34a;
 }
 
 .stock-low {
-  color: #e6a23c;
-  font-weight: 600;
+  font-weight: 700;
+  color: #d97706;
 }
 
 .stock-empty {
-  color: #f56c6c;
-  font-weight: 600;
+  font-weight: 700;
+  color: #dc2626;
 }
 
 .supplier-footer {
-  padding: 12px 16px;
-  background: #f8f9fa;
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
-  color: #606266;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  color: #475569;
+  border-top: 1px solid #e3f6ed;
+  background: linear-gradient(180deg, #fafdfb 0%, #f2fbf7 100%);
 }
 
 .footer-item {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 600;
+}
+
+.footer-item .el-icon {
+  color: #059669;
 }
 
 .text-success {
-  color: #67c23a;
-  font-weight: 600;
+  font-weight: 700;
+  color: #16a34a;
 }
 
 .text-warning {
-  color: #e6a23c;
-  font-weight: 600;
+  font-weight: 700;
+  color: #d97706;
 }
 
+/* ---------- 履歴ダイアログ ---------- */
+.sms-dlg-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, #047857 0%, #059669 38%, #10b981 68%, #14b8a6 100%);
+}
+
+.sms-dlg-hero__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(6, 78, 59, 0.3);
+}
+
+.sms-dlg-hero__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sms-dlg-hero__title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+.sms-dlg-hero__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.sms-dlg-hero__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.sms-dlg-hero__close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+:global(.el-dialog.sms-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:global(.el-dialog.sms-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+:global(.el-dialog.sms-dialog .el-dialog__body) {
+  padding: 14px 18px 18px;
+}
+
+:global(.el-dialog.sms-dialog .el-table th.el-table__cell) {
+  font-weight: 700;
+  color: #065f46;
+  background: #f0fbf6;
+}
+
+/* ---------- レスポンシブ ---------- */
 @media (max-width: 768px) {
   .supplied-material-stock-page {
-    padding: 12px;
+    padding: 8px;
   }
-  .page-header {
-    padding: 16px;
-  }
-  .title {
-    font-size: 18px;
-  }
+
   .header-stats {
     display: none;
   }
+
   .action-bar {
     flex-direction: column;
-    gap: 12px;
+    align-items: stretch;
+    gap: 8px;
   }
+
   .supplier-footer {
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 }
 </style>

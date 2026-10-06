@@ -1,19 +1,18 @@
 <template>
-  <div class="outsourcing-stock-page">
+  <div class="outsourcing-stock-page osk-modern pb-std">
     <!-- 页面头部：标题 + 统计指标 -->
-    <div class="page-header">
+    <div class="page-header pb-hero pb-hero--page">
+      <div class="head-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="title-icon"><el-icon><Box /></el-icon></div>
-        <div>
-          <h2 class="title">外注在庫管理</h2>
-          <p class="subtitle">外注メッキ・溶接品の在庫状況を一元管理</p>
+        <div class="title-text">
+          <h2 class="title pb-hero-title">外注在庫管理</h2>
+          <p class="subtitle pb-hero-desc">
+            外注溶接品の在庫を外注先・品番・在庫状況で絞り込み、入出庫履歴を確認
+          </p>
         </div>
       </div>
       <div class="header-kpis">
-        <div class="kpi kpi-teal">
-          <span class="kpi-val">{{ platingStockCount }}</span>
-          <span class="kpi-lbl">メッキ品種</span>
-        </div>
         <div class="kpi kpi-purple">
           <span class="kpi-val">{{ weldingStockCount }}</span>
           <span class="kpi-lbl">溶接品種</span>
@@ -31,19 +30,6 @@
 
     <!-- タブ + フィルター + 操作 一体化 -->
     <div class="toolbar-strip">
-      <el-tabs v-model="activeTab" class="strip-tabs">
-        <el-tab-pane name="plating">
-          <template #label>
-            <span class="tab-label"><el-icon><Brush /></el-icon>メッキ品在庫<el-badge :value="platingStockCount" class="tab-badge" /></span>
-          </template>
-        </el-tab-pane>
-        <el-tab-pane name="welding">
-          <template #label>
-            <span class="tab-label"><el-icon><Operation /></el-icon>溶接品在庫<el-badge :value="weldingStockCount" class="tab-badge" /></span>
-          </template>
-        </el-tab-pane>
-      </el-tabs>
-
       <div class="filter-row">
         <el-select v-model="filters.supplier" placeholder="外注先" clearable filterable size="default" style="width:155px">
           <el-option v-for="s in supplierOptions" :key="s.value" :label="s.label" :value="s.value" />
@@ -54,17 +40,23 @@
           <el-option label="僅少" value="low" />
           <el-option label="なし" value="empty" />
         </el-select>
-        <el-button type="primary" @click="handleSearch" :loading="loading" size="default">
+        <el-button
+          type="primary"
+          class="tb-btn tb-search"
+          @click="handleSearch"
+          :loading="loading"
+          size="default"
+        >
           <el-icon><Search /></el-icon>検索
         </el-button>
         <el-divider direction="vertical" />
-        <el-button @click="refreshStock" size="default">
+        <el-button class="tb-btn tb-refresh" @click="refreshStock" size="default">
           <el-icon><Refresh /></el-icon>更新
         </el-button>
-        <el-button @click="exportData" size="default">
+        <el-button class="tb-btn tb-excel" @click="exportData" size="default">
           <el-icon><Download /></el-icon>Excel
         </el-button>
-        <el-button @click="viewStockHistory" size="default">
+        <el-button class="tb-btn tb-history" @click="viewStockHistory" size="default">
           <el-icon><Document /></el-icon>履歴
         </el-button>
       </div>
@@ -171,7 +163,26 @@
     </div>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="在庫詳細" width="640px" class="detail-dialog">
+    <el-dialog
+      v-model="detailVisible"
+      title="在庫詳細"
+      width="640px"
+      class="detail-dialog osk-dialog pb-std"
+      :show-close="false"
+    >
+      <template #header>
+        <div class="osk-dlg-hero pb-hero">
+          <div class="head-fx pb-bubbles" aria-hidden="true" />
+          <span class="osk-dlg-hero__icon"><el-icon><Box /></el-icon></span>
+          <div class="osk-dlg-hero__copy">
+            <span class="osk-dlg-hero__title">在庫詳細</span>
+            <p class="osk-dlg-hero__desc">
+              {{ detailData.productCode }} {{ detailData.productName }}
+            </p>
+          </div>
+          <el-icon class="osk-dlg-hero__close" @click="detailVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="品番">{{ detailData.productCode }}</el-descriptions-item>
         <el-descriptions-item label="品名">{{ detailData.productName }}</el-descriptions-item>
@@ -195,7 +206,24 @@
     </el-dialog>
 
     <!-- 履歴对话框 -->
-    <el-dialog v-model="historyVisible" :title="historyTitle" width="820px" class="history-dialog">
+    <el-dialog
+      v-model="historyVisible"
+      :title="historyTitle"
+      width="820px"
+      class="history-dialog osk-dialog pb-std"
+      :show-close="false"
+    >
+      <template #header>
+        <div class="osk-dlg-hero osk-dlg-hero--history pb-hero">
+          <div class="head-fx pb-bubbles" aria-hidden="true" />
+          <span class="osk-dlg-hero__icon"><el-icon><Document /></el-icon></span>
+          <div class="osk-dlg-hero__copy">
+            <span class="osk-dlg-hero__title">{{ historyTitle }}</span>
+            <p class="osk-dlg-hero__desc">入庫・出庫の推移と在庫残を確認</p>
+          </div>
+          <el-icon class="osk-dlg-hero__close" @click="historyVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <el-table :data="historyData" border stripe size="small">
         <el-table-column prop="date" label="日付" width="100" />
         <el-table-column prop="type" label="種別" width="72" align="center">
@@ -242,8 +270,7 @@ import {
   Document,
   Upload,
   Calendar,
-  Brush,
-  Operation,
+  Close,
 } from '@element-plus/icons-vue'
 import {
   getPlatingStock,
@@ -292,7 +319,7 @@ interface HistoryItem {
 }
 
 const loading = ref(false)
-const activeTab = ref('plating')
+const activeTab = ref('welding')
 const detailVisible = ref(false)
 const historyVisible = ref(false)
 const historyTitle = ref('')
@@ -343,7 +370,6 @@ const currentStockList = computed(() => {
   return activeTab.value === 'plating' ? platingStockList.value : weldingStockList.value
 })
 
-const platingStockCount = computed(() => platingStockList.value.length)
 const weldingStockCount = computed(() => weldingStockList.value.length)
 const totalStockQty = computed(() =>
   [...platingStockList.value, ...weldingStockList.value].reduce((sum, i) => sum + i.stockQty, 0),
@@ -582,120 +608,196 @@ onMounted(async () => {
 <style scoped>
 /* ===== 页面容器 ===== */
 .outsourcing-stock-page {
-  padding: 10px 12px;
-  background: #f0f2f5;
   min-height: 100vh;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #eaf2ff 0%, #f8fafc 32%, #f8fafc 100%);
 }
 
-/* ===== 顶部 Header ===== */
+/* ============================================================ */
+/* 页面美化：现代 UI / 颜色区分（外注在庫＝ネイビー〜スカイ系）      */
+/* ============================================================ */
+
+/* ===== ヒーロー ===== */
 .page-header {
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 60%, #4facfe 100%);
-  border-radius: 10px;
-  padding: 12px 18px;
-  color: #fff;
+  position: relative;
+  overflow: hidden;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 12px rgba(30, 60, 114, 0.25);
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(125deg, #1e3c72 0%, #2a5298 45%, #3b82f6 75%, #4facfe 100%);
+  box-shadow:
+    0 12px 28px -18px rgba(42, 82, 152, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .header-left {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .title-icon {
-  width: 36px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
+  border-radius: 12px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 35, 80, 0.3);
+}
+
+.title-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
 }
 
 .subtitle {
-  margin: 1px 0 0;
-  font-size: 11px;
-  opacity: 0.85;
+  margin: 0;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.86);
 }
 
+/* KPI：濃色ヒーロー上の白カード（数字色で区別） */
 .header-kpis {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .kpi {
+  --kc: #1d4ed8;
+  min-width: 64px;
+  padding: 5px 12px;
   text-align: center;
-  padding: 6px 12px;
-  border-radius: 8px;
-  min-width: 62px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(148, 163, 184, 0.25),
+    0 6px 14px -10px rgba(15, 23, 42, 0.45);
 }
 
 .kpi-teal {
-  background: rgba(78, 205, 196, 0.22);
-  border: 1px solid rgba(78, 205, 196, 0.35);
+  --kc: #0f766e;
 }
 
 .kpi-purple {
-  background: rgba(167, 119, 227, 0.22);
-  border: 1px solid rgba(167, 119, 227, 0.35);
+  --kc: #6d28d9;
 }
 
 .kpi-blue {
-  background: rgba(255, 255, 255, 0.18);
+  --kc: #1d4ed8;
 }
 
 .kpi-amber {
-  background: rgba(255, 193, 7, 0.25);
-  border: 1px solid rgba(255, 193, 7, 0.4);
+  --kc: #b45309;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
 }
 
 .kpi-val {
   display: block;
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--kc);
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-lbl {
   font-size: 10px;
-  opacity: 0.9;
+  font-weight: 700;
+  color: #64748b;
 }
 
-/* ===== 工具条 ===== */
+/* ===== ツールバー（タブ＋絞り込み） ===== */
 .toolbar-strip {
-  background: #fff;
-  border-radius: 10px;
-  padding: 0 14px 10px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+  padding: 10px 14px 10px;
+  border-radius: 12px;
+  border: 1px solid #dbe7fb;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(30, 64, 175, 0.45);
+}
+
+.toolbar-strip::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #2a5298 0%, #3b82f6 55%, #4facfe 100%);
 }
 
 .strip-tabs :deep(.el-tabs__header) {
-  margin-bottom: 8px;
+  margin: 2px 0 10px;
 }
 
-.strip-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
+.strip-tabs :deep(.el-tabs__nav-wrap::after),
+.strip-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.strip-tabs :deep(.el-tabs__nav) {
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #eaf1fd;
+  box-shadow: inset 0 1px 2px rgba(30, 64, 175, 0.08);
 }
 
 .strip-tabs :deep(.el-tabs__item) {
-  height: 38px;
-  line-height: 38px;
+  height: 32px;
+  padding: 0 16px !important;
+  border-radius: 8px;
   font-size: 13px;
+  font-weight: 700;
+  line-height: 32px;
+  color: #475f8a;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.strip-tabs :deep(.el-tabs__item:hover) {
+  color: #1d4ed8;
+}
+
+.strip-tabs :deep(.el-tabs__item.is-active) {
+  color: #1e3a8a;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 #c7d8f7,
+    0 2px 6px -2px rgba(30, 64, 175, 0.3);
 }
 
 .tab-label {
@@ -708,100 +810,280 @@ onMounted(async () => {
   margin-left: 2px;
 }
 
+.tab-badge :deep(.el-badge__content) {
+  height: 18px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.strip-tabs :deep(.el-tabs__item.is-active) .tab-badge :deep(.el-badge__content) {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
 .filter-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .filter-row :deep(.el-divider--vertical) {
   height: 20px;
   margin: 0 2px;
+  border-color: #dbe7fb;
 }
 
-/* ===== 概要指标条 ===== */
+/* 入力枠：枠線は wrapper の内側リングのみ（二重線にしない） */
+.filter-row :deep(.el-input__wrapper),
+.filter-row :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #d3def3 inset;
+}
+
+.filter-row :deep(.el-input__wrapper:hover),
+.filter-row :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #93b4ec inset;
+}
+
+.filter-row :deep(.el-input__wrapper.is-focus),
+.filter-row :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #2563eb inset,
+    0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+/* ツールバーボタン（色で役割を区別） */
+.tb-btn {
+  height: 32px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.tb-btn .el-icon {
+  margin-right: 4px;
+}
+
+.tb-search {
+  --k-rgb: 37 99 235;
+  color: #fff;
+  border: 1px solid #1d4ed8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.tb-search:hover,
+.tb-search:focus-visible {
+  color: #fff;
+  border-color: #1e40af;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #5b96f7, #2563eb);
+}
+
+.tb-refresh,
+.tb-excel,
+.tb-history {
+  --tb-fg: #0369a1;
+  --tb-bd: #bae6fd;
+  --tb-bg: #f0f9ff;
+  --tb-hv: #7dd3fc;
+  color: var(--tb-fg);
+  border: 1px solid var(--tb-bd);
+  background: linear-gradient(180deg, #ffffff 0%, var(--tb-bg) 100%);
+}
+
+.tb-refresh:hover,
+.tb-excel:hover,
+.tb-history:hover,
+.tb-refresh:focus-visible,
+.tb-excel:focus-visible,
+.tb-history:focus-visible {
+  color: var(--tb-fg);
+  border-color: var(--tb-hv);
+  background: #fff;
+}
+
+.tb-refresh {
+  --k-rgb: 2 132 199;
+}
+
+.tb-excel {
+  --k-rgb: 5 150 105;
+  --tb-fg: #047857;
+  --tb-bd: #a7f3d0;
+  --tb-bg: #ecfdf5;
+  --tb-hv: #34d399;
+}
+
+.tb-history {
+  --k-rgb: 100 116 139;
+  --tb-fg: #475569;
+  --tb-bd: #cbd5e1;
+  --tb-bg: #f1f5f9;
+  --tb-hv: #94a3b8;
+}
+
+.tb-btn.is-disabled,
+.tb-btn.is-disabled:hover {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
+}
+
+/* ===== 概要指標（色分け・動きなし） ===== */
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .sm-card {
+  --accent: #2563eb;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
-  transition: transform 0.15s, box-shadow 0.15s;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 7%, #fff) 0%, #fff 70%);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px -16px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-.sm-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+.sm-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, #fff), var(--accent));
+}
+
+.sm-blue {
+  --accent: #2a5298;
+}
+
+.sm-green {
+  --accent: #059669;
+}
+
+.sm-orange {
+  --accent: #d97706;
+}
+
+.sm-violet {
+  --accent: #7c3aed;
 }
 
 .sm-icon {
+  flex-shrink: 0;
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  padding: 8px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  border-radius: 10px;
   font-size: 17px;
-  flex-shrink: 0;
-}
-
-.sm-blue .sm-icon {
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-}
-
-.sm-green .sm-icon {
-  background: linear-gradient(135deg, #34d399, #10b981);
-}
-
-.sm-orange .sm-icon {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-}
-
-.sm-violet .sm-icon {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--accent) 70%, #fff) 0%,
+    var(--accent) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 60%, #000 20%);
 }
 
 .sm-body {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
 }
 
 .sm-val {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: 18px;
+  font-weight: 800;
   line-height: 1.2;
+  color: color-mix(in srgb, var(--accent) 70%, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 
 .sm-lbl {
-  font-size: 10.5px;
-  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
 }
 
-/* ===== 表格 ===== */
+/* ===== テーブル ===== */
 .table-wrap {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #dbe7fb;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -20px rgba(30, 64, 175, 0.4);
+}
+
+.table-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  height: 3px;
+  background: linear-gradient(90deg, #2a5298 0%, #3b82f6 55%, #4facfe 100%);
 }
 
 .data-table {
   flex: 1;
+  --el-table-border-color: #e8eef9;
+  --el-table-row-hover-bg-color: #eef4ff;
+  --el-table-current-row-bg-color: #e0ecff;
+}
+
+.data-table :deep(th.el-table__cell) {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #1e3a8a !important;
+  background: #f1f6ff !important;
+  border-bottom: 1px solid #d6e2f7 !important;
+}
+
+.data-table :deep(td.el-table__cell) {
+  color: #1e293b;
+  border-bottom-color: #f0f4fb;
+}
+
+.data-table :deep(.el-table__row--striped td.el-table__cell) {
+  background: #fafcff;
+}
+
+.data-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background-color: #eef4ff !important;
 }
 
 .data-table :deep(.warning-row) {
@@ -812,61 +1094,216 @@ onMounted(async () => {
   background-color: #fef2f2 !important;
 }
 
-.data-table :deep(.el-table__header th) {
-  font-size: 12px;
+.data-table :deep(.warning-row > td.el-table__cell) {
+  background-color: #fffbeb !important;
+}
+
+.data-table :deep(.empty-row > td.el-table__cell) {
+  background-color: #fef2f2 !important;
+}
+
+.data-table :deep(.el-tag) {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.data-table :deep(.el-link) {
+  font-weight: 700;
 }
 
 .stock-normal {
+  font-weight: 700;
   color: #16a34a;
-  font-weight: 600;
 }
 
 .stock-low {
+  font-weight: 700;
   color: #d97706;
-  font-weight: 600;
 }
 
 .stock-empty {
+  font-weight: 700;
   color: #dc2626;
-  font-weight: 600;
 }
 
 .pending-qty {
+  font-weight: 600;
   color: #2563eb;
-  font-weight: 500;
 }
 
+/* ===== ページャー ===== */
 .pagination-wrapper {
-  padding: 8px 14px;
   display: flex;
   justify-content: flex-end;
-  border-top: 1px solid #f0f0f0;
+  padding: 8px 14px;
+  border-top: 1px solid #e8eef9;
+  background: linear-gradient(180deg, #fafcff 0%, #f3f7ff 100%);
+}
+
+.pagination-wrapper :deep(.el-pagination__total) {
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.pagination-wrapper :deep(.el-pager li),
+.pagination-wrapper :deep(.btn-prev),
+.pagination-wrapper :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  margin: 0 2px;
+  border-radius: 7px;
+  color: #1d4ed8;
+  border: 1px solid #dbe7fb;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+}
+
+.pagination-wrapper :deep(.el-pager li:not(.is-active):hover) {
+  border-color: #93b4ec;
+  background: #fff;
+}
+
+.pagination-wrapper :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-color: #1d4ed8;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(30, 58, 138, 0.35),
+    0 4px 10px -6px rgba(37, 99, 235, 0.7);
+}
+
+.pagination-wrapper :deep(.btn-prev:disabled),
+.pagination-wrapper :deep(.btn-next:disabled) {
+  color: #94a3b8;
+  border-color: #d1d5db;
+  background: #e5e7eb;
 }
 
 /* ===== 辅助文字 ===== */
 .text-success {
+  font-weight: 700;
   color: #16a34a;
-  font-weight: 600;
 }
 
 .text-warning {
+  font-weight: 700;
   color: #d97706;
-  font-weight: 600;
 }
 
-/* ===== 对话框微调 ===== */
-.detail-dialog :deep(.el-dialog__body) {
-  padding: 14px 20px;
+/* ===== ダイアログ ===== */
+.osk-dlg-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(125deg, #1e3c72 0%, #2a5298 45%, #3b82f6 75%, #4facfe 100%);
 }
 
-.history-dialog :deep(.el-dialog__body) {
-  padding: 10px 20px;
+.osk-dlg-hero--history {
+  background: linear-gradient(125deg, #0f766e 0%, #0d9488 45%, #0ea5e9 100%);
+}
+
+.osk-dlg-hero__icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 18px;
+  color: #fff;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 35, 80, 0.3);
+}
+
+.osk-dlg-hero__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.osk-dlg-hero__title {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  color: #fff;
+}
+
+.osk-dlg-hero__desc {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.osk-dlg-hero__close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  font-size: 18px;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.osk-dlg-hero__close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+:global(.el-dialog.osk-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:global(.el-dialog.osk-dialog .el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+:global(.el-dialog.osk-dialog .el-dialog__body) {
+  padding: 14px 18px 18px;
+}
+
+:global(.el-dialog.osk-dialog .el-descriptions__label) {
+  font-weight: 700;
+  color: #1e3a8a;
+  background: #f1f6ff;
+}
+
+:global(.el-dialog.osk-dialog .el-table th.el-table__cell) {
+  font-weight: 700;
+  color: #134e4a;
+  background: #effcf9;
 }
 
 /* ===== 响应式 ===== */
 @media (max-width: 1200px) {
   .summary-strip {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -878,9 +1315,8 @@ onMounted(async () => {
 
   .page-header {
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 14px;
     align-items: flex-start;
+    gap: 8px;
   }
 
   .header-kpis {
@@ -891,26 +1327,12 @@ onMounted(async () => {
   }
 
   .kpi {
-    padding: 4px 8px;
     min-width: unset;
-  }
-
-  .kpi-val {
-    font-size: 15px;
-  }
-
-  .title {
-    font-size: 15px;
-  }
-
-  .title-icon {
-    width: 30px;
-    height: 30px;
-    font-size: 15px;
+    padding: 4px 8px;
   }
 
   .summary-strip {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .filter-row {

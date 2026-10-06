@@ -464,7 +464,7 @@ export default {
     ERP_PURCHASE_SUPPLIES: 'Supply Purchase',
     ERP_OUTSOURCING_HOME: 'Outsourcing Home',
     ERP_OUTSOURCING_DASHBOARD: 'Outsourcing Dashboard',
-    ERP_OUTSOURCING_PLATING_ORDER: 'Plating Order',
+    ERP_OUTSOURCING_PLATING_ORDER: 'Outsourced Plating',
     ERP_OUTSOURCING_PLATING_RECEIVING: 'Plating Receiving',
     ERP_OUTSOURCING_WELDING_ORDER: 'Welding Order',
     ERP_OUTSOURCING_WELDING_RECEIVING: 'Welding Receiving',
