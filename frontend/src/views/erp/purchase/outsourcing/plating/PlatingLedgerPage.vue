@@ -308,10 +308,13 @@
               />
               <span
                 v-else
-                :class="['delivery-cell', { 'delivery-cell--editable': canEditDelivery }]"
-                :title="canEditDelivery ? 'ダブルクリックで納期を変更' : undefined"
+                :class="[
+                  'delivery-cell',
+                  { 'delivery-cell--editable': canEditDelivery, 'delivery-cell--manual': row.delivery_date_manual },
+                ]"
+                :title="deliveryTitle(row as PlatingLedgerRow)"
                 @dblclick="startDeliveryEdit(row as PlatingLedgerRow)"
-              >{{ row.delivery_date }}</span>
+              >{{ row.delivery_date }}<span v-if="row.delivery_date_manual" class="manual-mark">手</span></span>
             </template>
           </el-table-column>
           <el-table-column label="金額" width="112" align="right" class-name="col-order">
@@ -559,12 +562,16 @@
           <el-date-picker v-model="refreshEnd" type="date" value-format="YYYY-MM-DD" placeholder="終了日" style="width: 100%" />
         </el-form-item>
         <el-form-item label="対象">
-          <el-checkbox v-model="refreshIncludeOrdered">注文済みでも注文書未発行の行を含める</el-checkbox>
+          <div class="refresh-options">
+            <el-checkbox v-model="refreshIncludeOrdered">注文済みでも注文書未発行の行を含める</el-checkbox>
+            <el-checkbox v-model="refreshIncludeManualDelivery">手修正した納期もマスタの値に戻す</el-checkbox>
+          </div>
         </el-form-item>
       </el-form>
       <ul class="gen-notes">
         <li>既定では未注文（注文数 0）の行だけを更新します。</li>
         <li>注文書を発行済みの行は更新しません。</li>
+        <li>納期を手修正した行（「手」マーク）は、納期だけそのまま残します。</li>
         <li>注文済みの行を含めた場合、金額も新しい単価で再計算します。</li>
         <li>絞り込み中の外注先・製品名があれば、その範囲だけが対象です。</li>
       </ul>
@@ -721,6 +728,7 @@ const refreshing = ref(false)
 const refreshStart = ref('')
 const refreshEnd = ref('')
 const refreshIncludeOrdered = ref(false)
+const refreshIncludeManualDelivery = ref(false)
 
 // 数量のある行だけ表示（外注注文・外注受入のみ。台帳は常に全行）
 const onlyNonZero = ref(false)
@@ -929,6 +937,7 @@ function openRefreshMaster() {
   refreshStart.value = dateRange.value?.[0] || ''
   refreshEnd.value = dateRange.value?.[1] || ''
   refreshIncludeOrdered.value = false
+  refreshIncludeManualDelivery.value = false
   refreshVisible.value = true
 }
 
@@ -942,6 +951,7 @@ async function runRefreshMaster() {
       supplier_cd: supplierCd.value || undefined,
       product_cd: productCd.value || undefined,
       include_ordered: refreshIncludeOrdered.value,
+      include_manual_delivery: refreshIncludeManualDelivery.value,
     })
     const data = res?.data
     const missing = data?.missing_count ? `、マスタ無し ${data.missing_count} 件` : ''
@@ -1012,6 +1022,13 @@ function saveField(row: PlatingLedgerRow, field: QtyField, val: number | null | 
 const editingDeliveryId = ref<number | null>(null)
 let deliveryPicker: { handleOpen?: () => void; focus?: () => void } | null = null
 const canEditDelivery = computed(() => activeTab.value === 'order' && canEdit.value)
+
+function deliveryTitle(row: PlatingLedgerRow): string | undefined {
+  const parts: string[] = []
+  if (row.delivery_date_manual) parts.push('手修正した納期（マスタ反映では変わりません）')
+  if (canEditDelivery.value) parts.push('ダブルクリックで納期を変更')
+  return parts.length ? parts.join('\n') : undefined
+}
 
 function setDeliveryPickerRef(el: unknown) {
   deliveryPicker = (el as typeof deliveryPicker) || null
@@ -1707,8 +1724,32 @@ onMounted(() => {
   background: #f8f9ff;
 }
 
+.delivery-cell--manual {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.manual-mark {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 15px;
+  vertical-align: 1px;
+  color: #fff;
+  background: #f59e0b;
+}
+
 .delivery-picker {
   width: 112px !important;
+}
+
+.refresh-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .num-strong {

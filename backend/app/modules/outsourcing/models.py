@@ -227,6 +227,8 @@ class PlatingLedger(Base):
     unit_price = Column(Numeric(12, 2), default=0)
     lead_time_days = Column(Integer, default=7)
     delivery_date = Column(Date)
+    # 手修正した納期はマスタ反映で上書きしない
+    delivery_date_manual = Column(Boolean, nullable=False, default=False)
     order_qty = Column(Integer, default=0)
     order_no = Column(String(30), unique=True, nullable=True, index=True)
     order_amount = Column(Numeric(14, 2), default=0)
@@ -259,6 +261,8 @@ class WeldingLedger(Base):
     unit_price = Column(Numeric(12, 2), default=0)
     lead_time_days = Column(Integer, default=7)
     delivery_date = Column(Date)
+    # 手修正した納期はマスタ反映で上書きしない
+    delivery_date_manual = Column(Boolean, nullable=False, default=False)
     order_qty = Column(Integer, default=0)
     order_no = Column(String(30), unique=True, nullable=True, index=True)
     order_amount = Column(Numeric(14, 2), default=0)

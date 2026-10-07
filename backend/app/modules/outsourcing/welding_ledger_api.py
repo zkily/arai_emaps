@@ -70,6 +70,8 @@ class RefreshMasterBody(BaseModel):
     product_cd: Optional[str] = None
     # True なら注文済みでも注文書未発行の行を更新する（金額も再計算）
     include_ordered: bool = False
+    # True なら手修正した納期もマスタの値に戻す
+    include_manual_delivery: bool = False
 
 
 # 採番の一意制約衝突（同時保存）時の再試行回数
@@ -109,6 +111,7 @@ def _row_dict(r: WeldingLedger) -> dict:
         "unit_price": float(r.unit_price or 0),
         "lead_time_days": r.lead_time_days or 0,
         "delivery_date": r.delivery_date.isoformat() if r.delivery_date else None,
+        "delivery_date_manual": bool(r.delivery_date_manual),
         "order_qty": r.order_qty or 0,
         "order_no": r.order_no,
         "order_amount": float(r.order_amount or 0),
@@ -851,6 +854,7 @@ async def refresh_welding_ledger_master(
     """
     単価・リードタイム・納期・外注先名・製品名を現在のマスタで更新する。
     既定は未注文の行のみ。include_ordered なら注文書未発行の注文済み行も対象（金額を再計算）。
+    手修正した納期は残す（include_manual_delivery なら再計算して手修正を解除）。
     """
     start = _parse_date(body.start_date)
     end = _parse_date(body.end_date)
@@ -902,13 +906,19 @@ async def refresh_welding_ledger_master(
         product, supplier = pair
         lead = _lead_days(product, supplier)
         price = float(product.unit_price or 0)
-        delivery = _add_business_days(r.order_date, lead, scheduled, off)
+        keep_delivery = bool(r.delivery_date_manual) and not body.include_manual_delivery
+        delivery = (
+            r.delivery_date
+            if keep_delivery
+            else _add_business_days(r.order_date, lead, scheduled, off)
+        )
         supplier_name = supplier.supplier_name or product.supplier_name
         product_name = product.product_name
         if (
             float(r.unit_price or 0) == price
             and int(r.lead_time_days or 0) == lead
             and r.delivery_date == delivery
+            and bool(r.delivery_date_manual) == keep_delivery
             and r.supplier_name == supplier_name
             and r.product_name == product_name
         ):
@@ -916,6 +926,7 @@ async def refresh_welding_ledger_master(
         r.unit_price = product.unit_price or 0
         r.lead_time_days = lead
         r.delivery_date = delivery
+        r.delivery_date_manual = keep_delivery
         r.supplier_name = supplier_name
         r.product_name = product_name
         if int(r.order_qty or 0) > 0:
@@ -971,6 +982,7 @@ async def _apply_update(db: AsyncSession, row_id: int, body: UpdateBody, operato
             raise HTTPException(status_code=400, detail="納期は注文日以降の日付を指定してください")
         if delivery != row.delivery_date:
             row.delivery_date = delivery
+            row.delivery_date_manual = True
             # 納期は注文書に印字されるため、発行済なら未発行に戻す
             row.order_sheet_issued_at = None
             row.order_sheet_issued_by = None

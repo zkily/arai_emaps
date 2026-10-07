@@ -44,6 +44,8 @@ export interface PlatingLedgerRow {
   unit_price: number
   lead_time_days: number
   delivery_date: string | null
+  /** 納期を手修正した行（マスタ反映で納期を上書きしない） */
+  delivery_date_manual?: boolean
   order_qty: number
   order_no: string | null
   order_amount: number
@@ -114,6 +116,7 @@ export function refreshPlatingLedgerMaster(data: {
   supplier_cd?: string
   product_cd?: string
   include_ordered?: boolean
+  include_manual_delivery?: boolean
 }) {
   return request.post(`${BASE}/plating/ledger/refresh-master`, data) as unknown as Promise<{
     success: boolean
