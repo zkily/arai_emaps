@@ -44,7 +44,18 @@ export interface ManualRegistrationForm {
   startedAt: string | null
   endedAt: string | null
   breakMin: number
+  setupMin: number
+  repairMin: number
+  sawBladeMin: number
   stopMin: number
+}
+
+/** 段取・修理・鋸刃交換・停止の合計（分） */
+export function sumLossMin(src: Pick<ManualRegistrationForm, 'setupMin' | 'repairMin' | 'sawBladeMin' | 'stopMin'>): number {
+  return [src.setupMin, src.repairMin, src.sawBladeMin, src.stopMin].reduce(
+    (acc, v) => acc + Math.max(0, Math.round(Number(v) || 0)),
+    0,
+  )
 }
 
 function emptyForm(day: string, line: string): ManualRegistrationForm {
@@ -61,6 +72,9 @@ function emptyForm(day: string, line: string): ManualRegistrationForm {
     startedAt: null,
     endedAt: null,
     breakMin: 0,
+    setupMin: 0,
+    repairMin: 0,
+    sawBladeMin: 0,
     stopMin: 0,
   }
 }
@@ -137,7 +151,7 @@ export function resolveProductionEndDateTime(
   return { started, ended: endedSameDay, endsNextDay: false }
 }
 
-function hoursToMin(hours: number | null | undefined): number {
+export function hoursToMin(hours: number | null | undefined): number {
   const h = Number(hours ?? 0)
   if (!Number.isFinite(h) || h <= 0) return 0
   return Math.round(h * 60)
@@ -231,17 +245,18 @@ export function useCuttingManualRegistration() {
       form.value.startedAt,
       form.value.endedAt,
     )
+    const lossMin = sumLossMin(form.value)
     if (!started || !ended) {
-      return { shiftMin: null, workMin: null, breakMin: form.value.breakMin, stopMin: form.value.stopMin, endsNextDay: false }
+      return { shiftMin: null, workMin: null, breakMin: form.value.breakMin, lossMin, endsNextDay: false }
     }
     const shiftMin = Math.round((ended.getTime() - started.getTime()) / 60000)
-    const pauseMin = Math.max(0, form.value.breakMin) + Math.max(0, form.value.stopMin)
+    const pauseMin = Math.max(0, form.value.breakMin) + lossMin
     const workMin = Math.max(0, shiftMin - pauseMin)
     return {
       shiftMin,
       workMin,
       breakMin: form.value.breakMin,
-      stopMin: form.value.stopMin,
+      lossMin,
       endsNextDay,
     }
   })
@@ -322,8 +337,8 @@ export function useCuttingManualRegistration() {
     return m > 0 ? `${m}分` : '—'
   }
 
-  function formatStopMin(row: CuttingIndicatorRow): string {
-    const m = hoursToMin(row.setup_hours)
+  function formatHoursAsMin(hours: number | null | undefined): string {
+    const m = hoursToMin(hours)
     return m > 0 ? `${m}分` : '—'
   }
 
@@ -482,7 +497,10 @@ export function useCuttingManualRegistration() {
       startedAt: null,
       endedAt: null,
       breakMin: hoursToMin(row.break_hours),
-      stopMin: hoursToMin(row.setup_hours),
+      setupMin: hoursToMin(row.setup_hours),
+      repairMin: hoursToMin(row.repair_hours),
+      sawBladeMin: hoursToMin(row.saw_blade_exchange_hours),
+      stopMin: hoursToMin(row.planned_stop_hours),
     }
     const shiftMin = hoursToMin(row.shift_hours)
     if (shiftMin > 0) {
@@ -525,11 +543,11 @@ export function useCuttingManualRegistration() {
       return
     }
 
-    const breakMin = Math.max(0, Math.round(draft.breakMin))
-    const stopMin = Math.max(0, Math.round(draft.stopMin))
+    const toMin = (v: number) => Math.max(0, Math.round(Number(v) || 0))
+    const breakMin = toMin(draft.breakMin)
     const shiftMin = Math.round((we - ws) / 60000)
-    if (breakMin + stopMin > shiftMin) {
-      ElMessage.warning('休憩＋停止時間が生産時間を超えています')
+    if (breakMin + sumLossMin(draft) > shiftMin) {
+      ElMessage.warning('休憩・段取・修理・鋸刃交換・停止の合計が生産時間を超えています')
       return
     }
 
@@ -543,7 +561,10 @@ export function useCuttingManualRegistration() {
       quantity_variance: computedVariance.value,
       shift_hours: minToHours(shiftMin),
       break_hours: minToHours(breakMin),
-      setup_hours: minToHours(stopMin),
+      setup_hours: minToHours(toMin(draft.setupMin)),
+      repair_hours: minToHours(toMin(draft.repairMin)),
+      saw_blade_exchange_hours: minToHours(toMin(draft.sawBladeMin)),
+      planned_stop_hours: minToHours(toMin(draft.stopMin)),
       remarks: draft.registrationNote.trim() || null,
     }
 
@@ -668,7 +689,7 @@ export function useCuttingManualRegistration() {
     deleteRow,
     submitForm,
     formatBreakMin,
-    formatStopMin,
+    formatHoursAsMin,
     formatWorkHours,
     formatEfficiencyRate,
     isEfficiencyRateOutOfRange,

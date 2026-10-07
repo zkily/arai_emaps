@@ -12,6 +12,7 @@ import {
   parseTimeInput,
   resolveProductionEndDateTime,
   sanitizeTimeDraft,
+  sumLossMin,
 } from './useCuttingManualRegistration'
 
 /** 切断指示（生産完了）から一括登録する行 */
@@ -25,6 +26,9 @@ export interface CuttingBatchRow {
   startedText: string
   endedText: string
   breakMin: number
+  setupMin: number
+  repairMin: number
+  sawBladeMin: number
   stopMin: number
   remarks: string
   selected: boolean
@@ -60,10 +64,6 @@ function resolvePlannedQty(src: CuttingManagementListRow): number | null {
 }
 
 function toBatchRow(src: CuttingManagementListRow): CuttingBatchRow {
-  const stopMin =
-    toNonNegInt(src.mes_setup_time_min) +
-    toNonNegInt(src.mes_saw_blade_exchange_min) +
-    toNonNegInt(src.mes_repair_min)
   return {
     key: Number(src.id),
     line: (src.cutting_machine || src.production_line || '').trim(),
@@ -74,7 +74,10 @@ function toBatchRow(src: CuttingManagementListRow): CuttingBatchRow {
     startedText: extractHm(src.mes_production_started_at),
     endedText: extractHm(src.mes_production_ended_at),
     breakMin: 0,
-    stopMin,
+    setupMin: toNonNegInt(src.mes_setup_time_min),
+    repairMin: toNonNegInt(src.mes_repair_min),
+    sawBladeMin: toNonNegInt(src.mes_saw_blade_exchange_min),
+    stopMin: 0,
     remarks: '',
     selected: false,
     error: '',
@@ -207,7 +210,7 @@ export function useCuttingBatchRegistration(options: BatchOptions) {
     )
     if (!started || !ended) return null
     const shiftMin = Math.round((ended.getTime() - started.getTime()) / 60000)
-    return shiftMin - Math.max(0, row.breakMin || 0) - Math.max(0, row.stopMin || 0)
+    return shiftMin - Math.max(0, row.breakMin || 0) - sumLossMin(row)
   }
 
   function validateBatchRow(row: CuttingBatchRow, day: string): string {
@@ -220,8 +223,8 @@ export function useCuttingBatchRegistration(options: BatchOptions) {
     )
     if (!started || !ended) return '開始・終了未入力'
     const shiftMin = Math.round((ended.getTime() - started.getTime()) / 60000)
-    if (Math.max(0, row.breakMin || 0) + Math.max(0, row.stopMin || 0) > shiftMin) {
-      return '休憩＋停止が生産時間超過'
+    if (Math.max(0, row.breakMin || 0) + sumLossMin(row) > shiftMin) {
+      return '休憩・ロス時間が生産時間超過'
     }
     return ''
   }
@@ -280,7 +283,10 @@ export function useCuttingBatchRegistration(options: BatchOptions) {
             quantity_variance: batchVariance(r),
             shift_hours: minToHours(shiftMin),
             break_hours: minToHours(Math.max(0, Math.round(r.breakMin || 0))),
-            setup_hours: minToHours(Math.max(0, Math.round(r.stopMin || 0))),
+            setup_hours: minToHours(Math.max(0, Math.round(r.setupMin || 0))),
+            repair_hours: minToHours(Math.max(0, Math.round(r.repairMin || 0))),
+            saw_blade_exchange_hours: minToHours(Math.max(0, Math.round(r.sawBladeMin || 0))),
+            planned_stop_hours: minToHours(Math.max(0, Math.round(r.stopMin || 0))),
             remarks: r.remarks.trim() || null,
           })
           if (res.success === false || !res.data?.id) {

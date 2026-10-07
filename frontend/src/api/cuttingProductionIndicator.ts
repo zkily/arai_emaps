@@ -146,6 +146,8 @@ export interface CuttingProductionIndicatorRow {
   break_hours?: number | null
   setup_hours?: number | null
   repair_hours?: number | null
+  saw_blade_exchange_hours?: number | null
+  planned_stop_hours?: number | null
   work_hours?: number | null
   efficiency_rate?: number | null
   utilization_rate?: number | null
@@ -180,6 +182,9 @@ export interface CuttingProductionIndicatorManualBody {
   shift_hours?: number | null
   break_hours?: number | null
   setup_hours?: number | null
+  repair_hours?: number | null
+  saw_blade_exchange_hours?: number | null
+  planned_stop_hours?: number | null
   remarks?: string | null
 }
 

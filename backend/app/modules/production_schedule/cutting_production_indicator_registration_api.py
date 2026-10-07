@@ -85,6 +85,9 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "break_hours",
         "setup_hours",
         "repair_hours",
+        "saw_blade_exchange_hours",
+        "planned_stop_hours",
+        "available_work_hours",
         "work_hours",
         "efficiency_rate",
         "utilization_rate",
@@ -110,6 +113,9 @@ def _compute_metrics(
     shift_hours: float | None,
     break_hours: float | None,
     setup_hours: float | None,
+    repair_hours: float | None = None,
+    saw_blade_exchange_hours: float | None = None,
+    planned_stop_hours: float | None = None,
 ) -> dict[str, Any]:
     planned_n = int(planned or 0)
     actual_n = int(actual or 0)
@@ -121,7 +127,11 @@ def _compute_metrics(
     shift_h = max(0.0, _to_optional_float(shift_hours) or 0.0)
     break_h = max(0.0, _to_optional_float(break_hours) or 0.0)
     setup_h = max(0.0, _to_optional_float(setup_hours) or 0.0)
-    work_h = max(0.0, shift_h - break_h - setup_h) if shift_h > 0 else None
+    repair_h = max(0.0, _to_optional_float(repair_hours) or 0.0)
+    saw_h = max(0.0, _to_optional_float(saw_blade_exchange_hours) or 0.0)
+    stop_h = max(0.0, _to_optional_float(planned_stop_hours) or 0.0)
+    loss_h = setup_h + repair_h + saw_h + stop_h
+    work_h = max(0.0, shift_h - break_h - loss_h) if shift_h > 0 else None
     available_h = max(0.0, shift_h - break_h) if shift_h > 0 else None
 
     efficiency = None
@@ -138,6 +148,9 @@ def _compute_metrics(
         "shift_hours": round(shift_h, 3) if shift_h > 0 else None,
         "break_hours": round(break_h, 3) if break_h > 0 else None,
         "setup_hours": round(setup_h, 3) if setup_h > 0 else None,
+        "repair_hours": round(repair_h, 3) if repair_h > 0 else None,
+        "saw_blade_exchange_hours": round(saw_h, 3) if saw_h > 0 else None,
+        "planned_stop_hours": round(stop_h, 3) if stop_h > 0 else None,
         "available_work_hours": round(available_h, 3) if available_h and available_h > 0 else None,
         "work_hours": round(work_h, 3) if work_h and work_h > 0 else None,
         "utilization_rate": utilization,
@@ -158,6 +171,9 @@ class CuttingIndicatorManualBody(BaseModel):
     shift_hours: Optional[float] = None
     break_hours: Optional[float] = None
     setup_hours: Optional[float] = None
+    repair_hours: Optional[float] = None
+    saw_blade_exchange_hours: Optional[float] = None
+    planned_stop_hours: Optional[float] = None
     remarks: Optional[str] = None
 
 
@@ -241,9 +257,13 @@ def register_registration_routes(router: APIRouter) -> None:
             shift_hours=body.shift_hours,
             break_hours=body.break_hours,
             setup_hours=body.setup_hours,
+            repair_hours=body.repair_hours,
+            saw_blade_exchange_hours=body.saw_blade_exchange_hours,
+            planned_stop_hours=body.planned_stop_hours,
         )
         sync_key = _make_manual_sync_key()
-        params = {
+        params: dict[str, Any] = {c: None for c in INSERT_COLUMNS}
+        params |= {
             "fiscal_year": _fiscal_year_from_day(day),
             "production_month": day.replace(day=1),
             "production_day": day,
@@ -307,6 +327,17 @@ def register_registration_routes(router: APIRouter) -> None:
         shift_h = body.shift_hours if body.shift_hours is not None else current.get("shift_hours")
         break_h = body.break_hours if body.break_hours is not None else current.get("break_hours")
         setup_h = body.setup_hours if body.setup_hours is not None else current.get("setup_hours")
+        repair_h = body.repair_hours if body.repair_hours is not None else current.get("repair_hours")
+        saw_h = (
+            body.saw_blade_exchange_hours
+            if body.saw_blade_exchange_hours is not None
+            else current.get("saw_blade_exchange_hours")
+        )
+        stop_h = (
+            body.planned_stop_hours
+            if body.planned_stop_hours is not None
+            else current.get("planned_stop_hours")
+        )
 
         metrics = _compute_metrics(
             planned=int(planned) if planned is not None else None,
@@ -315,6 +346,9 @@ def register_registration_routes(router: APIRouter) -> None:
             shift_hours=shift_h,
             break_hours=break_h,
             setup_hours=setup_h,
+            repair_hours=repair_h,
+            saw_blade_exchange_hours=saw_h,
+            planned_stop_hours=stop_h,
         )
 
         params = {
@@ -342,6 +376,9 @@ def register_registration_routes(router: APIRouter) -> None:
               shift_hours = :shift_hours,
               break_hours = :break_hours,
               setup_hours = :setup_hours,
+              repair_hours = :repair_hours,
+              saw_blade_exchange_hours = :saw_blade_exchange_hours,
+              planned_stop_hours = :planned_stop_hours,
               available_work_hours = :available_work_hours,
               work_hours = :work_hours,
               utilization_rate = :utilization_rate,

@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import type { ElInput, ElInputNumber } from 'element-plus'
+import { ElMessage, type ElInput, type ElInputNumber } from 'element-plus'
 import {
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ChatLineSquare,
   Clock,
   DataLine,
   Delete,
+  Download,
   Edit,
   Refresh,
   User,
   Warning,
 } from '@element-plus/icons-vue'
-import { useCuttingManualRegistration } from './useCuttingManualRegistration'
+import { downloadExcelMultiSheet } from '@/utils/excelExport'
+import { hoursToMin, useCuttingManualRegistration } from './useCuttingManualRegistration'
 import { useCuttingBatchRegistration, type CuttingBatchRow } from './useCuttingBatchRegistration'
 
 defineOptions({ name: 'CuttingActualCollectionRegistration' })
@@ -63,7 +66,7 @@ const {
   deleteRow,
   submitForm,
   formatBreakMin,
-  formatStopMin,
+  formatHoursAsMin,
   formatWorkHours,
   formatEfficiencyRate,
   isEfficiencyRateOutOfRange,
@@ -131,8 +134,14 @@ function formatBatchWorkMin(row: CuttingBatchRow): string {
   return m < 0 ? '超過' : formatMinutesLabel(m)
 }
 
-/** 生産=0, 開始=1, 終了=2, 休憩=3, 停止=4 */
-const BATCH_NAV_LAST_COL = 4
+const BATCH_LOSS_COLUMNS: { field: 'setupMin' | 'repairMin' | 'sawBladeMin'; label: string; cls: string }[] = [
+  { field: 'setupMin', label: '段取(分)', cls: 'setup' },
+  { field: 'repairMin', label: '修理(分)', cls: 'repair' },
+  { field: 'sawBladeMin', label: '鋸刃交換(分)', cls: 'saw' },
+]
+
+/** 生産=0, 開始=1, 終了=2, 休憩=3, 段取=4, 修理=5, 鋸刃交換=6, 停止=7 */
+const BATCH_NAV_LAST_COL = 7
 const batchTableWrapRef = ref<HTMLElement | null>(null)
 
 function onBatchNavKeydown(e: KeyboardEvent): void {
@@ -155,6 +164,9 @@ const productSelected = computed(() => isEdit.value || Boolean(form.value.produc
 const startedAtInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 const endedAtInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 const breakMinInputRef = ref<InstanceType<typeof ElInputNumber> | null>(null)
+const setupMinInputRef = ref<InstanceType<typeof ElInputNumber> | null>(null)
+const repairMinInputRef = ref<InstanceType<typeof ElInputNumber> | null>(null)
+const sawBladeMinInputRef = ref<InstanceType<typeof ElInputNumber> | null>(null)
 const stopMinInputRef = ref<InstanceType<typeof ElInputNumber> | null>(null)
 const remarksInputRef = ref<InstanceType<typeof ElInput> | null>(null)
 
@@ -190,16 +202,117 @@ function onEndedAtEnter(e: Event): void {
   focusInputNumber(breakMinInputRef)
 }
 
-function onBreakMinEnter(e: Event): void {
-  if (!(e instanceof KeyboardEvent) || e.key !== 'Enter') return
-  e.preventDefault()
-  focusInputNumber(stopMinInputRef)
+function minEnterTo(next: typeof breakMinInputRef): (e: Event) => void {
+  return (e: Event) => {
+    if (!(e instanceof KeyboardEvent) || e.key !== 'Enter') return
+    e.preventDefault()
+    focusInputNumber(next)
+  }
 }
+
+const onBreakMinEnter = minEnterTo(setupMinInputRef)
+const onSetupMinEnter = minEnterTo(repairMinInputRef)
+const onRepairMinEnter = minEnterTo(sawBladeMinInputRef)
+const onSawBladeMinEnter = minEnterTo(stopMinInputRef)
 
 function onStopMinEnter(e: Event): void {
   if (!(e instanceof KeyboardEvent) || e.key !== 'Enter') return
   e.preventDefault()
   focusElInput(remarksInputRef)
+}
+
+const exporting = ref(false)
+
+const EXPORT_HEADERS = [
+  '生産日',
+  'ライン',
+  'CD',
+  '製品名',
+  '計画',
+  '生産',
+  '差異',
+  '能率',
+  '作業(h)',
+  '休憩(分)',
+  '段取(分)',
+  '修理(分)',
+  '鋸刃交換(分)',
+  '停止(分)',
+  '取得元',
+  '備考',
+]
+
+function toExportNumber(v: number | null | undefined): number | '' {
+  const n = Number(v)
+  return v == null || !Number.isFinite(n) ? '' : n
+}
+
+function buildExportAoa(): (string | number)[][] {
+  const body = filteredRows.value.map((row) => {
+    const rate = toExportNumber(row.efficiency_rate)
+    const work = toExportNumber(row.work_hours)
+    return [
+      row.production_day ?? '',
+      (row.production_line || '').trim(),
+      row.product_cd ?? '',
+      row.product_name ?? '',
+      toExportNumber(row.planned_quantity),
+      toExportNumber(row.actual_quantity),
+      toExportNumber(row.quantity_variance),
+      rate === '' ? '' : Math.round(rate),
+      work === '' ? '' : Math.round(work * 10) / 10,
+      hoursToMin(row.break_hours),
+      hoursToMin(row.setup_hours),
+      hoursToMin(row.repair_hours),
+      hoursToMin(row.saw_blade_exchange_hours),
+      hoursToMin(row.planned_stop_hours),
+      dataSourceLabel(row),
+      row.remarks ?? '',
+    ]
+  })
+  return [EXPORT_HEADERS, ...body]
+}
+
+function exportFileBase(): string {
+  const line = lineFilterName.value.trim()
+  return `切断実績収集登録_${productionDay.value}${line ? `_${line}` : ''}`
+}
+
+function escapeCsvCell(v: string | number): string {
+  const s = String(v)
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function downloadCsv(aoa: (string | number)[][], filename: string): void {
+  const content = aoa.map((r) => r.map(escapeCsvCell).join(',')).join('\r\n')
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function onExport(format: 'excel' | 'csv'): Promise<void> {
+  if (!filteredRows.value.length) {
+    ElMessage.warning('出力するデータがありません')
+    return
+  }
+  const aoa = buildExportAoa()
+  if (format === 'csv') {
+    downloadCsv(aoa, `${exportFileBase()}.csv`)
+    return
+  }
+  exporting.value = true
+  try {
+    await downloadExcelMultiSheet([{ name: '登録一覧', aoa }], `${exportFileBase()}.xlsx`)
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('Excel出力に失敗しました')
+  } finally {
+    exporting.value = false
+  }
 }
 
 onMounted(() => {
@@ -391,9 +504,31 @@ onMounted(() => {
                 </div>
               </template>
             </el-table-column>
+            <el-table-column
+              v-for="(col, ci) in BATCH_LOSS_COLUMNS"
+              :key="col.field"
+              :label="col.label"
+              width="88"
+              align="center"
+              header-align="center"
+              :class-name="`cb-col cb-col--${col.cls}`"
+            >
+              <template #default="{ row, $index }">
+                <div :data-bnav="`${$index}-${4 + ci}`">
+                  <el-input-number
+                    v-model="row[col.field]"
+                    :min="0"
+                    :max="999"
+                    :controls="false"
+                    class="car-batch__min"
+                    @change="row.error = ''"
+                  />
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="停止(分)" width="88" align="center" header-align="center" class-name="cb-col cb-col--stop">
               <template #default="{ row, $index }">
-                <div :data-bnav="`${$index}-4`">
+                <div :data-bnav="`${$index}-7`">
                   <el-input-number
                     v-model="row.stopMin"
                     :min="0"
@@ -431,7 +566,7 @@ onMounted(() => {
         </div>
 
         <div class="car-batch__footer">
-          <span class="car-batch__tip">Enter キーで 開始 → 終了 → 休憩 → 停止 → 次の行の開始 へ移動します</span>
+          <span class="car-batch__tip">Enter キーで 開始 → 終了 → 休憩 → 段取 → 修理 → 鋸刃交換 → 停止 → 次の行の開始 へ移動します</span>
           <el-button
             v-if="canCreate"
             type="primary"
@@ -626,6 +761,54 @@ onMounted(() => {
                 <em>分</em>
               </div>
             </div>
+            <div class="iar-time__cell iar-time__cell--setup">
+              <span>段取</span>
+              <div class="iar-time__num">
+                <el-input-number
+                  ref="setupMinInputRef"
+                  v-model="form.setupMin"
+                  :min="0"
+                  :max="999"
+                  :step="1"
+                  :disabled="!productSelected"
+                  :controls="false"
+                  @keydown="onSetupMinEnter"
+                />
+                <em>分</em>
+              </div>
+            </div>
+            <div class="iar-time__cell iar-time__cell--repair">
+              <span>修理</span>
+              <div class="iar-time__num">
+                <el-input-number
+                  ref="repairMinInputRef"
+                  v-model="form.repairMin"
+                  :min="0"
+                  :max="999"
+                  :step="1"
+                  :disabled="!productSelected"
+                  :controls="false"
+                  @keydown="onRepairMinEnter"
+                />
+                <em>分</em>
+              </div>
+            </div>
+            <div class="iar-time__cell iar-time__cell--saw">
+              <span>鋸刃交換</span>
+              <div class="iar-time__num">
+                <el-input-number
+                  ref="sawBladeMinInputRef"
+                  v-model="form.sawBladeMin"
+                  :min="0"
+                  :max="999"
+                  :step="1"
+                  :disabled="!productSelected"
+                  :controls="false"
+                  @keydown="onSawBladeMinEnter"
+                />
+                <em>分</em>
+              </div>
+            </div>
             <div class="iar-time__cell iar-time__cell--stop">
               <span>停止</span>
               <div class="iar-time__num">
@@ -648,7 +831,7 @@ onMounted(() => {
               シフト <b>{{ formatMinutesLabel(timeSummary.shiftMin) }}</b>
               <span v-if="timeSummary.endsNextDay" class="iar-time__next-day">（終了は翌日）</span>
               · 休憩 <b>{{ timeSummary.breakMin }}</b>分
-              · 停止 <b>{{ timeSummary.stopMin }}</b>分
+              · 段取・修理・鋸刃交換・停止 計 <b>{{ timeSummary.lossMin }}</b>分
             </p>
           </transition>
         </div>
@@ -741,6 +924,24 @@ onMounted(() => {
           >
             更新
           </el-button>
+          <el-dropdown trigger="click" :disabled="!filteredRows.length" @command="onExport">
+            <el-button
+              size="small"
+              round
+              class="car-btn-export"
+              :icon="Download"
+              :loading="exporting"
+              :disabled="!filteredRows.length"
+            >
+              出力<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="excel">Excel（.xlsx）</el-dropdown-item>
+                <el-dropdown-item command="csv">CSV（.csv）</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
 
@@ -802,9 +1003,24 @@ onMounted(() => {
               <span class="iar-table__pause">{{ formatBreakMin(row) }}</span>
             </template>
           </el-table-column>
+          <el-table-column label="段取" width="60" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="iar-table__pause">{{ formatHoursAsMin(row.setup_hours) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="修理" width="60" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="iar-table__pause">{{ formatHoursAsMin(row.repair_hours) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="鋸刃交換" width="72" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="iar-table__pause">{{ formatHoursAsMin(row.saw_blade_exchange_hours) }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="停止" width="60" align="center" header-align="center">
             <template #default="{ row }">
-              <span class="iar-table__pause">{{ formatStopMin(row) }}</span>
+              <span class="iar-table__pause">{{ formatHoursAsMin(row.planned_stop_hours) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="取得元" width="72" align="center" header-align="center">
@@ -1379,8 +1595,14 @@ onMounted(() => {
 }
 
 .iar-form__row--qty-time .iar-time__grid {
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.15fr) repeat(5, minmax(0, 1fr));
   gap: 6px;
+}
+
+@media (max-width: 1440px) {
+  .iar-form__row--qty-time .iar-time__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .iar-form__row--qty-time .iar-time__cell {
@@ -1691,6 +1913,9 @@ onMounted(() => {
 .iar-time__cell--end > span:first-child { color: #7c3aed; }
 .iar-time__cell--break > span:first-child { color: #0d9488; }
 .iar-time__cell--stop > span:first-child { color: #e11d48; }
+.iar-time__cell--setup > span:first-child { color: #d97706; }
+.iar-time__cell--repair > span:first-child { color: #ea580c; }
+.iar-time__cell--saw > span:first-child { color: #0891b2; }
 
 .iar-time__input {
   width: 100%;
@@ -2469,6 +2694,18 @@ onMounted(() => {
   background: #14b8a6;
   border-color: #14b8a6;
 }
+.car-modern .car-btn-export {
+  font-weight: 600;
+  color: #0f766e;
+  background: #fff;
+  border: 1px solid #5eead4;
+}
+.car-modern .car-btn-export:hover,
+.car-modern .car-btn-export:focus {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #14b8a6;
+}
 .car-modern .iar-table :deep(.el-table__header th) {
   background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf1 100%) !important;
   color: #115e59;
@@ -2494,6 +2731,9 @@ onMounted(() => {
 .car-modern .iar-panel--form .iar-time__cell--end { --fc: #7c3aed; --fc-soft: #f5f3ff; }
 .car-modern .iar-panel--form .iar-time__cell--break { --fc: #0d9488; --fc-soft: #f0fdfa; }
 .car-modern .iar-panel--form .iar-time__cell--stop { --fc: #e11d48; --fc-soft: #fff1f2; }
+.car-modern .iar-panel--form .iar-time__cell--setup { --fc: #d97706; --fc-soft: #fffbeb; }
+.car-modern .iar-panel--form .iar-time__cell--repair { --fc: #ea580c; --fc-soft: #fff7ed; }
+.car-modern .iar-panel--form .iar-time__cell--saw { --fc: #0891b2; --fc-soft: #ecfeff; }
 
 .car-modern .iar-panel--form .iar-panel__title {
   font-size: 16px;
@@ -2913,6 +3153,9 @@ onMounted(() => {
 .car-batch__table :deep(.cb-col--end) { --fc: #7c3aed; --fc-soft: #f5f3ff; }
 .car-batch__table :deep(.cb-col--break) { --fc: #0d9488; --fc-soft: #f0fdfa; }
 .car-batch__table :deep(.cb-col--stop) { --fc: #e11d48; --fc-soft: #fff1f2; }
+.car-batch__table :deep(.cb-col--setup) { --fc: #d97706; --fc-soft: #fffbeb; }
+.car-batch__table :deep(.cb-col--repair) { --fc: #ea580c; --fc-soft: #fff7ed; }
+.car-batch__table :deep(.cb-col--saw) { --fc: #0891b2; --fc-soft: #ecfeff; }
 .car-batch__table :deep(th.cb-col) {
   color: var(--fc);
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--fc) 55%, #fff);
