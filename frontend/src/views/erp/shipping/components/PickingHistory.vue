@@ -1,5 +1,5 @@
 <template>
-  <div class="picking-history-container">
+  <div class="picking-history-container pb-std">
     <!-- Modern Header -->
     <div class="page-header">
       <div class="header-content">
@@ -2258,17 +2258,6 @@ if (app) {
     radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
-  animation: backgroundFloat 20s ease-in-out infinite;
-}
-
-@keyframes backgroundFloat {
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-20px) rotate(1deg);
-  }
 }
 
 .picking-history-container > * {
@@ -3703,11 +3692,6 @@ if (app) {
   z-index: 3;
 }
 
-.daily-rate-row .daily-rate-count-col {
-  animation: dailyRateRowIn 0.45s ease both;
-  animation-delay: var(--row-delay, 0ms);
-}
-
 .count-compare {
   width: 100%;
   display: flex;
@@ -3754,13 +3738,6 @@ if (app) {
 
 .count-text b {
   color: #0f172a;
-}
-
-.daily-rate-row .daily-rate-name-col,
-.daily-rate-row .daily-rate-avg-col,
-.daily-rate-row .daily-rate-day-col {
-  animation: dailyRateRowIn 0.45s ease both;
-  animation-delay: var(--row-delay, 0ms);
 }
 
 .name-dot {
@@ -3815,8 +3792,6 @@ if (app) {
   right: 0;
   bottom: 0;
   height: var(--fill, 0%);
-  animation: dailyRateFill 0.7s ease both;
-  animation-delay: var(--cell-delay, 0ms);
 }
 
 .rate-pill-num {
@@ -3895,23 +3870,6 @@ if (app) {
 }
 .rate-pill.empty .rate-pill-fill {
   background: transparent;
-}
-
-@keyframes dailyRateRowIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes dailyRateFill {
-  from {
-    height: 0;
-  }
 }
 
 /* Modern Tables Grid (保留样式供其他用途) */

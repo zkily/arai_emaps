@@ -130,7 +130,9 @@ export function markPlatingOrderSheetIssued(ids: number[]) {
 
 export function updatePlatingLedger(
   id: number,
-  data: Partial<Pick<PlatingLedgerRow, 'order_qty' | 'receiving_qty' | 'defect_qty' | 'initial_stock'>>,
+  data: Partial<
+    Pick<PlatingLedgerRow, 'order_qty' | 'receiving_qty' | 'defect_qty' | 'initial_stock' | 'delivery_date'>
+  >,
 ) {
   return request.put(`${BASE}/plating/ledger/${id}`, data) as unknown as Promise<{
     success: boolean

@@ -56,6 +56,7 @@ class UpdateBody(BaseModel):
     receiving_qty: Optional[int] = None
     defect_qty: Optional[int] = None
     initial_stock: Optional[int] = None
+    delivery_date: Optional[str] = None
 
 
 class IssuedBody(BaseModel):
@@ -964,6 +965,15 @@ async def _apply_update(db: AsyncSession, row_id: int, body: UpdateBody, operato
         if initial > 0 and row.order_date.day != 1:
             raise HTTPException(status_code=400, detail="初期在庫は毎月1日の行にのみ入力できます")
         row.initial_stock = initial
+    if body.delivery_date is not None:
+        delivery = _parse_date(body.delivery_date)
+        if delivery < row.order_date:
+            raise HTTPException(status_code=400, detail="納期は注文日以降の日付を指定してください")
+        if delivery != row.delivery_date:
+            row.delivery_date = delivery
+            # 納期は注文書に印字されるため、発行済なら未発行に戻す
+            row.order_sheet_issued_at = None
+            row.order_sheet_issued_by = None
 
     changed = [
         f for f in ("order_qty", "receiving_qty", "defect_qty") if getattr(body, f) is not None

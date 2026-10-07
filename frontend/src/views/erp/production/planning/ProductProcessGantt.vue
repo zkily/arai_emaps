@@ -1,70 +1,38 @@
 <template>
-  <div class="ppg-page">
+  <div class="ppg-page pb-std">
     <!-- Hero -->
-    <header class="ppg-hero">
-      <div class="ppg-hero__glow" aria-hidden="true" />
-      <div class="ppg-hero__row">
-        <div class="ppg-hero__brand">
-          <div class="ppg-hero__icon">
-            <el-icon :size="22"><Calendar /></el-icon>
-          </div>
-          <div>
-            <p class="ppg-hero__kicker">生産計画</p>
-            <h2>製品工程ガント</h2>
-          </div>
+    <header class="ppg-hero pb-hero pb-hero--page">
+      <div class="ppg-hero__fx pb-bubbles" aria-hidden="true" />
+      <div class="ppg-hero__brand">
+        <div class="ppg-hero__icon">
+          <el-icon :size="20"><Calendar /></el-icon>
         </div>
-        <div class="ppg-kpis">
-          <div class="ppg-kpi">
-            <span class="ppg-kpi__label">対象製品</span>
-            <strong>{{ products.length }}</strong>
-            <em v-if="!hasProductFilter">/ {{ total }}</em>
-          </div>
-          <div class="ppg-kpi">
-            <span class="ppg-kpi__label">期間</span>
-            <strong>{{ dateCells.length }}</strong>
-            <em>日</em>
-          </div>
-          <div class="ppg-kpi">
-            <span class="ppg-kpi__label">指定</span>
-            <strong>{{ selectedProductCds.length || '全' }}</strong>
-          </div>
+        <div class="ppg-hero__copy">
+          <h2 class="pb-hero-title">製品工程ガント</h2>
+          <p class="pb-hero-desc">生産計画｜製品ごとのルート工程について、計画・実績・在庫推移を日別に表示します</p>
         </div>
       </div>
-      <div class="ppg-legend">
-        <template v-if="activeTab === 'gantt'">
-          <span class="ppg-legend__item">
-            <span class="ppg-legend__sample ppg-legend__sample--actual">123</span>実績
+      <div class="ppg-kpis">
+        <div class="ppg-kpi">
+          <span class="ppg-kpi__label"><i class="ppg-kpi__dot" />対象製品</span>
+          <span class="ppg-kpi__value">
+            <strong>{{ products.length }}</strong>
+            <em v-if="!hasProductFilter">/ {{ total }}</em>
           </span>
-          <span class="ppg-legend__item">
-            <span class="ppg-legend__sample ppg-legend__sample--plan">123</span>計画
+        </div>
+        <div class="ppg-kpi ppg-kpi--sky">
+          <span class="ppg-kpi__label"><i class="ppg-kpi__dot" />期間</span>
+          <span class="ppg-kpi__value">
+            <strong>{{ dateCells.length }}</strong>
+            <em>日</em>
           </span>
-          <span class="ppg-legend__sep" />
-        </template>
-        <template v-else>
-          <span class="ppg-legend__item">
-            <span class="ppg-legend__heat is-pos" />正
+        </div>
+        <div class="ppg-kpi ppg-kpi--amber">
+          <span class="ppg-kpi__label"><i class="ppg-kpi__dot" />指定</span>
+          <span class="ppg-kpi__value">
+            <strong>{{ selectedProductCds.length || '全' }}</strong>
           </span>
-          <span class="ppg-legend__item">
-            <span class="ppg-legend__heat is-zero" />0
-          </span>
-          <span class="ppg-legend__item">
-            <span class="ppg-legend__heat is-neg" />負
-          </span>
-          <span class="ppg-legend__sep" />
-        </template>
-        <span
-          v-for="p in legendProcesses"
-          :key="p.key"
-          class="ppg-legend__item"
-        >
-          <i class="ppg-legend__dot" :style="{ background: processColor(p.key) }" />
-          {{ p.label }}
-          <em v-if="activeTab === 'gantt' && p.mode === 'inventory_trend'">在庫</em>
-          <em v-else-if="activeTab === 'gantt' && p.mode === 'plan'">計画</em>
-          <em v-else-if="activeTab !== 'gantt' && p.mode === 'inventory_trend'">在庫</em>
-          <em v-else-if="activeTab === 'trend' && p.has_trend">推移</em>
-          <em v-else-if="activeTab === 'apt' && p.has_actual_plan_trend">実計</em>
-        </span>
+        </div>
       </div>
     </header>
 
@@ -157,11 +125,49 @@
     </section>
 
     <!-- Tabs + チャート本体 -->
-    <el-tabs v-model="activeTab" class="ppg-tabs">
-      <el-tab-pane label="工程ガント" name="gantt" />
-      <el-tab-pane label="工程推移" name="trend" />
-      <el-tab-pane label="実計推移" name="apt" />
-    </el-tabs>
+    <div class="ppg-toolbar">
+      <el-tabs v-model="activeTab" class="ppg-tabs">
+        <el-tab-pane label="工程ガント" name="gantt" />
+        <el-tab-pane label="工程推移" name="trend" />
+        <el-tab-pane label="実計推移" name="apt" />
+      </el-tabs>
+      <div class="ppg-legend">
+        <template v-if="activeTab === 'gantt'">
+          <span class="ppg-legend__item">
+            <span class="ppg-legend__sample ppg-legend__sample--actual">123</span>実績
+          </span>
+          <span class="ppg-legend__item">
+            <span class="ppg-legend__sample ppg-legend__sample--plan">123</span>計画
+          </span>
+          <span class="ppg-legend__sep" />
+        </template>
+        <template v-else>
+          <span class="ppg-legend__item">
+            <span class="ppg-legend__heat is-pos" />正
+          </span>
+          <span class="ppg-legend__item">
+            <span class="ppg-legend__heat is-zero" />0
+          </span>
+          <span class="ppg-legend__item">
+            <span class="ppg-legend__heat is-neg" />負
+          </span>
+          <span class="ppg-legend__sep" />
+        </template>
+        <span
+          v-for="p in legendProcesses"
+          :key="p.key"
+          class="ppg-legend__item"
+        >
+          <i class="ppg-legend__dot" :style="{ background: processColor(p.key) }" />
+          {{ p.label }}
+          <em v-if="activeTab === 'gantt' && p.mode === 'inventory_trend'">在庫</em>
+          <em v-else-if="activeTab === 'gantt' && p.mode === 'plan'">計画</em>
+          <em v-else-if="activeTab !== 'gantt' && p.mode === 'inventory_trend'">在庫</em>
+          <em v-else-if="activeTab === 'trend' && p.has_trend">推移</em>
+          <em v-else-if="activeTab === 'apt' && p.has_actual_plan_trend">実計</em>
+        </span>
+      </div>
+    </div>
 
     <section v-loading="loading" class="ppg-gantt">
       <div v-if="products.length" class="ppg-scroll">
@@ -601,8 +607,8 @@ function productAccent(index: number): string {
 function barStyle(key: string | null): Record<string, string> {
   const c = processColor(key)
   return {
-    background: `linear-gradient(180deg, ${c} 0%, ${c}dd 100%)`,
-    boxShadow: `0 4px 12px ${c}55, inset 0 1px 0 rgba(255,255,255,.28)`,
+    background: `linear-gradient(180deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 55%), linear-gradient(180deg, ${c} 0%, ${c}e6 100%)`,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,.3), inset 0 -2px 0 rgba(15,23,42,.16), 0 2px 5px -2px ${c}66`,
   }
 }
 
@@ -904,120 +910,149 @@ const productRows = computed<ProductRow[]>(() => {
   flex-direction: column;
   gap: 14px;
   min-height: 0;
-  background:
-    radial-gradient(1200px 400px at 10% -10%, rgba(99, 102, 241, 0.08), transparent 55%),
-    radial-gradient(900px 320px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 50%),
-    #f4f6fb;
+  background: linear-gradient(180deg, #eef0ff 0%, #f8fafc 260px, #f8fafc 100%);
 }
 
 .ppg-hero {
   position: relative;
   overflow: hidden;
-  border-radius: 18px;
-  padding: 20px 22px 16px;
-  color: #eef2ff;
-  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 48%, #1d4ed8 100%);
-  box-shadow: 0 18px 40px rgba(30, 27, 75, 0.28);
-}
-
-.ppg-hero__glow {
-  position: absolute;
-  right: -80px;
-  top: -90px;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(165, 180, 252, 0.35), transparent 68%);
-  pointer-events: none;
-}
-
-.ppg-hero__row {
-  position: relative;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  align-items: flex-start;
+  border-radius: 16px;
+  color: #eef2ff;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 34%, #4f46e5 62%, #2563eb 100%);
+  box-shadow: 0 10px 24px -12px rgba(49, 46, 129, 0.45);
 }
 
 .ppg-hero__brand {
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
 }
 
 .ppg-hero__icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
-}
-
-.ppg-hero__kicker {
-  margin: 0 0 2px;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #c7d2fe;
-}
-
-.ppg-hero h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
   color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.ppg-hero__copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ppg-hero__copy .pb-hero-title {
+  margin: 0;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.ppg-hero__copy .pb-hero-desc {
+  margin: 0;
+  color: rgba(224, 231, 255, 0.92);
 }
 
 .ppg-kpis {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ppg-kpi {
-  min-width: 86px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  --accent: #4f46e5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--accent) 14%, transparent),
+    0 4px 10px -6px rgba(15, 23, 42, 0.35);
+}
+
+.ppg-kpi--sky {
+  --accent: #0284c7;
+}
+
+.ppg-kpi--amber {
+  --accent: #d97706;
 }
 
 .ppg-kpi__label {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10px;
-  color: #c7d2fe;
+  font-weight: 700;
+  color: #64748b;
   letter-spacing: 0.04em;
 }
 
+.ppg-kpi__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.ppg-kpi__value {
+  display: inline-flex;
+  align-items: baseline;
+  line-height: 1;
+}
+
 .ppg-kpi strong {
-  font-size: 20px;
-  font-weight: 750;
-  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .ppg-kpi em {
   font-style: normal;
-  font-size: 12px;
-  color: #c7d2fe;
-  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-left: 3px;
+}
+
+.ppg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
 }
 
 .ppg-legend {
-  position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e0e7ff;
   font-size: 12px;
-  color: #e0e7ff;
+  font-weight: 600;
+  color: #334155;
 }
 
 .ppg-legend__item {
@@ -1027,16 +1062,17 @@ const productRows = computed<ProductRow[]>(() => {
 }
 
 .ppg-legend__sep {
+  align-self: stretch;
   width: 1px;
-  background: rgba(255, 255, 255, 0.18);
-  margin: 0 4px;
+  background: #e2e8f0;
+  margin: 0 2px;
 }
 
 .ppg-legend__dot {
   width: 9px;
   height: 9px;
   border-radius: 3px;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.06);
 }
 
 .ppg-legend__sample {
@@ -1050,7 +1086,12 @@ const productRows = computed<ProductRow[]>(() => {
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  background: linear-gradient(180deg, #6366f1, #4f46e5);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, #6366f1, #4f46e5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.16);
 }
 
 .ppg-legend__sample--actual {
@@ -1083,48 +1124,80 @@ const productRows = computed<ProductRow[]>(() => {
 .ppg-legend__item em {
   font-style: normal;
   font-size: 10px;
-  color: #c7d2fe;
-  background: rgba(255, 255, 255, 0.12);
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  border: 1px solid #e0e7ff;
   border-radius: 999px;
   padding: 0 6px;
 }
 
 .ppg-filters {
+  position: relative;
+  overflow: hidden;
   background: #fff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 16px;
-  padding: 12px 16px 2px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  border: 1px solid #e0e7ff;
+  border-radius: 14px;
+  padding: 14px 16px 2px;
+  box-shadow: 0 6px 18px -12px rgba(49, 46, 129, 0.25);
+}
+
+.ppg-filters::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4f46e5, #0284c7);
 }
 
 .ppg-tabs {
-  margin: -2px 0 -6px;
+  flex: 0 0 auto;
 }
 
-.ppg-tabs :deep(.el-tabs__header) {
+.ppg-tabs > :deep(.el-tabs__header) {
   margin: 0;
   border-bottom: none;
 }
 
-.ppg-tabs :deep(.el-tabs__nav-wrap::after) {
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__nav-wrap::after) {
   display: none;
 }
 
-.ppg-tabs :deep(.el-tabs__item) {
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__nav) {
+  padding: 3px;
+  border-radius: 12px;
+  background: #e0e7ff;
+  border: none;
+}
+
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__active-bar) {
+  display: none;
+}
+
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__item) {
+  height: 32px;
+  padding: 0 18px !important;
+  border-radius: 9px;
   font-weight: 700;
-  color: #64748b;
-  padding: 0 18px;
-  height: 40px;
+  color: #4f46e5;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.ppg-tabs :deep(.el-tabs__item.is-active) {
-  color: #4338ca;
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__item:hover) {
+  color: #3730a3;
+  background: rgba(255, 255, 255, 0.5);
 }
 
-.ppg-tabs :deep(.el-tabs__active-bar) {
-  height: 3px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #4f46e5, #2563eb);
+.ppg-tabs > :deep(.el-tabs__header .el-tabs__item.is-active) {
+  color: #3730a3;
+  background: #fff;
+  box-shadow:
+    inset 0 -2px 0 rgba(79, 70, 229, 0.18),
+    0 2px 6px -2px rgba(49, 46, 129, 0.3);
 }
 
 .ppg-filters__form :deep(.el-form-item) {
@@ -1133,8 +1206,28 @@ const productRows = computed<ProductRow[]>(() => {
 }
 
 .ppg-filters__form :deep(.el-form-item__label) {
-  color: #64748b;
-  font-weight: 600;
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ppg-filters__form :deep(.el-input__wrapper),
+.ppg-filters__form :deep(.el-select__wrapper) {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #dbe1f5;
+  transition: box-shadow 0.15s ease;
+}
+
+.ppg-filters__form :deep(.el-input__wrapper:hover),
+.ppg-filters__form :deep(.el-select__wrapper:hover) {
+  box-shadow: inset 0 0 0 1px #a5b4fc;
+}
+
+.ppg-filters__form :deep(.el-input__wrapper.is-focus),
+.ppg-filters__form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    inset 0 0 0 1px #6366f1,
+    0 0 0 3px rgba(99, 102, 241, 0.16);
 }
 
 .ppg-date {
@@ -1149,48 +1242,84 @@ const productRows = computed<ProductRow[]>(() => {
   width: 200px;
 }
 
-.ppg-search-btn {
-  padding: 8px 20px;
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+.ppg-filters .ppg-search-btn {
+  --k-rgb: 79 70 229;
+  padding: 8px 22px;
   border: none;
+  color: #fff;
+  font-weight: 700;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.ppg-filters .ppg-search-btn:hover,
+.ppg-filters .ppg-search-btn:focus-visible {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #818cf8, #4f46e5);
 }
 
 .ppg-presets,
 .ppg-zoom {
-  display: flex;
-  gap: 6px;
+  --seg: #4f46e5;
+  --seg-to: #4338ca;
+  --seg-bg: #eef2ff;
+  --seg-rgb: 79 70 229;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--seg-bg);
+}
+
+.ppg-zoom {
+  --seg: #0ea5e9;
+  --seg-to: #0284c7;
+  --seg-bg: #e0f2fe;
+  --seg-rgb: 2 132 199;
 }
 
 .ppg-chip {
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
-  border-radius: 999px;
-  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  color: var(--seg-to);
+  border-radius: 9px;
+  padding: 4px 12px;
   font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .ppg-chip:hover {
-  border-color: #c7d2fe;
-  color: #4338ca;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .ppg-chip.is-on {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
-  border-color: transparent;
   color: #fff;
-  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--seg), var(--seg-to));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18),
+    0 3px 8px -3px rgb(var(--seg-rgb) / 0.55);
 }
 
 .ppg-gantt {
+  position: relative;
   background: #fff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 16px;
+  border: 1px solid #e0e7ff;
+  border-top: 3px solid #4f46e5;
+  border-radius: 14px;
   min-height: 240px;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 6px 18px -12px rgba(49, 46, 129, 0.25);
 }
 
 .ppg-scroll {

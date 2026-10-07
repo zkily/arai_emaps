@@ -1,5 +1,5 @@
 <template>
-  <div class="picking-list-generator">
+  <div class="picking-list-generator pb-std">
     <!-- 统计卡片：精美UI -->
     <div class="statistics-section">
       <div class="statistics-cards">

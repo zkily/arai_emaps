@@ -289,7 +289,31 @@
           <el-table-column label="単価" width="80" align="right" class-name="col-order">
             <template #default="{ row }"><span class="num-muted">{{ formatNum(row.unit_price) }}</span></template>
           </el-table-column>
-          <el-table-column prop="delivery_date" label="納期" width="104" align="center" class-name="col-order" />
+          <el-table-column label="納期" width="124" align="center" class-name="col-order">
+            <template #default="{ row }">
+              <el-date-picker
+                v-if="editingDeliveryId === row.id"
+                :ref="setDeliveryPickerRef"
+                :model-value="row.delivery_date"
+                type="date"
+                value-format="YYYY-MM-DD"
+                format="YYYY-MM-DD"
+                :clearable="false"
+                :disabled-date="(d: Date) => isBeforeOrderDate(d, row as PlatingLedgerRow)"
+                size="small"
+                class="delivery-picker"
+                @update:model-value="(val: string) => saveDeliveryDate(row as PlatingLedgerRow, val)"
+                @visible-change="(open: boolean) => !open && endDeliveryEdit(row.id)"
+                @keydown.esc="endDeliveryEdit(row.id)"
+              />
+              <span
+                v-else
+                :class="['delivery-cell', { 'delivery-cell--editable': canEditDelivery }]"
+                :title="canEditDelivery ? 'ダブルクリックで納期を変更' : undefined"
+                @dblclick="startDeliveryEdit(row as PlatingLedgerRow)"
+              >{{ row.delivery_date }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="金額" width="112" align="right" class-name="col-order">
             <template #default="{ row }">
               <span :class="row.order_amount ? 'num-strong' : 'num-muted'">{{ formatNum(row.order_amount) }}</span>
@@ -561,7 +585,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -980,6 +1004,54 @@ function saveField(row: PlatingLedgerRow, field: QtyField, val: number | null | 
         if (current) current[field] = prev
       }
       notifyLedgerError(error, '保存に失敗しました')
+    }
+  })
+}
+
+// 納期：外注注文タブでダブルクリックして手修正
+const editingDeliveryId = ref<number | null>(null)
+let deliveryPicker: { handleOpen?: () => void; focus?: () => void } | null = null
+const canEditDelivery = computed(() => activeTab.value === 'order' && canEdit.value)
+
+function setDeliveryPickerRef(el: unknown) {
+  deliveryPicker = (el as typeof deliveryPicker) || null
+}
+
+function isBeforeOrderDate(d: Date, row: PlatingLedgerRow): boolean {
+  const [y, m, day] = row.order_date.split('-').map(Number)
+  return d.getTime() < new Date(y, m - 1, day).getTime()
+}
+
+async function startDeliveryEdit(row: PlatingLedgerRow) {
+  if (!canEditDelivery.value) return
+  editingDeliveryId.value = row.id
+  await nextTick()
+  if (deliveryPicker?.handleOpen) deliveryPicker.handleOpen()
+  else deliveryPicker?.focus?.()
+}
+
+function endDeliveryEdit(id: number) {
+  // 日付選択時は値の更新 → パネル閉じ の順なので、更新の処理後に外す
+  setTimeout(() => {
+    if (editingDeliveryId.value === id) editingDeliveryId.value = null
+  }, 0)
+}
+
+function saveDeliveryDate(row: PlatingLedgerRow, val: string | null) {
+  endDeliveryEdit(row.id)
+  if (!val || val === row.delivery_date) return
+  const id = row.id
+  const prev = row.delivery_date
+  row.delivery_date = val
+  saveChain = saveChain.then(async () => {
+    try {
+      const res = await ledger.update(id, { delivery_date: val })
+      const saved = res?.data?.row
+      applyAffected([...(saved ? [saved] : []), ...(res?.data?.affected || [])])
+    } catch (error: any) {
+      const current = rows.value.find((r) => r.id === id)
+      if (current) current.delivery_date = prev
+      notifyLedgerError(error, '納期の保存に失敗しました')
     }
   })
 }
@@ -1614,6 +1686,29 @@ onMounted(() => {
 .num-muted {
   color: #64748b;
   font-variant-numeric: tabular-nums;
+}
+
+.delivery-cell {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.delivery-cell--editable {
+  cursor: pointer;
+  border: 1px dashed transparent;
+  user-select: none;
+}
+
+.delivery-cell--editable:hover {
+  color: #3730a3;
+  border-color: #c7d2fe;
+  background: #f8f9ff;
+}
+
+.delivery-picker {
+  width: 112px !important;
 }
 
 .num-strong {

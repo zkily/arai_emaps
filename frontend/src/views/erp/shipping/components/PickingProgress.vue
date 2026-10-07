@@ -1,5 +1,5 @@
 <template>
-  <div class="picking-progress-container">
+  <div class="picking-progress-container pb-std">
     <!-- 页面标题区域 -->
     <div class="page-header">
       <div class="header-content">
