@@ -6,12 +6,13 @@ import math
 import asyncio
 import logging
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import date, timedelta, datetime, time
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, Iterable, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, and_, or_, delete, update, text, exists, func, case
+from sqlalchemy import select, and_, or_, delete, update, text, exists, func, case, insert
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.exc import OperationalError, ProgrammingError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -3278,9 +3279,14 @@ async def replan_sequence(
 
     # 在庫同期（活動判定前）：stock_transaction_logs → schedule_details
     # COMPLETED も含め順位昇順に配分する（同製品の上下工単へ瀑布するため）。
+    stock_agg = (
+        await _prefetch_line_stock_log_agg(db, line_machine, all_line_schedules)
+        if line_machine is not None
+        else None
+    )
     for ps in all_line_schedules:
         if (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS", "COMPLETED"):
-            await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+            await _sync_actual_from_stock_logs(db, ps, machine=line_machine, stock_agg=stock_agg)
     await db.flush()
     await _purge_pre_forced_start_schedule_rows(db, replannable_on_line)
 
@@ -3327,59 +3333,69 @@ async def replan_sequence(
         )
         await db.flush()
 
+    # 再排産後の明細期間で在庫ログを読み直す（明細の最大日が伸びるため）
+    stock_agg = (
+        await _prefetch_line_stock_log_agg(db, line_machine, all_line_schedules)
+        if line_machine is not None
+        else None
+    )
     for ps in all_line_schedules:
         if (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS", "COMPLETED"):
-            await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+            await _sync_actual_from_stock_logs(db, ps, machine=line_machine, stock_agg=stock_agg)
     await db.flush()
-    await _purge_pre_forced_start_schedule_rows(db, updated)
-
     # 最終：開始日指定前の孤立日別行を除去（当日分の再同期後も）
-    if updated:
-        await _purge_pre_forced_start_schedule_rows(db, updated)
+    await _purge_pre_forced_start_schedule_rows(db, updated)
 
     # 恢复冻结范围内计划（date < today）：仅恢复 planned_qty 与对应时段分配；
     # actual/defect 维持重排后最新同步值，remaining 随之重算。
     if line_schedule_ids:
         # autoflush=False のため SELECT が同セッション未 flush の明細を見落とし、
         # 既存行があるのに INSERT して uk_schedule_date に抵触することがある。
-        # MySQL の upsert で冪等に上書きする。
-        for (sid, work_date), frozen_planned in frozen_planned_snapshot.items():
-            fp = int(frozen_planned)
-            ins = mysql_insert(ScheduleDetail.__table__).values(
-                schedule_id=int(sid),
-                schedule_date=work_date,
-                planned_qty=fp,
-                actual_qty=0,
-                defect_qty=0,
-                remaining_qty=fp,
-            )
+        # MySQL の upsert で冪等に上書きする（executemany で一括）。
+        if frozen_planned_snapshot:
+            ins = mysql_insert(ScheduleDetail.__table__)
             await db.execute(
-                ins.on_duplicate_key_update(
-                    planned_qty=ins.inserted.planned_qty,
-                )
+                ins.on_duplicate_key_update(planned_qty=ins.inserted.planned_qty),
+                [
+                    {
+                        "schedule_id": int(sid),
+                        "schedule_date": work_date,
+                        "planned_qty": int(fp),
+                        "actual_qty": 0,
+                        "defect_qty": 0,
+                        "remaining_qty": int(fp),
+                    }
+                    for (sid, work_date), fp in frozen_planned_snapshot.items()
+                ],
             )
 
         # 冻结范围内的时段分配按快照恢复（未快照的工单/日期保持当前结果）
         if frozen_slice_snapshot:
+            frozen_dates_by_sid: dict[int, list[date]] = defaultdict(list)
             for sid, work_date in frozen_slice_snapshot.keys():
+                frozen_dates_by_sid[int(sid)].append(work_date)
+            for sid, dates in frozen_dates_by_sid.items():
                 await db.execute(
                     delete(ScheduleSliceAllocation).where(
-                        ScheduleSliceAllocation.schedule_id == int(sid),
-                        ScheduleSliceAllocation.work_date == work_date,
+                        ScheduleSliceAllocation.schedule_id == sid,
+                        ScheduleSliceAllocation.work_date.in_(dates),
                     )
                 )
-            for (sid, work_date), rows in frozen_slice_snapshot.items():
-                for r in rows:
-                    db.add(
-                        ScheduleSliceAllocation(
-                            schedule_id=int(sid),
-                            work_date=work_date,
-                            period_start=r["period_start"],
-                            period_end=r["period_end"],
-                            planned_qty=int(r["planned_qty"]),
-                            sort_order=int(r["sort_order"]),
-                        )
-                    )
+            await db.execute(
+                insert(ScheduleSliceAllocation.__table__),
+                [
+                    {
+                        "schedule_id": int(sid),
+                        "work_date": work_date,
+                        "period_start": r["period_start"],
+                        "period_end": r["period_end"],
+                        "planned_qty": int(r["planned_qty"]),
+                        "sort_order": int(r["sort_order"]),
+                    }
+                    for (sid, work_date), rows in frozen_slice_snapshot.items()
+                    for r in rows
+                ],
+            )
         await db.flush()
 
     # instruction_plans / aps_batch_plans 同期は凍結スライス復元後に行う（ロット start/end が最終スライスと一致）
@@ -4594,8 +4610,110 @@ def _good_actual_by_order_waterfall(
     return qty
 
 
+def _as_date(v: Any) -> date:
+    return date.fromisoformat(v) if isinstance(v, str) else v
+
+
+def _stock_log_machine_match_cond(machine: Optional[Machine]):
+    """在庫ログ「実績」の設備一致条件（machine_cd または設備名）。識別子が無ければ絞り込まない。"""
+    from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+
+    cd = (machine.machine_cd or "").strip() if machine is not None else ""
+    name = (machine.machine_name or "").strip() if machine is not None else ""
+    log_mc = func.trim(func.coalesce(StockTransactionLog.machine_cd, ""))
+    keys = [k for k in dict.fromkeys([cd, name]) if k]
+    if not keys:
+        return text("1=1")
+    if len(keys) == 1:
+        return log_mc == keys[0]
+    return or_(*[log_mc == k for k in keys])
+
+
+@dataclass
+class _LineStockLogAgg:
+    """ライン単位で先読みした在庫ログ日別集計 {製品CD: {日付: 数量}}。"""
+
+    actual: dict[str, dict[date, int]] = field(default_factory=dict)
+    defect: dict[str, dict[date, int]] = field(default_factory=dict)
+
+
+async def _prefetch_line_stock_log_agg(
+    db: AsyncSession,
+    machine: Machine,
+    schedules: Sequence[ProductionSchedule],
+) -> _LineStockLogAgg:
+    """
+    _sync_actual_from_stock_logs が工単ごとに発行する在庫ログ集計を、ライン全製品・全明細期間で 1 回にまとめる。
+    期間はライン上の schedule_details の最小〜最大日（各工単の lookback〜max_d を包含）。
+    """
+    from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+
+    agg = _LineStockLogAgg()
+    product_cds = sorted({(ps.product_cd or "").strip() for ps in schedules} - {""})
+    if not product_cds:
+        return agg
+    range_res = await db.execute(
+        select(func.min(ScheduleDetail.schedule_date), func.max(ScheduleDetail.schedule_date))
+        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+        .where(ProductionSchedule.line_id == machine.id)
+    )
+    d_from, d_to = range_res.one()
+    if d_from is None or d_to is None:
+        return agg
+    dt_from = datetime.combine(d_from, time(0, 0, 0))
+    dt_to = datetime.combine(d_to + timedelta(days=1), time(0, 0, 0))
+
+    # 照合順序 *_ci のため DB 側の表記揺れ（大文字小文字）を工単側の製品CDへ寄せる
+    pcd_by_fold = {cd.casefold(): cd for cd in product_cds}
+
+    def _key(v: Any) -> str:
+        s = str(v or "").strip()
+        return pcd_by_fold.get(s.casefold(), s)
+
+    tx_date = func.date(StockTransactionLog.transaction_time)
+    tcd = func.trim(StockTransactionLog.target_cd)
+    base_where = [
+        StockTransactionLog.transaction_time >= dt_from,
+        StockTransactionLog.transaction_time < dt_to,
+        tcd.in_(product_cds),
+    ]
+
+    act_res = await db.execute(
+        select(tcd.label("pcd"), tx_date.label("tx_date"), func.sum(StockTransactionLog.quantity))
+        .where(
+            StockTransactionLog.transaction_type == "実績",
+            _stock_log_machine_match_cond(machine),
+            *base_where,
+        )
+        .group_by(tcd, tx_date)
+    )
+    for pcd, d, q in act_res.all():
+        by_d = agg.actual.setdefault(_key(pcd), {})
+        by_d[_as_date(d)] = by_d.get(_as_date(d), 0) + int(q or 0)
+
+    defect_process_cd = await _stock_log_defect_process_cd_for_machine(db, machine)
+    if defect_process_cd:
+        def_res = await db.execute(
+            select(tcd.label("pcd"), tx_date.label("tx_date"), func.sum(StockTransactionLog.quantity))
+            .where(
+                func.trim(StockTransactionLog.transaction_type) == "不良",
+                func.trim(func.coalesce(StockTransactionLog.process_cd, "")) == defect_process_cd,
+                *base_where,
+            )
+            .group_by(tcd, tx_date)
+        )
+        for pcd, d, q in def_res.all():
+            by_d = agg.defect.setdefault(_key(pcd), {})
+            by_d[_as_date(d)] = by_d.get(_as_date(d), 0) + int(q or 0)
+    return agg
+
+
 async def _sync_actual_from_stock_logs(
-    db: AsyncSession, ps: ProductionSchedule, *, machine: Optional[Machine] = None
+    db: AsyncSession,
+    ps: ProductionSchedule,
+    *,
+    machine: Optional[Machine] = None,
+    stock_agg: Optional[_LineStockLogAgg] = None,
 ):
     """
     stock_transaction_logs を schedule_details に日別同期する。
@@ -4648,72 +4766,58 @@ async def _sync_actual_from_stock_logs(
         lookback_d = line_min_d
     forced_start = getattr(ps, "forced_start_date", None)
 
-    machine_cd_norm = (machine.machine_cd or "").strip() if machine is not None else ""
-    machine_name_norm = (machine.machine_name or "").strip() if machine is not None else ""
-    machine_match_cond = None
-    if machine_cd_norm and machine_name_norm:
-        machine_match_cond = or_(
-            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_cd_norm,
-            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_name_norm,
-        )
-    elif machine_cd_norm:
-        machine_match_cond = (
-            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_cd_norm
-        )
-    elif machine_name_norm:
-        machine_match_cond = (
-            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_name_norm
-        )
+    if stock_agg is not None:
+        actual_by_date = {
+            d: q
+            for d, q in stock_agg.actual.get(product_cd_norm, {}).items()
+            if lookback_d <= d <= max_d
+        }
+        defect_by_date = {
+            d: q
+            for d, q in stock_agg.defect.get(product_cd_norm, {}).items()
+            if lookback_d <= d <= max_d
+        }
     else:
-        # 設備識別子が取れない場合は machine 絞り込みを行わない（target_cd で同期）
-        machine_match_cond = text("1=1")
-
-    agg_res = await db.execute(
-        select(
-            sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
-            sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
-        )
-        .where(
-            StockTransactionLog.transaction_type == '実績',
-            StockTransactionLog.transaction_time.isnot(None),
-            sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
-            sa_func.date(StockTransactionLog.transaction_time) <= max_d,
-            machine_match_cond,
-            sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
-        )
-        .group_by(sa_func.date(StockTransactionLog.transaction_time))
-    )
-    actual_by_date: dict[date, int] = {}
-    for row in agg_res.all():
-        d = row.tx_date
-        if isinstance(d, str):
-            d = date.fromisoformat(d)
-        actual_by_date[d] = int(row.qty or 0)
-
-    defect_process_cd = await _stock_log_defect_process_cd_for_machine(db, machine)
-    defect_by_date: dict[date, int] = {}
-    if defect_process_cd:
-        agg_def = await db.execute(
+        actual_by_date = {}
+        agg_res = await db.execute(
             select(
                 sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
                 sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
             )
             .where(
-                sa_func.trim(StockTransactionLog.transaction_type) == "不良",
-                sa_func.trim(sa_func.coalesce(StockTransactionLog.process_cd, ""))
-                == defect_process_cd,
+                StockTransactionLog.transaction_type == '実績',
                 StockTransactionLog.transaction_time.isnot(None),
                 sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
                 sa_func.date(StockTransactionLog.transaction_time) <= max_d,
+                _stock_log_machine_match_cond(machine),
                 sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
             )
             .group_by(sa_func.date(StockTransactionLog.transaction_time))
         )
-        for row in agg_def.all():
-            d = row.tx_date
-            if isinstance(d, str):
-                d = date.fromisoformat(d)
-            defect_by_date[d] = int(row.qty or 0)
+        for row in agg_res.all():
+            actual_by_date[_as_date(row.tx_date)] = int(row.qty or 0)
+
+        defect_process_cd = await _stock_log_defect_process_cd_for_machine(db, machine)
+        defect_by_date = {}
+        if defect_process_cd:
+            agg_def = await db.execute(
+                select(
+                    sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
+                    sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
+                )
+                .where(
+                    sa_func.trim(StockTransactionLog.transaction_type) == "不良",
+                    sa_func.trim(sa_func.coalesce(StockTransactionLog.process_cd, ""))
+                    == defect_process_cd,
+                    StockTransactionLog.transaction_time.isnot(None),
+                    sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
+                    sa_func.date(StockTransactionLog.transaction_time) <= max_d,
+                    sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
+                )
+                .group_by(sa_func.date(StockTransactionLog.transaction_time))
+            )
+            for row in agg_def.all():
+                defect_by_date[_as_date(row.tx_date)] = int(row.qty or 0)
 
     # 同一ライン・同一製品で前順位工単に既に配賦済みの実績を控除し、
     # 同日実績の二重計上（複数工単への重複反映）を防ぐ。

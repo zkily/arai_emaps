@@ -5,7 +5,8 @@ JST 強制の産能推算ループ。schedule_details / schedule_slice_allocatio
 日次上限：その日の実稼働 h（時間帯合算 or カレンダー or default）×（daily_capacity/15.3）× 能率%。
 初日のみ段取（分）を稼働から差し引き、時間帯配分の先頭からも段取を消費（製品切替はライン順再計算で工単ごとに初日へ反映）。
 
-時間別ガント用 slice：各区間の上限＝⌊ 個/h × 能率 × 区間時間(h) ⌋ とし、時系列が早い区間から最大能力で詰める。
+時間別ガント用 slice：区間 i の上限＝⌊ 個/h × 能率 × 累計時間(h) ⌋ − 前区間までの累計上限 とし、
+時系列が早い区間から最大能力で詰める（区間ごとの端数切捨てで日量が ⌊ 個/h × 能率 × 稼働h ⌋ を下回らない）。
 最終生産日も「日量をその日の全時間に平均」はせず、先の時間帯を満杯にして残りは後ろの区間へ寄せる。
 """
 import math
@@ -14,7 +15,7 @@ from datetime import date, time, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import now_jst
@@ -203,19 +204,6 @@ def _cap_minute_segments_to_limit(
             out.append((sm, sm + take))
             used += take
     return out
-
-
-def day_planned_qty_cap(
-    productive_hours: float,
-    hourly_piece_rate: float,
-    efficiency_pct: float,
-) -> int:
-    """1 日の理論上限個数：⌊ 個/h × 能率% × 生産可能時間(h) ⌋（表示能率・稼働 h と一致）。"""
-    eff_factor = float(efficiency_pct or 100) / 100.0
-    rate = float(hourly_piece_rate)
-    if productive_hours <= 0 or rate <= 0 or eff_factor <= 0:
-        return 0
-    return int(math.floor(rate * eff_factor * productive_hours + 1e-9))
 
 
 def advance_line_cursor_after_slice(
@@ -571,6 +559,66 @@ async def _merge_or_insert_slice_allocation(
     return sa
 
 
+def _schedule_detail_row(
+    schedule_id: int, work_date: date, planned: int, actual: int, defect: int
+) -> dict[str, Any]:
+    return {
+        "schedule_id": schedule_id,
+        "schedule_date": work_date,
+        "planned_qty": int(planned),
+        "actual_qty": int(actual),
+        "defect_qty": int(defect),
+        "remaining_qty": 0,
+    }
+
+
+async def _bulk_insert_rows(db: AsyncSession, model: Any, rows: List[dict[str, Any]]) -> None:
+    """Core executemany で一括 INSERT（rows は同一キー構成であること）。"""
+    if rows:
+        await db.execute(insert(model.__table__), rows)
+
+
+def _chunks_total_minutes(chunks: List[tuple[time, time]]) -> int:
+    return sum(_chunk_length_minutes(st, et) for st, et in chunks)
+
+
+def _qty_cap_for_minutes(total_minutes: int, hourly_piece_rate: float, eff_factor: float) -> int:
+    if total_minutes <= 0 or hourly_piece_rate <= 0 or eff_factor <= 0:
+        return 0
+    return int(math.floor(float(hourly_piece_rate) * eff_factor * total_minutes / 60.0 + 1e-9))
+
+
+def _allocate_qty_to_chunks(
+    chunks: List[tuple[time, time]],
+    today_qty: int,
+    hourly_piece_rate: float,
+    efficiency_pct: float,
+) -> List[tuple[int, time, time, int]]:
+    """
+    日量を時間区間へ先詰め配分し [(区間 index, start, end, 本数)] を返す（本数 0 の区間は含めない）。
+    区間上限は累計時間ベースの差分で求め、全区間の上限合計＝⌊ 個/h × 能率 × 総時間 ⌋ となる。
+    """
+    eff_factor = float(efficiency_pct or 100) / 100.0
+    rate = float(hourly_piece_rate)
+    rem = int(today_qty)
+    if rem <= 0 or rate <= 0 or eff_factor <= 0:
+        return []
+    out: List[tuple[int, time, time, int]] = []
+    cum_min = 0
+    prev_cap = 0
+    for idx, (st, et) in enumerate(chunks):
+        if rem <= 0:
+            break
+        cum_min += _chunk_length_minutes(st, et)
+        cum_cap = _qty_cap_for_minutes(cum_min, rate, eff_factor)
+        give = min(rem, cum_cap - prev_cap)
+        prev_cap = cum_cap
+        if give > 0:
+            out.append((idx, st, et, give))
+            rem -= give
+    return out
+
+
 async def _persist_slice_allocations(
     db: AsyncSession,
     schedule_id: int,
@@ -590,7 +638,7 @@ async def _persist_slice_allocations(
     """
     1 日分を時間区間に配分して schedule_slice_allocations に保存。
 
-    ガント（時間別）は「各区内の最大可能個数」上限で、**時系列が早い区間から詰める**。
+    ガント（時間別）は累計時間ベースの区間上限で、**時系列が早い区間から詰める**。
     最終生産日も日量を全区間に平均せず、先の時間帯を最大能力で埋め残りは最後の区間に収まる。
     """
     if today_qty <= 0:
@@ -598,36 +646,27 @@ async def _persist_slice_allocations(
     segs = _productive_minute_segments(
         day_slots, avail_hours, apply_setup_day, setup_minutes, start_from_minute=start_from_minute
     )
+    max_prod_min = max(0, int(round(float(avail_hours) * 60)))
+    segs = _cap_minute_segments_to_limit(segs, max_prod_min)
     chunks = _split_segments_to_hour_chunks(segs)
     if not chunks:
         return 0
-    eff_factor = float(efficiency_pct or 100) / 100.0
-    rate = float(hourly_piece_rate)
-    if rate <= 0 or eff_factor <= 0:
-        return 0
-    rem = int(today_qty)
     sort_base = 0 if sort_order_start is None else int(sort_order_start)
     total_placed = 0
-    for st, et in chunks:
-        len_min = _chunk_length_minutes(st, et)
-        chunk_hours = len_min / 60.0
-        # 当該区間の理論上限（個）：⌊ 個/h × 能率 × 区間時間(h) ⌋
-        cap = int(math.floor(rate * eff_factor * chunk_hours + 1e-9))
-        give = min(rem, cap)
-        if give > 0:
-            await _merge_or_insert_slice_allocation(
-                db,
-                schedule_id,
-                work_date,
-                st,
-                et,
-                give,
-                sort_base,
-                merge_existing_period=merge_existing_period,
-            )
-            total_placed += give
-            rem -= give
-        sort_base += 1
+    for idx, st, et, give in _allocate_qty_to_chunks(
+        chunks, today_qty, hourly_piece_rate, efficiency_pct
+    ):
+        await _merge_or_insert_slice_allocation(
+            db,
+            schedule_id,
+            work_date,
+            st,
+            et,
+            give,
+            sort_base + idx,
+            merge_existing_period=merge_existing_period,
+        )
+        total_placed += give
     return total_placed
 
 
@@ -652,7 +691,7 @@ async def run_engine(
     1. schedule_details を全削除（冪等）
     2. 日別稼働 h：時間帯があれば合算、無ければ line_capacities → 設備 default
     3. 日次出来高 ⌊ 稼働 h × (daily_capacity/15.3) × 能率% ⌋ で schedule_details を INSERT（初日は段取を h から控除。use_setup_time=False の場合は段取を消費しない）
-    4. 同一数量を稼働帯に「区間ごとの時間上限×個/h×能率」で先から詰め、最大 60 分区間ごとに schedule_slice_allocations を INSERT
+    4. 同一数量を稼働帯に「累計時間ベースの区間上限」で先から詰め、最大 60 分区間ごとに schedule_slice_allocations を INSERT（日量＝区間合計）
     5. production_schedules の start_date / end_date / planned_output_qty / completion_rate を更新
 
     性能最適化パラメータ（省略時は従来通り DB 取得）:
@@ -721,16 +760,17 @@ async def run_engine(
     )
     await db.flush()
 
-    for d0, p0, a0, def0 in old_rows_before_start:
-        db.add(
-            ScheduleDetail(
-                schedule_id=schedule_id,
-                schedule_date=d0,
-                planned_qty=p0,
-                actual_qty=a0,
-                defect_qty=def0,
-            )
-        )
+    # 明細・スライスは配列に溜めて一括 INSERT（MySQL の ORM 単件 INSERT は行ごとに往復するため）
+    await _bulk_insert_rows(
+        db,
+        ScheduleDetail,
+        [
+            _schedule_detail_row(schedule_id, d0, p0, a0, def0)
+            for d0, p0, a0, def0 in old_rows_before_start
+        ],
+    )
+    detail_rows: List[dict[str, Any]] = []
+    slice_rows: List[dict[str, Any]] = []
 
     remaining = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0) - max(0, int(actual_done_qty or 0))
     if remaining <= 0:
@@ -854,42 +894,33 @@ async def run_engine(
             current_date += timedelta(days=1)
             continue
 
-        productive_hours = sum(
-            _chunk_length_minutes(st, et) / 60.0 for st, et in chunks
-        )
-        total_cap = day_planned_qty_cap(
-            productive_hours, rate, cap_eff_factor * 100.0
-        )
+        total_cap = _qty_cap_for_minutes(_chunks_total_minutes(chunks), rate, cap_eff_factor)
         today_qty = min(total_cap, remaining)
 
         if today_qty > 0:
-            placed = await _persist_slice_allocations(
-                db,
-                schedule_id,
-                current_date,
-                day_slot_list,
-                avail_hours,
-                apply_setup_slices,
-                int(setup_minutes),
-                today_qty,
-                hourly_piece_rate,
-                cap_eff_factor * 100.0,
-                start_from_minute=start_from_minute,
-            )
+            placed = 0
+            for idx, st, et, give in _allocate_qty_to_chunks(
+                chunks, today_qty, rate, cap_eff_factor * 100.0
+            ):
+                slice_rows.append(
+                    {
+                        "schedule_id": schedule_id,
+                        "work_date": current_date,
+                        "period_start": st,
+                        "period_end": et,
+                        "planned_qty": int(give),
+                        "sort_order": idx,
+                    }
+                )
+                placed += give
             if placed > 0:
                 oa = int(old_actual_by_date.get(current_date, 0))
                 odg = int(old_defect_by_date.get(current_date, 0))
                 if forced_start_floor is not None and current_date < forced_start_floor:
                     oa = 0
                     odg = 0
-                db.add(
-                    ScheduleDetail(
-                        schedule_id=schedule_id,
-                        schedule_date=current_date,
-                        planned_qty=placed,
-                        actual_qty=oa,
-                        defect_qty=odg,
-                    )
+                detail_rows.append(
+                    _schedule_detail_row(schedule_id, current_date, placed, oa, odg)
                 )
                 remaining -= placed
                 total_produced += placed
@@ -898,6 +929,9 @@ async def run_engine(
                 actual_end = current_date
 
         current_date += timedelta(days=1)
+
+    await _bulk_insert_rows(db, ScheduleSliceAllocation, slice_rows)
+    await _bulk_insert_rows(db, ScheduleDetail, detail_rows)
 
     ps.start_date = actual_start or start
     ps.end_date = actual_end or start
@@ -1101,10 +1135,7 @@ async def run_engine_append_qty(
             current_date += timedelta(days=1)
             continue
 
-        productive_hours = sum(
-            _chunk_length_minutes(st, et) / 60.0 for st, et in chunks
-        )
-        total_cap = day_planned_qty_cap(productive_hours, rate, cap_eff_factor * 100.0)
+        total_cap = _qty_cap_for_minutes(_chunks_total_minutes(chunks), rate, cap_eff_factor)
         today_qty = min(total_cap, remaining)
         if today_qty <= 0:
             current_date += timedelta(days=1)

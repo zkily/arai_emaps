@@ -7216,7 +7216,6 @@ function onDragLeaveChamfering(_zone: 'chamferingBatchList' | ChamferingManageme
 }
 
 function onChamferingBatchDragStart(e: DragEvent, row: ChamferingBatchRow) {
-  if (isDragging.value) return
   isDragging.value = true
   dragSourceRef.value = 'chamferingBatch'
   if (!e.dataTransfer) return
@@ -7225,7 +7224,6 @@ function onChamferingBatchDragStart(e: DragEvent, row: ChamferingBatchRow) {
 }
 
 function onChamferingManagementDragStart(e: DragEvent, row: ChamferingManagementRow) {
-  if (isDragging.value) return
   isDragging.value = true
   dragSourceRef.value = 'chamferingManagement'
   if (!e.dataTransfer) return
@@ -7243,6 +7241,8 @@ function onChamferingDragEnd() {
 /** 面取指示行を別の行にドロップして同一面取機・同一生産日内で並び替え */
 async function onDropChamferingRowForReorder(e: DragEvent, targetRow: ChamferingManagementRow) {
   e.preventDefault()
+  // 面取ロットからのドロップは外側の面取指示ドロップ領域で処理させる
+  if (dragSourceRef.value !== 'chamferingManagement') return
   e.stopPropagation()
   let payload: { source?: string; row?: ChamferingManagementRow }
   try {
@@ -7290,6 +7290,7 @@ async function onDropChamferingRowForReorder(e: DragEvent, targetRow: Chamfering
 
 function onDragoverChamferingRow(e: DragEvent) {
   e.preventDefault()
+  if (dragSourceRef.value !== 'chamferingManagement') return
   e.stopPropagation()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
@@ -7301,6 +7302,7 @@ async function onDropChamferingRowToEdge(
   context: 'today' | 'tomorrow'
 ) {
   e.preventDefault()
+  if (dragSourceRef.value !== 'chamferingManagement') return
   e.stopPropagation()
   let payload: { source?: string; row?: ChamferingManagementRow }
   try {
@@ -7770,6 +7772,8 @@ function onCuttingCardDragEnd() {
 /** 切断指示行を別の行にドロップして同一切断機内で並び替え（生産順更新） */
 async function onDropCuttingRowForReorder(e: DragEvent, targetRow: CuttingManagementRow) {
   e.preventDefault()
+  // ロット一覧からのドロップは外側の切断指示ドロップ領域で処理させる
+  if (dragSourceRef.value !== 'cuttingManagement') return
   e.stopPropagation()
   let payload: { source?: string; row?: CuttingManagementRow }
   try {
@@ -7813,6 +7817,8 @@ async function onDropCuttingRowForReorder(e: DragEvent, targetRow: CuttingManage
 /** 行上 dragover 时允许放置并显示 move 光标，确保表内拖拽排序可触发 drop */
 function onDragoverCuttingRow(e: DragEvent) {
   e.preventDefault()
+  // ロットのドラッグは effectAllowed='copy' のため、ここで move を設定するとドロップ不可になる
+  if (dragSourceRef.value !== 'cuttingManagement') return
   e.stopPropagation()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
@@ -7824,6 +7830,7 @@ async function onDropCuttingRowToEdge(
   context: 'today' | 'tomorrow'
 ) {
   e.preventDefault()
+  if (dragSourceRef.value !== 'cuttingManagement') return
   e.stopPropagation()
   let payload: { source?: string; row?: CuttingManagementRow }
   try {
@@ -10185,10 +10192,17 @@ onMounted(() => {
   loadCuttingManagement()
   loadCuttingInstructionNotes()
   window.addEventListener('keydown', onProductionDayEditorKeydown)
+  window.addEventListener('mousedown', resetStaleDragState, true)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onProductionDayEditorKeydown)
+  window.removeEventListener('mousedown', resetStaleDragState, true)
 })
+
+/** ドラッグ元の行が再描画されると dragend が届かず isDragging が残るため、次の操作開始時に解除する */
+function resetStaleDragState() {
+  if (isDragging.value || dragSourceRef.value) onCuttingCardDragEnd()
+}
 
 /** タブ切替で戻った時：絞り込み条件・ページはそのまま、一覧データのみ再取得 */
 async function refreshOnReactivate() {
@@ -10222,10 +10236,13 @@ onActivated(() => {
     return
   }
   window.addEventListener('keydown', onProductionDayEditorKeydown)
+  window.addEventListener('mousedown', resetStaleDragState, true)
   refreshOnReactivate()
 })
 onDeactivated(() => {
   window.removeEventListener('keydown', onProductionDayEditorKeydown)
+  window.removeEventListener('mousedown', resetStaleDragState, true)
+  onCuttingCardDragEnd()
 })
 </script>
  
