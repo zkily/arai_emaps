@@ -479,6 +479,7 @@ export default {
     ERP_INVENTORY_LIST: '仕掛品・製品在庫照会',
     ERP_INVENTORY_MATERIAL_LIST: '材料在庫照会',
     ERP_INVENTORY_PART_LIST: '部品在庫照会',
+    ERP_INVENTORY_SUPPLY_PARTS: '補給品管理',
     ERP_INVENTORY_STOCKTAKE: '棚卸管理',
     ERP_INVENTORY_STOCKTAKE_HOME: '棚卸管理ホーム',
     ERP_INVENTORY_STOCKTAKE_LIST: '棚卸リスト一覧',

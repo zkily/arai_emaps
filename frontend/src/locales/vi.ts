@@ -370,6 +370,7 @@ export default {
     ERP_INVENTORY_LIST: 'Tra cứu tồn kho BTP và sản phẩm',
     ERP_INVENTORY_MATERIAL_LIST: 'Tra cứu tồn kho vật liệu',
     ERP_INVENTORY_PART_LIST: 'Tra cứu tồn kho linh kiện',
+    ERP_INVENTORY_SUPPLY_PARTS: 'Quản lý phụ tùng',
     ERP_INVENTORY_STOCKTAKE: 'Kiểm kê kho',
     ERP_INVENTORY_STOCKTAKE_HOME: 'Trang kiểm kê',
     ERP_INVENTORY_STOCKTAKE_LIST: 'Danh sách kiểm kê',

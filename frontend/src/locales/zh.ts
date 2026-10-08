@@ -478,6 +478,7 @@ export default {
     ERP_INVENTORY_LIST: '在制品・制品库存查询',
     ERP_INVENTORY_MATERIAL_LIST: '材料库存查询',
     ERP_INVENTORY_PART_LIST: '部品库存查询',
+    ERP_INVENTORY_SUPPLY_PARTS: '补给品管理',
     ERP_INVENTORY_STOCKTAKE: '盘点管理',
     ERP_INVENTORY_STOCKTAKE_HOME: '盘点管理首页',
     ERP_INVENTORY_STOCKTAKE_LIST: '盘点清单',

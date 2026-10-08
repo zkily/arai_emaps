@@ -2,20 +2,23 @@
 ERPモジュール
 統合されたERP機能（在庫管理、購買管理、販売管理、基礎データ管理）
 """
+
 from fastapi import APIRouter
+
 from .api import router as main_router
-from .inventory_api import router as inventory_router
-from .inventory_logs_api import router as inventory_logs_router
-from .sales_api import router as sales_router
-from .master_api import router as master_router
-from .stock_transaction_log_api import router as stock_transaction_log_router
-from .production_actual_api import router as production_actual_router
-from .inventory_value_api import router as inventory_value_router
-from .inventory_comparison_api import router as inventory_comparison_router
-from .standard_cost_api import router as standard_cost_router
 from .bulk_disposal_retention_api import router as bulk_disposal_retention_router
+from .inventory_api import router as inventory_router
+from .inventory_comparison_api import router as inventory_comparison_router
+from .inventory_logs_api import router as inventory_logs_router
 from .inventory_report_api import router as inventory_report_router
+from .inventory_value_api import router as inventory_value_router
+from .master_api import router as master_router
+from .production_actual_api import router as production_actual_router
 from .production_review_api import router as production_review_router
+from .sales_api import router as sales_router
+from .standard_cost_api import router as standard_cost_router
+from .stock_transaction_log_api import router as stock_transaction_log_router
+from .supply_part_api import router as supply_part_router
 
 # メインルーター（すべてのERPサブルーターを統合）
 router = APIRouter()
@@ -36,6 +39,6 @@ router.include_router(standard_cost_router)
 router.include_router(bulk_disposal_retention_router)
 router.include_router(inventory_report_router)
 router.include_router(production_review_router)
+router.include_router(supply_part_router)
 
-__all__ = ['router']
-
+__all__ = ["router"]

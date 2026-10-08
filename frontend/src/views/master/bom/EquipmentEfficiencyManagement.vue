@@ -38,6 +38,9 @@
       </el-input>
       <div class="ee-toolbar-actions">
         <el-button @click="clearFilters" :icon="Refresh" class="ee-btn-clear">クリア</el-button>
+        <el-button type="primary" plain @click="overviewVisible = true" :icon="Grid" class="ee-btn-print">
+          工程別一覧
+        </el-button>
         <el-button
           v-if="canExport"
           type="success"
@@ -256,13 +259,20 @@
         </div>
       </template>
     </el-dialog>
+
+    <EquipmentEfficiencyProcessOverview
+      v-model="overviewVisible"
+      :initial-process="activeProcessTab"
+      :initial-keyword="filters.keyword"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Tools, Refresh, Plus, Search, Edit, Delete, Printer } from '@element-plus/icons-vue'
+import { Tools, Refresh, Plus, Search, Edit, Delete, Printer, Grid } from '@element-plus/icons-vue'
+import EquipmentEfficiencyProcessOverview from './EquipmentEfficiencyProcessOverview.vue'
 import {
   fetchEquipmentEfficiencyList,
   createEquipmentEfficiency,
@@ -296,6 +306,7 @@ const formRef = ref<FormInstance>()
 const activeProcessTab = ref('all')
 const statusUpdatingId = ref<number | null>(null)
 const printing = ref(false)
+const overviewVisible = ref(false)
 
 const processTypes = [
   { label: '全て', value: 'all' },

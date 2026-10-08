@@ -480,6 +480,7 @@ export default {
     ERP_INVENTORY_LIST: 'WIP & product inventory inquiry',
     ERP_INVENTORY_MATERIAL_LIST: 'Material inventory inquiry',
     ERP_INVENTORY_PART_LIST: 'Part inventory inquiry',
+    ERP_INVENTORY_SUPPLY_PARTS: 'Service parts',
     ERP_INVENTORY_STOCKTAKE: 'Physical Inventory',
     ERP_INVENTORY_STOCKTAKE_HOME: 'Stocktake Home',
     ERP_INVENTORY_STOCKTAKE_LIST: 'Stocktake List',

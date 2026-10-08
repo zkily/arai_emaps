@@ -63,6 +63,31 @@ export function fetchEquipmentEfficiencyList(
   return request.get(BASE, { params }) as Promise<EquipmentEfficiencyListResponse>
 }
 
+export interface EquipmentEfficiencyMaterial {
+  material_cd: string
+  material_name: string
+}
+
+export interface EquipmentEfficiencyByProcessRow extends EquipmentEfficiency {
+  process_type?: string
+  materials?: EquipmentEfficiencyMaterial[]
+}
+
+export interface EquipmentEfficiencyByProcessParams {
+  keyword?: string
+  processType?: string
+}
+
+/** 工程別一覧（設備ごとの製品・能率・使用材料） */
+export function fetchEquipmentEfficiencyByProcess(
+  params?: EquipmentEfficiencyByProcessParams
+): Promise<{ success?: boolean; data?: { list: EquipmentEfficiencyByProcessRow[]; total: number } }> {
+  return request.get(`${BASE}/by-process`, { params }) as Promise<{
+    success?: boolean
+    data?: { list: EquipmentEfficiencyByProcessRow[]; total: number }
+  }>
+}
+
 export function getEquipmentEfficiencyById(id: number): Promise<EquipmentEfficiency> {
   return request.get(`${BASE}/${id}`) as Promise<EquipmentEfficiency>
 }

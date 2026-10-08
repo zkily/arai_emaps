@@ -67,6 +67,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY_LIST', name: '仕掛品・製品在庫照会', icon: 'Goods', path: '/erp/inventory/list', parentCode: 'ERP_INVENTORY', sortOrder: 1 },
   { code: 'ERP_INVENTORY_MATERIAL_LIST', name: '材料在庫照会', icon: 'Collection', path: '/erp/inventory/material-list', parentCode: 'ERP_INVENTORY', sortOrder: 2 },
   { code: 'ERP_INVENTORY_PART_LIST', name: '部品在庫照会', icon: 'Grid', path: '/erp/inventory/part-list', parentCode: 'ERP_INVENTORY', sortOrder: 3 },
+  { code: 'ERP_INVENTORY_SUPPLY_PARTS', name: '補給品管理', icon: 'Box', path: '/erp/inventory/supply-parts', parentCode: 'ERP_INVENTORY', sortOrder: 3.6 },
   { code: 'ERP_INVENTORY_STOCK_ENTRY', name: '在庫登録管理', icon: 'DocumentAdd', path: '/erp/inventory/stock-entry', parentCode: 'ERP_INVENTORY', sortOrder: 4 },
   { code: 'ERP_INVENTORY_STOCK_TX_LOG', name: '在庫取引記録', icon: 'Notebook', path: '/erp/inventory/stock-transaction-logs', parentCode: 'ERP_INVENTORY', sortOrder: 5 },
   { code: 'ERP_INVENTORY_MANUAL_ENTRY_STATS', name: '実績修正統計', icon: 'DataAnalysis', path: '/erp/inventory/manual-entry-statistics', parentCode: 'ERP_INVENTORY', sortOrder: 5.5 },

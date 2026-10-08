@@ -4,14 +4,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_, func, case, literal
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import EquipmentEfficiency
+from app.modules.master.models import (
+    EquipmentEfficiency,
+    Material,
+    Product,
+    ProductBomHeader,
+    ProductBomLine,
+)
 
 router = APIRouter()
 
@@ -178,6 +184,114 @@ async def get_equipment_efficiency_list(
         payload["product_distinct_count"] = int(product_distinct)
 
     return payload
+
+
+async def _product_materials_map(db: AsyncSession, product_cds: List[str]) -> Dict[str, List[dict]]:
+    """製品CD → 使用材料一覧（製品マスタ material_cd 優先、無ければ明細BOMの材料行）"""
+    if not product_cds:
+        return {}
+    material_cds_by_product: Dict[str, List[str]] = {}
+
+    prod_rows = (
+        await db.execute(
+            select(Product.product_cd, Product.material_cd).where(Product.product_cd.in_(product_cds))
+        )
+    ).all()
+    for p_cd, m_cd in prod_rows:
+        m = (m_cd or "").strip()
+        if p_cd and m:
+            material_cds_by_product[p_cd] = [m]
+
+    missing = [cd for cd in product_cds if cd not in material_cds_by_product]
+    if missing:
+        bom_rows = (
+            await db.execute(
+                select(ProductBomHeader.parent_product_cd, ProductBomLine.component_material_cd)
+                .join(ProductBomLine, ProductBomLine.header_id == ProductBomHeader.id)
+                .where(
+                    ProductBomHeader.parent_product_cd.in_(missing),
+                    ProductBomHeader.status == "active",
+                    ProductBomLine.component_material_cd.isnot(None),
+                    ProductBomLine.component_material_cd != "",
+                )
+                .order_by(ProductBomHeader.parent_product_cd, ProductBomLine.line_no)
+            )
+        ).all()
+        for p_cd, m_cd in bom_rows:
+            lst = material_cds_by_product.setdefault(p_cd, [])
+            if m_cd not in lst:
+                lst.append(m_cd)
+
+    all_material_cds = sorted({m for lst in material_cds_by_product.values() for m in lst})
+    name_map: Dict[str, str] = {}
+    if all_material_cds:
+        mat_rows = (
+            await db.execute(
+                select(Material.material_cd, Material.material_name).where(
+                    Material.material_cd.in_(all_material_cds)
+                )
+            )
+        ).all()
+        name_map = {cd: name for cd, name in mat_rows}
+
+    return {
+        p_cd: [{"material_cd": m, "material_name": name_map.get(m) or ""} for m in lst]
+        for p_cd, lst in material_cds_by_product.items()
+    }
+
+
+_OVERVIEW_EXCLUDED_PRODUCT_TYPES = ("試作品", "補給品")
+
+
+@router.get("/by-process")
+async def get_equipment_efficiency_by_process(
+    keyword: Optional[str] = Query(None),
+    process_type: Optional[str] = Query(None, alias="processType"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """工程別一覧（設備ごとの製品・能率・使用材料）。無効・試作品・補給品・成型NC設備は対象外。"""
+    clauses = _list_where_clauses(keyword, process_type)
+    clauses.append(EquipmentEfficiency.status == 1)
+    mn = func.upper(func.coalesce(EquipmentEfficiency.machines_name, ""))
+    clauses.append(~and_(mn.like("%成型%"), mn.like("%NC%")))
+    pt = _process_type_expr()
+    stmt = select(EquipmentEfficiency, pt.label("process_type")).order_by(
+        EquipmentEfficiency.machines_name,
+        EquipmentEfficiency.machine_cd,
+        EquipmentEfficiency.product_name,
+    )
+    if clauses:
+        stmt = stmt.where(and_(*clauses))
+    rows = (await db.execute(stmt)).all()
+
+    product_cds = sorted({r.product_cd for r, _ in rows if r.product_cd})
+    if product_cds:
+        excluded = set(
+            (
+                await db.execute(
+                    select(Product.product_cd).where(
+                        Product.product_cd.in_(product_cds),
+                        Product.product_type.in_(_OVERVIEW_EXCLUDED_PRODUCT_TYPES),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if excluded:
+            rows = [(r, p) for r, p in rows if r.product_cd not in excluded]
+            product_cds = [cd for cd in product_cds if cd not in excluded]
+    materials_map = await _product_materials_map(db, product_cds)
+
+    data_list = []
+    for r, p in rows:
+        item = _row_to_dict(r)
+        item["process_type"] = str(p) if p is not None else "other"
+        item["materials"] = materials_map.get(r.product_cd or "", [])
+        data_list.append(item)
+
+    return {"success": True, "data": {"list": data_list, "total": len(data_list)}}
 
 
 @router.get("/{item_id:int}")
