@@ -1,6 +1,6 @@
 # 生産計画ベースライン管理 — スクリーンショット
 
-操作説明 Markdown：`frontend/src/views/manual/docs/plan-baseline_ja.md`
+操作説明の正本は PDF：`frontend/src/views/manual/pdfs/plan-baseline.pdf`（旧 Markdown：`frontend/src/views/manual/docs/plan-baseline_ja.md`）
 
 | ファイル名 | 内容 |
 |------------|------|

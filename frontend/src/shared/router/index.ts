@@ -29,12 +29,10 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/pages/Redirect.vue'),
     meta: { title: 'リダイレクト' },
   },
-  // 生産計画ベースライン管理 操作説明（公开ページ：无需登录）
+  // 生産計画ベースライン管理 操作説明（旧 URL → PDF マニュアル）
   {
     path: '/erp/production/plan-baseline/help',
-    name: 'ProductionPlanBaselineManagementHelp',
-    component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
-    meta: { title: '生産計画ベースライン管理 操作説明', requiresAuth: false },
+    redirect: { name: 'ManualHome', params: { slug: 'plan-baseline' } },
   },
   // 検査実績収集 操作説明（旧 URL → マニュアルホームへ）
   {

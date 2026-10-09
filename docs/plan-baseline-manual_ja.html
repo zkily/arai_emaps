@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>生産計画ベースライン管理 操作説明書</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 13mm 16mm;
+    @top-right {
+      content: "生産計画ベースライン管理 操作説明書";
+      font-family: "Yu Gothic", "Yu Gothic UI", Meiryo, sans-serif;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      font-family: "Yu Gothic", "Yu Gothic UI", Meiryo, sans-serif;
+      font-size: 9pt;
+      color: #64748b;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @top-right { content: none; }
+    @bottom-center { content: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    color: #1e293b;
+    font-family: "Yu Gothic", "Yu Gothic UI", "Meiryo", "Hiragino Sans", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+  }
+  h2 { font-size: 16pt; margin: 0 0 10px; page-break-after: avoid; }
+  h3 { font-size: 12pt; color: #0f766e; margin: 14px 0 6px; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 8px; padding-left: 1.35em; }
+  li { margin: 2px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #dbe3ee; padding: 5px 7px; vertical-align: top; text-align: left; }
+  th { background: #f1f5f9; color: #334155; font-weight: 700; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code {
+    font-family: "Yu Gothic", Meiryo, sans-serif;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 9.5pt;
+  }
+  .cover {
+    height: 297mm;
+    background: linear-gradient(165deg, #0b3a4a 0%, #0e7490 46%, #14b8a6 100%);
+    color: #fff;
+    padding: 28mm 18mm 16mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before, .cover::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+  }
+  .cover::before { width: 220mm; height: 220mm; right: -70mm; top: -80mm; }
+  .cover::after { width: 160mm; height: 160mm; left: -50mm; bottom: -40mm; }
+  .cover .inner { position: relative; z-index: 1; }
+  .pill {
+    display: inline-block;
+    border: 1px solid rgba(255,255,255,0.45);
+    background: rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-size: 10.5pt;
+    letter-spacing: 0.04em;
+  }
+  .cover h1 { font-size: 30pt; line-height: 1.25; margin: 18mm 0 6mm; font-weight: 800; }
+  .cover .lead { font-size: 12pt; margin: 0 0 12mm; font-weight: 500; }
+  .grid6 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .chip {
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 10.5pt;
+  }
+  .meta3 {
+    position: absolute;
+    left: 18mm; right: 18mm; bottom: 16mm;
+    display: grid;
+    grid-template-columns: 1.3fr 0.8fr 1fr;
+    gap: 10px;
+    z-index: 1;
+  }
+  .meta3 div {
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 10pt;
+  }
+  .meta3 small { display: block; opacity: 0.8; font-size: 8.5pt; }
+  .meta3 b { font-size: 12pt; font-weight: 700; }
+
+  .ch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 2.5px solid #0d9488;
+    padding-bottom: 4px;
+    margin: 4px 0 10px;
+    page-break-after: avoid;
+  }
+  .ch .no {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: #0d9488; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 12pt;
+  }
+  .sec { border-left: 4px solid #14b8a6; padding-left: 8px; margin: 14px 0 6px; page-break-after: avoid; }
+  .note, .warn, .tip {
+    page-break-inside: avoid;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 10pt;
+  }
+  .note { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .warn { background: #fffbeb; border: 1px solid #fde68a; }
+  .tip { background: #f0fdfa; border: 1px solid #99f6e4; }
+  .flow { display: flex; gap: 6px; align-items: stretch; margin: 8px 0 12px; page-break-inside: avoid; }
+  .flow .box {
+    flex: 1;
+    border: 1px solid #99f6e4;
+    background: #f0fdfa;
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 9pt;
+  }
+  .flow .box b { display: block; color: #0f766e; margin-bottom: 2px; }
+  .flow .arr { align-self: center; color: #0d9488; font-weight: 800; }
+
+  .toc { page-break-after: always; }
+  .toc-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    border-bottom: 1px dotted #cbd5e1;
+    padding: 5px 0;
+    font-size: 10.5pt;
+  }
+  .toc-row .hint { color: #64748b; font-size: 9pt; white-space: nowrap; }
+  .toc-row .num { color: #0f766e; font-weight: 800; margin-right: 6px; }
+
+  figure.shot { margin: 8px 0 12px; page-break-inside: avoid; }
+  figcaption { margin-top: 4px; font-size: 8.5pt; color: #475569; text-align: center; }
+  figure.shot img {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    display: block;
+  }
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 4px;
+    border-radius: 99px; color: #fff; font-size: 8pt; font-weight: 800;
+    vertical-align: middle; margin-right: 3px;
+  }
+  .r { background: #ef4444; }
+  .b { background: #2563eb; }
+
+  .ui {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8fafc;
+    font-size: 8pt;
+    line-height: 1.35;
+  }
+  .ui-hero {
+    background: linear-gradient(90deg, #0f766e, #0891b2);
+    color: #fff;
+    padding: 8px 10px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ui-hero b { font-size: 11pt; display: block; }
+  .ui-hero small { opacity: 0.9; }
+  .ui-btns { display: flex; gap: 4px; }
+  .btn { border-radius: 4px; padding: 2px 6px; font-weight: 700; }
+  .btn-w { background: #fff; color: #0f766e; }
+  .btn-g { background: #16a34a; color: #fff; }
+  .btn-d { background: #fff; color: #dc2626; border: 1px solid #fecaca; }
+  .btn-y { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
+  .btn-p { background: #e0f2fe; color: #0369a1; }
+  .ui-body { padding: 8px; }
+  .row { display: flex; gap: 6px; }
+  .card {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px;
+  }
+  .kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+  .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px; text-align: center; }
+  .kpi b { display: block; font-size: 8.5pt; color: #0f766e; }
+  .kpi span { color: #64748b; font-size: 7pt; }
+  .tabs { display: flex; gap: 3px; margin: 6px 0 4px; flex-wrap: wrap; }
+  .tab { background: #fff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 5px; }
+  .tab.on { background: #0f766e; color: #fff; border-color: #0f766e; }
+  .mini td, .mini th { padding: 2px 4px; font-size: 7.5pt; }
+  .neg { color: #dc2626; } .pos { color: #16a34a; }
+  .lock { font-size: 7.5pt; color: #0f766e; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="inner">
+    <span class="pill">Smart-EMAPs ／ 生産管理</span>
+    <h1>生産計画ベースライン管理<br>操作説明書</h1>
+    <p class="lead">基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
+    <div class="grid6">
+      <div class="chip">① 基準月のベースライン生成・削除</div>
+      <div class="chip">② 切断・面取・メッキ・検査の手入力</div>
+      <div class="chip">③ 変更計画・実績との差異確認</div>
+      <div class="chip">④ KPI・前月・前年同月の比較</div>
+      <div class="chip">⑤ 日次推移と月間ヒートマップ</div>
+      <div class="chip">⑥ 統合レポート・Excel・印刷</div>
+    </div>
+  </div>
+  <div class="meta3">
+    <div><small>対象画面</small><b>計画ベースライン</b></div>
+    <div><small>版数</small><b>第 1.0 版</b></div>
+    <div><small>作成日</small><b>2026年10月9日</b></div>
+  </div>
+</section>
+
+<section class="toc">
+  <div class="ch"><span class="no">目</span><h2 style="border:0;margin:0;padding:0;">目次</h2></div>
+  <div class="toc-row"><span><span class="num">1</span>はじめに（目的・用語・運用の流れ）</span><span class="hint">基準計画とは</span></div>
+  <div class="toc-row"><span><span class="num">2</span>画面を開く</span><span class="hint">ERP → 生産管理 → 生産計画</span></div>
+  <div class="toc-row"><span><span class="num">3</span>画面構成</span><span class="hint">生成・検索／KPI／チャート／一覧</span></div>
+  <div class="toc-row"><span><span class="num">4</span>ベースライン生成・削除</span><span class="hint">ロック・上書き・手入力の保持</span></div>
+  <div class="toc-row"><span><span class="num">5</span>基準計画の手入力</span><span class="hint">切断・面取・メッキ・検査</span></div>
+  <div class="toc-row"><span><span class="num">6</span>比較条件</span><span class="hint">対象月・工程で自動再取得</span></div>
+  <div class="toc-row"><span><span class="num">7</span>サマリー KPI・期間比較</span><span class="hint">前月・前年同月</span></div>
+  <div class="toc-row"><span><span class="num">8</span>日次推移・月間ヒートマップ</span><span class="hint">工程タブ連動</span></div>
+  <div class="toc-row"><span><span class="num">9</span>ベースライン比較一覧</span><span class="hint">差異閾値・アラート</span></div>
+  <div class="toc-row"><span><span class="num">10</span>計画を修正</span><span class="hint">日付の追加・行の保存・削除</span></div>
+  <div class="toc-row"><span><span class="num">11</span>レポート・Excel・印刷</span><span class="hint">定時配信</span></div>
+  <div class="toc-row"><span><span class="num">12</span>操作権限（生産計画）</span><span class="hint">登録・編集・削除・出力</span></div>
+  <div class="toc-row"><span><span class="num">13</span>メッセージと対処</span><span class="hint">画面に出る文言</span></div>
+  <div class="toc-row"><span><span class="num">14</span>運用上の注意・よくある質問</span><span class="hint">トラブル対応</span></div>
+  <div class="toc-row"><span><span class="num">—</span>文書情報・改訂履歴</span><span class="hint">版数・作成日</span></div>
+  <div class="note">
+    <strong>本書の画面図について</strong><br>
+    画面図は 2026年10月9日 時点の画面（ティールのヘッダー、生成ロック、KPI、工程タブ）に合わせた説明図です。件数・数量は説明用の例です。
+    <span class="badge r">1</span>は操作する場所、<span class="badge b">A</span>は画面の領域を示します。
+  </div>
+</section>
+
+<div class="ch"><span class="no">1</span><h2>はじめに</h2></div>
+<h3 class="sec">1-1 画面の目的</h3>
+<p>「生産計画ベースライン管理」は、ある基準月の生産計画を<strong>ベースライン（基準計画）</strong>として固定し、その後の<strong>変更計画</strong>や<strong>実績</strong>との差を工程別に見る画面です。月初に基準を決め、月中のぶれと達成状況を同じ画面で確認します。</p>
+<table>
+  <tr><th>できること</th><th>説明</th></tr>
+  <tr><td>生成・削除</td><td>基準月・工程のベースラインを作る、または消す。生成エリアはロックで誤操作を防ぎます</td></tr>
+  <tr><td>手入力</td><td>切断・面取・メッキ・検査は、カレンダーで日を選んで同じ数量を登録します</td></tr>
+  <tr><td>比較</td><td>基準計画・変更計画・実績・差異を日次で見ます。条件を変えると自動で読み直します</td></tr>
+  <tr><td>KPI・期間比較</td><td>当月の合計と、前月・前年同月の達成率を並べます</td></tr>
+  <tr><td>チャート</td><td>選んでいる工程タブの日次推移と、月間ヒートマップを表示します</td></tr>
+  <tr><td>出力</td><td>Excel、工程をまとめたレポート PDF、表示中タブの印刷</td></tr>
+</table>
+
+<h3 class="sec">1-2 用語</h3>
+<table>
+  <tr><th>用語</th><th>意味</th></tr>
+  <tr><td>基準計画</td><td>ベースライン生成（または手修正）で固定した日次の計画数量</td></tr>
+  <tr><td>変更計画</td><td>いまの計画数量。工程によって、基準計画と同じ場合と、別の計画列を見る場合があります</td></tr>
+  <tr><td>計画差異</td><td>変更計画 − 基準計画。プラスは増加、マイナスは減少です</td></tr>
+  <tr><td>実績合計</td><td>在庫取引記録から集計した、その日の実績数量。無い日は「-」</td></tr>
+  <tr><td>計画対実績差</td><td>基準計画 − 実績</td></tr>
+  <tr><td>計画達成率</td><td>実績 ÷ 変更計画。変更計画が 0 のときは「-」</td></tr>
+  <tr><td>溶接SP</td><td>製品名が FE-7 または CH2 RR の溶接。それ以外の溶接とは別工程として扱います</td></tr>
+</table>
+
+<h3 class="sec">1-3 運用の流れ</h3>
+<div class="flow">
+  <div class="box"><b>月初</b>ロックを ON にし、基準月を選んで生成する。手入力工程はカレンダーで日と数量を決める</div>
+  <div class="arr">→</div>
+  <div class="box"><b>月中</b>比較条件で対象月を見て、KPI・アラート・ヒートマップで差の大きい日を探す</div>
+  <div class="arr">→</div>
+  <div class="box"><b>必要時</b>「計画を修正」で日別数量を直す、日付を足す、行を消す</div>
+  <div class="arr">→</div>
+  <div class="box"><b>報告</b>「レポート生成」または「工程別報告書発行」で PDF を保存・印刷する</div>
+</div>
+
+<div class="ch"><span class="no">2</span><h2>画面を開く</h2></div>
+<ol>
+  <li>Smart-EMAPs にログインします。</li>
+  <li>左のサイドバーで <strong>ERP</strong> にマウスを置きます。</li>
+  <li><strong>生産管理</strong> → <strong>生産計画</strong> → <strong>計画ベースライン</strong> を開きます。</li>
+</ol>
+<p>画面パスは <code>/erp/production/plan-baseline</code> です。タイトルは「生産計画ベースライン管理」、説明は「基準計画の固定化から、変更計画・実績との差異把握までを一画面で」です。</p>
+<p>タイトル横の <strong>?</strong> から、この操作説明（マニュアル）を別タブで開けます。メニューに項目が無いときは、ロールにこの画面の参照権限がありません。</p>
+<div class="tip">開いた直後、比較条件は当月・全工程で比較データを読みます。一覧タブはデータがある工程だけが出て、成型があれば成型を先に表示します。</div>
+
+<div class="ch"><span class="no">3</span><h2>画面構成</h2></div>
+<p>上から、ヘッダー、生成・検索、サマリー KPI、推移・ヒートマップ、工程別の比較一覧、の順です。画面図は現行画面と同じヘッダー色・カード・ボタン色です。数値は説明用です。</p>
+<figure class="shot">
+  <img src="images/plan-baseline/01_overview.png" alt="生産計画ベースライン管理の画面上部" />
+  <figcaption>図 3-1　画面上部。A ベースライン生成、B 比較条件。1 レポート生成、2 再取得、3 生成、4 削除、5 計画を修正。</figcaption>
+</figure>
+<table>
+  <tr><th>場所</th><th>内容</th></tr>
+  <tr><td>ヘッダー</td><td>対象年月、工程、行数、アラート件数。レポート生成、定時配信、再取得、?</td></tr>
+  <tr><td>ベースライン生成</td><td>初期はロック中。スイッチを ON にすると基準月・工程・生成・削除・計画を修正が使えます</td></tr>
+  <tr><td>比較条件</td><td>対象月と工程。変えると約 0.3 秒後に一覧と KPI を読み直します。検索ボタンはありません</td></tr>
+  <tr><td>サマリー KPI</td><td>7 枚の合計カードと、当月・前月・前年同月の 3 枚</td></tr>
+  <tr><td>推移・ヒートマップ</td><td>いま開いている工程タブに連動します</td></tr>
+  <tr><td>比較一覧</td><td>データがある工程だけタブになります。外注メッキ・外注溶接などは出しません</td></tr>
+</table>
+
+<div class="ch"><span class="no">4</span><h2>ベースライン生成・削除</h2></div>
+<h3 class="sec">4-1 ロック</h3>
+<p>生成エリアの右上は、開いた直後 <strong>ロック中（OFF）</strong> です。基準月・工程・生成・削除・計画を修正は押せません。スイッチを <strong>ON（操作可）</strong> にしてから操作します。比較条件と一覧は、ロックと無関係に使えます。</p>
+<h3 class="sec">4-2 生成する</h3>
+<ol>
+  <li>ロックを ON にします。</li>
+  <li><strong>基準月</strong>を選びます。</li>
+  <li><strong>工程</strong>を選びます。空欄（全工程）のときは、成型・溶接・溶接SP を自動集計します。</li>
+  <li><strong>生成</strong>を押します（図 3-1 の 3）。</li>
+</ol>
+<p>工程が切断・面取・メッキ・検査のときは、確認の前に「基準計画の手入力」が開きます（第5章）。それ以外は次の確認が出ます。</p>
+<div class="warn"><strong>ベースライン生成の確認</strong><br>対象月のベースラインを再生成します。既存の自動集計データは上書きされます。切断・面取・メッキ・検査の手入力分は保持されます。確認の <strong>生成</strong> で実行、<strong>キャンセル</strong> で中止です。</div>
+<p>完了すると「ベースラインを生成しました」と出て、比較条件が生成と同じ月・工程に揃い、一覧を読み直します。</p>
+<table>
+  <tr><th>工程</th><th>基準計画の作り方</th></tr>
+  <tr><td>成型</td><td>生産サマリの molding_plan を日次合計</td></tr>
+  <tr><td>溶接</td><td>welding_plan の日次合計。製品名 FE-7・CH2 RR は含めず、溶接SP 側に分けます</td></tr>
+  <tr><td>溶接SP</td><td>製品名が FE-7 または CH2 RR の welding_plan</td></tr>
+  <tr><td>切断・面取・メッキ・検査</td><td>自動集計しません。第5章のカレンダーで選んだ日だけに、同じ数量を登録します</td></tr>
+  <tr><td>上記以外（全工程生成時の残り）</td><td>Excel 取込（production_plan_updates）を優先し、無い日はサマリの各 plan 列で補います</td></tr>
+</table>
+<h3 class="sec">4-3 削除する</h3>
+<ol>
+  <li>ロックを ON にし、基準月を確認します。</li>
+  <li>工程を指定するとその工程だけ、空欄（全工程）だとその月の全工程を削除します。</li>
+  <li><strong>削除</strong>を押し、確認で <strong>削除</strong> を押します。「この操作は取り消せません。」と出ます。</li>
+</ol>
+<p>完了すると「ベースラインを削除しました」と出て、比較一覧も同じ条件で更新されます。</p>
+
+<div class="ch"><span class="no">5</span><h2>基準計画の手入力</h2></div>
+<p>工程が <strong>切断・面取・メッキ・検査</strong> のどれかで <strong>生成</strong> を押すと、「基準計画の手入力」が開きます。成型・溶接・溶接SP、および全工程の自動生成では開きません。</p>
+<figure class="shot">
+  <img src="images/plan-baseline/03_manual_input.png" alt="基準計画の手入力ダイアログ" />
+  <figcaption>図 5-1　基準計画の手入力。平日が選択済み。1 選択日共通の数量、2 生成する。</figcaption>
+</figure>
+<ol>
+  <li>開いた直後は、その月の平日（月〜金）が選択されています。</li>
+  <li>日をクリックして追加または解除します。<strong>平日のみ</strong>／<strong>すべて</strong>／<strong>クリア</strong> も使えます。</li>
+  <li><strong>基準計画数（選択日共通）</strong>に 0 以上の整数を入れます。選んだ日はすべて同じ数量になります。</li>
+  <li><strong>生成する</strong>で登録します。<strong>キャンセル</strong>では何も変わりません。</li>
+</ol>
+<div class="warn">この生成は、その工程の既存ベースラインを消してから、選んだ日だけを作り直します。土日を残したいときは、生成前にその日をクリックして選んでください。あとから足すときは第10章の「日付を追加」を使います。</div>
+
+<div class="ch"><span class="no">6</span><h2>比較条件</h2></div>
+<p>比較条件は生成エリアと別です。ロックが OFF でも使えます。</p>
+<table>
+  <tr><th>項目</th><th>動き</th></tr>
+  <tr><td>対象月</td><td>一覧・KPI・チャートの月。初期値は当月</td></tr>
+  <tr><td>工程</td><td>空欄は全工程。指定するとその工程だけを取得します</td></tr>
+  <tr><td>自動更新</td><td>月または工程を変えると、約 0.3 秒後に再取得します。検索ボタンはありません</td></tr>
+  <tr><td>再取得</td><td>ヘッダーのボタン。いまの比較条件で読み直します</td></tr>
+</table>
+<p>生成または削除が成功したあとは、比較条件が生成側の基準月・工程に自動で揃います。</p>
+<div class="note">工程の候補は、全工程／切断／面取／成型／メッキ／溶接／溶接SP／検査 です。外注工程は、この画面の生成・比較の選択肢にはありません。</div>
+
+<div class="ch"><span class="no">7</span><h2>サマリー KPI・期間比較</h2></div>
+<p>データが無いカードは「-」です。数値は比較条件の範囲の合計です。カードの並びと色は図 3-1 のとおりです。</p>
+<table>
+  <tr><th>カード</th><th>計算</th></tr>
+  <tr><td>基準計画合計</td><td>ベースライン計画の合計</td></tr>
+  <tr><td>変更計画合計</td><td>最新計画の合計</td></tr>
+  <tr><td>計画差異</td><td>変更計画 − 基準計画。マイナスは赤字</td></tr>
+  <tr><td>実績合計</td><td>実績の合計。集計できないときは「-」</td></tr>
+  <tr><td>計画対実績差</td><td>基準計画 − 実績</td></tr>
+  <tr><td>計画達成率</td><td>実績 ÷ 変更計画（小数第 1 位の %）。100% 未満は注意色</td></tr>
+  <tr><td>達成率差異</td><td>計画対実績差 ÷ 基準計画合計（小数第 2 位の %）</td></tr>
+</table>
+<p>その下に <strong>当月・前月・前年同月</strong> の 3 枚があります。それぞれ基準計画、計画達成率、計画対実績差を出します。当月カードには、達成率の前月比（pt）と前年同月比（pt）が付きます。前月または前年に比較データが無いときは「—」です。</p>
+
+<div class="ch"><span class="no">8</span><h2>日次推移・月間ヒートマップ</h2></div>
+<figure class="shot">
+  <img src="images/plan-baseline/02_charts_list.png" alt="日次推移、月間ヒートマップ、比較一覧" />
+  <figcaption>図 8-1　C 日次推移、D 月間ヒートマップ、E 比較一覧。6 は差異閾値と Excel・報告書・印刷。成型タブが選択中の例です。</figcaption>
+</figure>
+<p>チャートも一覧も、比較一覧で開いている<strong>工程タブ</strong>の日次データです。タブを変えるとグラフもカレンダーも変わります。</p>
+<h3 class="sec">8-1 日次推移</h3>
+<ul>
+  <li>棒は基準計画と実績です。単位は千、小数第 1 位です。</li>
+  <li>差異は実績 − 基準計画で、実績が無い日は出しません。</li>
+  <li><strong>差異数値を表示</strong>と<strong>数量ラベル</strong>で、数字の出し入れができます。</li>
+  <li>比較データが無いときは「比較データがありません。比較条件を変更するか、工程タブを選択してください」と出ます。</li>
+</ul>
+<h3 class="sec">8-2 月間ヒートマップ</h3>
+<table>
+  <tr><th>パネル</th><th>見方</th></tr>
+  <tr><td>計画達成率</td><td>低い日ほど薄く、高い日ほど濃くなります</td></tr>
+  <tr><td>実績差異</td><td>単位は千。負は赤寄り、正は緑寄りです</td></tr>
+  <tr><td>実績数量</td><td>単位は千。少ない日と多い日の濃さが違います</td></tr>
+</table>
+<p>日付のマスをクリックすると、下の比較一覧でその日の行まで移動し、しばらく強調されます。</p>
+
+<div class="ch"><span class="no">9</span><h2>ベースライン比較一覧</h2></div>
+<h3 class="sec">9-1 タブ</h3>
+<p>データが 1 件以上ある工程だけがタブになります。並びは 切断、面取、成型、メッキ、溶接、溶接SP、検査 です。色は図 8-1 のとおり、工程ごとに分かれます。タブにアラートがあると件数の印が付きます。次の工程名は一覧に出しません。溶接前検査、外注検査前、外注支給前、外注支給前工程、外注メッキ、外注溶接。</p>
+<h3 class="sec">9-2 列</h3>
+<table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>日付</td><td>YYYY-MM-DD。アラートの日は警告アイコン。マウスを置くと理由が出ます</td></tr>
+  <tr><td>基準計画</td><td>生成時に固定した値。列見出しの ? に工程ごとの出典があります</td></tr>
+  <tr><td>変更計画</td><td>いまの計画。切断・面取・メッキ・検査・外注倉庫は基準計画と同じです。成型は molding_plan。溶接／溶接SP は welding_actual_plan（溶接SP は FE-7・CH2 RR、サマリのみ。合計 0 の日も反映し、サマリが無い日は 0）</td></tr>
+  <tr><td>計画差異</td><td>変更計画 − 基準計画。増加は上矢印、減少は下矢印</td></tr>
+  <tr><td>実績合計</td><td>在庫取引記録の日次実績。溶接／溶接SP は製品名で分けます。無い日は「-」</td></tr>
+  <tr><td>計画対実績差</td><td>基準計画 − 実績。実績が無い日は「-」</td></tr>
+</table>
+<p>表の下の<strong>合計</strong>は、その工程タブの基準計画・変更計画・計画差異・実績・計画対実績差です。</p>
+<h3 class="sec">9-3 差異閾値（アラート）</h3>
+<p>基準計画に対する差の絶対値が、閾値（%）を超えた行を強調します。初期値は <strong>5%</strong>、監視は<strong>実績</strong>のみ ON、<strong>計画</strong>は OFF です。<strong>アラートのみ</strong>にすると、そのタブはアラート行だけになります。</p>
+<ul>
+  <li>計画を ON にすると、計画差異率も見ます。実績を ON にすると、計画対実績差の率を見ます。</li>
+  <li>基準計画が 0 で差がある行は、率を 100% として扱います。</li>
+  <li>設定はブラウザに保存され、次回も同じ値で開きます。</li>
+</ul>
+<div class="tip">ヒートマップの日付をクリックした行は、一覧で一時的に強調されます。アラートの行とは別の印です。</div>
+
+<div class="ch"><span class="no">10</span><h2>計画を修正</h2></div>
+<p>生成エリアのロックを ON にし、<strong>計画を修正</strong>を押すと「ベースライン計画修正」が開きます。基準月と工程は、生成エリアの値が初期値です。開くと自動でデータを取得します。</p>
+<figure class="shot">
+  <img src="images/plan-baseline/04_adjust.png" alt="ベースライン計画修正ダイアログ" />
+  <figcaption>図 10-1　計画修正。1 データ取得、2 日付の追加、3 行の保存、4 変更を一括保存。</figcaption>
+</figure>
+<table>
+  <tr><th>操作</th><th>内容</th></tr>
+  <tr><td>データ取得</td><td>基準月・工程に合う行を読み直します。0 件のときは「該当データがありません。上のパネルから日付を追加できます」</td></tr>
+  <tr><td>リセット</td><td>基準月を生成エリアの月に戻し、工程を空にして一覧を空にします</td></tr>
+  <tr><td>表示</td><td>すべて／編集あり（未保存の行だけ）／比較アラート日</td></tr>
+  <tr><td>日付を追加</td><td>基準月の中の日付、工程、0 以上の数量。同じ日・同じ工程が既にあるときは入力欄へ写し、「既存行の数量を更新しました。保存してください」</td></tr>
+  <tr><td>保存</td><td>その行だけ即時保存。「修正しました」</td></tr>
+  <tr><td>削除</td><td>その日・その工程の行を消します。確認後に取り消せません</td></tr>
+  <tr><td>変更を一括保存</td><td>現在値と違う行だけ順に保存します。差が無いときは「変更された項目がありません」</td></tr>
+  <tr><td>閉じる</td><td>ダイアログを閉じます。未保存の入力は残りません</td></tr>
+</table>
+<p>数量欄では、矢印キーと Enter で上下の行へ移動できます。追加・保存・削除のあと、背面の比較一覧も読み直します。</p>
+
+<div class="ch"><span class="no">11</span><h2>レポート・Excel・印刷</h2></div>
+<h3 class="sec">11-1 レポート生成（ヘッダー）と工程別報告書発行（一覧）</h3>
+<p>どちらも、比較データがある工程を 1 つの PDF にまとめてサーバーへ保存し、そのあとブラウザの印刷ダイアログを開きます。対象は切断・面取・成型・メッキ・溶接・溶接SP・検査のうち、行がある工程です。処理中は「レポート生成」の進捗が出て、閉じられません。</p>
+<ol>
+  <li>比較条件で出したい月（必要なら工程）にして、一覧に行があることを確認します。</li>
+  <li><strong>レポート生成</strong>または<strong>工程別報告書発行</strong>を押します。</li>
+  <li>「統合レポートPDFを保存しました」のあと、印刷ダイアログが開きます。</li>
+</ol>
+<p>データが無いときは「切断・面取・成型・メッキ・溶接・溶接SP・検査のいずれにも比較データがありません。条件を確認し、先に検索を実行してください。」と出ます（比較は自動取得です。再取得を押してから再度実行してください）。</p>
+<p>PDF は工程ごとに 2 ページです。1 ページ目は日次表、2 ページ目は日次推移とヒートマップです。</p>
+<h3 class="sec">11-2 定時配信</h3>
+<p>ヘッダーの<strong>定時配信</strong>は、報告センターのスケジュールタブを開きます。毎週金曜 19:00 に自動生成し、メールに添付します。宛先は報告センター／通知設定で指定します。</p>
+<h3 class="sec">11-3 Excel 出力</h3>
+<p>一覧ヘッダーの <strong>Excel出力</strong> は、表示中の比較を .xlsx でダウンロードします。ファイル名の例は <code>生産計画ベースライン比較_2026-10.xlsx</code> です。</p>
+<ul>
+  <li>シート「サマリー」：基準月、工程条件、差異閾値、アラート件数、KPI、前月・前年同月、工程別合計</li>
+  <li>工程ごとのシート：日付、基準計画、変更計画、計画差異、差異率、実績、計画対実績差、アラート理由、合計行</li>
+  <li>アラートがあるときはシート「アラート一覧」</li>
+</ul>
+<p>0 件のときは「比較データがありません。先に検索を実行してください。」です。</p>
+<h3 class="sec">11-4 印刷</h3>
+<p>一覧の<strong>印刷</strong>は、いま開いている工程タブの表だけをブラウザ印刷します。画面全体ではありません。行が無いときは「印刷するデータがありません」です。</p>
+
+<div class="ch"><span class="no">12</span><h2>操作権限（生産計画）</h2></div>
+<p>ボタンは見えていても、生産計画モジュールの操作権限が無いと「生産計画の操作権限がありません」と出て処理は始まりません。</p>
+<table>
+  <tr><th>権限</th><th>できる操作</th></tr>
+  <tr><td>参照</td><td>画面を開く、比較条件、KPI、チャート、一覧の閲覧</td></tr>
+  <tr><td>登録</td><td>生成、手入力の生成、変更の一括保存</td></tr>
+  <tr><td>編集</td><td>計画修正の行保存、日付の追加</td></tr>
+  <tr><td>削除</td><td>月・工程の削除、計画修正での行削除</td></tr>
+  <tr><td>エクスポート</td><td>レポート生成、工程別報告書発行、Excel出力、印刷</td></tr>
+</table>
+
+<div class="ch"><span class="no">13</span><h2>メッセージと対処</h2></div>
+<table>
+  <tr><th>メッセージ</th><th>意味と対処</th></tr>
+  <tr><td>対象月を選択してください</td><td>基準月が空で生成または削除した。月を選ぶ</td></tr>
+  <tr><td>基準月を選択してください</td><td>修正ダイアログで月が空。月を選んでデータ取得する</td></tr>
+  <tr><td>反映する日付を1日以上選択してください</td><td>手入力で日が 0。カレンダーで日を選ぶ</td></tr>
+  <tr><td>基準計画数を入力してください（0以上）</td><td>数量が空、または 0 未満。0 以上の整数を入れる</td></tr>
+  <tr><td>ベースラインを生成しました</td><td>生成成功。比較一覧が更新される</td></tr>
+  <tr><td>ベースライン生成に失敗しました</td><td>通信またはサーバ。月・工程・元データを確認して再実行</td></tr>
+  <tr><td>ベースラインを削除しました</td><td>削除成功。取り消せない</td></tr>
+  <tr><td>比較データの取得に失敗しました</td><td>再取得する。続くときは権限とサーバを確認</td></tr>
+  <tr><td>該当データがありません。上のパネルから日付を追加できます</td><td>その月・工程に行が無い。生成するか、日付を追加する</td></tr>
+  <tr><td>追加する日付を選択してください／工程を選択してください</td><td>追加パネルの必須項目</td></tr>
+  <tr><td>日付は基準月の範囲内にしてください</td><td>別の月の日付は追加できない</td></tr>
+  <tr><td>既存行の数量を更新しました。保存してください</td><td>同じ日・工程がある。行の保存か一括保存が必要</td></tr>
+  <tr><td>変更された項目がありません</td><td>一括保存時に差分が無い</td></tr>
+  <tr><td>修正しました／日付を追加しました／削除しました</td><td>行操作の成功</td></tr>
+  <tr><td>生産計画の操作権限がありません</td><td>登録・編集・削除・出力の権限が無い。管理者に依頼する</td></tr>
+  <tr><td>Excelを出力しました</td><td>ダウンロード成功。保存先はブラウザのダウンロードフォルダ</td></tr>
+  <tr><td>統合レポートPDFを保存しました</td><td>サーバ保存成功。続けて印刷ダイアログが開く</td></tr>
+  <tr><td>レポート生成に失敗しました／保存に失敗しました</td><td>時間をおいて再実行。印刷だけ失敗した場合は、保存済み PDF の有無を管理者に確認</td></tr>
+</table>
+
+<div class="ch"><span class="no">14</span><h2>運用上の注意・よくある質問</h2></div>
+<ol>
+  <li><strong>生成の前にロックを ON にしてください。</strong> 初期状態では生成・削除・計画修正は押せません。</li>
+  <li><strong>自動生成は上書き、手入力工程は別です。</strong> 全工程または成型・溶接・溶接SP の再生成は、自動集計分を上書きします。切断・面取・メッキ・検査の手入力は、その再生成では消えません。手入力工程を単独で生成したときだけ、その工程は選び直した日だけに作り直されます。</li>
+  <li><strong>溶接と溶接SP を混ぜないでください。</strong> FE-7 と CH2 RR は溶接SP です。基準計画も実績も、この名前で分割します。</li>
+  <li><strong>変更計画が動かない工程があります。</strong> 切断・面取・メッキ・検査は、変更計画が常に基準計画と同じです。計画差異は 0 になります。差を見るのは実績側です。</li>
+  <li><strong>アラートの初期は実績だけです。</strong> 計画のぶれも見たいときは「計画」にチェックを入れます。閾値はブラウザごとに保存されます。</li>
+  <li><strong>印刷とレポートは別です。</strong> 印刷は開いている工程タブの表だけです。全部の工程を渡すときはレポート PDF か Excel を使います。</li>
+  <li><strong>未保存の修正は閉じると残しません。</strong> 一括保存または行の保存をしてから閉じてください。</li>
+</ol>
+<table>
+  <tr><th>質問</th><th>答え</th></tr>
+  <tr><td>検索ボタンはどこですか</td><td>ありません。対象月・工程を変えると自動で読み直します。すぐ読み直すときはヘッダーの再取得です</td></tr>
+  <tr><td>操業度カードはどこですか</td><td>現行のこの画面にはありません。設備の操業度は、成型計画など各計画画面で確認してください</td></tr>
+  <tr><td>クリアで当月に戻せますか</td><td>比較条件にクリアボタンはありません。対象月を当月に、工程を空に戻してください</td></tr>
+  <tr><td>手入力の土日が消えました</td><td>生成時の初期選択は平日だけです。土日が必要ならクリックして選んでから生成するか、あとから日付を追加してください</td></tr>
+  <tr><td>達成率が「-」です</td><td>変更計画の合計が 0、または実績が無いときです</td></tr>
+</table>
+
+<div class="ch"><span class="no">—</span><h2>文書情報・改訂履歴</h2></div>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>文書名</td><td>生産計画ベースライン管理 操作説明書</td></tr>
+  <tr><td>対象</td><td>ERP → 生産管理 → 生産計画 → 計画ベースライン</td></tr>
+  <tr><td>画面パス</td><td>/erp/production/plan-baseline</td></tr>
+  <tr><td>版数</td><td>第 1.0 版</td></tr>
+  <tr><td>作成日</td><td>2026年10月9日</td></tr>
+  <tr><td>言語</td><td>日本語</td></tr>
+</table>
+<table>
+  <tr><th>日付</th><th>版</th><th>内容</th></tr>
+  <tr><td>2026-10-09</td><td>1.0</td><td>現行画面（ロック、手入力カレンダー、溶接SP、期間比較、ヒートマップ、アラート、統合レポート）に合わせて新規作成。旧 Markdown 操作説明は参照用に残す</td></tr>
+</table>
+<p style="font-size:9pt;color:#475569">以上。ボタン名は 2026年10月9日時点の画面表示と一致します。計画の工数換算や各工程の元データ作成は、それぞれの計画画面の説明に従ってください。</p>
+
+</body>
+</html>

@@ -1,6 +1,9 @@
 # マニュアル（views/manual）
 
-操作説明の **Vue 画面**・**Markdown**・**スクリーンショット** をこのフォルダで管理します。
+操作説明の **Vue 画面**・**Markdown**・**PDF**・**スクリーンショット** をこのフォルダで管理します。
+
+画面単位の操作説明（`pageOperation`）は **PDF 正本**（`pdfs/`）。体裁・生成手順はリポジトリ直下
+`.cursor/rules/page-operation-pdf-manual.mdc` および `docs/README`（本フォルダ内 `docs/README.md`）に従う。
 
 ```
 manual/
@@ -11,7 +14,7 @@ manual/
 │   ├── README.md
 │   ├── forming-instruction_ja.md
 │   ├── cutting-instruction_ja.md
-│   ├── plan-baseline_ja.md
+│   ├── plan-baseline_ja.md   … 旧稿（正本は pdfs/plan-baseline.pdf）
 │   ├── inspection-actual_ja.md
 │   ├── inspection-actual-android_ja.md
 │   ├── inspection-actual-registration_ja.md

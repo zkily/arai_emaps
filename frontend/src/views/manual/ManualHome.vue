@@ -1,36 +1,48 @@
 <template>
   <div class="manual-home pb-std">
     <aside class="manual-sidebar">
+      <div class="manual-sidebar__bubbles" aria-hidden="true">
+        <span v-for="n in 9" :key="n" class="manual-sidebar__bubble" />
+      </div>
       <div class="manual-sidebar__header">
-        <el-icon class="manual-sidebar__logo" :size="22"><Notebook /></el-icon>
+        <el-icon class="manual-sidebar__logo" :size="18"><Notebook /></el-icon>
         <span class="manual-sidebar__title">{{ t('operationManual.homeTitle') }}</span>
       </div>
-      <nav class="manual-sidebar__nav">
-        <section
-          v-for="group in manualNavGroups"
-          :key="group.category"
-          class="manual-sidebar__group"
-        >
-          <h3 class="manual-sidebar__group-title">
-            {{ t(OPERATION_MANUAL_CATEGORY_I18N_KEY[group.category]) }}
-          </h3>
+      <div class="manual-sidebar__filter">
+        <el-input
+          v-model="filterKeyword"
+          size="small"
+          clearable
+          :prefix-icon="Search"
+          :placeholder="t('operationManual.filterPlaceholder')"
+        />
+      </div>
+      <el-scrollbar class="manual-sidebar__scroll">
+        <nav class="manual-sidebar__nav">
           <div
-            v-for="item in group.items"
-            :key="item.slug"
-            class="manual-sidebar__item"
-            :class="{ 'manual-sidebar__item--active': item.slug === activeSlug }"
-            @click="selectManual(item.slug)"
+            v-for="section in filteredSections"
+            :key="section.category"
+            class="manual-sidebar__section"
+            :class="`manual-sidebar__section--${section.category}`"
           >
-            <el-icon :size="16"><Memo /></el-icon>
-            <span class="manual-sidebar__item-text">{{ item.pageTitle }}</span>
-            <span v-if="item.pdfFile" class="manual-sidebar__pdf-tag">PDF</span>
+            <ManualMenuTreeItem
+              :node="section.node"
+              :active-slug="activeSlug"
+              :collapsed-keys="filterKeyword.trim() ? [] : collapsedKeys"
+              @select="selectManual"
+              @toggle="toggleFolder"
+            />
           </div>
-        </section>
-      </nav>
+          <p v-if="!filteredSections.length" class="manual-sidebar__empty">
+            {{ t('operationManual.filterEmpty') }}
+          </p>
+        </nav>
+      </el-scrollbar>
       <div class="manual-sidebar__footer">
         <el-button
           class="manual-sidebar__print-btn"
           size="small"
+          :disabled="!activeSlug"
           @click="handlePrint"
         >
           <el-icon><Printer /></el-icon>
@@ -43,6 +55,84 @@
       <div v-if="loading" class="manual-content__loading">
         <div class="manual-content__spinner" />
         <span>{{ t('operationManual.loading') }}</span>
+      </div>
+      <div v-else-if="!activeSlug" class="manual-welcome">
+        <div class="manual-content__header pb-hero pb-hero--page">
+          <div class="manual-content__fx pb-bubbles" aria-hidden="true" />
+          <div class="manual-content__title-badge">
+            <el-icon :size="20"><Notebook /></el-icon>
+          </div>
+          <div class="manual-content__copy">
+            <h1 class="manual-content__title pb-hero-title">{{ t('operationManual.homeTitle') }}</h1>
+            <p class="manual-content__subtitle pb-hero-desc">
+              {{ t('operationManual.welcomeSubtitle') }}
+            </p>
+          </div>
+        </div>
+        <div class="mw-stats">
+          <div v-for="stat in welcomeStats" :key="stat.key" class="mw-stat" :class="`mw-stat--${stat.key}`">
+            <div class="mw-stat__icon">
+              <el-icon :size="20"><component :is="stat.icon" /></el-icon>
+            </div>
+            <div class="mw-stat__body">
+              <div class="mw-stat__value">
+                {{ stat.value }}<span class="mw-stat__unit">{{ stat.unit }}</span>
+              </div>
+              <div class="mw-stat__label">{{ stat.label }}</div>
+            </div>
+          </div>
+        </div>
+
+        <section class="mw-section">
+          <h2 class="mw-section__title">{{ t('operationManual.welcomeStepsTitle') }}</h2>
+          <div class="mw-steps">
+            <div v-for="(step, index) in welcomeSteps" :key="step.key" class="mw-step">
+              <span class="mw-step__no">{{ index + 1 }}</span>
+              <div class="mw-step__icon">
+                <el-icon :size="22"><component :is="step.icon" /></el-icon>
+              </div>
+              <h3 class="mw-step__title">{{ step.title }}</h3>
+              <p class="mw-step__desc">{{ step.desc }}</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="mw-section">
+          <h2 class="mw-section__title">{{ t('operationManual.welcomeCategoriesTitle') }}</h2>
+          <div class="mw-cats">
+            <div
+              v-for="section in welcomeSections"
+              :key="section.category"
+              class="mw-cat"
+              :class="`mw-cat--${section.category}`"
+            >
+              <div class="mw-cat__head">
+                <span class="mw-cat__name">{{ section.name }}</span>
+                <span class="mw-cat__count">
+                  {{ section.items.length }}{{ t('operationManual.welcomeItemsUnit') }}
+                </span>
+              </div>
+              <ul class="mw-cat__list">
+                <li
+                  v-for="item in section.items"
+                  :key="item.manual.slug"
+                  class="mw-cat__item"
+                  role="button"
+                  tabindex="0"
+                  @click="selectManual(item.manual.slug)"
+                  @keydown.enter.prevent="selectManual(item.manual.slug)"
+                >
+                  <div class="mw-cat__item-main">
+                    <span class="mw-cat__item-title">{{ item.manual.pageTitle }}</span>
+                    <span v-if="item.path" class="mw-cat__item-path">{{ item.path }}</span>
+                  </div>
+                  <span v-if="item.manual.pdfFile" class="mw-cat__item-pdf">PDF</span>
+                  <el-icon class="mw-cat__item-arrow"><ArrowRight /></el-icon>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
       </div>
       <div v-else-if="loadError" class="manual-content__error">
         <p>{{ loadError }}</p>
@@ -103,13 +193,17 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Memo, Notebook, Printer, QuestionFilled, Top } from '@element-plus/icons-vue'
+import { ArrowRight, Notebook, Printer, QuestionFilled, Search, Top } from '@element-plus/icons-vue'
 import {
-  OPERATION_MANUALS,
   OPERATION_MANUAL_CATEGORY_I18N_KEY,
+  type OperationManualCategory,
+  type OperationManualEntry,
+  type OperationManualTreeNode,
   getOperationManualBySlug,
   getOperationManualNavGroups,
+  toOperationManualLeafNode,
 } from '@/config/operationManuals'
+import ManualMenuTreeItem from '@/views/manual/ManualMenuTreeItem.vue'
 import { runBrowserPrint } from '@/utils/manualPrintCapture'
 import { getManualMarkdown, getManualPdfUrl, normalizeManualMarkdown } from '@/views/manual/manualAssets'
 import {
@@ -122,14 +216,147 @@ defineOptions({ name: 'ManualHome' })
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n()
+const { t, te } = useI18n()
 
-const manuals = OPERATION_MANUALS
 const manualNavGroups = getOperationManualNavGroups()
 
-const activeSlug = computed(() => String(route.params.slug ?? manuals[0]?.slug ?? ''))
+/** 未選択（slug なし）のときは案内のみ表示する */
+const activeSlug = computed(() => String(route.params.slug ?? ''))
 const manual = computed(() => getOperationManualBySlug(activeSlug.value))
 const currentTitle = computed(() => manual.value?.pageTitle ?? t('operationManual.unknownTitle'))
+
+interface ManualSidebarSection {
+  category: OperationManualCategory
+  node: OperationManualTreeNode
+}
+
+const filterKeyword = ref('')
+/** 閉じているフォルダのキー（既定は空＝全展開。絞り込み中は無視して全展開） */
+const collapsedKeys = ref<string[]>([])
+
+function toggleFolder(key: string) {
+  collapsedKeys.value = collapsedKeys.value.includes(key)
+    ? collapsedKeys.value.filter((k) => k !== key)
+    : [...collapsedKeys.value, key]
+}
+
+/** フォルダ名を menu.<CODE> の翻訳に置き換える */
+function localizeTree(nodes: OperationManualTreeNode[]): OperationManualTreeNode[] {
+  return nodes.map((node) => {
+    const key = `menu.${node.menuCode ?? ''}`
+    return {
+      ...node,
+      name: node.menuCode && te(key) ? t(key) : node.name,
+      children: localizeTree(node.children),
+    }
+  })
+}
+
+const sidebarSections = computed<ManualSidebarSection[]>(() =>
+  manualNavGroups.map((group, index) => ({
+    category: group.category,
+    node: {
+      key: `category:${group.category}`,
+      name: t(OPERATION_MANUAL_CATEGORY_I18N_KEY[group.category]),
+      sortOrder: index,
+      children: localizeTree(group.tree ?? group.items.map(toOperationManualLeafNode)),
+    },
+  })),
+)
+
+/** 分類名・親メニュー名・マニュアル名・slug のいずれかに一致するものを残す（親が一致したら配下は全件） */
+function filterTreeNode(
+  node: OperationManualTreeNode,
+  keyword: string,
+  ancestorMatched: boolean,
+): OperationManualTreeNode | null {
+  if (node.manual) {
+    const hit =
+      ancestorMatched ||
+      node.manual.pageTitle.toLowerCase().includes(keyword) ||
+      node.manual.slug.toLowerCase().includes(keyword)
+    return hit ? node : null
+  }
+  const selfMatched = ancestorMatched || node.name.toLowerCase().includes(keyword)
+  const children = node.children
+    .map((child) => filterTreeNode(child, keyword, selfMatched))
+    .filter((child): child is OperationManualTreeNode => child !== null)
+  return children.length ? { ...node, children } : null
+}
+
+const filteredSections = computed<ManualSidebarSection[]>(() => {
+  const keyword = filterKeyword.value.trim().toLowerCase()
+  if (!keyword) return sidebarSections.value
+  return sidebarSections.value.flatMap((section) => {
+    const node = filterTreeNode(section.node, keyword, false)
+    return node ? [{ ...section, node }] : []
+  })
+})
+
+interface WelcomeManualItem {
+  manual: OperationManualEntry
+  /** 親メニューのパンくず（ページ操作関連のみ） */
+  path: string
+}
+
+function collectWelcomeItems(nodes: OperationManualTreeNode[], trail: string[]): WelcomeManualItem[] {
+  return nodes.flatMap((node) =>
+    node.manual
+      ? [{ manual: node.manual, path: trail.join(' › ') }]
+      : collectWelcomeItems(node.children, [...trail, node.name]),
+  )
+}
+
+const welcomeSections = computed(() =>
+  sidebarSections.value.map((section) => ({
+    category: section.category,
+    name: section.node.name,
+    items: collectWelcomeItems(section.node.children, []),
+  })),
+)
+
+const welcomeStats = computed(() => {
+  const items = welcomeSections.value.flatMap((s) => s.items)
+  const unit = t('operationManual.welcomeItemsUnit')
+  return [
+    { key: 'total', icon: 'Reading', value: items.length, unit, label: t('operationManual.welcomeStatTotal') },
+    {
+      key: 'pdf',
+      icon: 'Document',
+      value: items.filter((i) => i.manual.pdfFile).length,
+      unit,
+      label: t('operationManual.welcomeStatPdf'),
+    },
+    {
+      key: 'category',
+      icon: 'Files',
+      value: welcomeSections.value.length,
+      unit: '',
+      label: t('operationManual.welcomeStatCategory'),
+    },
+  ]
+})
+
+const welcomeSteps = computed(() => [
+  {
+    key: 'select',
+    icon: 'Pointer',
+    title: t('operationManual.welcomeStepSelect'),
+    desc: t('operationManual.welcomeSelect'),
+  },
+  {
+    key: 'filter',
+    icon: 'Search',
+    title: t('operationManual.welcomeStepFilter'),
+    desc: t('operationManual.welcomeFilter'),
+  },
+  {
+    key: 'print',
+    icon: 'Printer',
+    title: t('operationManual.welcomeStepPrint'),
+    desc: t('operationManual.welcomePdf'),
+  },
+])
 
 const loading = ref(true)
 const loadError = ref('')
@@ -193,6 +420,11 @@ async function loadDocument() {
   unbindAnchorNav?.()
   unbindAnchorNav = null
 
+  if (!activeSlug.value) {
+    loading.value = false
+    return
+  }
+
   const entry = manual.value
   if (!entry) {
     loadError.value = t('operationManual.notFound')
@@ -247,9 +479,6 @@ watch(activeSlug, () => {
 })
 
 onMounted(() => {
-  if (!route.params.slug && manuals[0]) {
-    router.replace({ params: { slug: manuals[0].slug } })
-  }
   loadDocument()
 })
 
@@ -286,165 +515,304 @@ function handlePrint() {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* ---------- サイドバー ---------- */
+/* ---------- サイドバー（淡色＋バブル装飾） ---------- */
 .manual-sidebar {
-  width: 248px;
-  min-width: 248px;
+  position: relative;
+  overflow: hidden;
+  width: 260px;
+  min-width: 260px;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #1e1b4b 0%, #312e81 45%, #3730a3 100%);
-  color: #e0e7ff;
-  box-shadow: 2px 0 12px rgba(15, 23, 42, 0.16);
+  background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 45%, #ecfeff 100%);
+  border-right: 1px solid #e0e7ff;
+  box-shadow: 4px 0 18px -10px rgba(79, 70, 229, 0.28);
   z-index: 1;
+}
+
+.manual-sidebar > :not(.manual-sidebar__bubbles) {
+  position: relative;
+  z-index: 1;
+}
+
+/* バブル装飾 */
+.manual-sidebar__bubbles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.manual-sidebar__bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(var(--bb-rgb, 165, 180, 252), 0.35) 45%,
+    rgba(var(--bb-rgb, 165, 180, 252), 0.12) 100%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+    0 6px 16px -8px rgba(var(--bb-rgb, 165, 180, 252), 0.6);
+  animation: manual-bubble-float 14s ease-in-out infinite;
+}
+
+.manual-sidebar__bubble:nth-child(1) {
+  --bb-rgb: 196, 181, 253;
+  width: 120px;
+  height: 120px;
+  top: -36px;
+  right: -40px;
+}
+.manual-sidebar__bubble:nth-child(2) {
+  --bb-rgb: 165, 180, 252;
+  width: 46px;
+  height: 46px;
+  top: 120px;
+  left: 14px;
+  animation-delay: -3s;
+  animation-duration: 11s;
+}
+.manual-sidebar__bubble:nth-child(3) {
+  --bb-rgb: 103, 232, 249;
+  width: 22px;
+  height: 22px;
+  top: 210px;
+  right: 30px;
+  animation-delay: -6s;
+  animation-duration: 9s;
+}
+.manual-sidebar__bubble:nth-child(4) {
+  --bb-rgb: 249, 168, 212;
+  width: 70px;
+  height: 70px;
+  top: 38%;
+  right: -18px;
+  animation-delay: -2s;
+  animation-duration: 16s;
+}
+.manual-sidebar__bubble:nth-child(5) {
+  --bb-rgb: 196, 181, 253;
+  width: 16px;
+  height: 16px;
+  top: 48%;
+  left: 36px;
+  animation-delay: -8s;
+  animation-duration: 10s;
+}
+.manual-sidebar__bubble:nth-child(6) {
+  --bb-rgb: 134, 239, 172;
+  width: 34px;
+  height: 34px;
+  top: 62%;
+  left: -8px;
+  animation-delay: -5s;
+  animation-duration: 13s;
+}
+.manual-sidebar__bubble:nth-child(7) {
+  --bb-rgb: 103, 232, 249;
+  width: 96px;
+  height: 96px;
+  bottom: 60px;
+  left: -34px;
+  animation-delay: -9s;
+  animation-duration: 18s;
+}
+.manual-sidebar__bubble:nth-child(8) {
+  --bb-rgb: 253, 230, 138;
+  width: 26px;
+  height: 26px;
+  bottom: 140px;
+  right: 44px;
+  animation-delay: -4s;
+  animation-duration: 12s;
+}
+.manual-sidebar__bubble:nth-child(9) {
+  --bb-rgb: 165, 180, 252;
+  width: 58px;
+  height: 58px;
+  bottom: -16px;
+  right: 20px;
+  animation-delay: -7s;
+  animation-duration: 15s;
+}
+
+@keyframes manual-bubble-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(6px, -14px) scale(1.04);
+  }
+  66% {
+    transform: translate(-6px, -6px) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manual-sidebar__bubble {
+    animation: none;
+  }
 }
 
 .manual-sidebar__header {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 48px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(238, 242, 255, 0.6) 100%);
+  backdrop-filter: blur(4px);
+}
+
+.manual-sidebar__header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #a855f7, #f43f5e, #06b6d4, #f59e0b, #10b981, #60a5fa);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .manual-sidebar__logo {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  box-shadow: 0 4px 12px rgba(129, 140, 248, 0.45);
 }
 
 .manual-sidebar__title {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.04em;
-  color: #fff;
+  color: #312e81;
+  white-space: nowrap;
+}
+
+.manual-sidebar__filter {
+  flex-shrink: 0;
+  padding: 10px 10px 4px;
+}
+
+.manual-sidebar__filter :deep(.el-input__wrapper) {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 0 0 1px #c7d2fe,
+    0 2px 8px -4px rgba(79, 70, 229, 0.25);
+}
+
+.manual-sidebar__filter :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    inset 0 0 0 1px #818cf8,
+    0 0 0 3px rgba(129, 140, 248, 0.18);
+}
+
+.manual-sidebar__filter :deep(.el-input__inner) {
+  color: #1e293b;
+}
+
+.manual-sidebar__filter :deep(.el-input__inner::placeholder) {
+  color: #94a3b8;
+}
+
+.manual-sidebar__filter :deep(.el-input__prefix),
+.manual-sidebar__filter :deep(.el-input__suffix) {
+  color: #818cf8;
+}
+
+.manual-sidebar__scroll {
+  flex: 1;
+  overflow: hidden;
+}
+
+.manual-sidebar__scroll :deep(.el-scrollbar__bar.is-vertical) {
+  width: 4px;
+  right: 2px;
+}
+
+.manual-sidebar__scroll :deep(.el-scrollbar__thumb) {
+  background: rgba(99, 102, 241, 0.25);
+  border-radius: 2px;
 }
 
 .manual-sidebar__nav {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 8px 10px;
+  padding: 6px 8px 10px;
 }
 
-.manual-sidebar__group + .manual-sidebar__group {
-  margin-top: 8px;
+.manual-sidebar__section + .manual-sidebar__section {
+  margin-top: 6px;
 }
 
-.manual-sidebar__group-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 4px;
-  padding: 4px 8px;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #c7d2fe;
+/* 分類ごとのアクセントカラー（ManualMenuTreeItem が --sc / --sc-rgb を参照。案内ページの分類カードと同色） */
+.manual-sidebar__section--pageOperation {
+  --sc: #a855f7;
+  --sc-rgb: 168, 85, 247;
+}
+.manual-sidebar__section--planning {
+  --sc: #f43f5e;
+  --sc-rgb: 244, 63, 94;
+}
+.manual-sidebar__section--instructionActual {
+  --sc: #d97706;
+  --sc-rgb: 217, 119, 6;
+}
+.manual-sidebar__section--mes {
+  --sc: #0891b2;
+  --sc-rgb: 8, 145, 178;
 }
 
-.manual-sidebar__group-title::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #a5b4fc;
-}
-
-.manual-sidebar__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  margin-bottom: 2px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12.5px;
-  line-height: 1.35;
-  color: rgba(224, 231, 255, 0.88);
-  border: 1px solid transparent;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.manual-sidebar__item .el-icon {
-  flex-shrink: 0;
-  color: #a5b4fc;
-}
-
-.manual-sidebar__item:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.manual-sidebar__item--active,
-.manual-sidebar__item--active:hover {
-  color: #3730a3;
-  font-weight: 700;
-  background: #fff;
-  border-color: #fff;
-  box-shadow:
-    inset 0 -2px 0 rgba(79, 70, 229, 0.16),
-    0 3px 8px -4px rgba(15, 23, 42, 0.5);
-}
-
-.manual-sidebar__item--active .el-icon {
-  color: #4f46e5;
-}
-
-.manual-sidebar__item-text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.manual-sidebar__pdf-tag {
-  flex-shrink: 0;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 9.5px;
-  font-weight: 800;
-  line-height: 16px;
-  letter-spacing: 0.04em;
-  color: #92400e;
-  background: #fde68a;
+.manual-sidebar__empty {
+  margin: 16px 0;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .manual-sidebar__footer {
   display: flex;
-  gap: 8px;
   padding: 8px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(199, 210, 254, 0.7);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(4px);
 }
 
 .manual-sidebar__footer .manual-sidebar__print-btn {
-  --k-rgb: 79 70 229;
   flex: 1;
   height: 30px;
   border-radius: 999px;
   font-weight: 700;
-  color: #3730a3;
-  border: 1px solid #fff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
   background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
 }
 
 .manual-sidebar__footer .manual-sidebar__print-btn:hover,
 .manual-sidebar__footer .manual-sidebar__print-btn:focus-visible {
   color: #312e81;
-  border-color: #fff;
+  border-color: #a5b4fc;
   background: linear-gradient(180deg, #ffffff 0%, #e0e7ff 100%);
 }
 
-.manual-sidebar__print-btn .el-icon {
-  margin-right: 4px;
+.manual-sidebar__footer .manual-sidebar__print-btn.is-disabled {
+  color: #a5b4fc;
+  border-color: #e0e7ff;
+  background: rgba(255, 255, 255, 0.6);
 }
+
+.manual-sidebar__print-btn span {
+  margin-left: 4px;
+}
+
+
 
 /* ---------- 本文 ---------- */
 .manual-content {
@@ -696,6 +1064,305 @@ function handlePrint() {
   font-size: 12px;
 }
 
+/* ---------- 未選択時の案内ページ ---------- */
+.manual-welcome {
+  max-width: 1280px;
+}
+
+/* 統計 */
+.mw-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.mw-stat {
+  --mw-rgb: 99, 102, 241;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(var(--mw-rgb), 0.18);
+  box-shadow: 0 8px 20px -14px rgba(var(--mw-rgb), 0.55);
+}
+
+.mw-stat::after {
+  content: '';
+  position: absolute;
+  right: -28px;
+  top: -28px;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--mw-rgb), 0.16) 0%, rgba(var(--mw-rgb), 0) 70%);
+  pointer-events: none;
+}
+
+.mw-stat--pdf {
+  --mw-rgb: 217, 119, 6;
+}
+
+.mw-stat--category {
+  --mw-rgb: 16, 185, 129;
+}
+
+.mw-stat__icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 55%),
+    rgb(var(--mw-rgb));
+  box-shadow: 0 6px 14px -6px rgba(var(--mw-rgb), 0.8);
+}
+
+.mw-stat__value {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.mw-stat__unit {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.mw-stat__label {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* セクション見出し */
+.mw-section + .mw-section {
+  margin-top: 20px;
+}
+
+.mw-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #312e81;
+}
+
+.mw-section__title::before {
+  content: '';
+  width: 4px;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #6366f1, #2563eb);
+}
+
+/* ご利用の流れ */
+.mw-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mw-step {
+  position: relative;
+  padding: 16px 16px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 6px 18px -14px rgba(49, 46, 129, 0.45);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.mw-step:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -14px rgba(49, 46, 129, 0.5);
+}
+
+.mw-step__no {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  color: rgba(99, 102, 241, 0.14);
+}
+
+.mw-step__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  color: #4f46e5;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+
+.mw-step__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.mw-step__desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #475569;
+}
+
+/* 分類別一覧（左メニューの分類色と合わせる） */
+.mw-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.mw-cat {
+  --mw-rgb: 99, 102, 241;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(var(--mw-rgb), 0.22);
+  box-shadow: 0 8px 20px -16px rgba(var(--mw-rgb), 0.7);
+}
+
+.mw-cat--pageOperation {
+  --mw-rgb: 168, 85, 247;
+}
+.mw-cat--planning {
+  --mw-rgb: 244, 63, 94;
+}
+.mw-cat--instructionActual {
+  --mw-rgb: 217, 119, 6;
+}
+.mw-cat--mes {
+  --mw-rgb: 8, 145, 178;
+}
+
+.mw-cat__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 3px solid rgb(var(--mw-rgb));
+  background: linear-gradient(90deg, rgba(var(--mw-rgb), 0.12) 0%, rgba(var(--mw-rgb), 0.02) 100%);
+}
+
+.mw-cat__name {
+  font-size: 14px;
+  font-weight: 800;
+  color: rgb(var(--mw-rgb));
+}
+
+.mw-cat__count {
+  flex-shrink: 0;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: rgb(var(--mw-rgb));
+}
+
+.mw-cat__list {
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.mw-cat__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.mw-cat__item + .mw-cat__item {
+  margin-top: 2px;
+}
+
+.mw-cat__item:hover,
+.mw-cat__item:focus-visible {
+  background: rgba(var(--mw-rgb), 0.08);
+  transform: translateX(2px);
+}
+
+.mw-cat__item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mw-cat__item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.mw-cat__item-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.mw-cat__item-pdf {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  color: #92400e;
+  background: #fde68a;
+}
+
+.mw-cat__item-arrow {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  transition: color 0.15s ease;
+}
+
+.mw-cat__item:hover .mw-cat__item-arrow {
+  color: rgb(var(--mw-rgb));
+}
+
 .manual-print-area {
   width: 100%;
 }
@@ -722,10 +1389,14 @@ function handlePrint() {
   .manual-sidebar {
     width: 100%;
     min-width: 0;
-    max-height: 200px;
+    max-height: 260px;
   }
   .manual-content {
     padding: 10px;
+  }
+  .mw-stats,
+  .mw-steps {
+    grid-template-columns: minmax(0, 1fr);
   }
   .manual-toc-fab {
     right: 16px;

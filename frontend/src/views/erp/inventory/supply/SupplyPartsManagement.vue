@@ -232,7 +232,7 @@
           <div class="spm-dialog-icon"><el-icon><Switch /></el-icon></div>
           <div class="spm-dialog-copy">
             <h3>量産品から振替</h3>
-            <p>製品種別を補給品にし、最新倉庫在庫をこの台帳へ移して、在庫取引記録に同数の出庫（補給品へ振替）を登録します</p>
+            <p>製品種別を補給品にし、最新倉庫在庫をこの台帳へ移して、在庫取引記録に同数の保留（補給品へ振替）を登録します</p>
           </div>
           <el-icon class="spm-close" @click="transferVisible = false"><Close /></el-icon>
         </div>
@@ -1064,7 +1064,7 @@ async function submitTransfer() {
       ...cardPayload(transferForm),
     })) as unknown as SupplyPartTransferResult
     if (res.warning) ElMessage.warning(res.warning)
-    else ElMessage.success(`振替しました。補給品へ入庫 ${res.transfer_qty}、在庫取引記録に同数の出庫を登録しました。`)
+    else ElMessage.success(`振替しました。補給品へ入庫 ${res.transfer_qty}、在庫取引記録に同数の保留を登録しました。`)
     transferVisible.value = false
     await loadList()
   } catch (error) {
@@ -1188,7 +1188,7 @@ async function removeStock(row: SupplyPartStock) {
     `現在庫 ${formatNum(row.on_hand_qty)} と入出庫履歴もすべて削除され、元に戻せません。`,
   ]
   if (row.source === 'transfer') {
-    lines.push('振替時に在庫取引記録へ登録した「補給品へ振替」の出庫も削除します（製品種別は変更しません）。')
+    lines.push('振替時に在庫取引記録へ登録した「補給品へ振替」の保留も削除します（製品種別は変更しません）。')
   }
   try {
     await ElMessageBox.confirm(lines.join('<br>'), '削除の確認', {
@@ -1205,7 +1205,7 @@ async function removeStock(row: SupplyPartStock) {
     const res = (await deleteSupplyPart(row.id)) as unknown as { removed_stock_logs: number }
     ElMessage.success(
       res.removed_stock_logs
-        ? `削除しました（在庫取引記録の振替出庫 ${res.removed_stock_logs} 件も削除）`
+        ? `削除しました（在庫取引記録の振替保留 ${res.removed_stock_logs} 件も削除）`
         : '削除しました'
     )
     if (detailVisible.value && detail.value?.stock.id === row.id) detailVisible.value = false

@@ -3,6 +3,7 @@
  * - MD・画像: frontend/src/views/manual/docs/ , frontend/src/views/manual/images/
  * - 画面: frontend/src/views/manual/ManualViewer.vue
  */
+import { menuConfig } from '@/router/menuConfig'
 
 /** ManualHome 左サイドバーの分類 */
 export type OperationManualCategory =
@@ -10,7 +11,6 @@ export type OperationManualCategory =
   | 'instructionActual'
   | 'mes'
   | 'pageOperation'
-  | 'purchasing'
 
 export interface OperationManualEntry {
   /** URL スラッグ（/operation-manuals/:slug） */
@@ -27,15 +27,22 @@ export interface OperationManualEntry {
   sortOrder: number
   /** サイドバー分類 */
   category: OperationManualCategory
+  /**
+   * 対象画面の menuConfig コード（例: MASTER_EQUIPMENT_EFFICIENCY）。
+   * ツリー表示の分類（ページ操作関連）では、ページメニューと同じ親メニュー階層の下に配置される
+   */
+  pageMenuCode?: string
 }
+
+/** ページメニューと同じ階層で開閉表示する分類 */
+export const OPERATION_MANUAL_TREE_CATEGORIES: OperationManualCategory[] = ['pageOperation']
 
 /** 分類の表示順（ManualHome 左メニュー） */
 export const OPERATION_MANUAL_CATEGORY_ORDER: OperationManualCategory[] = [
+  'pageOperation',
   'planning',
   'instructionActual',
   'mes',
-  'pageOperation',
-  'purchasing',
 ]
 
 export const OPERATION_MANUAL_CATEGORY_I18N_KEY: Record<OperationManualCategory, string> = {
@@ -43,7 +50,6 @@ export const OPERATION_MANUAL_CATEGORY_I18N_KEY: Record<OperationManualCategory,
   instructionActual: 'operationManual.categoryInstructionActual',
   mes: 'operationManual.categoryMes',
   pageOperation: 'operationManual.categoryPageOperation',
-  purchasing: 'operationManual.categoryPurchasing',
 }
 
 export const OPERATION_MANUAL_PARENT_CODE = 'OPERATION_MANUALS'
@@ -79,9 +85,10 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     slug: 'plan-baseline',
     menuCode: 'OP_MANUAL_PLAN_BASELINE',
     pageTitle: '生産計画ベースライン管理',
-    docFile: 'plan-baseline_ja.md',
+    pdfFile: 'plan-baseline.pdf',
     sortOrder: 5,
     category: 'pageOperation',
+    pageMenuCode: 'ERP_PRODUCTION_BASELINE',
   },
   {
     slug: 'equipment-efficiency',
@@ -90,6 +97,43 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     pdfFile: 'equipment-efficiency.pdf',
     sortOrder: 12,
     category: 'pageOperation',
+    pageMenuCode: 'MASTER_EQUIPMENT_EFFICIENCY',
+  },
+  {
+    slug: 'main-screen',
+    menuCode: 'OP_MANUAL_MAIN_SCREEN',
+    pageTitle: 'メイン画面（ダッシュボード）',
+    pdfFile: 'main-screen.pdf',
+    sortOrder: 0,
+    category: 'pageOperation',
+    pageMenuCode: 'DASHBOARD',
+  },
+  {
+    slug: 'order-monthly',
+    menuCode: 'OP_MANUAL_ORDER_MONTHLY',
+    pageTitle: '月受注管理',
+    pdfFile: 'order-monthly.pdf',
+    sortOrder: 13,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_ORDER_MONTHLY',
+  },
+  {
+    slug: 'order-daily',
+    menuCode: 'OP_MANUAL_ORDER_DAILY',
+    pageTitle: '日受注管理',
+    pdfFile: 'order-daily.pdf',
+    sortOrder: 14,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_ORDER_DAILY',
+  },
+  {
+    slug: 'supply-parts',
+    menuCode: 'OP_MANUAL_SUPPLY_PARTS',
+    pageTitle: '補給品管理',
+    pdfFile: 'supply-parts.pdf',
+    sortOrder: 15,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_INVENTORY_SUPPLY_PARTS',
   },
   {
     slug: 'forming-instruction',
@@ -160,32 +204,128 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     menuCode: 'OP_MANUAL_OUTSOURCING_WELDING',
     pageTitle: '外注溶接',
     pdfFile: 'outsourcing-welding.pdf',
-    sortOrder: 20,
-    category: 'purchasing',
+    sortOrder: 21,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_OUTSOURCING_WELDING_ORDER',
   },
   {
     slug: 'outsourcing-plating',
     menuCode: 'OP_MANUAL_OUTSOURCING_PLATING',
     pageTitle: '外注メッキ',
     pdfFile: 'outsourcing-plating.pdf',
-    sortOrder: 21,
-    category: 'purchasing',
+    sortOrder: 20,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_OUTSOURCING_PLATING_ORDER',
   },
 ]
+
+/** ManualHome ツリー表示用ノード（親メニュー＝フォルダ、マニュアル＝リーフ） */
+export interface OperationManualTreeNode {
+  /** フォルダ: menuConfig コード / リーフ: `manual:<slug>` */
+  key: string
+  /** フォルダのみ：menuConfig コード（i18n menu.<CODE>） */
+  menuCode?: string
+  name: string
+  icon?: string
+  sortOrder: number
+  children: OperationManualTreeNode[]
+  manual?: OperationManualEntry
+}
 
 export interface OperationManualNavGroup {
   category: OperationManualCategory
   items: OperationManualEntry[]
+  /** OPERATION_MANUAL_TREE_CATEGORIES の分類のみ */
+  tree?: OperationManualTreeNode[]
+}
+
+const menuConfigByCode = new Map(menuConfig.map((m) => [m.code, m]))
+
+/** pageMenuCode の親メニューを上位から順に返す（対象画面自身は含まない） */
+function getPageMenuAncestorCodes(pageMenuCode: string): string[] {
+  const codes: string[] = []
+  const visited = new Set<string>()
+  let parentCode = menuConfigByCode.get(pageMenuCode)?.parentCode
+  while (parentCode && !visited.has(parentCode)) {
+    visited.add(parentCode)
+    codes.unshift(parentCode)
+    parentCode = menuConfigByCode.get(parentCode)?.parentCode
+  }
+  return codes
+}
+
+/** 同一階層はページメニューの sortOrder 順（同順位はマニュアルの sortOrder 順） */
+function sortManualTree(nodes: OperationManualTreeNode[]): void {
+  nodes.sort(
+    (a, b) =>
+      a.sortOrder - b.sortOrder ||
+      (a.manual?.sortOrder ?? 0) - (b.manual?.sortOrder ?? 0),
+  )
+  nodes.forEach((n) => sortManualTree(n.children))
+}
+
+/** pageMenuCode を基に、ページメニューと同じ階層のツリーを組み立てる */
+export function buildOperationManualMenuTree(
+  items: OperationManualEntry[],
+): OperationManualTreeNode[] {
+  const roots: OperationManualTreeNode[] = []
+  const folders = new Map<string, OperationManualTreeNode>()
+
+  for (const manual of items) {
+    let siblings = roots
+    const ancestorCodes =
+      manual.pageMenuCode && menuConfigByCode.has(manual.pageMenuCode)
+        ? getPageMenuAncestorCodes(manual.pageMenuCode)
+        : []
+    for (const code of ancestorCodes) {
+      let folder = folders.get(code)
+      if (!folder) {
+        const menu = menuConfigByCode.get(code)
+        folder = {
+          key: code,
+          menuCode: code,
+          name: menu?.name ?? code,
+          icon: menu?.icon,
+          sortOrder: menu?.sortOrder ?? 0,
+          children: [],
+        }
+        folders.set(code, folder)
+        siblings.push(folder)
+      }
+      siblings = folder.children
+    }
+    const leaf = toOperationManualLeafNode(manual)
+    const pageMenu = manual.pageMenuCode ? menuConfigByCode.get(manual.pageMenuCode) : undefined
+    if (pageMenu) leaf.sortOrder = pageMenu.sortOrder
+    siblings.push(leaf)
+  }
+
+  sortManualTree(roots)
+  return roots
+}
+
+export function toOperationManualLeafNode(manual: OperationManualEntry): OperationManualTreeNode {
+  return {
+    key: `manual:${manual.slug}`,
+    name: manual.pageTitle,
+    sortOrder: manual.sortOrder,
+    children: [],
+    manual,
+  }
 }
 
 /** ManualHome 用：分類ごとにマニュアルをグループ化（空の分類は除外） */
 export function getOperationManualNavGroups(): OperationManualNavGroup[] {
-  return OPERATION_MANUAL_CATEGORY_ORDER.map((category) => ({
-    category,
-    items: OPERATION_MANUALS.filter((m) => m.category === category).sort(
+  return OPERATION_MANUAL_CATEGORY_ORDER.map((category) => {
+    const items = OPERATION_MANUALS.filter((m) => m.category === category).sort(
       (a, b) => a.sortOrder - b.sortOrder,
-    ),
-  })).filter((g) => g.items.length > 0)
+    )
+    const group: OperationManualNavGroup = { category, items }
+    if (OPERATION_MANUAL_TREE_CATEGORIES.includes(category)) {
+      group.tree = buildOperationManualMenuTree(items)
+    }
+    return group
+  }).filter((g) => g.items.length > 0)
 }
 
 export function getOperationManualPath(slug: string): string {

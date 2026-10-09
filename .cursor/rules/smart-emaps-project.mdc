@@ -10,6 +10,7 @@ alwaysApply: true
 - **前端**：Vue 3、Vite、TypeScript、Pinia、Vue Router、Element Plus、`frontend/src/`。
 - **后端**：FastAPI、异步 SQLAlchemy、Pydantic、`backend/app/`（业务按 `modules/` 拆分）。
 - **文档**：`docs/`（构建部署、业务说明等）。
+- **画面操作说明 PDF**：一律按 `.cursor/rules/page-operation-pdf-manual.mdc`（补给品 / ベースライン同型：HTML→PDF→Outline、不在 ManualHome 做额外 TOC）。
 
 ## 改动原则
 

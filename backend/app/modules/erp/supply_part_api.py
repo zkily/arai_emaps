@@ -37,9 +37,9 @@ TXN_MANUAL_IN = "manual_in"
 SOURCE_TRANSFER = "transfer"
 SOURCE_MANUAL = "manual"
 SUPPLY_PRODUCT_TYPE = "補給品"
-# 振替時に在庫取引記録へ登録する製品倉庫の出庫（生産データ管理の手入力出庫と同じ形）
+# 振替時に在庫取引記録へ登録する製品倉庫の保留（保留更新で倉庫保留に集計され、倉庫在庫から差し引かれる）
 STOCK_LOG_TYPE = "製品"
-STOCK_LOG_OUT = "出庫"
+STOCK_LOG_HOLD = "保留"
 STOCK_LOG_LOCATION = "製品倉庫"
 STOCK_LOG_PROCESS = "KT13"
 STOCK_LOG_UNIT = "本"
@@ -389,7 +389,7 @@ def _transfer_note(lines: list[dict], raw_qty: int, transfer_qty: int, extra: Op
         detail = "生産データの倉庫在庫行なし"
     text = (
         f"振替元: {detail}。合計 {raw_qty}。"
-        f"入庫数量 {transfer_qty}。種別を補給品にし、在庫取引記録に製品倉庫の出庫を登録しました。"
+        f"入庫数量 {transfer_qty}。種別を補給品にし、在庫取引記録に製品倉庫の保留を登録しました。"
     )
     if raw_qty <= 0:
         text += " 元の倉庫在庫が 0 以下のため入庫数量は 0 です。"
@@ -679,7 +679,7 @@ async def transfer_supply_part(
         op_id = getattr(current_user, "user_id", None) or getattr(current_user, "id", None)
         log = StockTransactionLog(
             stock_type=STOCK_LOG_TYPE,
-            transaction_type=STOCK_LOG_OUT,
+            transaction_type=STOCK_LOG_HOLD,
             target_cd=body.product_cd,
             location_cd=STOCK_LOG_LOCATION,
             process_cd=STOCK_LOG_PROCESS,
@@ -699,7 +699,7 @@ async def transfer_supply_part(
     if raw_qty <= 0:
         warning = (
             f"元の倉庫在庫は {raw_qty} のため、入庫数量は 0 です。"
-            "種別は補給品に変更しました（在庫取引記録の出庫はありません）。"
+            "種別は補給品に変更しました（在庫取引記録の保留はありません）。"
         )
     return {
         "stock": _stock_to_dict(stock),
@@ -1011,7 +1011,7 @@ async def delete_supply_part(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_inventory_operation("delete")),
 ):
-    """補給品カードと入出庫履歴を削除。振替分は在庫取引記録の振替出庫も削除する。"""
+    """補給品カードと入出庫履歴を削除。振替分は在庫取引記録の振替保留も削除する。"""
     res = await db.execute(
         select(SupplyPartStock).where(SupplyPartStock.id == stock_id).with_for_update()
     )

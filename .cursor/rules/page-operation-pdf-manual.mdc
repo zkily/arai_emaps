@@ -1,0 +1,45 @@
+---
+description: 画面操作説明 PDF（pageOperation）の生成・登録手順。補給品管理 / 生産計画ベースラインと同型。
+alwaysApply: true
+---
+
+# 画面操作説明 PDF（必須パターン）
+
+新規・更新の **ページ操作マニュアル** は、必ず次の型に揃える。参照正本: `supply-parts.pdf`、`plan-baseline.pdf`。
+
+## 成果物
+
+| 成果物 | 場所 |
+|--------|------|
+| 原稿 HTML（日文） | `docs/{slug}-manual_ja.html` |
+| 画面スクショ | `docs/images/{slug}/`（実 UI。模式図のみ禁止） |
+| 配布 PDF | `frontend/src/views/manual/pdfs/{slug}.pdf` |
+| ブックマーク付与 | `docs/images/{slug}/_add_bookmarks.py`（再生成後に再実行） |
+| 登録 | `operationManuals.ts`: `pdfFile` + `category: 'pageOperation'` + `pageMenuCode` |
+
+## 体裁（HTML）
+
+- 表紙: ティール系グラデ、`Smart-EMAPs / {領域}` pill、大タイトル、要約、番号付き機能タイル（6 前後）
+- 2 ページ目: **目次**（PDF 内。ManualHome に別 TOC サイドバーを作らない）
+- 本文: 番号付き章、操作手順、注意（赤）/ ヒント（青）、teal 見出し、実画面図
+- 末尾: 権限・メッセージ対処・運用注意・FAQ・文書情報・改訂履歴
+- 画面 `?` / help は `/manuals/{slug}`（または既存 redirect）へ
+
+## 生成手順
+
+1. 対象 Vue 画面の現行 UI・権限・ボタンを確認して日文原稿を書く
+2. 実画面スクショを `docs/images/{slug}/` に配置し HTML から参照
+3. Chrome/Edge headless で PDF 化（`--print-to-pdf`、`--no-pdf-header-footer`、`file://`）
+4. **必ず** PyMuPDF `set_toc` で Outline を付与（ビューア左の「ドキュメントのアウトライン」）。検索は **目次ページ以降** から見出しを探す（目次テキストに誤マッチしない）
+5. `OPERATION_MANUALS` 登録、必要なら i18n / 画面 help リンク、`docs/README` 更新
+
+## 禁止
+
+- ManualHome に PDF 用の別 TOC UI を追加しない（目次・章ジャンプは PDF Outline + PDF 内目次）
+- 模式図だけで実 UI スクショを省略しない
+- HTML 再印刷後にブックマーク再付与を忘れる
+
+## 検証
+
+- `pymupdf.open(pdf).get_toc()` が空でないこと；各章のページが本文見出しと一致すること
+- `/manuals/{slug}` で PDF が表示されること

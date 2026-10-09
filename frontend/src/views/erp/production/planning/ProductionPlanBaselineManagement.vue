@@ -1290,8 +1290,7 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperation
 const router = useRouter()
 
 const goHelpPage = () => {
-  // 新标签页打开：不替换当前页面；同时避免当前 SPA 热更新导致路由表未刷新。
-  window.open('/erp/production/plan-baseline/help', '_blank', 'noopener')
+  window.open('/manuals/plan-baseline', '_blank', 'noopener,noreferrer')
 }
 
 const goReportCenter = () => {

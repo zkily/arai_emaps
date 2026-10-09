@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>shots</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; color: #0f172a; }
+  .page { width: 1280px; height: 720px; overflow: hidden; page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .bg {
+    height: 100%;
+    padding: 14px 16px;
+    background:
+      radial-gradient(920px 440px at 6% -8%, rgba(153, 246, 228, 0.38) 0%, transparent 55%),
+      radial-gradient(780px 400px at 100% 0%, rgba(186, 230, 253, 0.42) 0%, transparent 50%),
+      linear-gradient(180deg, #eef6f7 0%, #e8eef4 48%, #f1f5f9 100%);
+  }
+  .hero {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-radius: 12px; color: #fff;
+    background: linear-gradient(135deg, rgba(13,148,136,.96) 0%, rgba(14,116,144,.94) 48%, rgba(37,99,235,.92) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 10px 28px rgba(14,116,144,.28);
+  }
+  .hero h1 { margin: 0; font-size: 20px; }
+  .hero p { margin: 4px 0 0; font-size: 11px; opacity: .95; }
+  .chips { display: flex; gap: 6px; margin-top: 6px; }
+  .chip { height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.3); display: inline-flex; align-items: center; }
+  .chip.alert { background: rgba(244,63,94,.55); }
+  .icon {
+    width: 40px; height: 40px; border-radius: 11px; margin-right: 10px;
+    background: linear-gradient(160deg, rgba(255,255,255,.38), rgba(255,255,255,.12));
+    border: 1px solid rgba(255,255,255,.35);
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .left { display: flex; align-items: center; }
+  .btns { display: flex; gap: 8px; align-items: center; }
+  .btn { border-radius: 10px; padding: 7px 12px; font-weight: 700; font-size: 13px; border: 1px solid transparent; }
+  .btn-w { background: #fff; color: #0f766e; }
+  .btn-t { background: linear-gradient(180deg,#5eead4,#0f766e); color: #fff; }
+  .btn-g { background: linear-gradient(180deg,#4ade80,#16a34a); color: #fff; }
+  .btn-d { background: linear-gradient(180deg,#fff,#fef2f2); color: #b91c1c; border-color: rgba(239,68,68,.42); }
+  .btn-y { background: linear-gradient(180deg,#fffbeb,#fef3c7); color: #92400e; border-color: rgba(245,158,11,.45); }
+  .btn-s { background: #fff; color: #166534; border-color: #86efac; font-size: 12px; padding: 4px 8px; }
+  .btn-p { background: #fff; color: #1d4ed8; border-color: #93c5fd; font-size: 12px; padding: 4px 8px; }
+  .zone { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 6px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+  .zone i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .z-g { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; } .z-g i { background: #059669; }
+  .z-t { color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; } .z-t i { background: #0d9488; }
+  .z-b { color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; } .z-b i { background: #0284c7; }
+  .z-i { color: #3730a3; background: #eef2ff; border: 1px solid #c7d2fe; } .z-i i { background: #4f46e5; }
+  .row { display: flex; gap: 10px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; box-shadow: 0 6px 18px rgba(15,23,42,.06); }
+  .card h3 { margin: 0; font-size: 15px; }
+  .sub { color: #64748b; font-size: 11px; margin-top: 2px; }
+  .badge { font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
+  .bg-gen { background: #d1fae5; color: #047857; }
+  .bg-auto { background: #e0f2fe; color: #0369a1; }
+  .ctl { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .field { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; min-width: 120px; font-size: 13px; }
+  .kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px; box-shadow: 0 4px 12px rgba(15,23,42,.05); }
+  .kpi .k { font-size: 11px; color: #64748b; }
+  .kpi .v { font-size: 16px; font-weight: 800; margin-top: 2px; }
+  .kpi .d { font-size: 10px; color: #94a3b8; }
+  .neg { color: #dc2626; } .pos { color: #059669; }
+  .pc { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .pc .card b { font-size: 12px; color: #0f766e; }
+  .mark {
+    position: absolute; z-index: 5; width: 22px; height: 22px; border-radius: 50%;
+    color: #fff; font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  }
+  .r { background: #ef4444; } .b { background: #2563eb; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; }
+  th { background: #f8fafc; text-align: right; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+  th:first-child, td:first-child { text-align: left; }
+  td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; text-align: right; }
+  .tabs { display: flex; gap: 6px; margin: 8px 0; }
+  .tab { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 8px; font-size: 12px; font-weight: 700; }
+  .tab.on { background: #fff7ed; border-color: #d97706; color: #9a3412; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .dlg { width: 560px; margin: 40px auto; background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(15,23,42,.18); overflow: hidden; }
+  .dlg.wide { width: 980px; }
+  .dlg-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: linear-gradient(135deg,#0d9488,#0e7490); color: #fff; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; }
+  .day { height: 32px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 12px; background: #fff; }
+  .day.on { background: #ccfbf1; border-color: #0d9488; color: #0f766e; font-weight: 800; }
+  .day.sun { color: #dc2626; } .day.sat { color: #2563eb; }
+  .wd { font-size: 11px; text-align: center; color: #64748b; font-weight: 700; }
+</style>
+</head>
+<body>
+<section class="page"><div class="bg">
+  <div class="hero">
+    <div class="left">
+      <div class="icon">📈</div>
+      <div>
+        <h1>生産計画ベースライン管理</h1>
+        <p>基準計画の固定化から、変更計画・実績との差異把握までを一画面で</p>
+        <div class="chips">
+          <span class="chip">2026年10月</span>
+          <span class="chip">全工程</span>
+          <span class="chip">186 行</span>
+          <span class="chip alert">アラート 12</span>
+        </div>
+      </div>
+    </div>
+    <div class="btns">
+      <span class="mark r" style="position:relative;margin-right:-18px">1</span>
+      <span class="btn btn-w">レポート生成</span>
+      <span class="btn btn-w" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)">定時配信</span>
+      <span class="mark r" style="position:relative;margin-right:-18px">2</span>
+      <span class="btn btn-t">再取得</span>
+    </div>
+  </div>
+  <div class="zone z-g"><i></i>生成・検索</div>
+  <div class="row">
+    <div class="card" style="flex:1.2;position:relative">
+      <div style="display:flex;justify-content:space-between">
+        <h3 style="display:flex;align-items:center;gap:6px"><span class="mark b" style="position:relative">A</span><span>ベースライン生成</span> <span class="badge bg-gen">GENERATE</span></h3>
+        <span style="font-size:12px;font-weight:800;color:#0f766e">操作可　ON</span>
+      </div>
+      <div class="sub">成型・溶接・溶接SPは自動集計／切断・面取・メッキ・検査はカレンダーで日付を選んで手入力</div>
+      <div class="ctl">
+        <span class="field">2026-10</span>
+        <span class="field">全工程</span>
+        <span class="mark r" style="position:relative">3</span>
+        <span class="btn btn-g">生成</span>
+        <span class="mark r" style="position:relative">4</span>
+        <span class="btn btn-d">削除</span>
+        <span class="mark r" style="position:relative">5</span>
+        <span class="btn btn-y">計画を修正</span>
+      </div>
+    </div>
+    <div class="card" style="flex:.8;position:relative">
+      <h3 style="display:flex;align-items:center;gap:6px"><span class="mark b" style="position:relative">B</span><span>比較条件</span> <span class="badge bg-auto">AUTO</span></h3>
+      <div class="sub">対象月・工程を変更すると自動で再取得</div>
+      <div class="ctl">
+        <span class="field">2026-10</span>
+        <span class="field">全工程</span>
+        <span class="sub">条件変更で一覧・KPIを自動更新</span>
+      </div>
+    </div>
+  </div>
+  <div class="zone z-t"><i></i>サマリー KPI</div>
+  <div class="kpis">
+    <div class="kpi"><div class="k">基準計画合計</div><div class="v">1,240,000</div><div class="d">ベースライン計画合計</div></div>
+    <div class="kpi"><div class="k">変更計画合計</div><div class="v">1,198,400</div><div class="d">最新計画合計</div></div>
+    <div class="kpi"><div class="k">計画差異</div><div class="v neg">-41,600</div><div class="d">変更計画 − 基準計画</div></div>
+    <div class="kpi"><div class="k">実績合計</div><div class="v">812,300</div><div class="d">最新実績合計</div></div>
+    <div class="kpi"><div class="k">計画対実績差</div><div class="v">427,700</div><div class="d">基準計画 − 実績</div></div>
+    <div class="kpi"><div class="k">計画達成率</div><div class="v neg">67.8%</div><div class="d">実績 ÷ 変更計画</div></div>
+    <div class="kpi"><div class="k">達成率差異</div><div class="v">34.49%</div><div class="d">計画対実績差 ÷ 基準計画</div></div>
+  </div>
+  <div class="pc">
+    <div class="card"><b>当月</b> 2026年10月<div class="sub">基準計画 1,240,000　達成率 67.8%　達成率 -4.2pt（前月比）</div></div>
+    <div class="card"><b>前月</b> 2026年09月<div class="sub">基準計画 1,180,000　達成率 72.0%</div></div>
+    <div class="card"><b>前年同月</b> 2025年10月<div class="sub">基準計画 1,090,000　達成率 80.4%</div></div>
+  </div>
+</div></section>
+
+<section class="page"><div class="bg">
+  <div class="zone z-b"><i></i>推移・ヒートマップ</div>
+  <div class="row">
+    <div class="card" style="flex:1;position:relative">
+      <span class="mark b" style="top:8px;right:8px">C</span>
+      <h3>日次推移 <span class="badge" style="background:#fff7ed;color:#9a3412">成型</span></h3>
+      <div class="sub">基準計画 × 実績（柱状・単位：千・小数1位）　差異数値を表示　数量ラベル</div>
+      <svg viewBox="0 0 560 180" width="100%" height="150" style="margin-top:8px">
+        <line x1="30" y1="150" x2="540" y2="150" stroke="#e2e8f0"/>
+        <rect x="40" y="70" width="14" height="80" fill="#5eead4"/>
+        <rect x="56" y="90" width="14" height="60" fill="#38bdf8"/>
+        <rect x="90" y="60" width="14" height="90" fill="#5eead4"/>
+        <rect x="106" y="100" width="14" height="50" fill="#38bdf8"/>
+        <rect x="140" y="80" width="14" height="70" fill="#5eead4"/>
+        <rect x="156" y="95" width="14" height="55" fill="#38bdf8"/>
+        <rect x="190" y="50" width="14" height="100" fill="#5eead4"/>
+        <rect x="206" y="88" width="14" height="62" fill="#38bdf8"/>
+        <rect x="240" y="75" width="14" height="75" fill="#5eead4"/>
+        <rect x="256" y="110" width="14" height="40" fill="#38bdf8"/>
+        <text x="40" y="170" font-size="10" fill="#64748b">10/01</text>
+        <text x="240" y="170" font-size="10" fill="#64748b">10/15</text>
+      </svg>
+    </div>
+    <div class="card" style="flex:1;position:relative">
+      <span class="mark b" style="top:8px;right:8px">D</span>
+      <h3>月間ヒートマップ <span class="badge" style="background:#fff7ed;color:#9a3412">成型</span></h3>
+      <div class="sub">計画達成率・実績差異・実績数量　クリックで比較一覧へ</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="flex:1"><div class="sub">計画達成率</div><div class="cal" id="h1"></div></div>
+        <div style="flex:1"><div class="sub">実績差異</div><div class="cal" id="h2"></div></div>
+        <div style="flex:1"><div class="sub">実績数量</div><div class="cal" id="h3"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="zone z-i"><i></i>工程別 比較一覧</div>
+  <div class="card" style="position:relative">
+    <span class="mark b" style="top:8px;left:8px">E</span>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin-left:28px">ベースライン比較一覧 <span class="badge" style="background:#e0f2fe;color:#0369a1">2026年10月</span> <span class="badge" style="background:#eef2ff;color:#3730a3">全 186 行</span> <span class="badge" style="background:#fee2e2;color:#b91c1c">アラート 12</span></h3>
+      <div class="ctl" style="margin:0">
+        <span class="mark r" style="position:relative">6</span>
+        <span style="font-size:12px">差異閾値 5%　実績</span>
+        <span class="btn btn-s">Excel出力</span>
+        <span class="btn btn-p">工程別報告書発行</span>
+        <span class="btn btn-p">印刷</span>
+      </div>
+    </div>
+    <div class="tabs">
+      <span class="tab"><span class="dot" style="background:#2563eb"></span>切断</span>
+      <span class="tab"><span class="dot" style="background:#16a34a"></span>面取</span>
+      <span class="tab on"><span class="dot" style="background:#d97706"></span>成型</span>
+      <span class="tab"><span class="dot" style="background:#dc2626"></span>メッキ</span>
+      <span class="tab"><span class="dot" style="background:#0284c7"></span>溶接</span>
+      <span class="tab"><span class="dot" style="background:#7c3aed"></span>溶接SP</span>
+      <span class="tab"><span class="dot" style="background:#0d9488"></span>検査</span>
+    </div>
+    <table>
+      <tr><th>日付</th><th>基準計画</th><th>変更計画</th><th>計画差異</th><th>実績合計</th><th>計画対実績差</th></tr>
+      <tr><td>2026-10-01</td><td>52,000</td><td>50,400</td><td class="neg">↓ -1,600</td><td>41,200</td><td>10,800</td></tr>
+      <tr style="background:#fff1f2"><td>2026-10-02 ⚠</td><td>48,000</td><td>48,000</td><td>0</td><td>22,100</td><td class="neg">25,900</td></tr>
+      <tr><td>2026-10-03</td><td>46,500</td><td>47,200</td><td class="pos">↑ 700</td><td>44,800</td><td>1,700</td></tr>
+    </table>
+  </div>
+</div></section>
+
+<section class="page"><div class="bg" style="display:flex;align-items:flex-start;justify-content:center">
+  <div class="dlg">
+    <div class="dlg-h">
+      <div><b style="font-size:16px">基準計画の手入力</b><div style="font-size:11px;opacity:.9">カレンダーで反映日を選択（既定は平日のみ／クリックで追加・解除）</div></div>
+      <span class="chip">切断</span>
+    </div>
+    <div style="padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span>対象月 <b>2026年10月</b></span><span>選択 <b>22日</b></span></div>
+      <div class="ctl"><span class="btn btn-p">平日のみ</span><span class="btn btn-p">すべて</span><span class="btn btn-p">クリア</span></div>
+      <div class="cal" style="margin-top:10px">
+        <div class="wd sun">日</div><div class="wd">月</div><div class="wd">火</div><div class="wd">水</div><div class="wd">木</div><div class="wd">金</div><div class="wd sat">土</div>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div style="margin-top:12px;font-size:13px;font-weight:700">基準計画数（選択日共通） <span class="mark r" style="position:relative;display:inline-flex">1</span></div>
+      <div class="field" style="margin-top:6px;width:200px">12000</div>
+      <div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px;font-size:12px">既存の「切断」ベースラインは削除され、選択した日付だけに入力値が登録されます。</div>
+      <div style="text-align:right;margin-top:12px"><span class="btn btn-p">キャンセル</span> <span class="mark r" style="position:relative;display:inline-flex">2</span> <span class="btn btn-g">生成する</span></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="page"><div class="bg" style="display:flex;align-items:flex-start;justify-content:center;padding-top:24px">
+  <div class="dlg wide">
+    <div class="dlg-h">
+      <div><b style="font-size:16px">ベースライン計画修正</b><div style="font-size:11px;opacity:.9">日別の計画値を編集・保存。日付の追加／削除もここから行えます。</div></div>
+      <span class="chip">12件　2026年10月</span>
+    </div>
+    <div style="padding:12px 14px">
+      <div class="ctl">
+        <span class="field">2026-10</span><span class="field">成型</span><span class="field">すべて</span>
+        <span class="mark r" style="position:relative">1</span><span class="btn btn-t">データ取得</span><span class="btn btn-p">リセット</span>
+      </div>
+      <div class="card" style="margin-top:8px;background:#f0fdfa">
+        <b>日付を追加</b> <span class="sub">基準月内の日付を選び、工程・数量を入れて追加</span>
+        <div class="ctl"><span class="field">2026-10-18</span><span class="field">成型</span><span class="field">8000</span><span class="mark r" style="position:relative">2</span><span class="btn btn-g">追加</span></div>
+      </div>
+      <table style="margin-top:8px">
+        <tr><th>日付</th><th>工程</th><th style="text-align:left">基準計画</th><th>操作</th></tr>
+        <tr><td>2026-10-01</td><td style="text-align:center">成型</td><td style="text-align:left">現在値 <b>52,000</b>　[ 52000 ]</td><td><span class="mark r" style="position:relative;display:inline-flex">3</span> 保存　削除</td></tr>
+        <tr><td>2026-10-02</td><td style="text-align:center">成型</td><td style="text-align:left">現在値 <b>48,000</b>　[ 48000 ]</td><td>保存　削除</td></tr>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12px;color:#64748b">
+        <span>削除＝その日付の行を減らす／追加パネル＝日付を増やす</span>
+        <span><span class="mark r" style="position:relative;display:inline-flex">4</span> <span class="btn btn-g">変更を一括保存</span> <span class="btn btn-p">閉じる</span></span>
+      </div>
+    </div>
+  </div>
+</div></section>
+<script>
+function cells(id, n, painter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    d.className = 'day';
+    d.style.height = '18px';
+    d.style.fontSize = '9px';
+    d.textContent = i < 3 ? '' : String(i - 2);
+    painter(d, i);
+    el.appendChild(d);
+  }
+}
+cells('h1', 35, (d,i) => { if (i>2) d.style.background = `rgba(13,148,136,${0.15+(i%5)*0.15})`; });
+cells('h2', 35, (d,i) => { if (i>2) d.style.background = i%4===0 ? '#fecaca' : '#bbf7d0'; });
+cells('h3', 35, (d,i) => { if (i>2) d.style.background = `rgba(2,132,199,${0.12+(i%6)*0.12})`; });
+const cal = document.getElementById('cal');
+const start = 4;
+for (let i = 0; i < 35; i++) {
+  const day = i - start + 1;
+  const el = document.createElement('div');
+  el.className = 'day';
+  if (day < 1 || day > 31) { el.style.visibility = 'hidden'; }
+  else {
+    el.textContent = String(day);
+    const wd = (i) % 7;
+    if (wd === 0) el.classList.add('sun');
+    if (wd === 6) el.classList.add('sat');
+    if (wd >= 1 && wd <= 5) el.classList.add('on');
+  }
+  cal.appendChild(el);
+}
+</script>
+</body>
+</html>
