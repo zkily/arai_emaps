@@ -9,6 +9,12 @@ const markdownModules = import.meta.glob<string>('./docs/**/*.md', {
   eager: true,
 })
 
+const pdfModules = import.meta.glob<string>('./pdfs/*.pdf', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+})
+
 const imageModules = import.meta.glob<string>(
   [
     './docs/**/images/**/*.{png,jpg,jpeg,gif,webp,svg}',
@@ -42,6 +48,16 @@ function findMarkdownKey(docPath: string): string | undefined {
     const k = normalizePath(key)
     return k.endsWith(`/${normalized}`) || k === `./docs/${normalized}`
   })
+}
+
+/** pdfs/ 直下のファイル名で PDF の配信 URL を取得 */
+export function getManualPdfUrl(filename: string): string | undefined {
+  const normalized = filename.replace(/^\//, '').replace(/^\.\//, '')
+  const key = Object.keys(pdfModules).find((item) => {
+    const k = normalizePath(item)
+    return k.endsWith(`/${normalized}`) || k === `./pdfs/${normalized}`
+  })
+  return key ? pdfModules[key] : undefined
 }
 
 /** docs/ 直下の相対パスで MD を取得（例: forming-instruction_ja.md） */

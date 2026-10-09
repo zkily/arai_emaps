@@ -16,6 +16,13 @@ alwaysApply: true
 - 仅为当前任务修改必要文件；避免无关重构与顺手「清理」。
 - 新增功能优先沿用现有模块划分、命名与调用方式（前端 `api/` 与视图分层，后端路由与服务分层）。
 
+## 数据库结构变更
+
+- 表结构 / 初始数据变更一律新增 `backend/database/migrations/NNN_*.sql`（编号递增），不要改写已发布的迁移。
+- 新增迁移后必须执行 `py scripts/sync_schema_from_migrations.py`，把变更同步到 `backend/database/schema/`
+  （已有表加列会写回 `tables/<表名>.sql`，新表生成新文件），并把 `schema/` 的变更一并提交。
+- 不要手工编辑 `schema/` 下的生成文件；若确有必要，改完后执行 `--force` 统一格式。
+
 ## 安全与配置
 
 - 勿将 `.env`、密钥、连接串提交入库；示例配置用 `.env.example` 一类方式说明。

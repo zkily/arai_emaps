@@ -23,6 +23,7 @@
           >
             <el-icon :size="16"><Memo /></el-icon>
             <span class="manual-sidebar__item-text">{{ item.pageTitle }}</span>
+            <span v-if="item.pdfFile" class="manual-sidebar__pdf-tag">PDF</span>
           </div>
         </section>
       </nav>
@@ -47,6 +48,23 @@
       </div>
       <div v-else-if="loadError" class="manual-content__error">
         <p>{{ loadError }}</p>
+      </div>
+      <div v-else-if="pdfUrl" class="manual-print-area manual-print-area--pdf">
+        <div class="manual-content__header">
+          <div class="manual-content__title-badge">
+            <el-icon :size="20"><QuestionFilled /></el-icon>
+          </div>
+          <div>
+            <h1 class="manual-content__title">{{ currentTitle }}</h1>
+            <p class="manual-content__subtitle">{{ t('operationManual.pdfSubtitle') }}</p>
+          </div>
+        </div>
+        <iframe
+          ref="pdfFrameEl"
+          class="manual-pdf"
+          :src="pdfUrl"
+          :title="currentTitle"
+        />
       </div>
       <div v-else class="manual-print-area">
         <div class="manual-content__header">
@@ -93,7 +111,7 @@ import {
   getOperationManualNavGroups,
 } from '@/config/operationManuals'
 import { runBrowserPrint } from '@/utils/manualPrintCapture'
-import { getManualMarkdown, normalizeManualMarkdown } from '@/views/manual/manualAssets'
+import { getManualMarkdown, getManualPdfUrl, normalizeManualMarkdown } from '@/views/manual/manualAssets'
 import {
   bindHelpContentAnchorNav,
   renderHelpMarkdown,
@@ -116,12 +134,14 @@ const currentTitle = computed(() => manual.value?.pageTitle ?? t('operationManua
 const loading = ref(true)
 const loadError = ref('')
 const renderedHtml = ref('')
+const pdfUrl = ref('')
 const manualScrollEl = ref<HTMLElement | null>(null)
 const helpContentEl = ref<HTMLElement | null>(null)
+const pdfFrameEl = ref<HTMLIFrameElement | null>(null)
 let unbindAnchorNav: (() => void) | null = null
 
 const showTocFab = computed(
-  () => !loading.value && !loadError.value && Boolean(renderedHtml.value),
+  () => !loading.value && !loadError.value && Boolean(renderedHtml.value) && !pdfUrl.value,
 )
 
 const TOC_HEADING_IDS = ['目次', 'toc', 'table-of-contents', 'mokuji']
@@ -169,6 +189,7 @@ async function loadDocument() {
   loading.value = true
   loadError.value = ''
   renderedHtml.value = ''
+  pdfUrl.value = ''
   unbindAnchorNav?.()
   unbindAnchorNav = null
 
@@ -180,6 +201,17 @@ async function loadDocument() {
   }
 
   try {
+    if (entry.pdfFile) {
+      const url = getManualPdfUrl(entry.pdfFile)
+      if (!url) {
+        throw new Error(`manual pdf not found: ${entry.pdfFile}`)
+      }
+      pdfUrl.value = url
+      return
+    }
+    if (!entry.docFile) {
+      throw new Error('manual source missing')
+    }
     const mdText = getManualMarkdown(entry.docFile)
     if (!mdText) {
       throw new Error(`manual not found: ${entry.docFile}`)
@@ -228,6 +260,16 @@ onUnmounted(() => {
 function handlePrint() {
   if (loading.value || loadError.value) {
     ElMessage.warning(t('operationManual.loading'))
+    return
+  }
+  if (pdfUrl.value) {
+    const frameWindow = pdfFrameEl.value?.contentWindow
+    if (frameWindow) {
+      frameWindow.focus()
+      frameWindow.print()
+      return
+    }
+    window.open(pdfUrl.value, '_blank', 'noopener,noreferrer')
     return
   }
   runBrowserPrint(manualScrollEl.value)
@@ -334,6 +376,17 @@ function handlePrint() {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.manual-sidebar__pdf-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fde68a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .manual-sidebar__footer {
@@ -486,5 +539,20 @@ function handlePrint() {
 
 .manual-print-area {
   width: 100%;
+}
+
+.manual-print-area--pdf {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px);
+}
+
+.manual-pdf {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: #fff;
 }
 </style>

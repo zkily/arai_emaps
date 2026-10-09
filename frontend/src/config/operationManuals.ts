@@ -5,7 +5,12 @@
  */
 
 /** ManualHome 左サイドバーの分類 */
-export type OperationManualCategory = 'planning' | 'instructionActual' | 'mes' | 'pageOperation'
+export type OperationManualCategory =
+  | 'planning'
+  | 'instructionActual'
+  | 'mes'
+  | 'pageOperation'
+  | 'purchasing'
 
 export interface OperationManualEntry {
   /** URL スラッグ（/operation-manuals/:slug） */
@@ -14,8 +19,10 @@ export interface OperationManualEntry {
   menuCode: string
   /** 画面ヘッダー主タイトル */
   pageTitle: string
-  /** MD 相対パス（docs/ からの相対、例: forming-instruction_ja.md） */
-  docFile: string
+  /** MD 相対パス（docs/ からの相対、例: forming-instruction_ja.md）。PDF のときは省略 */
+  docFile?: string
+  /** pdfs/ 直下のファイル名（例: equipment-efficiency.pdf） */
+  pdfFile?: string
   /** 全体の表示順（未分類時のフォールバック） */
   sortOrder: number
   /** サイドバー分類 */
@@ -28,6 +35,7 @@ export const OPERATION_MANUAL_CATEGORY_ORDER: OperationManualCategory[] = [
   'instructionActual',
   'mes',
   'pageOperation',
+  'purchasing',
 ]
 
 export const OPERATION_MANUAL_CATEGORY_I18N_KEY: Record<OperationManualCategory, string> = {
@@ -35,6 +43,7 @@ export const OPERATION_MANUAL_CATEGORY_I18N_KEY: Record<OperationManualCategory,
   instructionActual: 'operationManual.categoryInstructionActual',
   mes: 'operationManual.categoryMes',
   pageOperation: 'operationManual.categoryPageOperation',
+  purchasing: 'operationManual.categoryPurchasing',
 }
 
 export const OPERATION_MANUAL_PARENT_CODE = 'OPERATION_MANUALS'
@@ -59,11 +68,27 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     category: 'planning',
   },
   {
+    slug: 'forming-setup-schedule',
+    menuCode: 'OP_MANUAL_FORMING_SETUP',
+    pageTitle: '成型生産計画段替予定表',
+    pdfFile: 'forming-setup-schedule.pdf',
+    sortOrder: 3,
+    category: 'planning',
+  },
+  {
     slug: 'plan-baseline',
     menuCode: 'OP_MANUAL_PLAN_BASELINE',
     pageTitle: '生産計画ベースライン管理',
     docFile: 'plan-baseline_ja.md',
     sortOrder: 5,
+    category: 'pageOperation',
+  },
+  {
+    slug: 'equipment-efficiency',
+    menuCode: 'OP_MANUAL_EQUIPMENT_EFFICIENCY',
+    pageTitle: '設備能率管理',
+    pdfFile: 'equipment-efficiency.pdf',
+    sortOrder: 12,
     category: 'pageOperation',
   },
   {
@@ -129,6 +154,22 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     docFile: 'inspection-productivity_ja.md',
     sortOrder: 11,
     category: 'mes',
+  },
+  {
+    slug: 'outsourcing-welding',
+    menuCode: 'OP_MANUAL_OUTSOURCING_WELDING',
+    pageTitle: '外注溶接',
+    pdfFile: 'outsourcing-welding.pdf',
+    sortOrder: 20,
+    category: 'purchasing',
+  },
+  {
+    slug: 'outsourcing-plating',
+    menuCode: 'OP_MANUAL_OUTSOURCING_PLATING',
+    pageTitle: '外注メッキ',
+    pdfFile: 'outsourcing-plating.pdf',
+    sortOrder: 21,
+    category: 'purchasing',
   },
 ]
 

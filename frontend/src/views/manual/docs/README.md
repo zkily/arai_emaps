@@ -22,7 +22,8 @@
 
 1. 本フォルダに `{slug}_ja.md` を追加。
 2. 画像は `../images/YourFolder/` に配置し、MD 内は `./images/YourFolder/xxx.png` を使用。
-3. `frontend/src/config/operationManuals.ts` の `OPERATION_MANUALS` にエントリを追加（`category`: `planning` / `instructionActual` / `mes` / `pageOperation`）。
+3. `frontend/src/config/operationManuals.ts` の `OPERATION_MANUALS` にエントリを追加（`category`: `planning` / `instructionActual` / `mes` / `pageOperation` / `purchasing`）。
+4. PDF の操作説明は `frontend/src/views/manual/pdfs/` に置き、エントリの `pdfFile` にファイル名を指定する（`docFile` は不要）。
 
 ## 表示
 

@@ -4,21 +4,26 @@
     <div class="ee-header pb-hero pb-hero--page">
       <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="ee-header-left">
-        <div class="ee-title-row">
-          <span class="ee-title-icon"><el-icon :size="20"><Tools /></el-icon></span>
+        <span class="ee-title-icon"><el-icon :size="20"><Tools /></el-icon></span>
+        <div class="ee-title-copy">
           <h1 class="ee-title pb-hero-title">設備能率管理</h1>
+          <p class="ee-subtitle pb-hero-desc">設備ごとの加工製品別能率設定・管理</p>
         </div>
-        <p class="ee-subtitle pb-hero-desc">設備ごとの加工製品別能率設定・管理</p>
       </div>
-      <div class="ee-stats" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
-        <div class="ee-stat" v-for="(s, i) in [
-          { n: tabCountsAll, l: '設定数' },
-          { n: machineDistinctCount, l: '設備数' },
-          { n: productDistinctCount, l: '製品数' },
-          { n: efficiencyList.length, l: '表示中' }
-        ]" :key="s.l" :class="`ee-stat--${i}`">
+      <div class="ee-stats">
+        <div
+          v-for="(s, i) in [
+            { n: tabCountsAll, l: '設定数' },
+            { n: machineDistinctCount, l: '設備数' },
+            { n: productDistinctCount, l: '製品数' },
+            { n: efficiencyList.length, l: '表示中' }
+          ]"
+          :key="s.l"
+          class="ee-stat"
+          :class="`ee-stat--${i}`"
+        >
+          <span class="ee-stat-lbl"><i class="ee-stat-dot" />{{ s.l }}</span>
           <span class="ee-stat-num">{{ s.n }}</span>
-          <span class="ee-stat-lbl">{{ s.l }}</span>
         </div>
       </div>
     </div>
@@ -36,23 +41,81 @@
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
+      <el-select
+        v-model="filters.machineCd"
+        placeholder="設備"
+        filterable
+        clearable
+        class="ee-filter-select"
+        @change="handleMachineFilterChange"
+      >
+        <el-option
+          v-for="m in machineFilterOptions"
+          :key="m.value"
+          :label="m.label"
+          :value="m.value"
+        />
+      </el-select>
+      <el-select
+        v-model="filters.productCd"
+        placeholder="製品名"
+        filterable
+        clearable
+        class="ee-filter-select ee-filter-select--product"
+        @change="resetPageAndLoad"
+      >
+        <el-option
+          v-for="p in productFilterOptions"
+          :key="p.value"
+          :label="p.label"
+          :value="p.value"
+        >
+          <span>{{ p.name }}</span>
+          <span class="ee-filter-opt-cd">{{ p.value }}</span>
+        </el-option>
+      </el-select>
       <div class="ee-toolbar-actions">
-        <el-button @click="clearFilters" :icon="Refresh" class="ee-btn-clear">クリア</el-button>
-        <el-button type="primary" plain @click="overviewVisible = true" :icon="Grid" class="ee-btn-print">
+        <el-button @click="clearFilters" :icon="Refresh" class="ee-btn ee-btn--clear">クリア</el-button>
+        <el-button @click="overviewVisible = true" :icon="Grid" class="ee-btn ee-btn--overview">
           工程別一覧
         </el-button>
         <el-button
           v-if="canExport"
-          type="success"
-          plain
           @click="handlePrint"
           :icon="Printer"
           :loading="printing"
-          class="ee-btn-print"
+          class="ee-btn ee-btn--print"
         >
           印刷
         </el-button>
-        <el-button v-if="canCreate" type="primary" @click="openDialog()" :icon="Plus" class="ee-btn-add">
+        <el-button
+          v-if="canExport"
+          @click="handleExportExcel"
+          :icon="Download"
+          :loading="exporting"
+          class="ee-btn ee-btn--excel"
+        >
+          Excel出力
+        </el-button>
+        <el-button
+          v-if="canEdit"
+          @click="handleRefreshCurrentRate"
+          :icon="DataAnalysis"
+          :loading="refreshingCurrent"
+          class="ee-btn ee-btn--rate"
+        >
+          現在能率更新
+        </el-button>
+        <el-button
+          v-if="canCreate"
+          @click="openMissingDialog"
+          :icon="DocumentAdd"
+          :loading="missingLoading && !missingVisible"
+          class="ee-btn ee-btn--import"
+        >
+          生産性から追加
+        </el-button>
+        <el-button v-if="canCreate" @click="openDialog()" :icon="Plus" class="ee-btn ee-btn--add">
           <span class="btn-label">新規登録</span>
         </el-button>
       </div>
@@ -74,40 +137,56 @@
             border
             size="small"
             style="width: 100%"
+            class="ee-table"
             :empty-text="'データがありません'"
             :default-sort="{ prop: 'machines_name', order: 'ascending' }"
             :row-class-name="getRowClassName"
-            :header-cell-style="{ background: '#f0f2f8', color: '#374151', fontWeight: 600, fontSize: '11px', padding: '4px 8px', lineHeight: '1.3' }"
-            :cell-style="{ padding: '2px 8px', fontSize: '12px', lineHeight: '1.4' }"
             height="calc(100vh - 260px)"
           >
             <el-table-column type="index" label="#" width="48" align="center" :index="tableIndexMethod" />
-            <el-table-column prop="machine_cd" label="設備CD" width="90" align="center" sortable>
+            <el-table-column prop="machine_cd" label="設備CD" width="96" align="center" sortable>
               <template #default="{ row }">
                 <span class="ee-code ee-code--machine">{{ row.machine_cd }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="machines_name" label="設備名" min-width="120" sortable show-overflow-tooltip />
-            <el-table-column prop="product_cd" label="製品CD" width="90" align="center" sortable>
+            <el-table-column prop="machines_name" label="設備名" min-width="130" sortable show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="ee-name">{{ row.machines_name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="product_cd" label="製品CD" width="96" align="center" sortable>
               <template #default="{ row }">
                 <span class="ee-code ee-code--product">{{ row.product_cd }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="product_name" label="製品名" min-width="130" sortable show-overflow-tooltip />
-            <el-table-column prop="efficiency_rate" label="能率" width="80" align="center">
+            <el-table-column prop="product_name" label="製品名" min-width="140" sortable show-overflow-tooltip />
+            <el-table-column prop="efficiency_rate" label="能率" width="100" align="center">
               <template #default="{ row }">
-                <div class="ee-eff-cell">
+                <span class="ee-eff-cell">
                   <span class="ee-eff-val">{{ row.efficiency_rate?.toFixed(1) }}</span>
                   <span v-if="row.unit" class="ee-eff-unit">{{ row.unit }}</span>
-                </div>
+                </span>
               </template>
             </el-table-column>
-            <el-table-column prop="step_time" label="段取" width="65" align="center">
+            <el-table-column prop="current_efficiency_rate" label="現在能率" width="92" align="center">
+              <template #default="{ row }">
+                <el-tooltip
+                  v-if="row.current_efficiency_rate != null"
+                  :content="currentRateTip(row)"
+                  placement="top"
+                >
+                  <span class="ee-current">{{ Number(row.current_efficiency_rate).toFixed(1) }}</span>
+                </el-tooltip>
+                <span v-else class="ee-current ee-current--empty">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="step_time" label="段取" width="76" align="center">
               <template #default="{ row }">
                 <span v-if="row.step_time != null" class="ee-step">{{ row.step_time }}<small class="ee-min">分</small></span>
+                <span v-else class="ee-muted">—</span>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状態" width="85" align="center">
+            <el-table-column prop="status" label="状態" width="92" align="center">
               <template #default="{ row }">
                 <div class="ee-status-cell">
                   <el-switch
@@ -125,12 +204,47 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="remarks" label="備考" min-width="120" show-overflow-tooltip />
-            <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="110" align="center">
+            <el-table-column prop="remarks" label="備考" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="ee-remarks">{{ row.remarks }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="186" align="center">
               <template #default="{ row }">
                 <div class="ee-row-actions">
-                  <el-button v-if="canEdit" size="small" type="primary" link @click="openDialog(row)" :icon="Edit">編集</el-button>
-                  <el-button v-if="canDelete" size="small" type="danger" link @click="handleDelete(row.id)" :icon="Delete">削除</el-button>
+                  <el-button
+                    v-if="canEdit"
+                    size="small"
+                    link
+                    class="ee-act ee-act--edit pb-btn-plain"
+                    @click="openDialog(row)"
+                    :icon="Edit"
+                  >
+                    編集
+                  </el-button>
+                  <el-tooltip content="現在能率を能率へ反映" placement="top" :disabled="row.current_efficiency_rate == null">
+                    <el-button
+                      v-if="canEdit"
+                      size="small"
+                      link
+                      class="ee-act ee-act--apply pb-btn-plain"
+                      :disabled="row.current_efficiency_rate == null || applyingId === row.id"
+                      :loading="applyingId === row.id"
+                      @click="handleApplyCurrentRate(row)"
+                    >
+                      反映
+                    </el-button>
+                  </el-tooltip>
+                  <el-button
+                    v-if="canDelete"
+                    size="small"
+                    link
+                    class="ee-act ee-act--delete pb-btn-plain"
+                    @click="handleDelete(row.id)"
+                    :icon="Delete"
+                  >
+                    削除
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -140,7 +254,7 @@
       <!-- 結果バー + ページング -->
       <div class="ee-result-bar">
         <span>表示: <b>{{ efficiencyList.length }}</b> / <b>{{ total }}</b> 件</span>
-        <span v-if="activeProcessTab !== 'all'" class="ee-proc-tag">
+        <span v-if="activeProcessTab !== 'all'" class="ee-proc-tag" :class="`ee-proc-tag--${activeProcessTab}`">
           {{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程
         </span>
         <div class="ee-pagination-wrap">
@@ -161,12 +275,25 @@
     <!-- ダイアログ -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEdit ? '能率設定編集' : '能率設定新規登録'"
       width="580px"
       :close-on-click-modal="false"
-      class="ee-dialog"
+      :show-close="false"
+      class="eef-dialog pb-std"
       destroy-on-close
     >
+      <template #header>
+        <div class="eef-dialog-hero pb-hero" :class="isEdit ? 'is-edit' : 'is-new'">
+          <div class="pb-bubbles" aria-hidden="true" />
+          <div class="eef-dialog-icon">
+            <el-icon><component :is="isEdit ? Edit : Plus" /></el-icon>
+          </div>
+          <div class="eef-dialog-copy">
+            <h3>{{ isEdit ? '能率設定編集' : '能率設定新規登録' }}</h3>
+            <p>{{ isEdit ? '設備・製品ごとの能率と段取時間を更新します' : '設備と製品を選び、能率と段取時間を登録します' }}</p>
+          </div>
+          <el-icon class="eef-close" @click="dialogVisible = false"><Close /></el-icon>
+        </div>
+      </template>
       <el-form
         ref="formRef"
         :model="formData"
@@ -177,7 +304,7 @@
         size="default"
       >
         <div class="ee-form-section">
-          <div class="ee-form-section-title">設備・製品</div>
+          <div class="ee-form-section-title"><span class="ee-form-section-dot" />設備・製品</div>
           <el-form-item label="設備" prop="machine_cd">
             <el-select
               v-model="formData.machine_cd"
@@ -217,8 +344,8 @@
             <el-input v-model="formData.product_name" disabled />
           </el-form-item>
         </div>
-        <div class="ee-form-section">
-          <div class="ee-form-section-title">能率設定</div>
+        <div class="ee-form-section ee-form-section--amber">
+          <div class="ee-form-section-title"><span class="ee-form-section-dot" />能率設定</div>
           <div class="ee-form-row">
             <el-form-item label="能率" prop="efficiency_rate" class="ee-form-half">
               <el-input-number
@@ -227,6 +354,7 @@
                 :max="10000"
                 :precision="1"
                 :step="0.1"
+                controls-position="right"
                 style="width: 100%"
               />
             </el-form-item>
@@ -236,15 +364,16 @@
                 :min="0"
                 :max="9999"
                 :precision="0"
+                controls-position="right"
                 style="width: 100%"
                 placeholder="分"
               />
             </el-form-item>
           </div>
           <el-form-item label="状態" prop="status">
-            <el-radio-group v-model="formData.status">
-              <el-radio :value="1">有効</el-radio>
-              <el-radio :value="0">無効</el-radio>
+            <el-radio-group v-model="formData.status" class="ee-status-switch">
+              <el-radio-button :value="1">有効</el-radio-button>
+              <el-radio-button :value="0">無効</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="備考" prop="remarks">
@@ -254,8 +383,86 @@
       </el-form>
       <template #footer>
         <div class="ee-dialog-footer">
-          <el-button @click="dialogVisible = false">キャンセル</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="submitting">保存</el-button>
+          <el-button class="eef-cancel" @click="dialogVisible = false">キャンセル</el-button>
+          <el-button class="eef-save" :class="{ 'is-edit': isEdit }" @click="handleSubmit" :loading="submitting">
+            <el-icon><Check /></el-icon>
+            保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="missingVisible"
+      title="生産性から追加"
+      width="1000px"
+      top="5vh"
+      class="ee-dialog"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <div v-loading="missingLoading" class="ee-missing">
+        <p v-if="missingResult" class="ee-missing-desc">
+          期間 <b>{{ missingResult.period_from }} 〜 {{ missingResult.period_to }}</b>
+          の生産性（{{ missingResult.sources.join('・') }}）にあって、設備能率に未登録の組み合わせです。
+          能率・現在能率には「実績数 ÷ 作業時間 × 95%」が入ります。
+          実績件数が {{ LOW_SAMPLE_RECORDS }} 件未満の行は能率がぶれやすいため、必要に応じて外してください。
+        </p>
+        <el-table
+          ref="missingTableRef"
+          :data="missingResult?.candidates ?? []"
+          size="small"
+          border
+          height="56vh"
+          :row-key="(r: ProductivityMissingCandidate) => `${r.machine_cd}|${r.product_cd}`"
+          empty-text="追加できる組み合わせはありません"
+          @selection-change="(rows: ProductivityMissingCandidate[]) => (missingSelection = rows)"
+        >
+          <el-table-column type="selection" width="40" align="center" />
+          <el-table-column prop="process" label="工程" width="64" align="center" />
+          <el-table-column label="設備 / 検査員" min-width="130">
+            <template #default="{ row }">
+              {{ row.machines_name }} <span class="ee-filter-opt-cd">{{ row.machine_cd }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_cd" label="製品CD" width="90" align="center" />
+          <el-table-column prop="product_name" label="製品名" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="actual_qty" label="実績数" width="80" align="right" />
+          <el-table-column prop="work_hours" label="作業時間(h)" width="96" align="right" />
+          <el-table-column label="実績件数" width="84" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.record_count < LOW_SAMPLE_RECORDS" type="warning" size="small">
+                {{ row.record_count }}
+              </el-tag>
+              <span v-else>{{ row.record_count }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="能率" width="76" align="center">
+            <template #default="{ row }">
+              <span class="ee-current">{{ Number(row.efficiency_rate).toFixed(1) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <p v-if="missingResult?.unknown_product_cds?.length" class="ee-missing-note">
+          製品マスタに無い製品CDは対象外：{{ missingResult.unknown_product_cds.join('、') }}
+        </p>
+        <p v-if="missingResult?.unmatched_lines?.length" class="ee-missing-note">
+          設備マスタに一致しないライン：
+          {{ missingResult.unmatched_lines.map((u) => `${u.process} ${u.line_name}`).join('、') }}
+        </p>
+      </div>
+      <template #footer>
+        <div class="ee-dialog-footer">
+          <span class="ee-missing-count">選択 {{ missingSelection.length }} / {{ missingResult?.candidates.length ?? 0 }} 件</span>
+          <el-button @click="missingVisible = false">キャンセル</el-button>
+          <el-button
+            type="primary"
+            :disabled="missingSelection.length === 0"
+            :loading="missingAdding"
+            @click="handleAddMissing"
+          >
+            選択した組み合わせを追加
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -269,23 +476,46 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Tools, Refresh, Plus, Search, Edit, Delete, Printer, Grid } from '@element-plus/icons-vue'
+import {
+  Tools,
+  Refresh,
+  Plus,
+  Search,
+  Edit,
+  Delete,
+  Printer,
+  Grid,
+  DataAnalysis,
+  Close,
+  Check,
+  DocumentAdd,
+  Download,
+} from '@element-plus/icons-vue'
 import EquipmentEfficiencyProcessOverview from './EquipmentEfficiencyProcessOverview.vue'
 import {
   fetchEquipmentEfficiencyList,
   createEquipmentEfficiency,
   updateEquipmentEfficiency,
   deleteEquipmentEfficiency,
+  refreshEquipmentCurrentEfficiency,
+  applyEquipmentCurrentEfficiency,
+  fetchEquipmentEfficiencyFilterOptions,
+  fetchProductivityMissing,
+  addProductivityMissing,
+  type EquipmentEfficiencyFilterPair,
+  type ProductivityMissingCandidate,
+  type ProductivityMissingResult,
   type EquipmentEfficiency,
   type EquipmentEfficiencyTabCounts,
 } from '@/api/master/equipmentEfficiencyMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { getProductList } from '@/api/master/productMaster'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
 import { guardMasterOperation } from '@/utils/masterOperationGuard'
+import { downloadExcelMultiSheet } from '@/utils/excelExport'
 
 const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
@@ -306,7 +536,19 @@ const formRef = ref<FormInstance>()
 const activeProcessTab = ref('all')
 const statusUpdatingId = ref<number | null>(null)
 const printing = ref(false)
+const exporting = ref(false)
 const overviewVisible = ref(false)
+const refreshingCurrent = ref(false)
+const applyingId = ref<number | null>(null)
+
+/** 実績件数がこれ未満の候補は警告表示 */
+const LOW_SAMPLE_RECORDS = 3
+const missingVisible = ref(false)
+const missingLoading = ref(false)
+const missingAdding = ref(false)
+const missingResult = ref<ProductivityMissingResult | null>(null)
+const missingSelection = ref<ProductivityMissingCandidate[]>([])
+const missingTableRef = ref<TableInstance>()
 
 const processTypes = [
   { label: '全て', value: 'all' },
@@ -354,7 +596,79 @@ const formRules: FormRules = {
   ],
 }
 
-const filters = ref({ keyword: '' })
+const filters = ref({ keyword: '', machineCd: '', productCd: '' })
+
+const filterPairs = ref<EquipmentEfficiencyFilterPair[]>([])
+
+const compareOption = (a: string, b: string): number =>
+  a.localeCompare(b, 'ja', { numeric: true, sensitivity: 'base' })
+
+/** 選択中の工程タブに属する組み合わせのみ（「全て」は全件） */
+const tabFilterPairs = computed(() => {
+  const tab = activeProcessTab.value
+  if (tab === 'all') return filterPairs.value
+  return filterPairs.value.filter((p) => (p.process_type || 'other') === tab)
+})
+
+const machineFilterOptions = computed(() => {
+  const map = new Map<string, string>()
+  for (const p of tabFilterPairs.value) {
+    const cd = p.machine_cd || ''
+    if (cd && !map.has(cd)) map.set(cd, p.machines_name || cd)
+  }
+  return [...map.entries()]
+    .map(([value, name]) => ({ value, label: `${name}（${value}）` }))
+    .sort((a, b) => compareOption(a.label, b.label))
+})
+
+/** 設備選択時はその設備に登録された製品だけを候補にする */
+const productFilterOptions = computed(() => {
+  const mc = filters.value.machineCd
+  const map = new Map<string, string>()
+  for (const p of tabFilterPairs.value) {
+    if (mc && p.machine_cd !== mc) continue
+    const cd = p.product_cd || ''
+    if (cd && !map.has(cd)) map.set(cd, p.product_name || cd)
+  }
+  return [...map.entries()]
+    .map(([value, name]) => ({ value, name, label: `${name}（${value}）` }))
+    .sort((a, b) => compareOption(a.name, b.name))
+})
+
+const loadFilterOptions = async () => {
+  try {
+    const res = (await fetchEquipmentEfficiencyFilterOptions()) as Record<string, any>
+    const pairs = res?.data?.pairs ?? res?.pairs
+    filterPairs.value = Array.isArray(pairs) ? pairs : []
+  } catch (error) {
+    console.error('絞込候補の読み込みに失敗:', error)
+  }
+}
+
+const filterParams = () => {
+  const kw = filters.value.keyword?.trim()
+  return {
+    ...(kw ? { keyword: kw } : {}),
+    ...(filters.value.machineCd ? { machineCd: filters.value.machineCd } : {}),
+    ...(filters.value.productCd ? { productCd: filters.value.productCd } : {}),
+  }
+}
+
+const resetPageAndLoad = () => {
+  if (currentPage.value === 1) {
+    loadData()
+  } else {
+    currentPage.value = 1
+  }
+}
+
+const handleMachineFilterChange = () => {
+  const pc = filters.value.productCd
+  if (pc && !productFilterOptions.value.some((p) => p.value === pc)) {
+    filters.value.productCd = ''
+  }
+  resetPageAndLoad()
+}
 
 /** 検索キーワードに一致する総件数（タブラベル用・全タブ合計） */
 const tabCountsAll = computed(() => tabCounts.value.all ?? 0)
@@ -370,11 +684,15 @@ const getProcessCount = (processType: string): number => {
 }
 
 const handleTabChange = () => {
-  if (currentPage.value === 1) {
-    loadData()
-  } else {
-    currentPage.value = 1
+  const mc = filters.value.machineCd
+  if (mc && !machineFilterOptions.value.some((m) => m.value === mc)) {
+    filters.value.machineCd = ''
   }
+  const pc = filters.value.productCd
+  if (pc && !productFilterOptions.value.some((p) => p.value === pc)) {
+    filters.value.productCd = ''
+  }
+  resetPageAndLoad()
 }
 
 const tableIndexMethod = (index: number) => (currentPage.value - 1) * pageSize.value + index + 1
@@ -396,33 +714,6 @@ const handlePageSizeChange = () => {
 }
 
 const getRowClassName = () => 'ee-row'
-
-// ヘッダー統計カードの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.ee-stat')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.ee-stat').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 14).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.ee-stat').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 
 const handleStatusChange = async (row: EquipmentEfficiency, value: number | string | boolean) => {
   if (!guardMasterOperation(canEdit)) return
@@ -446,12 +737,11 @@ const handleStatusChange = async (row: EquipmentEfficiency, value: number | stri
 const loadData = async () => {
   loading.value = true
   try {
-    const kw = filters.value.keyword?.trim()
     const result = await fetchEquipmentEfficiencyList({
       page: currentPage.value,
       pageSize: pageSize.value,
       processType: activeProcessTab.value,
-      ...(kw ? { keyword: kw } : {}),
+      ...filterParams(),
     })
     const raw = result as Record<string, unknown>
     const data = (raw.success && raw.data ? raw.data : raw) as {
@@ -555,7 +845,7 @@ const handleSubmit = async () => {
         ElMessage.success('能率設定を登録しました')
       }
       dialogVisible.value = false
-      await loadData()
+      await Promise.all([loadData(), loadFilterOptions()])
     } catch (error) {
       console.error('保存に失敗:', error)
       ElMessage.error('保存に失敗しました')
@@ -576,7 +866,7 @@ const handleDelete = async (id?: number) => {
     })
     await deleteEquipmentEfficiency(id)
     ElMessage.success('能率設定を削除しました')
-    await loadData()
+    await Promise.all([loadData(), loadFilterOptions()])
     if (efficiencyList.value.length === 0 && currentPage.value > 1) {
       currentPage.value -= 1
       await loadData()
@@ -589,13 +879,121 @@ const handleDelete = async (id?: number) => {
   }
 }
 
-const clearFilters = () => {
-  filters.value = { keyword: '' }
-  if (currentPage.value === 1) {
-    loadData()
-  } else {
-    currentPage.value = 1
+const currentRatePeriodLabel = (): string => {
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth() - 2, 1)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return `${fmt(start)} 〜 ${fmt(today)}`
+}
+
+const currentRateTip = (row: EquipmentEfficiency): string => {
+  const at = row.current_efficiency_updated_at
+  const when = at ? at.replace('T', ' ').slice(0, 16) : ''
+  return when ? `更新日時 ${when}（直近3ヶ月の生産性 × 95%）` : '直近3ヶ月の生産性 × 95%'
+}
+
+const handleRefreshCurrentRate = async () => {
+  if (!guardMasterOperation(canEdit)) return
+  try {
+    await ElMessageBox.confirm(
+      `期間 ${currentRatePeriodLabel()} の生産性（実績数 ÷ 作業時間）を、製品と設備（検査は検査員）の組み合わせごとに集計し、95% を現在能率に書き込みます。能率そのものは変わりません。メッキ工程は集計対象外で、現在能率も変更しません。`,
+      '現在能率を更新',
+      { confirmButtonText: '更新', cancelButtonText: 'キャンセル', type: 'warning' }
+    )
+  } catch {
+    return
   }
+  refreshingCurrent.value = true
+  try {
+    const result = await refreshEquipmentCurrentEfficiency()
+    ElMessage.success(
+      `現在能率を更新しました（${result.period_from} 〜 ${result.period_to}、算出 ${result.updated} 件 / 実績なし ${result.cleared} 件 / 対象外 ${result.skipped} 件）`
+    )
+    await loadData()
+  } catch (error) {
+    console.error('現在能率の更新に失敗:', error)
+    ElMessage.error('現在能率の更新に失敗しました')
+  } finally {
+    refreshingCurrent.value = false
+  }
+}
+
+const openMissingDialog = async () => {
+  if (!guardMasterOperation(canCreate)) return
+  missingLoading.value = true
+  missingSelection.value = []
+  try {
+    const result = await fetchProductivityMissing()
+    if (!result.candidates.length) {
+      ElMessage.info(
+        `期間 ${result.period_from} 〜 ${result.period_to} の生産性に、未登録の組み合わせはありません`
+      )
+      return
+    }
+    missingResult.value = result
+    missingVisible.value = true
+    await nextTick()
+    missingTableRef.value?.toggleAllSelection()
+  } catch (error) {
+    console.error('未登録組み合わせの取得に失敗:', error)
+    ElMessage.error('未登録組み合わせの取得に失敗しました')
+  } finally {
+    missingLoading.value = false
+  }
+}
+
+const handleAddMissing = async () => {
+  if (!guardMasterOperation(canCreate)) return
+  const items = missingSelection.value.map((c) => ({
+    machine_cd: c.machine_cd,
+    product_cd: c.product_cd,
+  }))
+  if (!items.length) return
+  missingAdding.value = true
+  try {
+    const result = await addProductivityMissing(items)
+    ElMessage.success(`${result.added} 件を追加しました`)
+    missingVisible.value = false
+    await Promise.all([loadData(), loadFilterOptions()])
+  } catch (error) {
+    console.error('生産性からの追加に失敗:', error)
+    ElMessage.error('生産性からの追加に失敗しました')
+  } finally {
+    missingAdding.value = false
+  }
+}
+
+const handleApplyCurrentRate = async (row: EquipmentEfficiency) => {
+  if (!guardMasterOperation(canEdit)) return
+  if (!row.id || row.current_efficiency_rate == null) return
+  const next = Number(row.current_efficiency_rate).toFixed(1)
+  try {
+    await ElMessageBox.confirm(
+      `現在能率 ${next} を能率に反映しますか？`,
+      '能率へ反映',
+      { confirmButtonText: '反映', cancelButtonText: 'キャンセル', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  applyingId.value = row.id
+  try {
+    const updated = await applyEquipmentCurrentEfficiency(row.id)
+    row.efficiency_rate = updated.efficiency_rate
+    row.current_efficiency_rate = updated.current_efficiency_rate
+    ElMessage.success('能率を更新しました')
+  } catch (error) {
+    console.error('能率への反映に失敗:', error)
+    ElMessage.error('能率への反映に失敗しました')
+  } finally {
+    applyingId.value = null
+  }
+}
+
+const clearFilters = () => {
+  filters.value = { keyword: '', machineCd: '', productCd: '' }
+  resetPageAndLoad()
 }
 
 function escHtml(value: unknown): string {
@@ -607,13 +1005,12 @@ function escHtml(value: unknown): string {
 }
 
 const fetchFilteredListForPrint = async (): Promise<EquipmentEfficiency[]> => {
-  const kw = filters.value.keyword?.trim()
   const fetchSize = Math.max(total.value, efficiencyList.value.length, 1)
   const result = await fetchEquipmentEfficiencyList({
     page: 1,
     pageSize: Math.min(fetchSize, 99999),
     processType: activeProcessTab.value,
-    ...(kw ? { keyword: kw } : {}),
+    ...filterParams(),
   })
   const raw = result as Record<string, unknown>
   const data = (raw.success && raw.data ? raw.data : raw) as { list?: EquipmentEfficiency[] }
@@ -676,7 +1073,12 @@ const buildPrintHtml = (rows: EquipmentEfficiency[]): string => {
     minute: '2-digit',
   })
   const keyword = filters.value.keyword?.trim()
-  const keywordLine = keyword ? `キーワード：<strong>${escHtml(keyword)}</strong>　` : ''
+  const machineLabel = machineFilterOptions.value.find((m) => m.value === filters.value.machineCd)?.label
+  const productLabel = productFilterOptions.value.find((p) => p.value === filters.value.productCd)?.label
+  const keywordLine =
+    (keyword ? `キーワード：<strong>${escHtml(keyword)}</strong>　` : '') +
+    (machineLabel ? `設備：<strong>${escHtml(machineLabel)}</strong>　` : '') +
+    (productLabel ? `製品：<strong>${escHtml(productLabel)}</strong>　` : '')
   const groups = groupRowsForPrint(rows)
   let rowIndex = 0
 
@@ -826,6 +1228,86 @@ const handlePrint = async () => {
   }
 }
 
+const EXCEL_HEADERS = [
+  '工程',
+  '設備CD',
+  '設備名',
+  '製品CD',
+  '製品名',
+  '能率',
+  '単位',
+  '現在能率',
+  '現在能率更新日時',
+  'ステップタイム(分)',
+  '状態',
+  '備考',
+]
+
+const processLabelOf = (value: string): string =>
+  processTypes.find((p) => p.value === value)?.label || 'その他'
+
+const buildExcelAoa = (rows: EquipmentEfficiency[]): (string | number | null)[][] => {
+  const processByMachine = new Map<string, string>()
+  for (const p of filterPairs.value) {
+    if (p.machine_cd && !processByMachine.has(p.machine_cd)) {
+      processByMachine.set(p.machine_cd, p.process_type || 'other')
+    }
+  }
+  const toNum = (v: unknown): number | null =>
+    v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v)
+
+  return [
+    EXCEL_HEADERS,
+    ...rows.map((row) => [
+      activeProcessTab.value === 'all'
+        ? processLabelOf(processByMachine.get(row.machine_cd || '') || 'other')
+        : activeProcessLabel.value,
+      row.machine_cd || '',
+      row.machines_name || '',
+      row.product_cd || '',
+      row.product_name || '',
+      toNum(row.efficiency_rate),
+      row.unit || '',
+      toNum(row.current_efficiency_rate),
+      row.current_efficiency_updated_at
+        ? row.current_efficiency_updated_at.replace('T', ' ').slice(0, 16)
+        : '',
+      toNum(row.step_time),
+      formatStatusLabel(row.status),
+      row.remarks || '',
+    ]),
+  ]
+}
+
+const handleExportExcel = async () => {
+  if (!guardMasterOperation(canExport)) return
+  exporting.value = true
+  try {
+    const rows = await fetchFilteredListForPrint()
+    if (rows.length === 0) {
+      ElMessage.warning('出力対象の行がありません（絞込みを確認してください）')
+      return
+    }
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+      now.getDate()
+    ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(
+      now.getMinutes()
+    ).padStart(2, '0')}`
+    const label = activeProcessLabel.value
+    await downloadExcelMultiSheet(
+      [{ name: `設備能率_${label}`, aoa: buildExcelAoa(rows) }],
+      `設備能率管理_${label}_${stamp}.xlsx`
+    )
+    ElMessage.success(`${rows.length} 件を Excel に出力しました`)
+  } catch (error) {
+    console.error('Excel出力に失敗:', error)
+    ElMessage.error('Excel出力に失敗しました')
+  } finally {
+    exporting.value = false
+  }
+}
+
 let listWatchReady = false
 watch([currentPage, pageSize], () => {
   if (!listWatchReady) return
@@ -833,7 +1315,7 @@ watch([currentPage, pageSize], () => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadEquipmentOptions(), loadProductOptions()])
+  await Promise.all([loadEquipmentOptions(), loadProductOptions(), loadFilterOptions()])
   listWatchReady = true
   await loadData()
 })
@@ -843,111 +1325,145 @@ onMounted(async () => {
 /* ===== Layout ===== */
 .ee-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 50%, #e8ecf3 100%);
   padding: 12px 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(180deg, #f1f8e4 0%, #f8fafc 240px, #f8fafc 100%);
 }
 
-/* ===== Header ===== */
+/* ===== Header（olive → lime → gold） ===== */
 .ee-header {
-  background: linear-gradient(135deg, #5b5ea6 0%, #7c3aed 60%, #6d28d9 100%);
-  border-radius: 12px;
-  padding: 14px 20px;
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-radius: 16px;
   color: #fff;
-  box-shadow: 0 4px 20px rgba(91, 94, 166, 0.3);
-  animation: slideDown 0.35s ease;
+  background: linear-gradient(125deg, #365314 0%, #4d7c0f 34%, #65a30d 66%, #ca8a04 100%);
+  box-shadow: 0 10px 24px -12px rgba(63, 98, 18, 0.5);
 }
 
 .ee-header-left {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
 }
 
-.ee-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .ee-title-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
   background: rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.ee-title-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .ee-title {
-  font-size: 18px;
-  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #fff;
 }
 
 .ee-subtitle {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.8);
-  margin: 3px 0 0 40px;
+  margin: 0;
+  color: rgba(247, 254, 231, 0.92);
 }
 
 .ee-stats {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
 .ee-stat {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  padding: 8px 14px;
-  text-align: center;
-  min-width: 64px;
-  transition: transform 0.2s, background 0.2s;
+  --sc: #4d7c0f;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #fff;
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--sc) 14%, transparent),
+    0 4px 10px -6px rgba(26, 46, 5, 0.45);
 }
 
-.ee-stat:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.22);
+.ee-stat--0 { --sc: #4d7c0f; }
+.ee-stat--1 { --sc: #0284c7; }
+.ee-stat--2 { --sc: #7c3aed; }
+.ee-stat--3 { --sc: #d97706; }
+
+.ee-stat-lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.ee-stat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sc);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc) 22%, transparent);
 }
 
 .ee-stat-num {
-  display: block;
   font-size: 18px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.ee-stat-lbl {
-  display: block;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.85);
-  margin-top: 2px;
-  letter-spacing: 0.04em;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--sc);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== Toolbar ===== */
 .ee-toolbar {
-  background: #fff;
-  border-radius: 10px;
-  padding: 8px 14px;
+  position: relative;
+  overflow: hidden;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  animation: slideDown 0.4s ease;
+  padding: 11px 14px 8px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2eccf;
+  box-shadow: 0 4px 12px -8px rgba(63, 98, 18, 0.3);
+}
+
+.ee-toolbar::before,
+.ee-table-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 5;
+  background: linear-gradient(90deg, #4d7c0f, #65a30d, #a3e635, #ca8a04);
 }
 
 .ee-search {
@@ -956,239 +1472,467 @@ onMounted(async () => {
 }
 
 .ee-search :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  box-shadow: none;
-  border: 1px solid #e5e7eb;
   height: 32px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px #dfe7d2;
+  transition: box-shadow 0.15s ease;
+}
+
+.ee-search :deep(.el-input__wrapper:hover) {
+  box-shadow: inset 0 0 0 1px #a3e635;
 }
 
 .ee-search :deep(.el-input__wrapper.is-focus) {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+  box-shadow:
+    inset 0 0 0 1px #65a30d,
+    0 0 0 3px rgba(101, 163, 13, 0.15);
+}
+
+.ee-filter-select {
+  width: 170px;
+}
+
+.ee-filter-select--product {
+  width: 230px;
+}
+
+.ee-filter-select :deep(.el-select__wrapper) {
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+.ee-filter-opt-cd {
+  float: right;
+  margin-left: 12px;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .ee-toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-left: auto;
 }
 
-.ee-btn-clear {
-  --el-button-hover-bg-color: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 12px;
+.ee-toolbar .ee-btn {
+  --b-from: #ffffff;
+  --b-to: #f1f5f9;
+  --b-line: #d6dde8;
+  --k-rgb: 100 116 139;
   height: 32px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  border: 1px solid var(--b-line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--b-from), var(--b-to));
 }
 
-.ee-btn-print {
-  border-radius: 8px;
-  font-size: 12px;
-  height: 32px;
+.ee-toolbar .ee-btn:hover,
+.ee-toolbar .ee-btn:focus-visible {
+  color: #fff;
+  border-color: var(--b-line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, var(--b-from), var(--b-to));
 }
 
-.ee-btn-add {
-  border-radius: 8px;
-  font-size: 12px;
-  height: 32px;
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  border: none;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
-  transition: transform 0.15s, box-shadow 0.15s;
+.ee-toolbar .ee-btn--clear,
+.ee-toolbar .ee-btn--clear:hover,
+.ee-toolbar .ee-btn--clear:focus-visible {
+  color: #475569;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
 }
 
-.ee-btn-add:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+.ee-toolbar .ee-btn--overview {
+  --b-from: #38bdf8;
+  --b-to: #0284c7;
+  --b-line: #0369a1;
+  --k-rgb: 2 132 199;
+}
+
+.ee-toolbar .ee-btn--print {
+  --b-from: #34d399;
+  --b-to: #059669;
+  --b-line: #047857;
+  --k-rgb: 5 150 105;
+}
+
+.ee-toolbar .ee-btn--excel {
+  --b-from: #2dd4bf;
+  --b-to: #0f766e;
+  --b-line: #115e59;
+  --k-rgb: 15 118 110;
+}
+
+.ee-toolbar .ee-btn--rate {
+  --b-from: #fbbf24;
+  --b-to: #d97706;
+  --b-line: #b45309;
+  --k-rgb: 217 119 6;
+}
+
+.ee-toolbar .ee-btn--import {
+  --b-from: #a78bfa;
+  --b-to: #7c3aed;
+  --b-line: #6d28d9;
+  --k-rgb: 124 58 237;
+}
+
+.ee-toolbar .ee-btn--add {
+  --b-from: #84cc16;
+  --b-to: #4d7c0f;
+  --b-line: #3f6212;
+  --k-rgb: 77 124 15;
+  padding: 0 16px;
 }
 
 /* ===== Table Section ===== */
 .ee-table-wrap {
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  animation: slideDown 0.45s ease;
+  padding-top: 3px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2eccf;
+  box-shadow: 0 6px 18px -12px rgba(63, 98, 18, 0.35);
 }
 
+/* 工程タブ：工程ごとに色分け */
 .ee-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-.ee-tabs :deep(.el-tabs__header) {
+.ee-tabs > :deep(.el-tabs__header) {
   margin: 0;
-  padding: 0 14px;
-  background: #fafbfc;
-  border-bottom: 1px solid #eef0f4;
+  padding: 8px 12px;
+  background: #fafcf6;
+  border-bottom: 1px solid #edf2e3;
 }
 
-.ee-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-  background: transparent;
+.ee-tabs > :deep(.el-tabs__header .el-tabs__nav-wrap::after),
+.ee-tabs > :deep(.el-tabs__header .el-tabs__active-bar) {
+  display: none;
 }
 
-.ee-tabs :deep(.el-tabs__item) {
+.ee-tabs > :deep(.el-tabs__header .el-tabs__nav) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: none;
+}
+
+.ee-tabs > :deep(.el-tabs__header .el-tabs__item) {
+  --tc: #4d7c0f;
+  height: 28px;
+  padding: 0 12px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
-  height: 36px;
-  line-height: 36px;
-  padding: 0 12px;
-  color: #6b7280;
-  transition: color 0.2s;
+  font-weight: 700;
+  line-height: 28px;
+  color: var(--tc);
+  background: color-mix(in srgb, var(--tc) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--tc) 24%, #fff);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
-.ee-tabs :deep(.el-tabs__item.is-active) {
-  color: #7c3aed;
-  font-weight: 600;
+.ee-tabs > :deep(.el-tabs__header .el-tabs__item::before) {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tc);
 }
 
-.ee-tabs :deep(.el-tabs__active-bar) {
-  background: #7c3aed;
-  height: 2px;
-  border-radius: 2px;
+.ee-tabs > :deep(.el-tabs__header #tab-all) { --tc: #4d7c0f; }
+.ee-tabs > :deep(.el-tabs__header #tab-cutting) { --tc: #2563eb; }
+.ee-tabs > :deep(.el-tabs__header #tab-chamfering) { --tc: #0891b2; }
+.ee-tabs > :deep(.el-tabs__header #tab-forming) { --tc: #059669; }
+.ee-tabs > :deep(.el-tabs__header #tab-welding) { --tc: #dc2626; }
+.ee-tabs > :deep(.el-tabs__header #tab-plating) { --tc: #ca8a04; }
+.ee-tabs > :deep(.el-tabs__header #tab-inspection) { --tc: #db2777; }
+.ee-tabs > :deep(.el-tabs__header #tab-other) { --tc: #64748b; }
+
+.ee-tabs > :deep(.el-tabs__header .el-tabs__item:hover) {
+  background: color-mix(in srgb, var(--tc) 14%, #fff);
+  border-color: color-mix(in srgb, var(--tc) 40%, #fff);
 }
 
-.ee-tabs :deep(.el-tabs__content) {
+.ee-tabs > :deep(.el-tabs__header .el-tabs__item.is-active) {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--tc) 80%, #000);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tc) 78%, #fff), var(--tc));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.16),
+    0 3px 8px -3px color-mix(in srgb, var(--tc) 60%, transparent);
+}
+
+.ee-tabs > :deep(.el-tabs__header .el-tabs__item.is-active::before) {
+  background: #fff;
+}
+
+.ee-tabs > :deep(.el-tabs__content) {
   flex: 1;
   padding: 0;
 }
 
-.ee-tabs :deep(.el-tab-pane) {
+.ee-tabs > :deep(.el-tabs__content .el-tab-pane) {
   height: 100%;
 }
 
-/* Table styles */
-.ee-table-wrap :deep(.el-table) {
-  --el-table-border-color: #e8eaf0;
-  --el-table-row-hover-bg-color: rgba(124, 58, 237, 0.04);
-  --el-table-header-bg-color: #f0f2f8;
+/* 一覧：文字色・背景を統一、1行表示 */
+.ee-table {
+  --el-table-border-color: #edf1e6;
+  --el-table-row-hover-bg-color: #f4faea;
+  --el-table-header-bg-color: #f4f8ec;
+  --el-table-text-color: #334155;
   font-size: 12px;
+  color: #334155;
 }
 
-.ee-table-wrap :deep(.el-table .el-table__cell) {
-  padding: 2px 0;
-}
-
-.ee-table-wrap :deep(.el-table__header) th {
-  background: #f0f2f8 !important;
-  color: #374151;
-  font-weight: 600;
+.ee-table :deep(th.el-table__cell) {
+  padding: 6px 0;
   font-size: 11px;
-  padding: 4px 8px;
-  line-height: 1.3;
-  border-bottom: 1.5px solid #dde0ea;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #3f6212;
+  background: #f4f8ec;
+  border-bottom: 1px solid #dbe8c4;
 }
 
-.ee-table-wrap :deep(.el-table__header) th .cell {
-  padding: 0 4px;
-  line-height: 1.4;
+.ee-table :deep(td.el-table__cell) {
+  padding: 4px 0;
+}
+
+.ee-table :deep(.cell) {
+  padding: 0 8px;
+  line-height: 22px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ee-table-wrap :deep(.el-table__body) td {
-  padding: 2px 8px;
-  line-height: 1.4;
-  transition: background 0.15s;
+.ee-table :deep(th.el-table__cell .cell) {
+  line-height: 18px;
 }
 
-.ee-table-wrap :deep(.el-table__body) td .cell {
-  padding: 0 4px;
-  line-height: 1.5;
+.ee-table :deep(.el-table__row--striped td.el-table__cell) {
+  background: #fbfdf8;
 }
 
-.ee-table-wrap :deep(.el-table__body tr:hover > td) {
-  background: rgba(124, 58, 237, 0.04) !important;
+.ee-table :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: #f4faea;
 }
 
-.ee-table-wrap :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background: #f8f9fc;
+.ee-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #84cc16;
 }
 
-.ee-table-wrap :deep(.el-table--small td, .el-table--small th) {
-  padding: 2px 0;
+.ee-table :deep(td.el-table__cell:first-child .cell) {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Cells */
+.ee-code {
+  --cc: #4d7c0f;
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  vertical-align: middle;
+  color: var(--cc);
+  background: color-mix(in srgb, var(--cc) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--cc) 22%, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ee-code--machine { --cc: #4d7c0f; }
+.ee-code--product { --cc: #0369a1; }
+
+.ee-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ee-remarks {
+  color: #64748b;
+}
+
+.ee-muted {
+  color: #cbd5e1;
+}
+
 .ee-eff-cell {
   display: inline-flex;
   align-items: baseline;
   gap: 2px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 999px;
+  line-height: 20px;
+  background: #f4faea;
+  border: 1px solid #d9f0b0;
 }
 
 .ee-eff-val {
-  font-weight: 700;
-  color: #1e293b;
   font-size: 12px;
+  font-weight: 800;
+  color: #3f6212;
+  font-variant-numeric: tabular-nums;
 }
 
 .ee-eff-unit {
   font-size: 9px;
-  color: #94a3b8;
+  color: #65a30d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ee-current {
+  display: inline-block;
+  min-width: 42px;
+  padding: 0 6px;
+  border-radius: 999px;
+  line-height: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  cursor: default;
+}
+
+.ee-current--empty {
+  color: #cbd5e1;
+  font-weight: 500;
+  background: transparent;
+  border-color: transparent;
+}
+
+.ee-step {
+  font-weight: 700;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
 }
 
 .ee-min {
+  margin-left: 1px;
   font-size: 9px;
   color: #94a3b8;
-  margin-left: 1px;
 }
 
 .ee-status-cell {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.ee-status-cell :deep(.el-switch.is-checked .el-switch__core) {
+  background: #65a30d;
+  border-color: #65a30d;
 }
 
 .ee-status-lbl {
   font-size: 10px;
-  color: #9ca3af;
+  font-weight: 600;
+  color: #94a3b8;
 }
 
 .ee-status-lbl.on {
-  color: #10b981;
-  font-weight: 600;
+  color: #4d7c0f;
+  font-weight: 700;
 }
 
 .ee-row-actions {
-  display: flex;
-  gap: 0;
-  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
 }
 
-.ee-row-actions .el-button {
+.ee-row-actions .ee-act {
+  --ac: #2563eb;
+  height: 22px;
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 999px;
   font-size: 11px;
-  padding: 1px 4px;
+  font-weight: 700;
+  color: var(--ac);
+  background: color-mix(in srgb, var(--ac) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--ac) 24%, #fff);
 }
 
-.ee-row-actions .el-button + .el-button {
-  margin-left: 2px;
+.ee-row-actions .ee-act:hover,
+.ee-row-actions .ee-act:focus-visible {
+  color: #fff;
+  background: var(--ac);
+  border-color: var(--ac);
+}
+
+.ee-row-actions .ee-act--edit { --ac: #2563eb; }
+.ee-row-actions .ee-act--apply { --ac: #d97706; }
+.ee-row-actions .ee-act--delete { --ac: #e11d48; }
+
+.ee-row-actions .ee-act.is-disabled,
+.ee-row-actions .ee-act.is-disabled:hover {
+  color: #94a3b8;
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.ee-row-actions .ee-act + .ee-act {
+  margin-left: 0;
 }
 
 /* Result bar */
 .ee-result-bar {
-  padding: 6px 16px;
-  font-size: 12px;
-  color: #6b7280;
-  background: #fafbfc;
-  border-top: 1px solid #eef0f4;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #64748b;
+  background: #fafcf6;
+  border-top: 1px solid #edf2e3;
+}
+
+.ee-result-bar b {
+  color: #4d7c0f;
 }
 
 .ee-pagination-wrap {
-  margin-left: auto;
   flex: 1 1 auto;
   display: flex;
   justify-content: flex-end;
   min-width: 0;
+  margin-left: auto;
 }
 
 .ee-pagination-wrap :deep(.el-pagination) {
@@ -1197,59 +1941,134 @@ onMounted(async () => {
   row-gap: 4px;
 }
 
+.ee-pagination-wrap :deep(.el-pager li.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #84cc16, #4d7c0f) !important;
+}
+
 .ee-proc-tag {
+  --tc: #4d7c0f;
   display: inline-flex;
   align-items: center;
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  letter-spacing: 0.02em;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tc);
+  background: color-mix(in srgb, var(--tc) 10%, #fff);
+  border: 1px solid color-mix(in srgb, var(--tc) 28%, #fff);
 }
 
-/* ===== Dialog ===== */
-.ee-dialog :deep(.el-dialog) {
+.ee-proc-tag--cutting { --tc: #2563eb; }
+.ee-proc-tag--chamfering { --tc: #0891b2; }
+.ee-proc-tag--forming { --tc: #059669; }
+.ee-proc-tag--welding { --tc: #dc2626; }
+.ee-proc-tag--plating { --tc: #ca8a04; }
+.ee-proc-tag--inspection { --tc: #db2777; }
+.ee-proc-tag--other { --tc: #64748b; }
+
+/* ===== Dialog（append 先で scope 属性が付かないため外枠は :global で指定） ===== */
+:global(.el-dialog.eef-dialog) {
+  padding: 0;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow:
+    0 24px 48px -16px rgba(63, 98, 18, 0.4),
+    0 0 0 1px rgba(101, 163, 13, 0.12);
 }
 
-.ee-dialog :deep(.el-dialog__header) {
-  padding: 14px 20px;
-  background: linear-gradient(135deg, #5b5ea6, #7c3aed);
+:global(.el-dialog.eef-dialog .el-dialog__header) {
+  padding: 0;
   margin: 0;
 }
 
-.ee-dialog :deep(.el-dialog__title) {
+:global(.el-dialog.eef-dialog .el-dialog__body) {
+  padding: 14px 16px 4px;
+  background: linear-gradient(180deg, #f8fbf3, #f5f7fb);
+}
+
+:global(.el-dialog.eef-dialog .el-dialog__footer) {
+  padding: 12px 18px 14px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.eef-dialog-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
   color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  background: linear-gradient(125deg, #3f6212 0%, #4d7c0f 34%, #65a30d 68%, #84cc16 100%);
 }
 
-.ee-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: rgba(255, 255, 255, 0.8);
+.eef-dialog-hero.is-edit {
+  background: linear-gradient(125deg, #b45309 0%, #d97706 40%, #f59e0b 76%, #fbbf24 100%);
 }
 
-.ee-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+.eef-dialog-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.18);
+}
+
+.eef-dialog-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.eef-dialog-copy h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+}
+
+.eef-dialog-copy p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.eef-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  font-size: 18px;
   color: #fff;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: background 0.2s ease;
 }
 
-.ee-dialog :deep(.el-dialog__body) {
-  padding: 16px 20px;
-  background: #fafbfc;
-}
-
-.ee-dialog :deep(.el-dialog__footer) {
-  padding: 10px 20px 14px;
-  border-top: 1px solid #eef0f4;
+.eef-close:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .ee-form {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .ee-form :deep(.el-form-item) {
@@ -1258,37 +2077,53 @@ onMounted(async () => {
 
 .ee-form :deep(.el-form-item__label) {
   font-size: 12px;
-  color: #4b5563;
-  font-weight: 500;
+  font-weight: 700;
+  color: #475569;
 }
 
 .ee-form-section {
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px 14px 4px;
+  --accent: #65a30d;
+  position: relative;
+  overflow: hidden;
   margin-bottom: 10px;
-  border: 1px solid #eef0f4;
+  padding: 12px 14px 2px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.ee-form-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 30%, #fff));
+}
+
+.ee-form-section--amber {
+  --accent: #d97706;
 }
 
 .ee-form-section-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #7c3aed;
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #334155;
 }
 
-.ee-form-section-title::before {
-  content: '';
-  display: inline-block;
-  width: 3px;
-  height: 14px;
-  background: linear-gradient(180deg, #7c3aed, #a78bfa);
-  border-radius: 2px;
+.ee-form-section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .ee-form-row {
@@ -1301,24 +2136,42 @@ onMounted(async () => {
 }
 
 .ee-form :deep(.el-input__wrapper),
-.ee-form :deep(.el-textarea__inner),
-.ee-form :deep(.el-select .el-input__wrapper) {
+.ee-form :deep(.el-select__wrapper),
+.ee-form :deep(.el-textarea__inner) {
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  box-shadow: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: inset 0 0 0 1px #dfe7d2;
+  transition: box-shadow 0.15s ease;
+}
+
+.ee-form :deep(.el-input__wrapper:hover),
+.ee-form :deep(.el-select__wrapper:hover),
+.ee-form :deep(.el-textarea__inner:hover) {
+  box-shadow: inset 0 0 0 1px #a3e635;
 }
 
 .ee-form :deep(.el-input__wrapper.is-focus),
-.ee-form :deep(.el-select .el-input__wrapper.is-focus),
+.ee-form :deep(.el-select__wrapper.is-focused),
 .ee-form :deep(.el-textarea__inner:focus) {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+  box-shadow:
+    inset 0 0 0 1px #65a30d,
+    0 0 0 3px rgba(101, 163, 13, 0.14);
 }
 
 .ee-form :deep(.el-input.is-disabled .el-input__wrapper) {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
+  background: #f1f5f9;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.ee-status-switch :deep(.el-radio-button__inner) {
+  font-weight: 700;
+  color: #4d7c0f;
+}
+
+.ee-status-switch :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  color: #fff;
+  border-color: #4d7c0f;
+  background: linear-gradient(135deg, #84cc16, #4d7c0f);
+  box-shadow: -1px 0 0 0 #4d7c0f;
 }
 
 .ee-dialog-footer {
@@ -1327,27 +2180,74 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.ee-dialog-footer .el-button--primary {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  border: none;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+.ee-missing-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #475569;
 }
 
-.ee-dialog-footer .el-button--primary:hover {
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+.ee-missing-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #b45309;
 }
 
-/* ===== Animations ===== */
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.ee-missing-count {
+  margin-right: auto;
+  align-self: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.ee-dialog-footer .eef-cancel {
+  --k-rgb: 100 116 139;
+  height: 34px;
+  border-radius: 9px;
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #d6dde8;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+}
+
+.ee-dialog-footer .eef-save {
+  --k-rgb: 77 124 15;
+  min-width: 104px;
+  height: 34px;
+  border-radius: 9px;
+  font-weight: 800;
+  color: #fff;
+  border: 1px solid #3f6212;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #84cc16, #4d7c0f);
+}
+
+.ee-dialog-footer .eef-save:hover,
+.ee-dialog-footer .eef-save:focus-visible {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #a3e635, #65a30d);
+}
+
+.ee-dialog-footer .eef-save.is-edit {
+  --k-rgb: 217 119 6;
+  border-color: #b45309;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.ee-dialog-footer .eef-save.is-edit:hover,
+.ee-dialog-footer .eef-save.is-edit:focus-visible {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #fbbf24, #f59e0b);
+}
+
+.ee-dialog-footer .eef-save .el-icon {
+  margin-right: 4px;
 }
 
 /* ===== Responsive ===== */
@@ -1358,15 +2258,9 @@ onMounted(async () => {
   .ee-header {
     flex-direction: column;
     align-items: flex-start;
-    padding: 12px 16px;
   }
   .ee-stats {
     width: 100%;
-    flex-wrap: wrap;
-  }
-  .ee-stat {
-    flex: 1;
-    min-width: 56px;
   }
   .ee-toolbar {
     flex-wrap: wrap;
@@ -1375,368 +2269,17 @@ onMounted(async () => {
     max-width: 100%;
     flex-basis: 100%;
   }
+  .ee-filter-select,
+  .ee-filter-select--product {
+    flex: 1 1 140px;
+    width: auto;
+  }
   .btn-label {
     display: none;
   }
   .ee-form-row {
     flex-direction: column;
     gap: 0;
-  }
-}
-
-/* ============================================================
- * 页面美化：現代UI・3D動効・色分け（設備能率管理 / olive→lime→gold）
- * ============================================================ */
-.eef-modern {
-  --hx-1: #1a2e05;
-  --hx-2: #3f6212;
-  --hx-3: #65a30d;
-  --hx-4: #eab308;
-  --hx-deep: #365314;
-  --hx-soft: #f7fee7;
-  --hx-line: rgba(101, 163, 13, 0.18);
-  background:
-    radial-gradient(1100px 360px at 10% -10%, rgba(163, 230, 53, 0.13), transparent 60%),
-    radial-gradient(900px 320px at 100% 0%, rgba(234, 179, 8, 0.08), transparent 60%),
-    linear-gradient(160deg, #f9fcf2 0%, #f7fee7 40%, #f8fafc 100%);
-}
-
-.eef-modern .ee-header {
-  position: relative;
-  overflow: hidden;
-  border-radius: 16px;
-  background: linear-gradient(125deg, var(--hx-1) 0%, var(--hx-2) 38%, var(--hx-3) 72%, var(--hx-4) 100%);
-  box-shadow:
-    0 18px 36px -18px rgba(63, 98, 18, 0.6),
-    0 6px 14px -6px rgba(234, 179, 8, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-.eef-modern .ee-header > :not(.page-header-fx) {
-  position: relative;
-  z-index: 1;
-}
-
-.eef-modern .page-header-fx {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.eef-modern .ee-title-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.1));
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow:
-    0 4px 0 rgba(26, 46, 5, 0.5),
-    0 10px 18px -6px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  animation: eefIconRev 5s ease-in-out infinite;
-}
-
-.eef-modern .ee-title {
-  font-weight: 800;
-  text-shadow: 0 2px 10px rgba(26, 46, 5, 0.35);
-}
-
-.eef-modern .ee-subtitle {
-  margin-left: 48px;
-}
-
-.eef-modern .ee-stats {
-  perspective: 650px;
-  flex-wrap: wrap;
-}
-
-.eef-modern .ee-stat {
-  --sc: #d9f99d;
-  position: relative;
-  overflow: hidden;
-  border-radius: 12px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow:
-    0 3px 0 rgba(26, 46, 5, 0.4),
-    0 10px 20px -10px rgba(0, 0, 0, 0.45);
-  transform-style: preserve-3d;
-  transition: transform 0.18s ease-out, box-shadow 0.25s ease;
-}
-
-.eef-modern .ee-stat,
-.eef-modern .ee-stat:hover {
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-}
-
-.eef-modern .ee-stat::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
-  background: var(--sc);
-}
-
-.eef-modern .ee-stat::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.35), transparent 60%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-
-.eef-modern .ee-stat:hover {
-  box-shadow:
-    0 5px 0 rgba(26, 46, 5, 0.45),
-    0 16px 26px -12px rgba(0, 0, 0, 0.5);
-}
-
-.eef-modern .ee-stat:hover::after {
-  opacity: 1;
-}
-
-.eef-modern .ee-stat--0 { --sc: #fde68a; }
-.eef-modern .ee-stat--1 { --sc: #bef264; }
-.eef-modern .ee-stat--2 { --sc: #7dd3fc; }
-.eef-modern .ee-stat--3 { --sc: #fdba74; }
-
-.eef-modern .ee-stat-num {
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  transform: translateZ(14px);
-  text-shadow: 0 2px 6px rgba(26, 46, 5, 0.35);
-}
-
-.eef-modern .ee-toolbar,
-.eef-modern .ee-table-wrap {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  border: 1px solid var(--hx-line);
-  box-shadow:
-    0 10px 24px -16px rgba(63, 98, 18, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.04);
-}
-
-.eef-modern .ee-toolbar::before,
-.eef-modern .ee-table-wrap::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 3px;
-  z-index: 5;
-  background: linear-gradient(90deg, var(--hx-2), var(--hx-3), #a3e635, var(--hx-4));
-}
-
-.eef-modern .ee-toolbar {
-  padding-top: 11px;
-}
-
-.eef-modern .ee-table-wrap {
-  padding-top: 3px;
-}
-
-.eef-modern .ee-search :deep(.el-input__wrapper.is-focus) {
-  border-color: var(--hx-3);
-  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.14);
-}
-
-.eef-modern .ee-btn-clear {
-  color: var(--hx-deep);
-  background: var(--hx-soft);
-  border-color: rgba(101, 163, 13, 0.25);
-  box-shadow: 0 2px 0 rgba(101, 163, 13, 0.22);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.eef-modern .ee-btn-clear:hover {
-  transform: translateY(-1px);
-  color: var(--hx-deep);
-  background: #ecfccb;
-  box-shadow: 0 3px 0 rgba(101, 163, 13, 0.28);
-}
-
-.eef-modern .ee-btn-print {
-  box-shadow: 0 2px 0 rgba(22, 163, 74, 0.3);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.eef-modern .ee-btn-print:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 0 rgba(22, 163, 74, 0.38);
-}
-
-.eef-modern .ee-btn-add {
-  --k-edge: #3f6212;
-  --k-glow: rgba(101, 163, 13, 0.5);
-  font-weight: 700;
-  background: linear-gradient(135deg, #84cc16, #4d7c0f);
-  box-shadow:
-    0 3px 0 var(--k-edge),
-    0 10px 18px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.eef-modern .ee-btn-add:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.06);
-  background: linear-gradient(135deg, #84cc16, #4d7c0f);
-  box-shadow:
-    0 5px 0 var(--k-edge),
-    0 14px 22px -8px var(--k-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.eef-modern .ee-btn-add:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--k-edge);
-}
-
-.eef-modern .ee-tabs :deep(.el-tabs__header) {
-  background: linear-gradient(180deg, #fbfdf6, #f7fee7);
-}
-
-.eef-modern .ee-tabs :deep(.el-tabs__item) {
-  --tc: var(--hx-3);
-  position: relative;
-  margin: 4px 2px 0;
-  height: 32px;
-  line-height: 32px;
-  border-radius: 9px 9px 0 0;
-  transition: color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-}
-
-.eef-modern .ee-tabs :deep(#tab-all) { --tc: #4d7c0f; }
-.eef-modern .ee-tabs :deep(#tab-cutting) { --tc: #2563eb; }
-.eef-modern .ee-tabs :deep(#tab-chamfering) { --tc: #0891b2; }
-.eef-modern .ee-tabs :deep(#tab-forming) { --tc: #059669; }
-.eef-modern .ee-tabs :deep(#tab-welding) { --tc: #dc2626; }
-.eef-modern .ee-tabs :deep(#tab-plating) { --tc: #ca8a04; }
-.eef-modern .ee-tabs :deep(#tab-inspection) { --tc: #db2777; }
-.eef-modern .ee-tabs :deep(#tab-other) { --tc: #64748b; }
-
-.eef-modern .ee-tabs :deep(.el-tabs__item:hover) {
-  color: var(--tc);
-  transform: translateY(-1px);
-}
-
-.eef-modern .ee-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--tc);
-  font-weight: 700;
-  background: color-mix(in srgb, var(--tc) 10%, #fff);
-  box-shadow: inset 0 2px 0 var(--tc);
-}
-
-.eef-modern .ee-tabs :deep(.el-tabs__active-bar) {
-  height: 3px;
-  background: linear-gradient(90deg, var(--hx-3), var(--hx-4));
-}
-
-.eef-modern .ee-table-wrap :deep(.el-table__header-wrapper th.el-table__cell) {
-  background: linear-gradient(180deg, #365314, #3f6212) !important;
-  color: #fff !important;
-  border-bottom: 2px solid var(--hx-4) !important;
-}
-
-.eef-modern .ee-table-wrap :deep(.el-table__body tr:hover > td) {
-  background: #f7fee7 !important;
-}
-
-.eef-modern .ee-table-wrap :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
-  box-shadow: inset 3px 0 0 var(--hx-3);
-}
-
-.eef-modern .ee-code {
-  --cc: #4d7c0f;
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 6px;
-  font-family: 'Consolas', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--cc);
-  background: color-mix(in srgb, var(--cc) 9%, #fff);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc) 32%, #fff), 0 2px 0 color-mix(in srgb, var(--cc) 25%, #fff);
-  transition: transform 0.15s ease;
-}
-
-.eef-modern .ee-code--machine { --cc: #4d7c0f; }
-.eef-modern .ee-code--product { --cc: #0369a1; }
-
-.eef-modern .ee-table-wrap :deep(tr:hover) .ee-code {
-  transform: translateY(-1px);
-}
-
-.eef-modern .ee-eff-cell {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #fefce8, #ecfccb);
-  border: 1px solid #d9f99d;
-  box-shadow: 0 1px 0 #bef264;
-}
-
-.eef-modern .ee-eff-val {
-  color: var(--hx-deep);
-  font-variant-numeric: tabular-nums;
-}
-
-.eef-modern .ee-eff-unit {
-  color: #a16207;
-}
-
-.eef-modern .ee-step {
-  display: inline-block;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-weight: 700;
-  color: #b45309;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-}
-
-.eef-modern .ee-result-bar b {
-  color: var(--hx-3);
-}
-
-.eef-modern .ee-proc-tag {
-  background: linear-gradient(135deg, var(--hx-3), var(--hx-4));
-  box-shadow: 0 2px 0 var(--hx-deep);
-}
-
-.eef-modern .ee-result-bar :deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, var(--hx-3), var(--hx-4)) !important;
-  color: #fff;
-  box-shadow: 0 2px 0 var(--hx-deep);
-}
-
-@keyframes eefIconRev {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateZ(0deg);
-  }
-  40% {
-    transform: perspective(300px) rotateX(10deg) rotateZ(-14deg);
-  }
-  60% {
-    transform: perspective(300px) rotateX(10deg) rotateZ(10deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .eef-modern .ee-title-icon {
-    animation: none;
-  }
-
-  .eef-modern .ee-stat,
-  .eef-modern .ee-stat:hover {
-    transform: none;
   }
 }
 </style>

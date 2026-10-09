@@ -13,6 +13,7 @@
     py scripts/bootstrap_full_database.py --dry-run          # 仅列出将执行的文件
     py scripts/bootstrap_full_database.py --drop-database    # 先 DROP 再 CREATE（危险，仅空库/开发）
     py scripts/bootstrap_full_database.py --mysql "C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysql.exe"
+    py scripts/bootstrap_full_database.py --from-schema      # 不跑 migrations，改用 backend/database/schema/ 的按表文件建库
 """
 from __future__ import annotations
 
@@ -30,6 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 INIT_SQL = ROOT / "backend" / "database" / "init" / "01_init.sql"
 MIGRATIONS_DIR = ROOT / "backend" / "database" / "migrations"
 MIGRATION_NUM_RE = re.compile(r"^(\d+)_.*\.sql$")
+SCHEMA_DIR = ROOT / "backend" / "database" / "schema"
+SCHEMA_ORDER = ("tables", "views", "functions", "procedures", "triggers", "events", "seed")
 
 
 def _subprocess_kw() -> dict:
@@ -110,6 +113,35 @@ def sorted_migration_files() -> List[Path]:
     return [t[2] for t in keyed]
 
 
+def schema_file_groups() -> List[tuple[str, List[Path]]]:
+    if not SCHEMA_DIR.is_dir():
+        raise SystemExit(f"缺少 schema 目录: {SCHEMA_DIR}")
+    return [(sub, sorted((SCHEMA_DIR / sub).glob("*.sql"))) for sub in SCHEMA_ORDER]
+
+
+def apply_schema(mysql_exe: str, cnf_path: str, db: str) -> int:
+    """按 tables → views → … → seed 顺序执行；视图之间有依赖，失败的视图会重试直到无进展。"""
+    count = 0
+    for sub, files in schema_file_groups():
+        pending = files
+        while pending:
+            failed: list[tuple[Path, RuntimeError]] = []
+            for p in pending:
+                try:
+                    run_mysql(mysql_exe, cnf_path, [db], p, f"schema {sub}/{p.name}")
+                    count += 1
+                except RuntimeError as e:
+                    if sub != "views":
+                        raise
+                    failed.append((p, e))
+            if not failed:
+                break
+            if len(failed) == len(pending):
+                raise failed[0][1]
+            pending = [p for p, _ in failed]
+    return count
+
+
 def write_client_cnf(host: str, port: int, user: str, password: str) -> str:
     fd, path = tempfile.mkstemp(suffix=".cnf", text=True)
     try:
@@ -159,16 +191,29 @@ def main() -> None:
         action="store_true",
         help="先 DROP DATABASE IF EXISTS 再 CREATE（会删除库内全部数据，仅用于空库/开发）",
     )
+    ap.add_argument(
+        "--from-schema",
+        action="store_true",
+        help="不执行 migrations，改为执行 backend/database/schema/ 下的表别文件（之后再执行 init 投入管理员）",
+    )
+    ap.add_argument("--db-name", default="", help="覆盖 .env 中的 DB_NAME（例如建临时校验库）")
     args = ap.parse_args()
 
     if not INIT_SQL.is_file():
         raise SystemExit(f"缺少 init 脚本: {INIT_SQL}")
 
     host, port, user, password, db = load_db_settings(args.env_file)
-    migrations = sorted_migration_files()
+    if args.db_name.strip():
+        db = args.db_name.strip()
+    migrations = [] if args.from_schema else sorted_migration_files()
 
     if args.dry_run:
         print(f"[dry-run] DB={db} host={host} port={port} user={user}")
+        if args.from_schema:
+            for sub, files in schema_file_groups():
+                print(f"[dry-run] schema/{sub}: {len(files)} file(s)")
+            print(f"[dry-run] then {INIT_SQL.relative_to(ROOT)}")
+            return
         print(f"[dry-run] 1. {INIT_SQL.relative_to(ROOT)}")
         for i, p in enumerate(migrations, start=2):
             print(f"[dry-run] {i}. {p.relative_to(ROOT)}")
@@ -197,16 +242,23 @@ def main() -> None:
             None,
             "CREATE DATABASE",
         )
-        run_mysql(mysql_exe, cnf_path, [db], INIT_SQL, f"init {INIT_SQL.name}")
-        for p in migrations:
-            run_mysql(mysql_exe, cnf_path, [db], p, f"migration {p.name}")
+        if args.from_schema:
+            applied = apply_schema(mysql_exe, cnf_path, db)
+            run_mysql(mysql_exe, cnf_path, [db], INIT_SQL, f"init {INIT_SQL.name}")
+        else:
+            run_mysql(mysql_exe, cnf_path, [db], INIT_SQL, f"init {INIT_SQL.name}")
+            for p in migrations:
+                run_mysql(mysql_exe, cnf_path, [db], p, f"migration {p.name}")
     finally:
         try:
             os.unlink(cnf_path)
         except OSError:
             pass
 
-    print(f"Done: database {db!r} — init + {len(migrations)} migration(s) applied.")
+    if args.from_schema:
+        print(f"Done: database {db!r} — {applied} schema file(s) + init applied.")
+    else:
+        print(f"Done: database {db!r} — init + {len(migrations)} migration(s) applied.")
 
 
 if __name__ == "__main__":

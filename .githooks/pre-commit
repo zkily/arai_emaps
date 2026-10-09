@@ -1,0 +1,17 @@
+#!/bin/sh
+# 提交包含尚未同步到 backend/database/schema/ 的迁移时，自动同步并把 schema 变更加入本次提交。
+# 启用: git config core.hooksPath .githooks   跳过: git commit --no-verify
+
+staged=$(git diff --cached --name-only --diff-filter=AM -- 'backend/database/migrations/*.sql')
+[ -z "$staged" ] && exit 0
+
+if command -v py >/dev/null 2>&1; then PY=py; else PY=python3; fi
+
+$PY scripts/sync_schema_from_migrations.py --check >/dev/null 2>&1 && exit 0
+
+echo "[pre-commit] 检测到未同步的迁移，正在更新 backend/database/schema/ ..."
+if ! $PY scripts/sync_schema_from_migrations.py; then
+  echo "[pre-commit] schema 同步失败。请修正迁移后重试，或用 git commit --no-verify 跳过。" >&2
+  exit 1
+fi
+git add backend/database/schema

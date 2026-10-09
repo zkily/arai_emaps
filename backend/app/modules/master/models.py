@@ -453,6 +453,8 @@ class EquipmentEfficiency(Base):
     product_cd = Column(String(20), nullable=True, index=True)
     product_name = Column(String(50), nullable=True)
     efficiency_rate = Column(Numeric(10, 1), default=0.0)
+    current_efficiency_rate = Column(Numeric(10, 1), nullable=True)
+    current_efficiency_updated_at = Column(DateTime, nullable=True)
     step_time = Column(Integer, nullable=True)
     unit = Column(String(50), nullable=True)
     remarks = Column(Text, nullable=True)

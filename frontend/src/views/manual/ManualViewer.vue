@@ -88,6 +88,9 @@ async function loadDocument() {
   }
 
   try {
+    if (!entry.docFile) {
+      throw new Error('manual source missing')
+    }
     const mdText = getManualMarkdown(entry.docFile)
     if (!mdText) {
       throw new Error(`manual not found: ${entry.docFile}`)

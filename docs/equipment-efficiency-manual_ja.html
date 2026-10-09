@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>設備能率管理 操作説明書</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm;
+    @bottom-center {
+      content: counter(page);
+      font-family: "Yu Gothic", "YuGothic", Meiryo, sans-serif;
+      font-size: 9pt;
+      color: #64748b;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @bottom-center { content: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    color: #1e293b;
+    font-family: "Yu Gothic", "YuGothic", "Meiryo", "Hiragino Sans", sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.65;
+  }
+  h1, h2, h3, h4 { line-height: 1.35; page-break-after: avoid; }
+  h2 { font-size: 15pt; color: #365314; border-bottom: 2.5px solid #65a30d; padding-bottom: 4px; margin: 22px 0 10px; }
+  h3 { font-size: 12pt; color: #3f6212; margin: 16px 0 6px; }
+  h4 { font-size: 11pt; color: #334155; margin: 12px 0 4px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 8px; padding-left: 1.4em; }
+  li { margin: 2px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; page-break-inside: avoid; font-size: 9.5pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 5px 7px; vertical-align: top; text-align: left; }
+  th { background: #ecfccb; color: #365314; font-weight: 700; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code, .kbd {
+    font-family: "Yu Gothic", "YuGothic", Meiryo, sans-serif;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 9.5pt;
+  }
+  .note, .warn, .tip {
+    page-break-inside: avoid;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 10pt;
+  }
+  .note { background: #f8fafc; border-left: 4px solid #64748b; }
+  .warn { background: #fffbeb; border-left: 4px solid #d97706; }
+  .tip { background: #f0fdf4; border-left: 4px solid #16a34a; }
+  .note strong, .warn strong, .tip strong { display: inline; }
+  a { color: #3f6212; text-decoration: none; }
+
+  .cover {
+    height: 297mm;
+    background: linear-gradient(160deg, #365314 0%, #4d7c0f 42%, #65a30d 72%, #ca8a04 100%);
+    color: #fff;
+    padding: 28mm 22mm 20mm;
+    page-break-after: always;
+    position: relative;
+  }
+  .cover .brand { font-size: 12pt; letter-spacing: 0.18em; opacity: 0.9; margin: 0; }
+  .cover h1 { font-size: 32pt; margin: 48mm 0 8px; font-weight: 800; letter-spacing: 0.04em; }
+  .cover .sub { font-size: 16pt; margin: 0 0 18mm; font-weight: 500; }
+  .cover .meta { font-size: 11pt; line-height: 1.9; }
+  .cover .meta b { font-weight: 700; }
+  .cover .foot {
+    position: absolute;
+    left: 22mm;
+    right: 22mm;
+    bottom: 18mm;
+    border-top: 1px solid rgba(255,255,255,0.45);
+    padding-top: 8px;
+    font-size: 10pt;
+    opacity: 0.92;
+  }
+  .toc { page-break-after: always; }
+  .toc ol { list-style: none; padding: 0; margin: 12px 0; }
+  .toc li { border-bottom: 1px dotted #cbd5e1; padding: 5px 0; }
+  .toc a { color: #1e293b; }
+  .formula {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-weight: 700;
+    text-align: center;
+    margin: 8px 0 12px;
+  }
+  .small { font-size: 9pt; color: #475569; }
+  figure { margin: 8px 0 14px; page-break-inside: avoid; }
+  figure img {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+  }
+  figcaption {
+    margin-top: 4px;
+    font-size: 9pt;
+    color: #475569;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <p class="brand">SMART-EMAPS</p>
+  <h1>設備能率管理<br>操作説明書</h1>
+  <p class="sub">設備ごとの製品別能率を登録・更新・出力する</p>
+  <div class="meta">
+    対象画面　<b>マスタ管理 → BOM → 設備能率管理</b><br>
+    画面パス　<b>/master/bom/equipment-efficiency</b><br>
+    文書版　　<b>2026年10月9日</b><br>
+    言語　　　<b>日本語</b>
+  </div>
+  <div class="foot">本書は画面の現行仕様に合わせて作成しています。ボタン名は画面上の表示と一致します。</div>
+</section>
+
+<section class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li>1. この画面でできること</li>
+    <li>2. 画面を開く</li>
+    <li>3. 画面の構成</li>
+    <li>4. 絞り込み</li>
+    <li>5. 一覧の列</li>
+    <li>6. 新規登録・編集・削除・状態の切替</li>
+    <li>7. 現在能率を更新する</li>
+    <li>8. 現在能率を能率へ反映する</li>
+    <li>9. 生産性から組み合わせを追加する</li>
+    <li>10. 工程別一覧</li>
+    <li>11. 一覧の印刷</li>
+    <li>12. Excel 出力</li>
+    <li>13. 現在能率の計算方法</li>
+    <li>14. 工程の自動判定</li>
+    <li>15. 権限</li>
+    <li>16. メッセージと対処</li>
+    <li>17. 運用上の注意</li>
+  </ol>
+</section>
+
+<h2>1. この画面でできること</h2>
+<p>設備能率管理は、設備（検査工程は検査員）と製品の組み合わせごとに、計画で使う<strong>能率</strong>と段取時間を保持するマスタです。切断・面取・成型・溶接・メッキ・検査の各計画画面は、ここにある有効な行を参照します。</p>
+<p class="small">画面図は 2026年10月9日の開発環境（マスタ管理 → BOM → 設備能率管理）で撮影しています。件数は撮影時点の登録内容です。</p>
+<table>
+  <tr><th>できること</th><th>説明</th></tr>
+  <tr><td>一覧・絞り込み</td><td>工程タブ、キーワード、設備、製品名で行を探す</td></tr>
+  <tr><td>登録・編集・削除</td><td>設備と製品を選び、能率・段取時間・状態・備考を保存する</td></tr>
+  <tr><td>状態の切替</td><td>一覧のスイッチで有効 / 無効をすぐ保存する</td></tr>
+  <tr><td>現在能率の更新</td><td>直近 3 か月の生産性から参考値を計算し、<strong>現在能率</strong>だけを書き換える</td></tr>
+  <tr><td>能率への反映</td><td>確認のあと、その行の現在能率を能率へコピーする</td></tr>
+  <tr><td>生産性から追加</td><td>生産性にあって、このマスタに無い組み合わせを新規行として追加する</td></tr>
+  <tr><td>工程別一覧</td><td>設備ごとのカードで、製品名・能率・使用材料を見る。A3 横で印刷できる</td></tr>
+  <tr><td>印刷 / Excel</td><td>いまの絞り込み結果を、ページをまたいでまとめて出力する</td></tr>
+</table>
+<div class="warn"><strong>能率と現在能率は別の項目です。</strong>「現在能率更新」を押しても、計画が参照する能率は変わりません。能率を変えるのは、行の「反映」、または編集画面での手入力だけです。</div>
+
+<h2>2. 画面を開く</h2>
+<ol>
+  <li>Smart-EMAPs にログインします。</li>
+  <li>左メニュー <strong>マスタ管理</strong> を開きます。</li>
+  <li><strong>BOM</strong> を開きます。</li>
+  <li><strong>設備能率管理</strong> をクリックします。</li>
+</ol>
+<p>メニューに項目が無い場合は、ロールにこの画面の参照権限が付いていません。管理者にメニュー権限の付与を依頼してください。</p>
+
+<h2>3. 画面の構成</h2>
+<h3>3.1 ヘッダーの件数</h3>
+<table>
+  <tr><th>表示</th><th>意味</th></tr>
+  <tr><td>設定数</td><td>全工程の登録件数（タブ「全て」の件数）</td></tr>
+  <tr><td>設備数</td><td>いまの絞り込み結果に含まれる設備の種類数</td></tr>
+  <tr><td>製品数</td><td>いまの絞り込み結果に含まれる製品の種類数</td></tr>
+  <tr><td>表示中</td><td>いまのページに出ている行数</td></tr>
+</table>
+<h3>3.2 ツールバー</h3>
+<p>左から、キーワード、設備、製品名、そして次のボタンです。</p>
+<table>
+  <tr><th>ボタン</th><th>必要な権限</th><th>動き</th></tr>
+  <tr><td>クリア</td><td>参照</td><td>キーワード・設備・製品名を消し、1 ページ目を読み直す</td></tr>
+  <tr><td>工程別一覧</td><td>参照</td><td>設備カードの一覧ダイアログを開く</td></tr>
+  <tr><td>印刷</td><td>エクスポート</td><td>絞り込み結果を A4 縦で印刷する</td></tr>
+  <tr><td>Excel出力</td><td>エクスポート</td><td>絞り込み結果を .xlsx でダウンロードする</td></tr>
+  <tr><td>現在能率更新</td><td>編集</td><td>全件の現在能率を再計算する（能率は変えない）</td></tr>
+  <tr><td>生産性から追加</td><td>登録</td><td>未登録の組み合わせを選んで追加する</td></tr>
+  <tr><td>新規登録</td><td>登録</td><td>1 件を手入力で登録する</td></tr>
+</table>
+<p>権限が無いボタンは表示されません。</p>
+<figure>
+  <img src="images/equipment-efficiency/01_page.png" alt="設備能率管理の画面全体" />
+  <figcaption>図1　画面全体（マスタ管理 → BOM → 設備能率管理）。ヘッダーの件数、絞り込み、工程タブ、一覧。</figcaption>
+</figure>
+<h3>3.3 工程タブ</h3>
+<p>全て / 切断 / 面取 / 成型 / 溶接 / メッキ / 検査 / その他。括弧内は、その工程の件数です。タブを変えると 1 ページ目に戻り、設備の候補もその工程だけになります。</p>
+<h3>3.4 ページング</h3>
+<p>1 ページの件数は 20 / 50 / 100 から選べます。画面下に「表示: ○ / ○ 件」と出ます。印刷と Excel は、表示中のページだけではなく、絞り込みに合う<strong>全件</strong>が対象です。</p>
+
+<h2>4. 絞り込み</h2>
+<h3>4.1 キーワード</h3>
+<p>プレースホルダは「製品名・設備名で検索…」です。入力して約 0.3 秒待つと検索します。設備名、設備 CD、製品名、製品 CD、備考などに部分一致します。× で消せます。</p>
+<h3>4.2 設備</h3>
+<p>候補は「設備名（設備 CD）」です。入力して絞り込めます。× で解除できます。</p>
+<ul>
+  <li>工程タブが「全て」以外のとき、候補はその工程の設備だけです。</li>
+  <li>タブを変えたとき、選んでいた設備がその工程に無ければ選択は外れます。</li>
+  <li>検査員の行は、設備 CD が <code>INSP-</code> で始まるため、検査タブの候補に出ます。</li>
+</ul>
+<h3>4.3 製品名</h3>
+<p>候補は製品名と製品 CD です。設備を選んでいるときは、その設備に登録されている製品だけに絞られます。設備を変えて、選んでいた製品がその設備に無ければ、製品の選択は外れます。</p>
+<div class="tip">工程を決めてから設備、そのあと製品、の順に選ぶと候補が一番少なくなります。</div>
+<figure>
+  <img src="images/equipment-efficiency/03_machine_filter.png" alt="成型タブで設備の候補が成型設備に限定される" />
+  <figcaption>図2　「成型」タブを選ぶと、設備の候補は成型設備だけになる（成型01〜）。</figcaption>
+</figure>
+
+<h2>5. 一覧の列</h2>
+<table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>#</td><td>絞り込み全体での通し番号</td></tr>
+  <tr><td>設備 CD</td><td>設備マスタのコード。検査員は <code>INSP-</code> ＋社員番号（例: INSP-3001）</td></tr>
+  <tr><td>設備名</td><td>設備名。検査員の行は氏名</td></tr>
+  <tr><td>製品 CD / 製品名</td><td>製品マスタのコードと名称</td></tr>
+  <tr><td>能率</td><td>計画が参照する値。小数第 1 位。単位が入っている行は数値の右に単位が付く</td></tr>
+  <tr><td>現在能率</td><td>直近 3 か月の生産性 × 95%。未計算、または実績が無い行は「—」。数値にマウスを置くと更新日時が出る</td></tr>
+  <tr><td>段取</td><td>段取時間（分）。未設定は「—」</td></tr>
+  <tr><td>状態</td><td>有効 / 無効のスイッチ。編集権限があると、切り替えた瞬間に保存される</td></tr>
+  <tr><td>備考</td><td>自由記入。生産性から追加した行は、期間付きの自動文が入る</td></tr>
+  <tr><td>操作</td><td>編集、反映、削除。権限が無い操作は出ない</td></tr>
+</table>
+<p>列見出しをクリックすると、その列で並べ替えできます。初期の並びは設備名の昇順です。</p>
+<figure>
+  <img src="images/equipment-efficiency/02_forming.png" alt="成型タブの一覧。能率と現在能率" />
+  <figcaption>図3　成型タブ。能率（緑）と現在能率（橙）。段取・状態・操作（編集 / 反映 / 削除）。</figcaption>
+</figure>
+
+<h2>6. 新規登録・編集・削除・状態の切替</h2>
+<h3>6.1 新規登録</h3>
+<ol>
+  <li><strong>新規登録</strong> を押します。タイトルは「能率設定新規登録」です。</li>
+  <li><strong>設備</strong> を選びます。設備名は選んだコードから自動で入り、手では変えられません。</li>
+  <li><strong>製品</strong> を選びます。製品名も自動で入ります。</li>
+  <li><strong>能率</strong> を入れます。0〜10000、小数第 1 位、0.1 刻みです。必須です。</li>
+  <li>必要なら <strong>段取時間</strong>（0〜9999 分、整数）、<strong>状態</strong>（初期値は有効）、<strong>備考</strong> を入れます。</li>
+  <li><strong>保存</strong> を押します。「能率設定を登録しました」と出れば完了です。</li>
+</ol>
+<p>設備または製品が空だと「設備を選択してください」「製品を選択してください」が出て保存できません。能率が空、または 0 未満でも保存できません。</p>
+<figure>
+  <img src="images/equipment-efficiency/04_register.png" alt="能率設定の新規登録ダイアログ" />
+  <figcaption>図4　新規登録。設備と製品を選ぶと名称は自動で入ります。状態の初期値は有効です。</figcaption>
+</figure>
+<h3>6.2 編集</h3>
+<p>行の <strong>編集</strong> を押すと「能率設定編集」が開きます。項目は新規登録と同じです。保存すると「能率設定を更新しました」と出ます。</p>
+<h3>6.3 削除</h3>
+<p>行の <strong>削除</strong> を押すと「この能率設定を削除しますか？」と聞かれます。<strong>削除</strong> で確定し、<strong>キャンセル</strong> で中止します。削除した行は元に戻せません。計画側でその組み合わせを参照している場合は、先に影響を確認してください。</p>
+<h3>6.4 状態</h3>
+<p>一覧のスイッチでも、編集画面の「有効 / 無効」でも変えられます。無効の行は工程別一覧には出ません。計画側で無効行を使うかどうかは、参照している各画面の条件に従います。</p>
+
+<h2>7. 現在能率を更新する</h2>
+<p><strong>現在能率更新</strong> は、画面に見えている行だけではなく、対象工程の登録行すべてを一度に更新します。タブや絞り込みでは範囲は狭まりません。</p>
+<ol>
+  <li>ボタンを押します。</li>
+  <li>確認文に期間が出ます。例: 2026-10-09 に実行すると「2026-08-01 〜 2026-10-09」です。当月を含む直近 3 カレンダー月の 1 日から、実行日までです。</li>
+  <li>内容を確認し、<strong>更新</strong> を押します。<strong>キャンセル</strong> なら何も変わりません。</li>
+  <li>完了すると次の件数が表示されます。</li>
+</ol>
+<table>
+  <tr><th>表示</th><th>意味</th></tr>
+  <tr><td>算出</td><td>期間内の実績から現在能率を書き込んだ件数</td></tr>
+  <tr><td>実績なし</td><td>対象工程だが、一致する実績が無く、現在能率を空にした件数</td></tr>
+  <tr><td>対象外</td><td>計算しない工程の件数。メッキはここにはいり、値は変わりません</td></tr>
+</table>
+<div class="note">確認文の要点: 実績数 ÷ 作業時間を、製品と設備（検査は検査員）ごとに集計し、95% を現在能率へ書く。能率そのものは変わらない。メッキは集計対象外。</div>
+<figure>
+  <img src="images/equipment-efficiency/05_refresh_confirm.png" alt="現在能率を更新する確認" />
+  <figcaption>図5　「現在能率更新」の確認。キャンセルすれば何も変わりません。</figcaption>
+</figure>
+
+<h2>8. 現在能率を能率へ反映する</h2>
+<p>現在能率は参考値です。計画用の能率に採用するときだけ、行ごとに反映します。</p>
+<ol>
+  <li>現在能率に数値がある行で、<strong>反映</strong> を押します。空（—）の行は押せません。</li>
+  <li>「現在能率 ○○.○ を能率に反映しますか？」と出ます。</li>
+  <li><strong>反映</strong> で、その行の能率だけが現在能率と同じ値になります。現在能率の数値はそのまま残ります。</li>
+</ol>
+<p>複数行を一括で反映する機能はありません。採用する行だけを確認して反映してください。</p>
+<figure>
+  <img src="images/equipment-efficiency/06_apply_confirm.png" alt="現在能率を能率へ反映する確認" />
+  <figcaption>図6　行の「反映」。確認に、書き込む現在能率の値が出ます。</figcaption>
+</figure>
+
+<h2>9. 生産性から組み合わせを追加する</h2>
+<p>各工程の生産性に実績があるのに、設備能率マスタに同じ組み合わせが無いとき、その組み合わせを新しい行として追加します。</p>
+<ol>
+  <li><strong>生産性から追加</strong> を押します。</li>
+  <li>未登録が無いときは「未登録の組み合わせはありません」と出て、ダイアログは開きません。</li>
+  <li>候補があるとダイアログ「生産性から追加」が開きます。初期状態では<strong>すべての行にチェック</strong>が付いています。</li>
+  <li>不要な行のチェックを外します。画面下に「選択 ○ / ○ 件」と出ます。</li>
+  <li><strong>選択した組み合わせを追加</strong> を押します。「○ 件を追加しました」と出れば完了です。</li>
+</ol>
+<h3>9.1 ダイアログの列</h3>
+<table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>工程</td><td>切断 / 面取 / 成型 / 溶接 / 検査</td></tr>
+  <tr><td>設備 / 検査員</td><td>設備名と設備 CD。検査は検査員氏名と <code>INSP-</code> コード</td></tr>
+  <tr><td>製品 CD / 製品名</td><td>製品マスタにある製品だけが候補になります</td></tr>
+  <tr><td>実績数</td><td>期間内の実績数量の合計</td></tr>
+  <tr><td>作業時間(h)</td><td>期間内の作業時間の合計（時間）</td></tr>
+  <tr><td>実績件数</td><td>集計に使ったレコード数。3 件未満は黄色のラベル</td></tr>
+  <tr><td>能率</td><td>追加後に能率と現在能率の両方へ入る値</td></tr>
+</table>
+<h3>9.2 追加される行の中身</h3>
+<ul>
+  <li>能率と現在能率は同じ値（実績数 ÷ 作業時間 × 95%、小数第 1 位）です。</li>
+  <li>状態は有効です。単位は空です。</li>
+  <li>段取時間は、同じ設備 CD ですでに登録されている段取時間のうち、いちばん多い値をコピーします。その設備に既存行が無いときは空です。</li>
+  <li>備考は「生産性より自動追加（開始日〜終了日）」です。</li>
+</ul>
+<div class="warn"><strong>黄色ラベル（実績 3 件未満）は能率が振れやすいです。</strong> 検査は候補が多く、初期状態ですべて選択されています。工程や製品で内容を見てから、不要な行のチェックを外して追加してください。一度に数百件を追加しない運用を推奨します。</div>
+<figure>
+  <img src="images/equipment-efficiency/08_missing_none.png" alt="未登録の組み合わせが無いときのメッセージ" />
+  <figcaption>図7　未登録が無いとき。ダイアログは開かず、画面上部に期間つきの案内が出ます（2026-10-09 時点の実データ）。</figcaption>
+</figure>
+<figure>
+  <img src="images/equipment-efficiency/08_missing.png" alt="生産性から追加ダイアログの表示例" />
+  <figcaption>図8　候補があるときのダイアログ（3行は説明用の例。撮影時点の実データには未登録が無かった）。実績 3 件未満は黄色。検査は INSP- コード。開いた直後は全行が選択される。</figcaption>
+</figure>
+<h3>9.3 ダイアログ下の注記</h3>
+<ul>
+  <li><strong>製品マスタに無い製品 CD</strong> は候補に入りません。コードの一覧が注記されます。</li>
+  <li><strong>設備マスタに一致しないライン</strong> も追加できません。生産性側のライン名と、設備マスタの設備名が一致しないときです。成型のライン名末尾の「号」（成型01号）は、照合のとき「成型01」として扱います。</li>
+</ul>
+
+<h2>10. 工程別一覧</h2>
+<p>ツールバーの <strong>工程別一覧</strong> で開きます。タイトルは「工程別一覧（設備別 製品・能率・使用材料）」です。1 設備が 1 枚のカードになり、カード内は製品名・能率・使用材料の 3 列です。</p>
+<h3>10.1 一覧に出る行 / 出ない行</h3>
+<table>
+  <tr><th>条件</th><th>一覧</th></tr>
+  <tr><td>状態が有効</td><td>出る</td></tr>
+  <tr><td>状態が無効</td><td>出ない</td></tr>
+  <tr><td>製品区分が試作品、補給品</td><td>出ない</td></tr>
+  <tr><td>設備名に「成型」と「NC」の両方を含む（成型 NC）</td><td>出ない</td></tr>
+</table>
+<p>メイン画面の一覧には、無効行や試作品もそのまま出ます。除外されるのは工程別一覧だけです。</p>
+<h3>10.2 使用材料</h3>
+<p>製品マスタの材料コードを優先します。材料コードが空の製品は、状態が active の製品 BOM 明細にある材料を、行番号順に並べます。材料マスタに名称があれば名称を表示します。</p>
+<h3>10.3 ダイアログ内の操作</h3>
+<ul>
+  <li>工程のラジオ（全て / 切断 / 面取 / 成型 / 溶接 / メッキ / 検査 / その他）で切り替わります。開いた直後は、メイン画面で選んでいた工程です。</li>
+  <li>キーワードは製品名・設備名の検索です。メイン画面の絞り込みとは独立しています。</li>
+  <li>右上に「設備 ○ 台 ／ 製品 ○ 件」と出ます。</li>
+  <li><strong>印刷（A3横）</strong> は、エクスポート権限があるときだけ出ます。用紙は A3 横、1 行にカード 6 枚です。工程が複数あるときは工程ごとに改ページします。</li>
+</ul>
+<figure>
+  <img src="images/equipment-efficiency/07_overview.png" alt="工程別一覧の設備カード" />
+  <figcaption>図9　工程別一覧。1 設備が 1 カードで、製品名・能率・使用材料。右上の「印刷（A3横）」で出力します。</figcaption>
+</figure>
+
+<h2>11. 一覧の印刷</h2>
+<p>ツールバーの <strong>印刷</strong> は、メインの一覧を印刷します。工程別一覧の印刷とは別です。</p>
+<ol>
+  <li>タブと絞り込みを、出したい範囲に合わせます。</li>
+  <li><strong>印刷</strong> を押します。対象が 0 件だと「印刷対象の行がありません」と出ます。</li>
+  <li>別ウィンドウが開き、ブラウザの印刷ダイアログが出ます。用紙は A4 縦です。</li>
+</ol>
+<p>見出しは「設備能率管理（絞込結果）」です。キーワード、設備、製品、工程、件数、印刷日時が付きます。本文は設備ごとにまとまり、列は製品 CD、製品名、能率、段取、状態、備考です。ポップアップがブロックされると「ポップアップがブロックされました」と出ます。ブラウザでこのサイトのポップアップを許可してください。</p>
+
+<h2>12. Excel 出力</h2>
+<ol>
+  <li>タブと絞り込みを、出したい範囲に合わせます。</li>
+  <li><strong>Excel出力</strong> を押します。0 件のときは「出力対象の行がありません」と出ます。</li>
+  <li>完了すると「○ 件を Excel に出力しました」と出て、.xlsx がダウンロードされます。</li>
+</ol>
+<p>ファイル名の例: <code>設備能率管理_成型_20261009_0905.xlsx</code>（工程名と年月日時分）。シート名は「設備能率_工程名」です。ヘッダー行は太字です。</p>
+<table>
+  <tr><th>列</th><th>形式</th></tr>
+  <tr><td>工程</td><td>タブが「全て」のときは設備から判定した工程名。特定タブのときはそのタブ名</td></tr>
+  <tr><td>設備 CD / 設備名 / 製品 CD / 製品名</td><td>文字</td></tr>
+  <tr><td>能率 / 現在能率 / ステップタイム(分)</td><td>数値（空のときは空白）。Excel 上で並べ替えや計算ができます</td></tr>
+  <tr><td>単位</td><td>登録されているときだけ文字が入る</td></tr>
+  <tr><td>現在能率更新日時</td><td>年月日時分。未更新は空白</td></tr>
+  <tr><td>状態</td><td>有効 または 無効</td></tr>
+  <tr><td>備考</td><td>文字</td></tr>
+</table>
+
+<h2>13. 現在能率の計算方法</h2>
+<div class="formula">現在能率 ＝（期間内の実績数量の合計 ÷ 期間内の正味作業時間の合計）× 0.95</div>
+<p>小数第 1 位で四捨五入します。日ごとの能率を平均した値ではありません。生産性分析画面の総合能率と同じく、期間合計どうしで割ります。</p>
+<h3>13.1 期間</h3>
+<p>実行日が属する月を含む、直近 3 カレンダー月です。開始日はその 3 か月前の月の 1 日、終了日は実行日です。</p>
+<h3>13.2 集計に入れる実績</h3>
+<p>実績数量が 0 より大きく、作業時間も 0 より大きいレコードだけを分子・分母に入れます。</p>
+<table>
+  <tr><th>工程</th><th>元データ</th><th>設備の取り方</th><th>数量</th><th>時間</th></tr>
+  <tr><td>切断</td><td>切断の生産指標</td><td>ライン名。末尾の「号」は除いて設備名と照合</td><td>実績数量</td><td>作業時間</td></tr>
+  <tr><td>面取</td><td>面取の生産指標</td><td>同上</td><td>合計生産数が 0 より大きければその値。そうでなければ面取実績と SW 実績の合計</td><td>作業時間</td></tr>
+  <tr><td>成型</td><td>成型の生産指標</td><td>同上（成型01号 → 成型01）</td><td>実績数量</td><td>作業時間</td></tr>
+  <tr><td>溶接</td><td>溶接実績</td><td>溶接機。生産完了の行だけ</td><td>生産実績数</td><td>正味生産秒を時間に換算</td></tr>
+  <tr><td>検査</td><td>検査実績</td><td>設備は使わない。検査員を 1 台の設備として扱う。生産完了の行だけ</td><td>生産実績数</td><td>正味生産秒。無ければ開始〜終了の秒数</td></tr>
+  <tr><td>メッキ</td><td colspan="4">集計しません。既存行の現在能率も変更しません</td></tr>
+</table>
+<h3>13.3 検査員の行</h3>
+<ul>
+  <li>設備 CD は <code>INSP-</code> ＋ユーザーの社員番号（ログイン ID）です。例: 社員番号 3001 → <code>INSP-3001</code>。</li>
+  <li>設備名は氏名です。氏名が空のときは社員番号です。</li>
+  <li>このコードで始まる行は、設備名に「検査」と無くても検査タブに分類されます。</li>
+  <li>検査員の行は、設備マスタの設備とは別のコードです。成型や溶接の設備行と混ざりません。</li>
+</ul>
+<h3>13.4 既存行との突き合わせ</h3>
+<ul>
+  <li>切断・面取・成型・溶接は、正規化した設備名と製品 CD で既存行に当てます。</li>
+  <li>検査は設備 CD（<code>INSP-…</code>）と製品 CD で当てます。</li>
+  <li>当たった行は現在能率と更新日時を書き換えます。当たらず、かつその工程の集計に成功している行は、現在能率を空にします（実績なし）。</li>
+  <li>メッキ、および集計できなかった工程の行はスキップし、既存の現在能率を残します（対象外）。</li>
+</ul>
+
+<h2>14. 工程の自動判定</h2>
+<p>タブ、工程別一覧、Excel の工程列、現在能率の対象判定は、同じルールです。上から順に、最初に一致した工程になります。</p>
+<table>
+  <tr><th>順</th><th>条件</th><th>工程</th></tr>
+  <tr><td>1</td><td>設備 CD が INSP- で始まる</td><td>検査</td></tr>
+  <tr><td>2</td><td>設備名または設備 CD に「面取」または chamfer</td><td>面取</td></tr>
+  <tr><td>3</td><td>「成型」または forming</td><td>成型</td></tr>
+  <tr><td>4</td><td>「溶接」または welding</td><td>溶接</td></tr>
+  <tr><td>5</td><td>「メッキ」、plating、または設備 CD に pl</td><td>メッキ</td></tr>
+  <tr><td>6</td><td>「検査」または inspection</td><td>検査</td></tr>
+  <tr><td>7</td><td>「切断」または cutting</td><td>切断</td></tr>
+  <tr><td>8</td><td>どれにも一致しない</td><td>その他</td></tr>
+</table>
+<p>設備名の表記がこのルールと違うと、意図したタブに出ません。その場合は設備マスタの名称を確認してください。</p>
+
+<h2>15. 権限</h2>
+<p>ボタンと行操作は、マスタ画面の操作権限で出します。</p>
+<table>
+  <tr><th>権限</th><th>できる操作</th></tr>
+  <tr><td>参照</td><td>一覧、絞り込み、工程別一覧の表示</td></tr>
+  <tr><td>登録</td><td>新規登録、生産性から追加</td></tr>
+  <tr><td>編集</td><td>編集、状態の切替、現在能率更新、反映</td></tr>
+  <tr><td>削除</td><td>削除</td></tr>
+  <tr><td>エクスポート</td><td>印刷、Excel出力、工程別一覧の印刷</td></tr>
+</table>
+<p>権限が無い操作を実行しようとすると、操作ガードのメッセージが出て処理は始まりません。</p>
+
+<h2>16. メッセージと対処</h2>
+<table>
+  <tr><th>メッセージ</th><th>意味と対処</th></tr>
+  <tr><td>データがありません</td><td>絞り込みが狭すぎるか、その工程に行が無い。クリアして再検索する</td></tr>
+  <tr><td>設備を選択してください / 製品を選択してください</td><td>登録ダイアログの必須項目。両方選んでから保存する</td></tr>
+  <tr><td>能率を入力してください / 能率は0以上である必要があります</td><td>能率を 0 以上の数値にする</td></tr>
+  <tr><td>現在能率を更新しました（算出 / 実績なし / 対象外）</td><td>更新成功。能率列は変わっていない</td></tr>
+  <tr><td>現在能率の更新に失敗しました</td><td>通信またはサーバのエラー。時間をおいて再実行する。再実行しても能率が勝手に変わることはない</td></tr>
+  <tr><td>未登録の組み合わせはありません</td><td>その期間の生産性は、すでにマスタへ反映済み</td></tr>
+  <tr><td>追加できる組み合わせはありません</td><td>ダイアログを開いたあと候補が空。製品マスタ未登録やライン不一致の注記を確認する</td></tr>
+  <tr><td>○ 件を追加しました</td><td>選択した組み合わせを新規行として登録した</td></tr>
+  <tr><td>現在能率 ○ を能率に反映しますか？</td><td>反映の確認。キャンセルすれば能率は変わらない</td></tr>
+  <tr><td>この能率設定を削除しますか？</td><td>削除の確認。削除は元に戻せない</td></tr>
+  <tr><td>印刷対象の行がありません / 出力対象の行がありません</td><td>絞り込み結果が 0 件。条件を緩める</td></tr>
+  <tr><td>ポップアップがブロックされました</td><td>ブラウザのポップアップ許可が必要</td></tr>
+  <tr><td>○ 件を Excel に出力しました</td><td>ダウンロード成功。保存先はブラウザのダウンロードフォルダ</td></tr>
+</table>
+
+<h2>17. 運用上の注意</h2>
+<ol>
+  <li><strong>更新と反映を分けてください。</strong> 月初などに「現在能率更新」で参考値を作り、差が大きい行だけを担当者が「反映」します。更新ボタンだけでは計画用の能率は変わりません。</li>
+  <li><strong>メッキは自動計算しません。</strong> メッキの能率は、新規登録または編集で手入力します。</li>
+  <li><strong>検査は検査員単位です。</strong> 検査工程に設備列は無いため、検査員 × 製品で行を持ちます。設備 CD は <code>INSP-</code> で始まります。工程別一覧や Excel でも、設備名の位置に検査員氏名が出ます。</li>
+  <li><strong>実績が少ない行は採用前に確認してください。</strong> 件数が 1〜2 件だと、1 件の異常な作業時間で能率が極端に低く、または高くなります。黄色ラベルの行は、反映や追加の前に生産性の元データを見てください。</li>
+  <li><strong>生産性から追加は全選択が初期値です。</strong> 検査だけでも候補が数百件になることがあります。必要な組み合わせだけ残して追加してください。追加した行の能率は、最初から現在能率と同じ値です。あとから現在能率更新をしても、能率は自動では追従しません。</li>
+  <li><strong>ライン名と設備名を揃えてください。</strong> 一致しないラインは追加も現在能率の更新もできません。成型の「号」だけは自動で無視します。</li>
+  <li><strong>工程別一覧は配布用の見え方です。</strong> 無効、試作品、補給品、成型 NC はカードに出ません。マスタの全件を渡すときは、メイン画面の Excel 出力を使ってください。</li>
+  <li><strong>印刷と Excel は絞り込み全件です。</strong> 画面が 20 件表示でも、条件に合う行が 500 件あれば 500 件出ます。出す前にタブと設備・製品を確認してください。</li>
+</ol>
+
+<p class="small">以上。本書の対象は設備能率管理画面（2026年10月9日時点）です。計画画面側で能率をどう工数に換算するかは、各計画画面の説明に従ってください。</p>
+
+</body>
+</html>
