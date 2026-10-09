@@ -313,6 +313,9 @@ export default {
     PIN: 'Thêm vào thường dùng',
     UNPIN: 'Bỏ ghim',
     PIN_LIMIT: 'Chỉ có thể ghim tối đa {max} trang',
+    REMOVE_SHORTCUT: 'Xóa khỏi thường dùng',
+    SHORTCUT_REMOVED: 'Đã xóa "{name}" khỏi thường dùng',
+    SHORTCUT_REMOVE_FAILED: 'Xóa khỏi thường dùng thất bại',
   },
   menu: {
     DASHBOARD: 'Bảng điều khiển',

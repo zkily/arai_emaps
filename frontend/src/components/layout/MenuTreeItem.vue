@@ -5,7 +5,12 @@
   Element Plus アイコン名を component :is で解決する。
 -->
 <template>
-  <el-sub-menu v-if="node.children && node.children.length" :index="node.code">
+  <el-sub-menu
+    v-if="node.children && node.children.length"
+    :index="node.code"
+    :popper-class="popperClass"
+    :teleported="true"
+  >
     <template #title>
       <SidebarCollapsedEntry
         v-if="depth === 0"
@@ -20,11 +25,16 @@
         <span :title="label">{{ label }}</span>
       </template>
     </template>
+    <li class="sbm-popup-head" role="presentation">
+      <i class="sbm-popup-head__dot" />
+      <span>{{ label }}</span>
+    </li>
     <MenuTreeItem
       v-for="child in node.children"
       :key="child.code"
       :node="child"
       :depth="depth + 1"
+      :root-key="moduleKey"
       :is-collapsed="isCollapsed"
     />
   </el-sub-menu>
@@ -60,8 +70,10 @@ const props = withDefaults(
     node: MenuTreeNode
     isCollapsed?: boolean
     depth?: number
+    /** 所属ルートメニュー（ポップアップの配色用） */
+    rootKey?: string
   }>(),
-  { isCollapsed: false, depth: 0 },
+  { isCollapsed: false, depth: 0, rootKey: '' },
 )
 
 const { t, te } = useI18n()
@@ -72,6 +84,9 @@ const label = computed(() => {
   if (te(key)) return t(key)
   return props.node.name
 })
+
+const moduleKey = computed(() => props.rootKey || props.node.code.toLowerCase())
+const popperClass = computed(() => `sbm-popper sbm-popper--${moduleKey.value}`)
 
 const isPinned = computed(() => {
   if (!props.node.path) return false

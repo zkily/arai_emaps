@@ -421,6 +421,9 @@ export default {
     PIN: 'よく使うに追加',
     UNPIN: 'ピン留めを解除',
     PIN_LIMIT: 'ピン留めは最大{max}件までです',
+    REMOVE_SHORTCUT: 'よく使うから削除',
+    SHORTCUT_REMOVED: '「{name}」をよく使うから削除しました',
+    SHORTCUT_REMOVE_FAILED: 'よく使うからの削除に失敗しました',
   },
   menu: {
     DASHBOARD: 'ダッシュボード',

@@ -421,6 +421,9 @@ export default {
     PIN: '加入常用',
     UNPIN: '取消常用',
     PIN_LIMIT: '最多只能收藏 {max} 个页面',
+    REMOVE_SHORTCUT: '从常用中移除',
+    SHORTCUT_REMOVED: '已从常用中移除「{name}」',
+    SHORTCUT_REMOVE_FAILED: '从常用中移除失败',
   },
   menu: {
     DASHBOARD: '仪表板',

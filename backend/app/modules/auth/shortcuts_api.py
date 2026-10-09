@@ -1,14 +1,19 @@
 """
 サイドバー常用ページ API
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
-from app.modules.auth.shortcuts_service import get_shortcuts, record_visit, replace_pins
+from app.modules.auth.shortcuts_service import (
+    get_shortcuts,
+    record_visit,
+    remove_shortcut,
+    replace_pins,
+)
 
 router = APIRouter()
 
@@ -40,6 +45,15 @@ async def list_shortcuts(
 ):
     data = await get_shortcuts(db, current_user)
     return data
+
+
+@router.delete("", response_model=ShortcutsResponse, summary="常用ページから削除（ピン留め・訪問履歴）")
+async def delete_shortcut(
+    path: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await remove_shortcut(db, current_user, path)
 
 
 @router.put("/pins", response_model=ShortcutsResponse, summary="ピン留め一覧更新")

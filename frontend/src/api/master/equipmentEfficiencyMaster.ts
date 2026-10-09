@@ -41,6 +41,9 @@ export interface EquipmentEfficiencyListParams {
   processType?: string
   machineCd?: string
   productCd?: string
+  /** machine_cd / machines_name / product_cd / product_name（全件に対してサーバー側で並べ替え） */
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
 }
 
 export interface EquipmentEfficiencyFilterPair {

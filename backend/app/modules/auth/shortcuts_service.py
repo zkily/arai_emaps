@@ -163,6 +163,25 @@ async def replace_pins(db: AsyncSession, user: User, paths: list[str]) -> dict:
     return await get_shortcuts(db, user)
 
 
+async def remove_shortcut(db: AsyncSession, user: User, path: str) -> dict:
+    normalized = (path or "").strip()
+    if normalized:
+        await db.execute(
+            delete(UserPinnedPage).where(
+                UserPinnedPage.user_id == user.id,
+                UserPinnedPage.path == normalized,
+            )
+        )
+        await db.execute(
+            delete(UserPageVisit).where(
+                UserPageVisit.user_id == user.id,
+                UserPageVisit.path == normalized,
+            )
+        )
+        await db.commit()
+    return await get_shortcuts(db, user)
+
+
 async def record_visit(db: AsyncSession, user: User, path: str) -> None:
     normalized = (path or "").strip()
     if not normalized or normalized in EXCLUDED_PATHS:

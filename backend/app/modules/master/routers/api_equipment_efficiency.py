@@ -108,6 +108,29 @@ async def _tab_counts(
     return counts
 
 
+_LIST_SORT_COLUMNS = {
+    "machine_cd": EquipmentEfficiency.machine_cd,
+    "machines_name": EquipmentEfficiency.machines_name,
+    "product_cd": EquipmentEfficiency.product_cd,
+    "product_name": EquipmentEfficiency.product_name,
+}
+
+
+def _list_order_by(sort_by: Optional[str], sort_order: Optional[str]) -> list:
+    """一覧の並び順。ページングより前に DB で全件に適用する。"""
+    default = [
+        EquipmentEfficiency.machines_name,
+        EquipmentEfficiency.product_name,
+        EquipmentEfficiency.id,
+    ]
+    column = _LIST_SORT_COLUMNS.get((sort_by or "").strip())
+    if column is None:
+        return default
+    desc = (sort_order or "").strip().lower() in ("desc", "descending")
+    primary = column.desc() if desc else column.asc()
+    return [primary, *[c for c in default if c is not column]]
+
+
 def _as_float(value):
     if value is None:
         return None
@@ -148,6 +171,8 @@ async def get_equipment_efficiency_list(
     process_type: Optional[str] = Query(None, alias="processType"),
     machine_cd: Optional[str] = Query(None, alias="machineCd"),
     product_cd: Optional[str] = Query(None, alias="productCd"),
+    sort_by: Optional[str] = Query(None, alias="sortBy"),
+    sort_order: Optional[str] = Query(None, alias="sortOrder"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=99999, alias="pageSize"),
     limit: Optional[int] = Query(
@@ -168,9 +193,7 @@ async def get_equipment_efficiency_list(
         count_stmt = count_stmt.where(where_expr)
     total = (await db.execute(count_stmt)).scalar() or 0
 
-    list_stmt = select(EquipmentEfficiency).order_by(
-        EquipmentEfficiency.machines_name, EquipmentEfficiency.product_name
-    )
+    list_stmt = select(EquipmentEfficiency).order_by(*_list_order_by(sort_by, sort_order))
     if where_expr is not None:
         list_stmt = list_stmt.where(where_expr)
 

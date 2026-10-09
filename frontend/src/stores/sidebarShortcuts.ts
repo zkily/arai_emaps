@@ -73,6 +73,13 @@ export const useSidebarShortcutsStore = defineStore('sidebarShortcuts', () => {
     await savePins(current)
   }
 
+  async function removeShortcut(path: string) {
+    const data = await shortcutsApi.removeShortcut(path)
+    pinned.value = data.pinned ?? []
+    frequent.value = data.frequent ?? []
+    loaded.value = true
+  }
+
   async function recordVisit(path: string) {
     const normalized = (path || '').trim()
     if (!normalized) return
@@ -105,6 +112,7 @@ export const useSidebarShortcutsStore = defineStore('sidebarShortcuts', () => {
     load,
     reset,
     togglePin,
+    removeShortcut,
     recordVisit,
     savePins,
   }

@@ -422,6 +422,9 @@ export default {
     PIN: 'Add to shortcuts',
     UNPIN: 'Remove from shortcuts',
     PIN_LIMIT: 'You can pin up to {max} pages',
+    REMOVE_SHORTCUT: 'Remove from shortcuts',
+    SHORTCUT_REMOVED: 'Removed "{name}" from shortcuts',
+    SHORTCUT_REMOVE_FAILED: 'Failed to remove from shortcuts',
   },
   menu: {
     DASHBOARD: 'Dashboard',

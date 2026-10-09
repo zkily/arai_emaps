@@ -20,6 +20,10 @@ export const updatePins = (paths: string[]) => {
   return request.put<any, ShortcutsResponse>('/api/auth/shortcuts/pins', { paths })
 }
 
+export const removeShortcut = (path: string) => {
+  return request.delete<any, ShortcutsResponse>('/api/auth/shortcuts', { params: { path } })
+}
+
 export const recordPageVisit = (path: string) => {
   return request.post('/api/auth/shortcuts/visit', { path })
 }

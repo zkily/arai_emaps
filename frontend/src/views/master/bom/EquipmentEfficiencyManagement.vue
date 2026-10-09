@@ -131,7 +131,8 @@
           :name="process.value"
         >
           <el-table
-            :data="process.value === activeProcessTab ? efficiencyList : []"
+            v-if="process.value === activeProcessTab"
+            :data="efficiencyList"
             v-loading="loading"
             stripe
             border
@@ -139,27 +140,28 @@
             style="width: 100%"
             class="ee-table"
             :empty-text="'データがありません'"
-            :default-sort="{ prop: 'machines_name', order: 'ascending' }"
+            :default-sort="tableDefaultSort"
             :row-class-name="getRowClassName"
             height="calc(100vh - 260px)"
+            @sort-change="handleSortChange"
           >
             <el-table-column type="index" label="#" width="48" align="center" :index="tableIndexMethod" />
-            <el-table-column prop="machine_cd" label="設備CD" width="96" align="center" sortable>
+            <el-table-column prop="machine_cd" label="設備CD" width="96" align="center" sortable="custom">
               <template #default="{ row }">
                 <span class="ee-code ee-code--machine">{{ row.machine_cd }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="machines_name" label="設備名" min-width="130" sortable show-overflow-tooltip>
+            <el-table-column prop="machines_name" label="設備名" min-width="130" sortable="custom" show-overflow-tooltip>
               <template #default="{ row }">
                 <span class="ee-name">{{ row.machines_name }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="product_cd" label="製品CD" width="96" align="center" sortable>
+            <el-table-column prop="product_cd" label="製品CD" width="96" align="center" sortable="custom">
               <template #default="{ row }">
                 <span class="ee-code ee-code--product">{{ row.product_cd }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="product_name" label="製品名" min-width="140" sortable show-overflow-tooltip />
+            <el-table-column prop="product_name" label="製品名" min-width="140" sortable="custom" show-overflow-tooltip />
             <el-table-column prop="efficiency_rate" label="能率" width="100" align="center">
               <template #default="{ row }">
                 <span class="ee-eff-cell">
@@ -645,12 +647,37 @@ const loadFilterOptions = async () => {
   }
 }
 
+type TableSortOrder = 'ascending' | 'descending' | null
+
+const sortState = ref<{ prop: string; order: TableSortOrder }>({
+  prop: 'machines_name',
+  order: 'ascending',
+})
+
+const tableDefaultSort = computed(() =>
+  sortState.value.prop && sortState.value.order
+    ? { prop: sortState.value.prop, order: sortState.value.order }
+    : undefined
+)
+
+const handleSortChange = ({ prop, order }: { prop: string | null; order: TableSortOrder }) => {
+  sortState.value = { prop: prop || '', order: order || null }
+  resetPageAndLoad()
+}
+
+const sortParams = () => {
+  const { prop, order } = sortState.value
+  if (!prop || !order) return {}
+  return { sortBy: prop, sortOrder: order === 'descending' ? ('desc' as const) : ('asc' as const) }
+}
+
 const filterParams = () => {
   const kw = filters.value.keyword?.trim()
   return {
     ...(kw ? { keyword: kw } : {}),
     ...(filters.value.machineCd ? { machineCd: filters.value.machineCd } : {}),
     ...(filters.value.productCd ? { productCd: filters.value.productCd } : {}),
+    ...sortParams(),
   }
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="manual-home">
+  <div class="manual-home pb-std">
     <aside class="manual-sidebar">
       <div class="manual-sidebar__header">
         <el-icon class="manual-sidebar__logo" :size="22"><Notebook /></el-icon>
@@ -30,8 +30,6 @@
       <div class="manual-sidebar__footer">
         <el-button
           class="manual-sidebar__print-btn"
-          type="default"
-          plain
           size="small"
           @click="handlePrint"
         >
@@ -50,14 +48,16 @@
         <p>{{ loadError }}</p>
       </div>
       <div v-else-if="pdfUrl" class="manual-print-area manual-print-area--pdf">
-        <div class="manual-content__header">
+        <div class="manual-content__header pb-hero pb-hero--page">
+          <div class="manual-content__fx pb-bubbles" aria-hidden="true" />
           <div class="manual-content__title-badge">
             <el-icon :size="20"><QuestionFilled /></el-icon>
           </div>
-          <div>
-            <h1 class="manual-content__title">{{ currentTitle }}</h1>
-            <p class="manual-content__subtitle">{{ t('operationManual.pdfSubtitle') }}</p>
+          <div class="manual-content__copy">
+            <h1 class="manual-content__title pb-hero-title">{{ currentTitle }}</h1>
+            <p class="manual-content__subtitle pb-hero-desc">{{ t('operationManual.pdfSubtitle') }}</p>
           </div>
+          <span class="manual-content__kind">PDF</span>
         </div>
         <iframe
           ref="pdfFrameEl"
@@ -67,13 +67,14 @@
         />
       </div>
       <div v-else class="manual-print-area">
-        <div class="manual-content__header">
+        <div class="manual-content__header pb-hero pb-hero--page">
+          <div class="manual-content__fx pb-bubbles" aria-hidden="true" />
           <div class="manual-content__title-badge">
             <el-icon :size="20"><QuestionFilled /></el-icon>
           </div>
-          <div>
-            <h1 class="manual-content__title">{{ currentTitle }}</h1>
-            <p class="manual-content__subtitle">{{ t('operationManual.subtitle') }}</p>
+          <div class="manual-content__copy">
+            <h1 class="manual-content__title pb-hero-title">{{ currentTitle }}</h1>
+            <p class="manual-content__subtitle pb-hero-desc">{{ t('operationManual.subtitle') }}</p>
           </div>
         </div>
         <div
@@ -86,7 +87,6 @@
       <el-button
         v-show="showTocFab"
         class="manual-toc-fab"
-        type="primary"
         round
         :aria-label="t('operationManual.backToToc')"
         @click="scrollToToc"
@@ -282,36 +282,43 @@ function handlePrint() {
 .manual-home {
   display: flex;
   height: 100vh;
-  background: #f0f2f5;
+  background: linear-gradient(180deg, #eef0ff 0%, #f6f7fb 220px, #f6f7fb 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ---------- サイドバー ---------- */
 .manual-sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 248px;
+  min-width: 248px;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #1e1b4b 0%, #312e81 40%, #3730a3 100%);
+  background: linear-gradient(180deg, #1e1b4b 0%, #312e81 45%, #3730a3 100%);
   color: #e0e7ff;
-  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.18);
+  box-shadow: 2px 0 12px rgba(15, 23, 42, 0.16);
   z-index: 1;
 }
 
 .manual-sidebar__header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 20px 18px;
+  gap: 10px;
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .manual-sidebar__logo {
-  color: #a5b4fc;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .manual-sidebar__title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
 }
@@ -319,53 +326,73 @@ function handlePrint() {
 .manual-sidebar__nav {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 10px 16px;
+  padding: 8px 8px 10px;
 }
 
 .manual-sidebar__group + .manual-sidebar__group {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .manual-sidebar__group-title {
-  margin: 0 0 6px;
-  padding: 0 8px 6px;
-  font-size: 11px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 4px 8px;
+  font-size: 10.5px;
+  font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: none;
-  color: rgba(199, 210, 254, 0.75);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c7d2fe;
+}
+
+.manual-sidebar__group-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a5b4fc;
 }
 
 .manual-sidebar__item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  margin-bottom: 4px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 6px 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-  color: rgba(224, 231, 255, 0.85);
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: rgba(224, 231, 255, 0.88);
+  border: 1px solid transparent;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.manual-sidebar__item .el-icon {
+  flex-shrink: 0;
+  color: #a5b4fc;
 }
 
 .manual-sidebar__item:hover {
+  color: #fff;
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  transform: translateX(2px);
 }
 
-.manual-sidebar__item--active {
-  background: rgba(99, 102, 241, 0.35);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(165, 180, 252, 0.3);
-}
-
+.manual-sidebar__item--active,
 .manual-sidebar__item--active:hover {
-  background: rgba(99, 102, 241, 0.45);
+  color: #3730a3;
+  font-weight: 700;
+  background: #fff;
+  border-color: #fff;
+  box-shadow:
+    inset 0 -2px 0 rgba(79, 70, 229, 0.16),
+    0 3px 8px -4px rgba(15, 23, 42, 0.5);
+}
+
+.manual-sidebar__item--active .el-icon {
+  color: #4f46e5;
 }
 
 .manual-sidebar__item-text {
@@ -380,74 +407,53 @@ function handlePrint() {
 
 .manual-sidebar__pdf-tag {
   flex-shrink: 0;
-  padding: 1px 6px;
+  padding: 0 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fde68a;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 16px;
   letter-spacing: 0.04em;
+  color: #92400e;
+  background: #fde68a;
 }
 
 .manual-sidebar__footer {
-  padding: 14px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.manual-sidebar__footer .el-button {
+.manual-sidebar__footer .manual-sidebar__print-btn {
+  --k-rgb: 79 70 229;
   flex: 1;
-  border-radius: 8px;
+  height: 30px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #3730a3;
+  border: 1px solid #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
 }
 
+.manual-sidebar__footer .manual-sidebar__print-btn:hover,
+.manual-sidebar__footer .manual-sidebar__print-btn:focus-visible {
+  color: #312e81;
+  border-color: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #e0e7ff 100%);
+}
+
+.manual-sidebar__print-btn .el-icon {
+  margin-right: 4px;
+}
+
+/* ---------- 本文 ---------- */
 .manual-content {
   position: relative;
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 28px 36px;
+  padding: 14px 18px;
   scroll-behavior: smooth;
-}
-
-.manual-toc-fab {
-  position: fixed;
-  right: 36px;
-  bottom: 28px;
-  z-index: 20;
-  height: 44px;
-  padding: 0 18px;
-  border-radius: 22px;
-  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.35), 0 2px 8px rgba(15, 23, 42, 0.12);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.manual-toc-fab .el-icon {
-  margin-right: 6px;
-  font-size: 16px;
-}
-
-.manual-toc-fab__label {
-  font-size: 13px;
-}
-
-@media (max-width: 768px) {
-  .manual-toc-fab {
-    right: 16px;
-    bottom: 16px;
-    padding: 0 14px;
-  }
-
-  .manual-toc-fab__label {
-    font-size: 12px;
-  }
-}
-
-@media print {
-  .manual-toc-fab {
-    display: none !important;
-  }
 }
 
 .manual-content__loading {
@@ -455,7 +461,7 @@ function handlePrint() {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 60px 10px;
+  padding: 40px 10px;
   color: #475569;
   font-size: 14px;
 }
@@ -464,63 +470,249 @@ function handlePrint() {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid rgba(64, 158, 255, 0.25);
-  border-top-color: rgba(64, 158, 255, 0.95);
+  border: 2px solid rgba(79, 70, 229, 0.2);
+  border-top-color: #4f46e5;
   animation: mc-spin 1s linear infinite;
 }
 
 @keyframes mc-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .manual-content__error {
-  padding: 40px 20px;
+  padding: 32px 20px;
   text-align: center;
   color: #64748b;
 }
 
 .manual-content__header {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 36%, #4f46e5 66%, #2563eb 100%);
+  box-shadow: 0 8px 20px -12px rgba(49, 46, 129, 0.5);
 }
 
 .manual-content__title-badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(64, 158, 255, 0.1);
-  border: 1px solid rgba(64, 158, 255, 0.18);
-  color: #409eff;
-  flex-shrink: 0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.manual-content__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .manual-content__title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 750;
-  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #fff;
 }
 
 .manual-content__subtitle {
-  margin: 3px 0 0;
-  font-size: 13px;
-  color: #64748b;
+  margin: 0;
+  color: rgba(224, 231, 255, 0.92);
+}
+
+.manual-content__kind {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #92400e;
+  background: #fff;
+  box-shadow: inset 0 -2px 0 rgba(217, 119, 6, 0.18);
 }
 
 .manual-content__body {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 16px;
-  padding: 24px 28px;
-  line-height: 1.8;
-  color: #0f172a;
+  position: relative;
+  overflow: hidden;
+  padding: 14px 20px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 6px 18px -12px rgba(49, 46, 129, 0.25);
+  line-height: 1.7;
+  color: #1e293b;
   font-size: 14px;
+}
+
+.manual-content__body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4f46e5, #2563eb);
+}
+
+/* Markdown の余白をこのページだけ詰める */
+.manual-content__body.help-content > :deep(:first-child) {
+  margin-top: 0;
+}
+
+.manual-content__body.help-content :deep(p) {
+  margin: 0 0 8px;
+}
+
+.manual-content__body.help-content :deep(h1),
+.manual-content__body.help-content :deep(h2) {
+  margin: 16px 0 8px;
+  padding: 4px 10px;
+  font-size: 16px;
+  color: #312e81;
+  border-left: 4px solid #4f46e5;
+  border-radius: 0 8px 8px 0;
+  background: linear-gradient(90deg, #eef2ff 0%, rgba(238, 242, 255, 0) 80%);
+}
+
+.manual-content__body.help-content :deep(h3),
+.manual-content__body.help-content :deep(h4) {
+  margin: 12px 0 6px;
+  padding-left: 8px;
+  font-size: 14px;
+  color: #3730a3;
+  border-left: 3px solid #a5b4fc;
+}
+
+.manual-content__body.help-content :deep(ul),
+.manual-content__body.help-content :deep(ol) {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+.manual-content__body.help-content :deep(li) {
+  margin: 2px 0;
+}
+
+.manual-content__body.help-content :deep(li::marker) {
+  color: #6366f1;
+}
+
+.manual-content__body.help-content :deep(blockquote) {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 4px solid #6366f1;
+  background: #f5f7ff;
+  border-radius: 8px;
+}
+
+.manual-content__body.help-content :deep(blockquote > :last-child) {
+  margin-bottom: 0;
+}
+
+.manual-content__body.help-content :deep(hr) {
+  margin: 12px 0;
+  border-top-color: #e2e8f0;
+}
+
+.manual-content__body.help-content :deep(table) {
+  margin: 8px 0 10px;
+  border-radius: 8px;
+}
+
+.manual-content__body.help-content :deep(th),
+.manual-content__body.help-content :deep(td) {
+  padding: 6px 10px;
+  border-color: #e2e8f0;
+}
+
+.manual-content__body.help-content :deep(th) {
+  color: #312e81;
+  background: #eef2ff;
+}
+
+.manual-content__body.help-content :deep(tr:nth-child(even) td) {
+  background: #fafbff;
+}
+
+.manual-content__body.help-content :deep(img) {
+  margin: 4px 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px -6px rgba(2, 6, 23, 0.25);
+}
+
+.manual-content__body.help-content :deep(code) {
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 6px;
+}
+
+.manual-toc-fab {
+  --k-rgb: 79 70 229;
+  position: fixed;
+  right: 28px;
+  bottom: 22px;
+  z-index: 20;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border: 1px solid #3730a3;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.manual-toc-fab:hover,
+.manual-toc-fab:focus-visible {
+  color: #fff;
+  border-color: #312e81;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
+    linear-gradient(135deg, #818cf8, #4f46e5);
+}
+
+.manual-toc-fab .el-icon {
+  margin-right: 6px;
+  font-size: 15px;
+}
+
+.manual-toc-fab__label {
+  font-size: 12px;
+}
+
+.manual-print-area {
+  width: 100%;
+}
+
+.manual-print-area--pdf {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 28px);
+}
+
+.manual-pdf {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+  background: #fff;
 }
 
 @media (max-width: 768px) {
@@ -533,26 +725,46 @@ function handlePrint() {
     max-height: 200px;
   }
   .manual-content {
-    padding: 16px;
+    padding: 10px;
+  }
+  .manual-toc-fab {
+    right: 16px;
+    bottom: 16px;
+    padding: 0 14px;
   }
 }
 
-.manual-print-area {
-  width: 100%;
-}
+@media print {
+  .manual-toc-fab {
+    display: none !important;
+  }
 
-.manual-print-area--pdf {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 56px);
-}
+  .manual-content__header {
+    color: #0f172a !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border-bottom: 2px solid #4f46e5;
+    border-radius: 0 !important;
+  }
 
-.manual-pdf {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 16px;
-  background: #fff;
+  .manual-content__fx,
+  .manual-content__kind {
+    display: none !important;
+  }
+
+  .manual-content__title-badge {
+    color: #4f46e5;
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
+
+  .manual-content__title,
+  .manual-content__subtitle {
+    color: #0f172a !important;
+  }
+
+  .manual-content__body::before {
+    display: none;
+  }
 }
 </style>
