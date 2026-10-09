@@ -468,7 +468,6 @@ export interface FileWatcherSettings {
   materialFiles: string[]
   pickingFiles: string[]
   enabled: Record<string, boolean>
-  excelWatcherEnabled: boolean
 }
 
 /** ファイル監視の有効/無効一覧取得 */
@@ -478,11 +477,8 @@ export function getFileWatcherSettings(): Promise<FileWatcherSettings> {
 }
 
 /** ファイル監視の有効/無効を保存 */
-export function updateFileWatcherSettings(payload: {
-  enabled: Record<string, boolean>
-  excelWatcherEnabled?: boolean
-}) {
-  return request.put<{ message: string; enabled: Record<string, boolean>; excelWatcherEnabled: boolean }>(
+export function updateFileWatcherSettings(payload: { enabled: Record<string, boolean> }) {
+  return request.put<{ message: string; enabled: Record<string, boolean> }>(
     `${SETTINGS_BASE}/file-watcher`,
     payload
   )

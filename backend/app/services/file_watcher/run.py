@@ -20,11 +20,6 @@ from app.services.file_watcher.sync_services import (
     MATERIAL_CUTTING_CSV_BASENAME,
     run_picking_sync_and_refresh_matched,
 )
-from app.services.file_watcher.excel_processor import (
-    ExcelProcessor,
-    EXCEL_FILES,
-    is_excel_target_file,
-)
 from app.services.file_watcher.inspection_excel_processor import (
     InspectionExcelProcessor,
     is_inspection_excel_file,
@@ -53,7 +48,6 @@ from app.services.file_watcher.plating_production_indicator_sync import sync_pla
 from app.services.file_watcher.utils import wait_for_file_stable
 from app.services.file_watcher.enabled_config import (
     is_file_enabled,
-    is_excel_watcher_enabled,
     is_inspection_excel_watcher_enabled,
     is_inspection_management_sync_enabled,
     is_welding_excel_watcher_enabled,
@@ -137,70 +131,9 @@ def _norm_path(value):
     return os.path.normpath(s) if s else ""
 
 
-def _get_watch_paths():
-    """
-    (csv_path, excel_path) を返す。
-    CSV: FILE_WATCH_BASE_PATH（受信 CSV/材料）。
-    Excel: FILE_WATCH_EXCEL_BASE_PATH。未設定なら CSV と同じ。
-    """
-    csv_path = _norm_path(os.environ.get("FILE_WATCH_BASE_PATH") or getattr(settings, "FILE_WATCH_BASE_PATH", None))
-    excel_path = _norm_path(os.environ.get("FILE_WATCH_EXCEL_BASE_PATH") or getattr(settings, "FILE_WATCH_EXCEL_BASE_PATH", None))
-    if not excel_path:
-        excel_path = csv_path
-    return csv_path, excel_path
-
-
-def _scan_excel_files_at_startup(base_path, task_queue):
-    """起動時にディレクトリをスキャンし、監視対象の Excel ファイルを一覧（パス・ファイル名の確認用）"""
-    try:
-        names = os.listdir(base_path)
-    except OSError as e:
-        logger.warning("起動時にディレクトリを一覧できません %s: %s", base_path, e)
-        return
-    found = [n for n in names if is_excel_target_file(n)]
-    if found:
-        logger.info("📑 ディレクトリ内の Excel 計画ファイル %s 件: %s", len(found), ", ".join(sorted(found)[:5]) + (" ..." if len(found) > 5 else ""))
-    else:
-        xlsm = [n for n in names if n.endswith(".xlsm")]
-        logger.warning("📑 24 種類の計画ファイルは見つかりませんでした。ディレクトリ内の .xlsm: %s", xlsm[:10] if xlsm else "なし")
-
-
-def _excel_polling_loop(base_path, task_queue, poll_interval, stop_event, in_queue_filenames):
-    """Excel 用ポーリングスレッド：mtime で変更検知（ネットワークドライブで watchdog が反応しない場合用）；キュー重複防止"""
-    last_mtime = {}
-    while not stop_event.is_set():
-        try:
-            stop_event.wait(timeout=poll_interval)
-            if stop_event.is_set():
-                break
-            try:
-                names = os.listdir(base_path)
-            except OSError:
-                continue
-            for name in names:
-                if not is_excel_target_file(name):
-                    continue
-                if name in in_queue_filenames:
-                    continue
-                path = os.path.join(base_path, name)
-                if not os.path.isfile(path):
-                    continue
-                try:
-                    mtime = os.path.getmtime(path)
-                except OSError:
-                    continue
-                key = os.path.normpath(path)
-                prev = last_mtime.get(key)
-                last_mtime[key] = mtime
-                if prev is not None and mtime > prev:
-                    logger.info("Excel 轮询检测到变更，已入队: %s", name)
-                    in_queue_filenames.add(name)
-                    try:
-                        task_queue.put((path, name))
-                    except Exception:
-                        in_queue_filenames.discard(name)
-        except Exception as e:
-            logger.debug("Excel 轮询异常: %s", e)
+def _get_csv_watch_path():
+    """CSV 受信ディレクトリ（FILE_WATCH_BASE_PATH）"""
+    return _norm_path(os.environ.get("FILE_WATCH_BASE_PATH") or getattr(settings, "FILE_WATCH_BASE_PATH", None))
 
 
 def _get_inspection_excel_path():
@@ -744,8 +677,7 @@ def _safe_getmtime(path):
 
 
 def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, excel_lock):
-    """生産計画 Excel 専用ワーカー；同一 Excel は 1 ワーカーのみ処理"""
-    excel_processor = ExcelProcessor()
+    """管理指標 Excel 専用ワーカー；同一 Excel は 1 ワーカーのみ処理"""
     inspection_processor = InspectionExcelProcessor()
     while True:
         try:
@@ -867,8 +799,6 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
                         mgmt_result.parsed,
                         filename,
                     )
-            elif is_excel_target_file(filename):
-                excel_processor.process_file(filepath)
             else:
                 logger.warning("[Excel] 未対応ファイルのためスキップ: %s", filename)
             processed_ok = True
@@ -904,8 +834,8 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
 
 
 def run_watcher():
-    """ファイル監視サービスを起動：CSV 受信ディレクトリと生産計画 Excel ディレクトリを同時監視（別々に指定可）"""
-    csv_path, excel_path = _get_watch_paths()
+    """ファイル監視サービスを起動：CSV 受信ディレクトリと各管理指標 Excel を監視"""
+    csv_path = _get_csv_watch_path()
     if not csv_path:
         entries_fb = settings.get_material_receiving_csv_entries()
         if entries_fb:
@@ -924,16 +854,12 @@ def run_watcher():
     if not os.path.exists(csv_path):
         logger.error("❌ CSV 監視パスが存在しません: %s", csv_path)
         return
-    if excel_path and excel_path != csv_path and not os.path.exists(excel_path):
-        logger.error("❌ Excel 監視パスが存在しません: %s", excel_path)
-        return
     inspection_excel_path = _get_inspection_excel_path()
     welding_excel_path = _get_welding_excel_path()
     cutting_excel_path = _get_cutting_excel_path()
     forming_excel_path = _get_forming_excel_path()
     chamfering_excel_path = _get_chamfering_excel_path()
     plating_excel_path = _get_plating_excel_path()
-    excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     inspection_watcher_enabled = (
         os.environ.get("DISABLE_INSPECTION_EXCEL_WATCHER", "").strip().lower() != "true"
     ) and is_inspection_excel_watcher_enabled()
@@ -952,17 +878,16 @@ def run_watcher():
     plating_watcher_enabled = (
         os.environ.get("DISABLE_PLATING_EXCEL_WATCHER", "").strip().lower() != "true"
     ) and is_plating_excel_watcher_enabled()
-    excel_queue_needed = excel_watcher_enabled or (
-        inspection_watcher_enabled and bool(inspection_excel_path)
-    ) or (welding_watcher_enabled and bool(welding_excel_path)) or (
-        cutting_watcher_enabled and bool(cutting_excel_path)
-    ) or (forming_watcher_enabled and bool(forming_excel_path)) or (chamfering_watcher_enabled and bool(chamfering_excel_path)) or (plating_watcher_enabled and bool(plating_excel_path))
+    excel_queue_needed = (
+        (inspection_watcher_enabled and bool(inspection_excel_path))
+        or (welding_watcher_enabled and bool(welding_excel_path))
+        or (cutting_watcher_enabled and bool(cutting_excel_path))
+        or (forming_watcher_enabled and bool(forming_excel_path))
+        or (chamfering_watcher_enabled and bool(chamfering_excel_path))
+        or (plating_watcher_enabled and bool(plating_excel_path))
+    )
     logger.info("🚀 ファイル監視サービスを起動しています...")
     logger.info("📂 CSV 受信監視パス: %s", csv_path)
-    if excel_path and excel_path != csv_path:
-        logger.info("📂 Excel 計画監視パス: %s", excel_path)
-    else:
-        logger.info("📂 Excel 計画与 CSV 共用路径")
     if inspection_excel_path:
         logger.info("📂 検査管理指標 Excel パス: %s", inspection_excel_path)
         if _inspection_mgmt_sync_enabled():
@@ -1007,12 +932,11 @@ def run_watcher():
     )
     cutting_csv_display = os.path.basename(settings.get_material_cutting_csv_path()) or MATERIAL_CUTTING_CSV_BASENAME
     logger.info(
-        "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s、溶接管理指標 %s、切断管理指標 %s、成形管理指標 %s、面取管理指標 %s、メッキ管理指標 %s",
+        "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、検査管理指標 %s、溶接管理指標 %s、切断管理指標 %s、成形管理指標 %s、面取管理指標 %s、メッキ管理指標 %s",
         len(STOCK_FILES),
         len(MATERIAL_FILES),
         cutting_csv_display,
         len(PICKING_FILES),
-        len(EXCEL_FILES),
         "有効" if (inspection_watcher_enabled and inspection_excel_path) else "未設定/無効",
         "有効" if (welding_watcher_enabled and welding_excel_path) else "未設定/無効",
         "有効" if (cutting_watcher_enabled and cutting_excel_path) else "未設定/無効",
@@ -1020,8 +944,6 @@ def run_watcher():
         "有効" if (chamfering_watcher_enabled and chamfering_excel_path) else "未設定/無効",
         "有効" if (plating_watcher_enabled and plating_excel_path) else "未設定/無効",
     )
-    if not excel_watcher_enabled:
-        logger.info("📌 Excel 計画監視は無効です（環境変数またはシステム設定）")
     if inspection_excel_path and not inspection_watcher_enabled:
         logger.info("📌 検査管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
     if welding_excel_path and not welding_watcher_enabled:
@@ -1034,8 +956,6 @@ def run_watcher():
         logger.info("📌 面取管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
     if plating_excel_path and not plating_watcher_enabled:
         logger.info("📌 メッキ管理指標 Excel 監視は無効です（環境変数またはシステム設定）")
-    if excel_watcher_enabled and excel_path:
-        _scan_excel_files_at_startup(excel_path, None)
 
     csv_task_queue = queue.Queue()
     excel_task_queue = queue.Queue()
@@ -1068,7 +988,6 @@ def run_watcher():
     handler = UnifiedHandler(
         csv_task_queue=csv_task_queue,
         excel_task_queue=excel_task_queue,
-        excel_watcher_enabled=excel_watcher_enabled,
         inspection_watcher_enabled=inspection_watcher_enabled,
         inspection_excel_path=inspection_excel_path,
         welding_watcher_enabled=welding_watcher_enabled,
@@ -1086,53 +1005,49 @@ def run_watcher():
     )
     observer = PollingObserver(timeout=POLL_INTERVAL)
     observer.schedule(handler, csv_path, recursive=False)
-    if excel_path and excel_path != csv_path:
-        observer.schedule(handler, excel_path, recursive=False)
     if inspection_excel_path:
         inspection_dir = os.path.dirname(inspection_excel_path)
-        if inspection_dir and inspection_dir not in (csv_path, excel_path):
+        if inspection_dir and inspection_dir != csv_path:
             try:
                 observer.schedule(handler, inspection_dir, recursive=False)
             except Exception as e:
                 logger.warning("検査管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     if welding_excel_path:
         welding_dir = os.path.dirname(welding_excel_path)
-        if welding_dir and welding_dir not in (csv_path, excel_path):
+        if welding_dir and welding_dir != csv_path:
             try:
                 observer.schedule(handler, welding_dir, recursive=False)
             except Exception as e:
                 logger.warning("溶接管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     if cutting_excel_path:
         cutting_dir = os.path.dirname(cutting_excel_path)
-        if cutting_dir and cutting_dir not in (csv_path, excel_path):
+        if cutting_dir and cutting_dir != csv_path:
             try:
                 observer.schedule(handler, cutting_dir, recursive=False)
             except Exception as e:
                 logger.warning("切断管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     if forming_excel_path:
         forming_dir = os.path.dirname(forming_excel_path)
-        if forming_dir and forming_dir not in (csv_path, excel_path):
+        if forming_dir and forming_dir != csv_path:
             try:
                 observer.schedule(handler, forming_dir, recursive=False)
             except Exception as e:
                 logger.warning("成形管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     if chamfering_excel_path:
         chamfering_dir = os.path.dirname(chamfering_excel_path)
-        if chamfering_dir and chamfering_dir not in (csv_path, excel_path):
+        if chamfering_dir and chamfering_dir != csv_path:
             try:
                 observer.schedule(handler, chamfering_dir, recursive=False)
             except Exception as e:
                 logger.warning("面取管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     if plating_excel_path:
         plating_dir = os.path.dirname(plating_excel_path)
-        if plating_dir and plating_dir not in (csv_path, excel_path):
+        if plating_dir and plating_dir != csv_path:
             try:
                 observer.schedule(handler, plating_dir, recursive=False)
             except Exception as e:
                 logger.warning("メッキ管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     watched_roots = {os.path.normpath(csv_path)}
-    if excel_path:
-        watched_roots.add(os.path.normpath(excel_path))
     if inspection_excel_path:
         idir = os.path.dirname(inspection_excel_path)
         if idir:
@@ -1209,19 +1124,6 @@ def run_watcher():
         cutting_csv_display,
         POLL_INTERVAL,
     )
-    if excel_watcher_enabled and excel_path:
-        excel_poll_thread = threading.Thread(
-            target=_excel_polling_loop,
-            args=(
-                excel_path,
-                excel_task_queue,
-                POLL_INTERVAL,
-                stop_polling,
-                in_queue_excel_filenames,
-            ),
-            daemon=True,
-        )
-        excel_poll_thread.start()
     if inspection_watcher_enabled and inspection_excel_path:
         inspection_poll_thread = threading.Thread(
             target=_inspection_excel_polling_loop,
@@ -1384,10 +1286,7 @@ def run_watcher():
                 "⚠️ メッキ管理指標 Excel は起動時に未検出（ネットワーク復旧後に自動監視）: %s",
                 plating_excel_path,
             )
-    if excel_watcher_enabled and excel_path:
-        logger.info("✅ ポーリング開始（Watchdog + Excel mtime）、ファイル変更を待機中...")
-    else:
-        logger.info("✅ ポーリング開始、ファイル変更を待機中...")
+    logger.info("✅ ポーリング開始、ファイル変更を待機中...")
     try:
         while True:
             time.sleep(1)
@@ -1412,7 +1311,7 @@ def start_file_watcher_background() -> None:
         if _file_watcher_bg_started:
             logger.info("ファイル監視バックグラウンドは既に起動済みのためスキップします")
             return
-        csv_path, _ = _get_watch_paths()
+        csv_path = _get_csv_watch_path()
         if not csv_path:
             entries_fb = settings.get_material_receiving_csv_entries()
             if entries_fb:

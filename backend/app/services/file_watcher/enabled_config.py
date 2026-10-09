@@ -36,20 +36,18 @@ def _read_raw() -> dict:
 
 
 def get_enabled() -> dict:
-    """{ "StockIn.csv": True, ..., "PickingLog.csv": True, "excel_watcher_enabled": True } を返す。未設定は True"""
+    """{ "StockIn.csv": True, ..., "PickingLog.csv": True } を返す。未設定は True"""
     raw = _read_raw()
     result = {}
     for name in _ALL_FILE_NAMES:
         result[name] = raw.get(name, True)
-    result["excel_watcher_enabled"] = raw.get("excel_watcher_enabled", True)
     return result
 
 
-def set_enabled(enabled: dict, excel_watcher_enabled: bool = True) -> None:
-    """有効設定を書き込む（STOCK + MATERIAL + PICKING のキーと excel_watcher_enabled）"""
+def set_enabled(enabled: dict) -> None:
+    """有効設定を書き込む（STOCK + MATERIAL + PICKING のキー）"""
     all_names = set(STOCK_FILES) | set(MATERIAL_FILES) | set(PICKING_FILES) | {MATERIAL_CUTTING_CSV_BASENAME}
     to_save = {k: bool(v) for k, v in enabled.items() if k in all_names}
-    to_save["excel_watcher_enabled"] = bool(excel_watcher_enabled)
     _ENABLED_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(_ENABLED_JSON, "w", encoding="utf-8") as f:
         json.dump(to_save, f, ensure_ascii=False, indent=2)
@@ -59,12 +57,6 @@ def is_file_enabled(filename: str) -> bool:
     """監視プロセス用：そのファイル名が有効か（未設定・キーなしは True）"""
     raw = _read_raw()
     return raw.get(filename, True)
-
-
-def is_excel_watcher_enabled() -> bool:
-    """Excel 計画監視が有効か（未設定は True）。環境変数 DISABLE_EXCEL_WATCHER は run 側で別途参照。"""
-    raw = _read_raw()
-    return raw.get("excel_watcher_enabled", True)
 
 
 def is_inspection_excel_watcher_enabled() -> bool:

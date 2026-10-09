@@ -108,11 +108,11 @@ class Settings(BaseSettings):
     # SQL ログ（有効だと起動・処理が重くなるため、デバッグ時のみ True 推奨）
     SQL_ECHO: bool = False
 
-    # ファイル監視：CSV 受信 + 生産計画 Excel（2 ディレクトリを別々に指定可）
+    # ファイル監視：CSV 受信 + 各管理指標 Excel
     FILE_WATCH_BASE_PATH: str = ""  # CSV 受信ディレクトリ（いずれか必須）
     # True: FastAPI 起動時に run_file_watcher と同等の監視をバックグラウンドスレッドで開始（別途 python run_file_watcher.py 不要）
     FILE_WATCH_START_WITH_API: bool = False
-    FILE_WATCH_EXCEL_BASE_PATH: str = ""  # Excel 計画ディレクトリ（省略時は BASE と共用）
+    FILE_WATCH_EXCEL_BASE_PATH: str = ""  # 未使用（生産計画 Excel 監視は廃止。既存 .env との互換のため残す）
     FILE_WATCH_POLL_INTERVAL: float = 1.0  # ネットワークパスは 1 秒推奨
     FILE_WATCH_DEBOUNCE_SEC: int = 2
     FILE_WATCH_EXCEL_WORKERS: int = 3  # Excel 計画の同時処理数

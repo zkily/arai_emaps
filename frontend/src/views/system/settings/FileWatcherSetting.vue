@@ -8,7 +8,7 @@
         <div class="top-bar__text">
           <h1 class="top-bar__title">ファイル監視設定</h1>
           <p class="top-bar__desc">
-            BT-data 受信 CSV・ピッキングログ・Excel 計画の監視を切り替え
+            BT-data 受信 CSV・ピッキングログの監視を切り替え
           </p>
         </div>
       </div>
@@ -82,26 +82,10 @@
             <p v-else class="empty-hint">定義されたファイルがありません</p>
           </div>
         </section>
-
-        <section class="panel panel--excel">
-          <div class="panel__head">
-            <el-icon class="panel__head-icon" :size="18"><Document /></el-icon>
-            <div class="panel__head-text">
-              <h2 class="panel__title">Excel 計画</h2>
-              <span class="panel__target">加工・溶接 .xlsm → production_plan_*</span>
-            </div>
-          </div>
-          <div class="panel__body">
-            <div class="file-row file-row--single">
-              <span class="file-name file-name--wrap">計画更新・加工状況・操業度の監視</span>
-              <el-switch v-model="excelWatcherEnabled" size="small" />
-            </div>
-          </div>
-        </section>
       </div>
 
       <el-alert type="info" :closable="false" show-icon class="tip">
-        オフにしたファイル／Excel 監視は同期されません。設定は監視プロセスに即時反映されます。
+        オフにしたファイルは同期されません。設定は監視プロセスに即時反映されます。
       </el-alert>
     </el-card>
   </div>
@@ -110,7 +94,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Monitor, Check, Box, CollectionTag, Van, Document } from '@element-plus/icons-vue'
+import { Monitor, Check, Box, CollectionTag, Van } from '@element-plus/icons-vue'
 import { getFileWatcherSettings, updateFileWatcherSettings } from '@/api/system'
 
 const loading = ref(false)
@@ -118,7 +102,6 @@ const saving = ref(false)
 const stockFiles = ref<string[]>([])
 const materialFiles = ref<string[]>([])
 const pickingFiles = ref<string[]>([])
-const excelWatcherEnabled = ref(true)
 const enabled = ref<Record<string, boolean>>({})
 
 async function load() {
@@ -128,7 +111,6 @@ async function load() {
     stockFiles.value = res.stockFiles || []
     materialFiles.value = res.materialFiles || []
     pickingFiles.value = res.pickingFiles || []
-    excelWatcherEnabled.value = res.excelWatcherEnabled !== false
     enabled.value = { ...(res.enabled || {}) }
   } catch (e) {
     ElMessage.error('取得に失敗しました')
@@ -141,10 +123,7 @@ async function load() {
 async function handleSave() {
   saving.value = true
   try {
-    await updateFileWatcherSettings({
-      enabled: enabled.value,
-      excelWatcherEnabled: excelWatcherEnabled.value,
-    })
+    await updateFileWatcherSettings({ enabled: enabled.value })
     ElMessage.success('保存しました')
   } catch (e) {
     ElMessage.error('保存に失敗しました')
@@ -268,10 +247,6 @@ onMounted(load)
   );
   overflow: hidden;
   min-height: 0;
-}
-
-.panel--excel {
-  grid-column: 1 / -1;
 }
 
 .panel__head {
