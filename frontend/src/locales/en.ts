@@ -685,6 +685,7 @@ export default {
     MASTER_UNIT_PRICE: 'Process unit price',
     OPERATION_MANUALS: 'Manual',
     OP_MANUAL_FORMING: 'Forming instruction & actuals',
+    OP_MANUAL_FORMING_INSTRUCTION_ISSUE: 'Forming instruction sheet issuance',
     OP_MANUAL_FORMING_PLANNING: 'Forming production planning',
     OP_MANUAL_WELDING: 'Welding instruction & actuals',
     OP_MANUAL_WELDING_PLANNING: 'Welding production planning',

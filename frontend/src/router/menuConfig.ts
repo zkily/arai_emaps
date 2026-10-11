@@ -259,6 +259,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'OP_MANUAL_INSPECTION_REGISTRATION', name: '検査実績収集登録', icon: 'EditPen', path: '/operation-manuals/inspection-actual-registration', parentCode: 'OPERATION_MANUALS', sortOrder: 9 },
   { code: 'OP_MANUAL_INSPECTION_MONITOR', name: '検査モニタ', icon: 'Monitor', path: '/operation-manuals/inspection-monitor', parentCode: 'OPERATION_MANUALS', sortOrder: 10 },
   { code: 'OP_MANUAL_INSPECTION_PRODUCTIVITY', name: '検査工程 — 生産性分析', icon: 'TrendCharts', path: '/operation-manuals/inspection-productivity', parentCode: 'OPERATION_MANUALS', sortOrder: 11 },
+  { code: 'OP_MANUAL_FORMING_INSTRUCTION_ISSUE', name: '成型指示書発行管理', icon: 'SetUp', path: '/manuals/forming-instruction-issue', parentCode: 'OPERATION_MANUALS', sortOrder: 11.5 },
   { code: 'OP_MANUAL_FORMING_SETUP', name: '成型生産計画段替予定表', icon: 'Document', path: '/manuals/forming-setup-schedule', parentCode: 'OPERATION_MANUALS', sortOrder: 12 },
   { code: 'OP_MANUAL_EQUIPMENT_EFFICIENCY', name: '設備能率管理', icon: 'Odometer', path: '/manuals/equipment-efficiency', parentCode: 'OPERATION_MANUALS', sortOrder: 13 },
   { code: 'OP_MANUAL_MAIN_SCREEN', name: 'メイン画面（ダッシュボード）', icon: 'HomeFilled', path: '/manuals/main-screen', parentCode: 'OPERATION_MANUALS', sortOrder: 13.4 },

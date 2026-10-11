@@ -11,6 +11,11 @@
               <h1 class="page-title pb-hero-title">成型指示書発行管理</h1>
               <span class="page-subtitle pb-hero-desc">生産計画データ管理・指示発行システム</span>
             </div>
+            <el-tooltip content="操作説明を開く" placement="bottom" :show-after="0">
+              <el-icon class="help-icon help-icon--header" :size="18" @click="goHelpPage">
+                <QuestionFilled />
+              </el-icon>
+            </el-tooltip>
           </div>
         </div>
         <div class="page-header-actions">
@@ -876,6 +881,7 @@ import {
   Printer,
   Memo,
   Delete,
+  QuestionFilled,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { getProductList } from '@/api/master/productMaster'
@@ -905,6 +911,10 @@ const props = defineProps<{
 // 表示制御用のフラグ（テンプレートで直接参照）
 const showWorkTimeConfig = props.showWorkTimeConfig !== false
 const compact = props.compact === true
+
+const goHelpPage = () => {
+  window.open('/manuals/forming-instruction-issue', '_blank', 'noopener,noreferrer')
+}
 
 /** API 响应类型（request 拦截器返回 response.data） */
 interface ApiResponse<T = any> {
@@ -9754,6 +9764,23 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
+}
+
+.mi-modern .help-icon--header {
+  color: rgba(255, 255, 255, 0.9) !important;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+.mi-modern .help-icon--header:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.08);
 }
 
 .molding-instruction-container.mi-modern .title-icon {

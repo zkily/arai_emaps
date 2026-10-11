@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>plan-baseline extra</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; color: #0f172a; }
+  .page { width: 1280px; height: 720px; overflow: hidden; page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .app { height: 100%; display: flex; background: #f1f5f9; }
+  .rail { width: 64px; background: #0b1220; display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 10px; }
+  .ico { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: #111827; color: #94a3b8; border: 1px solid #1f2937; }
+  .ico.on { background: linear-gradient(160deg,#14b8a6,#0e7490); color: #fff; border-color: transparent; }
+  .fly { position: absolute; left: 72px; top: 40px; display: flex; z-index: 5; }
+  .panel { width: 210px; background: #111827; color: #e2e8f0; border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,.45); padding: 10px 0; border: 1px solid #1f2937; }
+  .panel h4 { margin: 0 12px 8px; font-size: 12px; color: #94a3b8; }
+  .item { padding: 9px 14px; font-size: 14px; display: flex; justify-content: space-between; }
+  .item.on { background: rgba(13,148,136,.28); color: #fff; }
+  .item.sel { background: rgba(244,63,94,.22); outline: 2px solid #f43f5e; outline-offset: -2px; }
+  .mark { position: absolute; z-index: 8; width: 26px; height: 26px; border-radius: 50%; background: #ef4444; color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .main { flex: 1; padding: 18px; }
+  .ghost { height: 560px; border: 1px dashed #cbd5e1; border-radius: 12px; background: #fff; opacity: .5; }
+  .dlg-wrap { height: 100%; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; }
+  .dlg { width: 440px; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgba(15,23,42,.3); }
+  .dlg-h { padding: 14px 16px; font-weight: 800; background: linear-gradient(135deg,#0d9488,#0e7490); color: #fff; }
+  .dlg-b { padding: 22px 20px; text-align: center; }
+  .bar { height: 12px; border-radius: 99px; background: #e2e8f0; margin-top: 14px; overflow: hidden; }
+  .bar > i { display: block; width: 62%; height: 100%; background: linear-gradient(90deg,#14b8a6,#0d9488); }
+</style>
+</head>
+<body>
+<section class="page">
+  <div class="app">
+    <div class="rail">
+      <div class="ico">🏠</div>
+      <div class="ico on">ERP</div>
+      <div class="ico">MES</div>
+      <div class="ico">APS</div>
+    </div>
+    <div class="main">
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:8px;">メイン画面</div>
+      <div class="ghost"></div>
+    </div>
+  </div>
+  <div class="fly">
+    <div class="panel">
+      <h4>ERP管理メニュー</h4>
+      <div class="item">受注管理</div>
+      <div class="item on">生産管理 <span>›</span></div>
+      <div class="item">在庫管理</div>
+    </div>
+    <div class="panel" style="margin-left:6px;">
+      <h4>生産管理</h4>
+      <div class="item on">生産計画 <span>›</span></div>
+      <div class="item">生産実績</div>
+      <div class="item">生産指標</div>
+    </div>
+    <div class="panel" style="margin-left:6px;">
+      <h4>生産計画</h4>
+      <div class="item">生産データ管理</div>
+      <div class="item sel">計画ベースライン</div>
+      <div class="item">製品工程ガント</div>
+    </div>
+  </div>
+  <div class="mark" style="left:78px;top:22px;">1</div>
+  <div class="mark" style="left:250px;top:108px;">2</div>
+  <div class="mark" style="left:470px;top:88px;">3</div>
+  <div class="mark" style="left:700px;top:118px;">4</div>
+</section>
+<section class="page">
+  <div class="dlg-wrap">
+    <div class="dlg">
+      <div class="dlg-h">レポート生成</div>
+      <div class="dlg-b">
+        <div style="font-size:28px;">📄</div>
+        <p style="font-weight:800;margin:8px 0 4px;">全工程統合レポート（PDF）を生成しています</p>
+        <p style="color:#64748b;font-size:13px;margin:0;">成型</p>
+        <div class="bar"><i></i></div>
+        <div style="margin-top:6px;font-size:12px;color:#0f766e;font-weight:800;">62%</div>
+        <p style="font-size:12px;color:#94a3b8;margin:12px 0 0;">このダイアログは閉じられません。完了後に印刷ダイアログが開きます。</p>
+      </div>
+    </div>
+  </div>
+</section>
+</body>
+</html>

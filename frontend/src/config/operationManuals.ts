@@ -136,6 +136,15 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     pageMenuCode: 'ERP_INVENTORY_SUPPLY_PARTS',
   },
   {
+    slug: 'forming-instruction-issue',
+    menuCode: 'OP_MANUAL_FORMING_INSTRUCTION_ISSUE',
+    pageTitle: '成型指示書発行管理',
+    pdfFile: 'forming-instruction-issue.pdf',
+    sortOrder: 3.5,
+    category: 'pageOperation',
+    pageMenuCode: 'MES_PRODUCTION_INSTR_FORMING',
+  },
+  {
     slug: 'forming-instruction',
     menuCode: 'OP_MANUAL_FORMING',
     pageTitle: '成型工程 生産指示・実績収集',

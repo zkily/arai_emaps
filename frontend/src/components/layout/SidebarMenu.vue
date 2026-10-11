@@ -17,8 +17,8 @@
         :default-active="activeMenu"
         :collapse="true"
         :collapse-transition="false"
-        :show-timeout="60"
-        :hide-timeout="180"
+        :show-timeout="220"
+        :hide-timeout="240"
         :popper-offset="10"
         class="sidebar-el-menu"
         :class="{ 'is-sb-collapsed': isCollapsed }"
@@ -493,26 +493,54 @@ const toggleCollapse = () => {
   box-shadow: none !important;
 }
 
-/* 開閉アニメーション：横スライド + フェード */
+/* 開閉：少し待ってから、フェード + 軽い浮上で柔らかく出す */
+.el-popper.sbm-popper.el-zoom-in-left-enter-active,
+.el-popper.sbm-popper.el-zoom-in-left-leave-active {
+  transform-origin: left center;
+}
 .el-popper.sbm-popper.el-zoom-in-left-enter-active {
-  opacity: 1;
-  transform: none;
-  transform-origin: left top;
   transition:
-    opacity 0.16s ease-out,
-    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.48s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .el-popper.sbm-popper.el-zoom-in-left-leave-active {
-  opacity: 0;
-  transform: translateX(-4px);
   transition:
-    opacity 0.12s ease-in,
-    transform 0.12s ease-in;
+    opacity 0.2s cubic-bezier(0.4, 0, 0.7, 0.2),
+    transform 0.22s cubic-bezier(0.4, 0, 0.7, 0.2);
 }
-.el-popper.sbm-popper.el-zoom-in-left-enter-from {
+.el-popper.sbm-popper.el-zoom-in-left-enter-from,
+.el-popper.sbm-popper.el-zoom-in-left-leave-to {
   opacity: 0;
-  transform: translateX(-10px);
+  transform: translate3d(-12px, 6px, 0) scale(0.96);
 }
+.el-popper.sbm-popper.el-zoom-in-left-enter-to,
+.el-popper.sbm-popper.el-zoom-in-left-leave-from {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+@keyframes sbm-row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-6px, 3px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li {
+  animation: sbm-row-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(1) { animation-delay: 0.04s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(2) { animation-delay: 0.07s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(3) { animation-delay: 0.1s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(4) { animation-delay: 0.13s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(5) { animation-delay: 0.16s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(6) { animation-delay: 0.18s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(7) { animation-delay: 0.2s; }
+.el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li:nth-child(n + 8) { animation-delay: 0.22s; }
 
 .sbm-popper .el-menu--popup {
   min-width: 212px !important;
@@ -693,11 +721,14 @@ const toggleCollapse = () => {
 @media (prefers-reduced-motion: reduce) {
   .el-popper.sbm-popper.el-zoom-in-left-enter-active,
   .el-popper.sbm-popper.el-zoom-in-left-leave-active {
-    transition: opacity 0.1s linear;
+    transition: opacity 0.12s linear;
   }
   .el-popper.sbm-popper.el-zoom-in-left-enter-from,
-  .el-popper.sbm-popper.el-zoom-in-left-leave-active {
+  .el-popper.sbm-popper.el-zoom-in-left-leave-to {
     transform: none;
+  }
+  .el-popper.sbm-popper.el-zoom-in-left-enter-active .el-menu--popup > li {
+    animation: none;
   }
 }
 </style>

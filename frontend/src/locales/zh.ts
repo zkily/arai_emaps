@@ -683,6 +683,7 @@ export default {
     MASTER_UNIT_PRICE: '工序标准成本',
     OPERATION_MANUALS: 'マニュアル',
     OP_MANUAL_FORMING: '成型工程 生产指示与实绩收集',
+    OP_MANUAL_FORMING_INSTRUCTION_ISSUE: '成型指示书发行管理',
     OP_MANUAL_FORMING_PLANNING: '成型工程 计划作成',
     OP_MANUAL_WELDING: '溶接工程 生产指示与实绩收集',
     OP_MANUAL_WELDING_PLANNING: '溶接工程 计划作成',

@@ -575,6 +575,7 @@ export default {
     MASTER_UNIT_PRICE: 'Đơn giá công đoạn',
     OPERATION_MANUALS: 'Manual',
     OP_MANUAL_FORMING: 'Chỉ thị & thực tế công đoạn ép',
+    OP_MANUAL_FORMING_INSTRUCTION_ISSUE: 'Phát hành phiếu chỉ thị ép',
     OP_MANUAL_FORMING_PLANNING: 'Lập kế hoạch sản xuất ép',
     OP_MANUAL_WELDING: 'Chỉ thị & thực tế công đoạn hàn',
     OP_MANUAL_WELDING_PLANNING: 'Lập kế hoạch sản xuất hàn',

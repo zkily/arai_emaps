@@ -684,6 +684,7 @@ export default {
     MASTER_UNIT_PRICE: '工程別標準原価',
     OPERATION_MANUALS: 'マニュアル',
     OP_MANUAL_FORMING: '成型工程 生産指示・実績収集',
+    OP_MANUAL_FORMING_INSTRUCTION_ISSUE: '成型指示書発行管理',
     OP_MANUAL_FORMING_PLANNING: '成型工程 計画作成',
     OP_MANUAL_WELDING: '溶接工程 生産指示・実績収集',
     OP_MANUAL_WELDING_PLANNING: '溶接工程 計画作成',

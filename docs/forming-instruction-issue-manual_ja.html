@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>成型指示書発行管理 操作説明書</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 13mm 16mm;
+    @top-right {
+      content: "成型指示書発行管理 操作説明書";
+      font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+      font-size: 8pt; color: #94a3b8;
+    }
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+      font-size: 9pt; color: #64748b;
+    }
+  }
+  @page :first {
+    margin: 0;
+    @top-right { content: none; }
+    @bottom-center { content: none; }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; color: #0f172a;
+    font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, "Hiragino Sans", sans-serif;
+    font-size: 10.5pt; line-height: 1.65;
+  }
+  h2 { font-size: 17pt; margin: 0; font-weight: 800; color: #0f172a; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 10px; padding-left: 0; list-style: none; }
+  li { margin: 5px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #f1f5f9; color: #334155; font-weight: 700; border-bottom: 1px solid #cbd5e1; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code, .kbd {
+    font-family: Consolas, "Yu Gothic UI", Meiryo, sans-serif;
+    background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px;
+    padding: 1px 6px; font-size: 9pt;
+  }
+
+  /* cover — order-monthly style */
+  .cover {
+    height: 297mm;
+    background: linear-gradient(155deg, #1e3a8a 0%, #1d4ed8 28%, #0e7490 62%, #14b8a6 100%);
+    color: #fff; padding: 28mm 18mm 16mm; page-break-after: always; position: relative; overflow: hidden;
+  }
+  .cover::before, .cover::after {
+    content: ""; position: absolute; border-radius: 50%; background: rgba(255,255,255,0.08);
+  }
+  .cover::before { width: 230mm; height: 230mm; right: -80mm; top: -90mm; }
+  .cover::after { width: 170mm; height: 170mm; left: -55mm; bottom: -45mm; }
+  .cover .inner { position: relative; z-index: 1; }
+  .pill {
+    display: inline-block; border: 1px solid rgba(255,255,255,0.45); background: rgba(255,255,255,0.12);
+    border-radius: 999px; padding: 4px 14px; font-size: 10.5pt; letter-spacing: 0.04em;
+  }
+  .cover h1 { font-size: 30pt; line-height: 1.25; margin: 18mm 0 6mm; font-weight: 800; }
+  .cover .lead { font-size: 12pt; margin: 0 0 12mm; font-weight: 500; }
+  .grid6 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .chip {
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 10px; padding: 8px 12px; font-size: 10.5pt;
+  }
+  .meta3 {
+    position: absolute; left: 18mm; right: 18mm; bottom: 16mm;
+    display: grid; grid-template-columns: 1.3fr 0.8fr 1fr; gap: 10px; z-index: 1;
+  }
+  .meta3 div {
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 12px; padding: 10px 12px; font-size: 10pt;
+  }
+  .meta3 small { display: block; opacity: 0.8; font-size: 8.5pt; }
+  .meta3 b { font-size: 12pt; font-weight: 700; }
+
+  /* chapter head — purple square */
+  .ch {
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 2.5px solid #4f46e5; padding-bottom: 5px; margin: 2px 0 12px;
+    page-break-after: avoid;
+  }
+  .ch .no {
+    width: 28px; height: 28px; border-radius: 8px; background: #4f46e5; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 13pt; flex-shrink: 0;
+  }
+  .sec {
+    border-left: 4px solid #2563eb; padding-left: 10px; margin: 14px 0 8px;
+    color: #1d4ed8; font-size: 12pt; font-weight: 800; page-break-after: avoid;
+  }
+  .step {
+    display: flex; gap: 8px; align-items: flex-start; margin: 6px 0;
+  }
+  .step .n {
+    width: 20px; height: 20px; border-radius: 50%; background: #2563eb; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9pt; font-weight: 800; flex-shrink: 0; margin-top: 2px;
+  }
+  .ui-pill {
+    display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 9pt; font-weight: 700;
+    border: 1px solid transparent; vertical-align: baseline;
+  }
+  .ui-g { background: #ecfdf5; color: #047857; border-color: #86efac; }
+  .ui-b { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+  .ui-y { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+  .ui-i { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; color: #fff;
+    font-size: 8pt; font-weight: 800; vertical-align: middle; margin-right: 2px;
+  }
+  .badge.r { background: #ef4444; }
+  .badge.b { background: #2563eb; }
+
+  .info, .ex, .warn {
+    page-break-inside: avoid; border-radius: 10px; padding: 10px 12px 10px 40px;
+    margin: 10px 0; font-size: 10pt; position: relative;
+  }
+  .info { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .ex { background: #f5f3ff; border: 1px solid #c4b5fd; }
+  .warn { background: #fffbeb; border: 1px solid #fde68a; padding-left: 12px; }
+  .info::before, .ex::before {
+    position: absolute; left: 10px; top: 10px; width: 20px; height: 20px; border-radius: 50%;
+    color: #fff; font-size: 10pt; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .info::before { content: "i"; background: #2563eb; }
+  .ex::before { content: "例"; background: #7c3aed; font-size: 8pt; }
+
+  .toc { page-break-after: always; }
+  .toc-row {
+    display: flex; justify-content: space-between; gap: 12px;
+    border-bottom: 1px dotted #cbd5e1; padding: 5px 0; font-size: 10.5pt;
+  }
+  .toc-row .hint { color: #64748b; font-size: 9pt; white-space: nowrap; }
+  .toc-row .num { color: #4f46e5; font-weight: 800; margin-right: 6px; }
+
+  figure.shot { margin: 8px 0 12px; page-break-inside: avoid; }
+  figcaption { margin-top: 4px; font-size: 8.5pt; color: #475569; text-align: center; }
+  figure.shot img {
+    width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; display: block;
+  }
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="inner">
+    <span class="pill">Smart-EMAPs ／ 製造実行（MES）</span>
+    <h1>成型指示書発行管理<br>操作説明書</h1>
+    <p class="lead">翌日分の成型生産指示書発行から、段取表・設備運行時間・備考設定までを一画面で</p>
+    <div class="grid6">
+      <div class="chip">① 翌日分の指示書発行（設備ごと）</div>
+      <div class="chip">② 生産日・設備・製品で絞り込み</div>
+      <div class="chip">③ 備考編集・占用（技術／保全）確認</div>
+      <div class="chip">④ 段取表プレビュー／印刷</div>
+      <div class="chip">⑤ 設備運行時間・新聞紙・メモ設定</div>
+      <div class="chip">⑥ 日別計画・実績のチャート確認</div>
+    </div>
+  </div>
+  <div class="meta3">
+    <div><small>対象画面</small><b>成型指示書発行管理</b></div>
+    <div><small>版数</small><b>第 2.0 版</b></div>
+    <div><small>作成日</small><b>2026年10月12日</b></div>
+  </div>
+</section>
+
+<section class="toc">
+  <div class="ch"><span class="no">目</span><h2>目次</h2></div>
+  <div class="toc-row"><span><span class="num">1</span>はじめに（画面の目的・用語）</span><span class="hint">できること・用語</span></div>
+  <div class="toc-row"><span><span class="num">2</span>画面を開く</span><span class="hint">MES → 生産指示 → 成型指示</span></div>
+  <div class="toc-row"><span><span class="num">3</span>画面構成</span><span class="hint">領域・操作ボタン</span></div>
+  <div class="toc-row"><span><span class="num">4</span>絞り込み・一覧の見方</span><span class="hint">生産日・備考・占用</span></div>
+  <div class="toc-row"><span><span class="num">5</span>指示書発行</span><span class="hint">翌日設定・プレビュー・印刷</span></div>
+  <div class="toc-row"><span><span class="num">6</span>段取表プレビュー・印刷</span><span class="hint">編集してから／そのまま</span></div>
+  <div class="toc-row"><span><span class="num">7</span>設備運行時間設定</span><span class="hint">17-19／19-21／6-8</span></div>
+  <div class="toc-row"><span><span class="num">8</span>新聞紙設定</span><span class="hint">対象製品・備考表示</span></div>
+  <div class="toc-row"><span><span class="num">9</span>メモ（TODO）</span><span class="hint">追加・完了・削除</span></div>
+  <div class="toc-row"><span><span class="num">10</span>日別計画・実績チャート</span><span class="hint">期間・月切替</span></div>
+  <div class="toc-row"><span><span class="num">11</span>操作権限（製造実行）</span><span class="hint">登録・編集・削除・出力</span></div>
+  <div class="toc-row"><span><span class="num">12</span>メッセージと対処</span><span class="hint">画面に出る文言</span></div>
+  <div class="toc-row"><span><span class="num">13</span>運用上の注意・よくある質問</span><span class="hint">トラブル対応</span></div>
+  <div class="toc-row"><span><span class="num">—</span>文書情報・改訂履歴</span><span class="hint">版数・作成日</span></div>
+  <div class="info">
+    <strong>本書の画面図について</strong><br>
+    画面図は 2026年10月12日 時点の「成型指示書発行管理」およびメニュー操作を基にしています。件数・数量は撮影／説明用の例です。
+    <span class="badge r">1</span>は操作する場所、<span class="badge b">A</span>は画面の領域を示します。<br>
+    現場での指示書交換・PLC／HT・実績照合など工程全体の流れは、マニュアル「成型工程 生産指示・実績収集」を参照してください。
+  </div>
+</section>
+
+<!-- 1 -->
+<div class="ch"><span class="no">1</span><h2>はじめに</h2></div>
+<div class="sec">1-1 画面の目的</div>
+<p>「成型指示書発行管理」は、成型工程の<strong>日次計画を確認し、設備ごとの生産指示書と段取表を発行</strong>する画面です。翌日分の指示書を印刷し、現場へ渡すまでの事務操作をここに集約します。</p>
+<table>
+  <tr><th>できること</th><th>説明</th></tr>
+  <tr><td>計画確認</td><td>生産日・設備・製品で絞り込み、能率・段取時間・備考・占用を一覧で見る</td></tr>
+  <tr><td>指示書発行</td><td>有効な成型設備ごとに 1 ページの指示書を生成し、<strong>A5 横向き・カラー</strong>で印刷する</td></tr>
+  <tr><td>段取表</td><td>編集可能なプレビューから印刷、または編集せずそのまま印刷する</td></tr>
+  <tr><td>設定</td><td>設備運行時間帯、新聞紙をかける対象製品、メモ（TODO）を管理する</td></tr>
+  <tr><td>チャート</td><td>日別の計画合計と実績合計を棒グラフで確認する</td></tr>
+</table>
+
+<div class="sec">1-2 用語</div>
+<table>
+  <tr><th>用語</th><th>意味</th></tr>
+  <tr><td>生産日</td><td>指示・計画の対象日。指示書発行は原則「翌日」を選ぶ</td></tr>
+  <tr><td>指示書</td><td>設備ごとの成型生産指示書。製品 QR、計画数、能率、段取、記入欄を含む</td></tr>
+  <tr><td>段取表</td><td>ライン別の当日／次日の品種・計画数・稼働時間などをまとめた掲示用表</td></tr>
+  <tr><td>占用</td><td>技術使用・保全など、稼働から差し引く時間帯。予告表示もある</td></tr>
+  <tr><td>新聞紙をかける</td><td>対象製品で備考が空のとき、指示書・一覧に自動表示する定型備考</td></tr>
+  <tr><td>能率／段取時間</td><td>計画上の能率（％）と段取に要する分。指示書にも印字される</td></tr>
+</table>
+
+<div class="sec">1-3 運用の流れ</div>
+<div class="step"><span class="n">1</span><div>生産日を<strong>翌日</strong>に合わせ、計画一覧を確認する</div></div>
+<div class="step"><span class="n">2</span><div>必要なら設備・製品で絞り込み、備考を整える</div></div>
+<div class="step"><span class="n">3</span><div><span class="ui-pill ui-g">指示書発行</span> で設備ごとの指示書を印刷し、現場へ配布する</div></div>
+<div class="step"><span class="n">4</span><div>掲示用に <span class="ui-pill ui-b">段取表プレビュー</span> または <span class="ui-pill ui-b">段取表印刷</span> を使う</div></div>
+<div class="step"><span class="n">5</span><div>運行時間・新聞紙・メモは都度メンテナンスする</div></div>
+
+<!-- 2 -->
+<div class="ch pb"><span class="no">2</span><h2>画面を開く</h2></div>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/10_menu.png" alt="サイドバーから成型指示を開く" />
+  <figcaption>図 2-1　サイドバーから開く（MES → 生産指示 → 成型指示）</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>Smart-EMAPs にログインします。</div></div>
+<div class="step"><span class="n">2</span><div>左サイドバーの <span class="kbd">MES</span> アイコンにマウスを置きます（図 2-1 の <span class="badge r">1</span>）。「MES管理メニュー」が開きます。</div></div>
+<div class="step"><span class="n">3</span><div><span class="kbd">生産指示</span> にマウスを置きます（<span class="badge r">2</span>）。</div></div>
+<div class="step"><span class="n">4</span><div><span class="kbd">成型指示</span> をクリックします（<span class="badge r">3</span>）。</div></div>
+<div class="step"><span class="n">5</span><div>画面上部に「成型指示書発行管理」と表示されます。パスは <code>/mes/productionInstruction/forming</code> です。</div></div>
+<div class="info">
+  <strong>メニューに「成型指示」が無いとき</strong><br>
+  ロールにこの画面のメニュー権限がありません。管理者に付与を依頼してください。メニュー名は「成型指示」、画面タイトルは「成型指示書発行管理」です（同じ画面です）。ヘッダー横の <strong>?</strong> から本書を開けます。
+</div>
+
+<!-- 3 -->
+<div class="ch pb"><span class="no">3</span><h2>画面構成</h2></div>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/03_overview.png" alt="成型指示書発行管理 画面全体" />
+  <figcaption>図 3-1　画面全体（ヘッダー・検索バー・計画一覧・日別チャート）</figcaption>
+</figure>
+<table>
+  <tr><th>No</th><th>エリア</th><th>説明</th></tr>
+  <tr><td><span class="badge b">A</span></td><td>タイトル・サマリ</td><td>画面名、計画生産数・稼働設備、<span class="ui-pill ui-i">データ更新</span>、操作説明（?）</td></tr>
+  <tr><td><span class="badge b">B</span></td><td>検索・操作バー</td><td>生産日、設備選択、キーワード、指示書発行・段取表・設定ボタン</td></tr>
+  <tr><td><span class="badge b">C</span></td><td>計画テーブル</td><td>生産日・設備・製品・順位・計画数・能率・段取・備考・占用</td></tr>
+  <tr><td><span class="badge b">D</span></td><td>日別チャート</td><td>計画生産数と実績生産数の棒グラフ（期間・月切替）</td></tr>
+</table>
+
+<div class="sec">3-1 操作ボタン</div>
+<table>
+  <tr><th>No</th><th>ボタン</th><th>動き</th><th>参照</th></tr>
+  <tr><td><span class="badge r">1</span></td><td><span class="ui-pill ui-i">データ更新</span></td><td>計画データを再取得</td><td>第 4 章</td></tr>
+  <tr><td><span class="badge r">2</span></td><td><span class="ui-pill ui-g">指示書発行</span></td><td>設備ごとの指示書を生成し印刷ダイアログを開く</td><td>第 5 章</td></tr>
+  <tr><td><span class="badge r">3</span></td><td><span class="ui-pill ui-b">段取表プレビュー</span></td><td>編集可能な段取表ダイアログを開く</td><td>第 6 章</td></tr>
+  <tr><td><span class="badge r">4</span></td><td><span class="ui-pill ui-b">段取表印刷</span></td><td>編集せずそのまま印刷</td><td>第 6 章</td></tr>
+  <tr><td><span class="badge r">5</span></td><td><span class="ui-pill ui-i">設備運行時間設定</span></td><td>稼働時間帯の設定ダイアログ（表示時）</td><td>第 7 章</td></tr>
+  <tr><td><span class="badge r">6</span></td><td><span class="ui-pill ui-y">新聞紙設定</span></td><td>「新聞紙をかける」対象製品の設定</td><td>第 8 章</td></tr>
+  <tr><td><span class="badge r">7</span></td><td><span class="ui-pill ui-i">メモ</span></td><td>メモ（TODO）ダイアログ（件数バッジ付き）</td><td>第 9 章</td></tr>
+</table>
+<div class="info">
+  <strong>権限が無い場合</strong><br>
+  ボタンは見えていても、製造実行の操作権限が無いと「製造実行の操作権限がありません」と出て処理は始まりません（第 11 章）。
+</div>
+
+<!-- 4 -->
+<div class="ch pb"><span class="no">4</span><h2>絞り込み・一覧の見方</h2></div>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/04_date_filter.png" alt="生産日の絞り込み" />
+  <figcaption>図 4-1　生産日の切替（前日／今日／翌日）</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div><strong>生産日</strong>を日付ピッカー、または <span class="ui-pill ui-i">前日</span> <span class="ui-pill ui-b">今日</span> <span class="ui-pill ui-i">翌日</span> で切り替えます。変更すると一覧が再検索されます。</div></div>
+<div class="step"><span class="n">2</span><div><strong>設備選択</strong>で特定ラインだけに絞り込めます（クリアで全設備）。</div></div>
+<div class="step"><span class="n">3</span><div><strong>製品名・設備名検索</strong>にキーワードを入れると、入力のたびに絞り込みます。</div></div>
+<div class="step"><span class="n">4</span><div><strong>備考</strong>はセルで編集できます。フォーカスを外すか <span class="kbd">Enter</span> で保存（「備考を保存しました」）。</div></div>
+<div class="step"><span class="n">5</span><div><strong>占用</strong>列には技術使用・保全などのタグが出ます。「予告」は事前告知です。</div></div>
+<div class="warn"><strong>注意：</strong> 指示書発行前に、対象日の計画が意図どおりか一覧で確認してください。計画が無い設備は指示書上「生産計画停止」等と出ることがあります。</div>
+
+<!-- 5 -->
+<div class="ch pb"><span class="no">5</span><h2>指示書発行</h2></div>
+<div class="warn"><strong>重要：</strong> ツールチップのとおり、<strong>基本的には翌日の日付を設定してから発行</strong>してください。<span class="ui-pill ui-i">翌日</span> ボタンの利用を推奨します。</div>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/05_issue_btn.png" alt="指示書発行ボタン" />
+  <figcaption>図 5-1　検索バーの <span class="ui-pill ui-g">指示書発行</span>（緑色）</figcaption>
+</figure>
+
+<div class="sec">5-1 手順</div>
+<div class="step"><span class="n">1</span><div>生産日を翌日（または発行対象日）にします。</div></div>
+<div class="step"><span class="n">2</span><div>必要なら設備・キーワードで絞り込みます。</div></div>
+<div class="step"><span class="n">3</span><div><span class="ui-pill ui-g">指示書発行</span> を押します（エクスポート権限が必要）。</div></div>
+<div class="step"><span class="n">4</span><div>プレビューが表示され、<strong>QRコード読み込み中...</strong> のあとブラウザ印刷ダイアログが開きます。</div></div>
+<div class="step"><span class="n">5</span><div>用紙 <strong>A5</strong>・<strong>カラー</strong>・両面はオフを確認して印刷します。右上の × でキャンセルできます。</div></div>
+
+<figure class="shot">
+  <img src="images/forming-instruction-issue/06_issue_preview.png" alt="指示書印刷プレビューと印刷設定" />
+  <figcaption>図 5-2　印刷プレビューと印刷設定（❶カラー ❷A5 ❸両面オフ）</figcaption>
+</figure>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/07_issue_printed.png" alt="成型生産指示書の例" />
+  <figcaption>図 5-3　成型生産指示書（設備ごと 1 ページ）の例</figcaption>
+</figure>
+
+<div class="sec">5-2 指示書に含まれる主な情報</div>
+<table>
+  <tr><th>項目</th><th>説明</th></tr>
+  <tr><td>設備名・設備 CD・生産日</td><td>ヘッダー。集計時間帯（例: 前日15:00〜当日15:00）も表示</td></tr>
+  <tr><td>製品 QR／製品 CD</td><td>現場・HT 等での読取用</td></tr>
+  <tr><td>生産順位・計画数・備考</td><td>当日計画の明細。当日行は強調表示される場合あり</td></tr>
+  <tr><td>記入項目</td><td>勤務時間帯・生産数・記入者・工程チェック欄（手書き用）</td></tr>
+</table>
+<div class="info">対象設備が 0 件のときは「印刷対象の設備がありません」。計画が無い設備は表内に「生産計画停止」等と出ることがあります。</div>
+
+<!-- 6 -->
+<div class="ch pb"><span class="no">6</span><h2>段取表プレビュー・印刷</h2></div>
+<table>
+  <tr><th>ボタン</th><th>用途</th></tr>
+  <tr><td><span class="ui-pill ui-b">段取表プレビュー</span></td><td>編集可能な表を開き、操業度・品種・計画数などを直してから印刷</td></tr>
+  <tr><td><span class="ui-pill ui-b">段取表印刷</span></td><td>編集せず、現在の計画データからそのまま印刷</td></tr>
+</table>
+
+<div class="sec">6-1 段取予定プレビュー（ダイアログ）</div>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/14_setup_preview.png" alt="段取予定プレビューダイアログ" />
+  <figcaption>図 6-1　段取予定プレビュー。<span class="badge r">1</span>編集可能な一覧、<span class="badge r">2</span>印刷／閉じる</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>対象の生産日を合わせます。</div></div>
+<div class="step"><span class="n">2</span><div><span class="ui-pill ui-b">段取表プレビュー</span> を開きます。</div></div>
+<div class="step"><span class="n">3</span><div>ダイアログ上部に生産日・生産計画合計数が表示されます。</div></div>
+<div class="step"><span class="n">4</span><div>表のセル（操業度・能率・生産品種・当日計画数・段取まで・次生産品種・備考など）を必要に応じて編集します。</div></div>
+<div class="step"><span class="n">5</span><div>フッターの <span class="ui-pill ui-b">印刷</span> で出力します。<span class="ui-pill ui-i">閉じる</span> で破棄して閉じます。</div></div>
+<table>
+  <tr><th>窗体の主な列</th><th>説明</th></tr>
+  <tr><td>ライン</td><td>成型ライン番号</td></tr>
+  <tr><td>予定稼働(H)</td><td>予定稼働時間。負荷に応じて色分け</td></tr>
+  <tr><td>操業度</td><td>手入力可（小数 1 桁に整形）</td></tr>
+  <tr><td>生産品種／当日計画数</td><td>当日の品種と数量（複数行可）</td></tr>
+  <tr><td>段取まで(H)</td><td>次段取までの時間目安</td></tr>
+  <tr><td>次生産品種・計画数</td><td>翌日以降（前日15時から）の列グループ</td></tr>
+  <tr><td>備考</td><td>掲示用のメモ</td></tr>
+</table>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/09_setup_sample.png" alt="段取表印刷サンプル" />
+  <figcaption>図 6-2　段取表の印刷イメージ例</figcaption>
+</figure>
+<div class="info">計画データが無いときは「印刷する計画データがありません」。プレビューの変更は印刷用であり、元計画マスタへの自動反映ではありません。</div>
+
+<!-- 7 -->
+<div class="ch pb"><span class="no">7</span><h2>設備運行時間設定</h2></div>
+<p>検索バーの <span class="ui-pill ui-i">設備運行時間設定</span>（表示されている場合）から、設備ごとの稼働時間帯を管理します。チェックした帯は稼働中として扱われます。</p>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/11_work_time.png" alt="設備運行時間設定ダイアログ" />
+  <figcaption>図 7-1　設備運行時間設定。<span class="badge r">1</span>設備追加、<span class="badge r">2</span>一括保存</figcaption>
+</figure>
+<div class="sec">7-1 手順</div>
+<div class="step"><span class="n">1</span><div><span class="ui-pill ui-i">設備運行時間設定</span> を開きます。</div></div>
+<div class="step"><span class="n">2</span><div>一覧で各設備の <strong>17-19時／19-21時／6-8時</strong> をチェックします。</div></div>
+<div class="step"><span class="n">3</span><div><span class="ui-pill ui-b">一括保存</span> で反映します。</div></div>
+<div class="step"><span class="n">4</span><div>未登録設備は <span class="ui-pill ui-b">設備追加</span> で追加ダイアログを開き、設備コードと時間帯を選んで保存します。</div></div>
+<div class="step"><span class="n">5</span><div>不要な行は <span class="ui-pill" style="color:#dc2626;border-color:#fecaca;background:#fef2f2;">削除</span> します（確認後）。</div></div>
+<table>
+  <tr><th>窗体項目</th><th>説明</th></tr>
+  <tr><td>設備CD／設備名</td><td>対象成型設備</td></tr>
+  <tr><td>17-19時</td><td>夕方帯の稼働</td></tr>
+  <tr><td>19-21時</td><td>夜帯の稼働</td></tr>
+  <tr><td>6-8時</td><td>早朝帯の稼働</td></tr>
+  <tr><td>設備追加ダイアログ</td><td>設備コード選択（追加時）、時間帯チェック、保存／キャンセル</td></tr>
+</table>
+<div class="info">MES ルート設定によっては本ボタンが非表示の場合があります。編集・登録・削除には第 11 章の権限が必要です。</div>
+
+<!-- 8 -->
+<div class="ch pb"><span class="no">8</span><h2>新聞紙設定</h2></div>
+<p><span class="ui-pill ui-y">新聞紙設定</span> で、「新聞紙をかける」を備考に自動表示する製品を管理します。</p>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/12_newspaper.png" alt="新聞紙設定ダイアログ" />
+  <figcaption>図 8-1　新聞紙をかける — 対象製品設定。<span class="badge r">1</span>登録一覧と削除</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div><span class="ui-pill ui-y">新聞紙設定</span> を開きます。</div></div>
+<div class="step"><span class="n">2</span><div>製品名を選び <span class="ui-pill ui-b">追加</span> します。</div></div>
+<div class="step"><span class="n">3</span><div>一覧の製品は備考が空のとき「新聞紙をかける」と表示・印字されます。</div></div>
+<div class="step"><span class="n">4</span><div>不要な製品は <span class="ui-pill" style="color:#dc2626;border-color:#fecaca;background:#fef2f2;">削除</span> します。</div></div>
+<div class="ex">手入力の備考がある行は、その内容が優先されます。空のときだけ定型文が出ます。</div>
+
+<!-- 9 -->
+<div class="ch pb"><span class="no">9</span><h2>メモ（TODO）</h2></div>
+<p>メモアイコン（未完了件数バッジ付き）から、画面固有の短い TODO を管理します。</p>
+<figure class="shot">
+  <img src="images/forming-instruction-issue/13_notes.png" alt="メモ（TODO）ダイアログ" />
+  <figcaption>図 9-1　メモ（TODO）。<span class="badge r">1</span>一覧（完了チェック・削除）</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>メモアイコンを開き、短文を入力して <span class="ui-pill ui-b">追加</span>（最大 200 文字）します。</div></div>
+<div class="step"><span class="n">2</span><div>チェックで完了／未完了を切り替えます（完了行は取り消し線）。</div></div>
+<div class="step"><span class="n">3</span><div>不要な行は削除アイコンで消します。</div></div>
+<table>
+  <tr><th>窗体項目</th><th>説明</th></tr>
+  <tr><td>入力欄</td><td>プレースホルダ「簡単なメモを入力（短文）」、文字数 n/200</td></tr>
+  <tr><td>追加</td><td>登録権限が必要。空だと「内容を入力してください」</td></tr>
+  <tr><td>完了チェック</td><td>編集権限。済／未を切替</td></tr>
+  <tr><td>削除</td><td>削除権限</td></tr>
+  <tr><td>未登録</td><td>0 件のときの表示</td></tr>
+</table>
+
+<!-- 10 -->
+<div class="ch pb"><span class="no">10</span><h2>日別計画・実績チャート</h2></div>
+<p>画面下部の「日別計画・実績生産数」で、計画と実績を日付ごとに合計して棒グラフ表示します（図 3-1 の領域 <span class="badge b">D</span>）。</p>
+<div class="step"><span class="n">1</span><div>日付範囲、または <span class="ui-pill ui-i">前月</span> <span class="ui-pill ui-b">今月</span> <span class="ui-pill ui-i">翌月</span> で期間を切り替えます。</div></div>
+<div class="step"><span class="n">2</span><div>計画（濃色）と実績（淡色）が並びます。当日は「今日」印が付く場合があります。</div></div>
+<div class="info">該当期間に数量が無いときは空表示（「該当期間に計画・実績の数量がありません」）になります。</div>
+
+<!-- 11 -->
+<div class="ch pb"><span class="no">11</span><h2>操作権限（製造実行）</h2></div>
+<p>ボタンが見えていても、製造実行の操作権限が無いと「製造実行の操作権限がありません」と出て処理は始まりません。</p>
+<table>
+  <tr><th>権限</th><th>できる操作</th></tr>
+  <tr><td>参照</td><td>画面を開く、一覧・チャートの閲覧、データ更新</td></tr>
+  <tr><td>登録</td><td>メモ追加、新聞紙製品の追加、運行時間の設備追加 など</td></tr>
+  <tr><td>編集</td><td>備考保存、メモ完了切替、運行時間の一括保存 など</td></tr>
+  <tr><td>削除</td><td>メモ削除、新聞紙製品削除、運行時間設定の削除</td></tr>
+  <tr><td>エクスポート</td><td>指示書発行、段取表プレビュー／印刷</td></tr>
+</table>
+
+<!-- 12 -->
+<div class="ch pb"><span class="no">12</span><h2>メッセージと対処</h2></div>
+<table>
+  <tr><th>メッセージ</th><th>意味と対処</th></tr>
+  <tr><td>印刷対象の設備がありません</td><td>対象日・絞り込みで印刷可能設備が 0。日付と設備選択を見直す</td></tr>
+  <tr><td>印刷する計画データがありません</td><td>段取表用の計画が無い。生産日と計画投入を確認</td></tr>
+  <tr><td>QRコード読み込み中...</td><td>プレビュー準備中。完了後に印刷ダイアログが開く</td></tr>
+  <tr><td>印刷に失敗しました／印刷の実行に失敗しました</td><td>ブラウザの印刷許可・プリンタ接続を確認して再実行</td></tr>
+  <tr><td>備考を保存しました</td><td>備考の保存成功</td></tr>
+  <tr><td>備考の保存に失敗しました</td><td>通信または権限。再入力して保存</td></tr>
+  <tr><td>計画データの読み込みに失敗しました</td><td>データ更新を押す。続くときはサーバ／権限を確認</td></tr>
+  <tr><td>製造実行の操作権限がありません</td><td>登録・編集・削除・出力の権限が無い。管理者に依頼</td></tr>
+  <tr><td>製品名を選択してください</td><td>新聞紙設定で未選択のまま追加した</td></tr>
+  <tr><td>この製品名は既に登録されています</td><td>新聞紙対象の重複</td></tr>
+  <tr><td>内容を入力してください</td><td>メモが空</td></tr>
+  <tr><td>追加しました／削除しました</td><td>メモ・新聞紙・運行時間などの成功メッセージ</td></tr>
+</table>
+
+<!-- 13 -->
+<div class="ch pb"><span class="no">13</span><h2>運用上の注意・よくある質問</h2></div>
+<div class="step"><span class="n">1</span><div><strong>指示書は原則「翌日」発行です。</strong> 当日発行が必要なときだけ、生産日を当日に合わせてください。</div></div>
+<div class="step"><span class="n">2</span><div><strong>発行後に計画が変わったら差し替えます。</strong> 再発行した指示書で現場の紙を更新してください。</div></div>
+<div class="step"><span class="n">3</span><div><strong>段取表プレビューの編集は印刷用です。</strong> 元の計画データを直す場合は成型計画画面などで行います。</div></div>
+<div class="step"><span class="n">4</span><div><strong>新聞紙表示は備考が空のときだけです。</strong></div></div>
+<div class="step"><span class="n">5</span><div><strong>工程全体の実績収集は別マニュアルです。</strong> PLC／HT／実績照合は「成型工程 生産指示・実績収集」を参照してください。</div></div>
+<table>
+  <tr><th>質問</th><th>答え</th></tr>
+  <tr><td>特定ラインだけ印刷できますか</td><td>設備選択で絞ってから指示書発行します</td></tr>
+  <tr><td>印刷ダイアログが出ません</td><td>プレビューの × で閉じていないか、ブラウザの印刷ブロックを確認します</td></tr>
+  <tr><td>設備運行時間設定が見えません</td><td>画面設定で非表示の場合があります。管理者に確認してください</td></tr>
+  <tr><td>チャートが空です</td><td>期間内に計画・実績が無いときです。月や日付範囲を変えてください</td></tr>
+  <tr><td>工程全体の手順はどこですか</td><td>マニュアル「成型工程 生産指示・実績収集」を開いてください</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">—</span><h2>文書情報</h2></div>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>文書名</td><td>成型指示書発行管理 操作説明書</td></tr>
+  <tr><td>対象</td><td>MES → 生産指示 → 成型指示</td></tr>
+  <tr><td>画面パス</td><td>/mes/productionInstruction/forming</td></tr>
+  <tr><td>版数</td><td>第 2.0 版</td></tr>
+  <tr><td>作成日</td><td>2026年10月12日</td></tr>
+  <tr><td>スタイル正本</td><td>月受注管理 操作説明書（order-monthly.pdf）に準拠</td></tr>
+  <tr><td>言語</td><td>日本語</td></tr>
+</table>
+
+<div class="ch"><span class="no">—</span><h2>改訂履歴</h2></div>
+<table>
+  <tr><th>日付</th><th>版</th><th>内容</th></tr>
+  <tr><td>2026-10-12</td><td>2.0</td><td>月受注管理と同スタイルで全面改訂。実メニュー／実画面／各ダイアログ（指示書・段取表・運行時間・新聞紙・メモ）の図と詳細説明を追加</td></tr>
+  <tr><td>2026-10-12</td><td>1.0</td><td>初版（様式見直しのため 2.0 に置換）</td></tr>
+</table>
+<p style="font-size:9pt;color:#475569">以上。ボタン名は 2026年10月12日時点の画面表示と一致します。現場交換・実績照合・APS 再計算は関連マニュアルに従ってください。</p>
+
+</body>
+</html>

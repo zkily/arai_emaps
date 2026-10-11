@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>forming-instruction-issue extra shots</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; color: #0f172a; background: #0f172a; }
+  .page { width: 1280px; height: 720px; overflow: hidden; page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .app {
+    height: 100%; display: flex; background: #f1f5f9;
+  }
+  .rail {
+    width: 64px; background: #0b1220; color: #94a3b8;
+    display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 10px;
+  }
+  .rail .ico {
+    width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; background: #111827; border: 1px solid #1f2937;
+  }
+  .rail .ico.on { background: linear-gradient(160deg,#38bdf8,#2563eb); color: #fff; border-color: transparent; }
+  .fly {
+    position: absolute; left: 72px; top: 48px; display: flex; gap: 0; z-index: 5;
+  }
+  .panel {
+    width: 220px; background: #111827; color: #e2e8f0; border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,.45); padding: 10px 0; border: 1px solid #1f2937;
+  }
+  .panel h4 { margin: 0 12px 8px; font-size: 12px; color: #94a3b8; font-weight: 700; }
+  .item { padding: 10px 14px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .item:hover, .item.on { background: rgba(37,99,235,.25); color: #fff; }
+  .item.sel { background: rgba(244,63,94,.22); outline: 2px solid #f43f5e; outline-offset: -2px; }
+  .mark {
+    position: absolute; z-index: 8; width: 26px; height: 26px; border-radius: 50%;
+    color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
+  .r { background: #ef4444; }
+  .main { flex: 1; padding: 18px; background:
+    radial-gradient(700px 320px at 10% 0%, rgba(125,211,252,.25), transparent 60%),
+    linear-gradient(180deg,#eef6ff,#f1f5f9); }
+  .hero {
+    background: linear-gradient(135deg,#0ea5e9,#2563eb 50%,#4f46e5); color: #fff;
+    border-radius: 14px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .hero h1 { margin: 0; font-size: 22px; }
+  .hero p { margin: 4px 0 0; font-size: 12px; opacity: .95; }
+  .stat { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; padding: 6px 12px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { font-size: 11px; opacity: .9; }
+  .card { margin-top: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; box-shadow: 0 8px 20px rgba(15,23,42,.06); }
+  .ctl { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .field { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: 12px; background: #fff; }
+  .btn { border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 12px; border: 1px solid transparent; }
+  .btn-g { background: linear-gradient(180deg,#4ade80,#16a34a); color: #fff; }
+  .btn-b { background: linear-gradient(180deg,#60a5fa,#2563eb); color: #fff; }
+  .btn-y { background: linear-gradient(180deg,#fde68a,#f59e0b); color: #78350f; }
+  .btn-i { background: #e2e8f0; color: #334155; }
+  .btn-s { background: #fff; border-color: #cbd5e1; color: #334155; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+  th { background: #f8fafc; padding: 7px 6px; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 6px; border-bottom: 1px solid #f1f5f9; text-align: center; }
+  td.l { text-align: left; }
+  .dlg-wrap {
+    height: 100%; background: rgba(15,23,42,.45);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .dlg {
+    background: #fff; border-radius: 14px; width: 980px; max-height: 660px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(15,23,42,.35);
+  }
+  .dlg.sm { width: 560px; }
+  .dlg.md { width: 760px; }
+  .dlg-h {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; background: linear-gradient(135deg,#0ea5e9,#2563eb); color: #fff; font-weight: 800;
+  }
+  .dlg-b { padding: 14px 16px; }
+  .dlg-f { padding: 12px 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; }
+  .hint { font-size: 12px; color: #64748b; margin: 0 0 10px; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+  .tag-w { background: #fef3c7; color: #92400e; }
+  .tag-i { background: #e0f2fe; color: #0369a1; }
+  .note-row { display: flex; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+  .note-row.done { color: #94a3b8; text-decoration: line-through; }
+  .input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; width: 100%; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- 10 menu -->
+<section class="page">
+  <div class="app">
+    <div class="rail">
+      <div class="ico">🏠</div>
+      <div class="ico on">MES</div>
+      <div class="ico">ERP</div>
+      <div class="ico">APS</div>
+    </div>
+    <div class="main">
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:8px;">メイン画面（ダッシュボード）</div>
+      <div style="height:520px;border:1px dashed #cbd5e1;border-radius:12px;background:#fff;opacity:.55;"></div>
+    </div>
+  </div>
+  <div class="fly">
+    <div class="panel">
+      <h4>MES管理メニュー</h4>
+      <div class="item">生産実績集計</div>
+      <div class="item on">生産指示 <span>›</span></div>
+      <div class="item">設備・ライン</div>
+    </div>
+    <div class="panel" style="margin-left:6px;">
+      <h4>生産指示</h4>
+      <div class="item">切断指示</div>
+      <div class="item sel">成型指示</div>
+      <div class="item">溶接指示</div>
+      <div class="item">製品ラベル発行</div>
+    </div>
+  </div>
+  <div class="mark r" style="left:78px;top:28px;">1</div>
+  <div class="mark r" style="left:250px;top:118px;">2</div>
+  <div class="mark r" style="left:500px;top:148px;">3</div>
+</section>
+
+<!-- 11 work time -->
+<section class="page"><div class="dlg-wrap">
+  <div class="mark r" style="left:180px;top:90px;">1</div>
+  <div class="dlg md">
+    <div class="dlg-h"><span>設備運行時間設定</span><span style="opacity:.8;font-weight:600;">×</span></div>
+    <div class="dlg-b">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div>
+          <div style="font-weight:800;">稼働時間帯を設定する設備を管理</div>
+          <p class="hint">チェックを入れた時間帯は設備が稼働中として扱われます</p>
+        </div>
+        <button class="btn btn-b">＋ 設備追加</button>
+      </div>
+      <table>
+        <thead><tr><th>設備CD</th><th>設備名</th><th>17-19時</th><th>19-21時</th><th>6-8時</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr><td>FM-001</td><td>成型01</td><td>✓</td><td>✓</td><td></td><td style="color:#dc2626;">削除</td></tr>
+          <tr><td>FM-002</td><td>成型02</td><td>✓</td><td></td><td>✓</td><td style="color:#dc2626;">削除</td></tr>
+          <tr><td>FM-003</td><td>成型03</td><td>✓</td><td>✓</td><td>✓</td><td style="color:#dc2626;">削除</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="dlg-f">
+      <button class="btn btn-s">閉じる</button>
+      <button class="btn btn-b">一括保存</button>
+    </div>
+  </div>
+  <div class="mark r" style="right:210px;bottom:70px;">2</div>
+</div></section>
+
+<!-- 12 newspaper -->
+<section class="page"><div class="dlg-wrap">
+  <div class="dlg sm">
+    <div class="dlg-h"><span>新聞紙をかける — 対象製品設定</span><span>×</span></div>
+    <div class="dlg-b">
+      <p class="hint">登録した製品は、備考が空の場合に「新聞紙をかける」を表示します。</p>
+      <div class="ctl" style="margin-bottom:12px;">
+        <div class="field" style="flex:1;">製品名を選択 ▾</div>
+        <button class="btn btn-b">追加</button>
+      </div>
+      <div class="mark r" style="position:relative;display:inline-flex;margin-bottom:6px;">1</div>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;">
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+          <span>ブラケットA</span><span style="color:#dc2626;font-size:12px;font-weight:700;">削除</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;">
+          <span>カバーB</span><span style="color:#dc2626;font-size:12px;font-weight:700;">削除</span>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-f"><button class="btn btn-s">閉じる</button></div>
+  </div>
+</div></section>
+
+<!-- 13 notes -->
+<section class="page"><div class="dlg-wrap">
+  <div class="dlg sm">
+    <div class="dlg-h"><span>メモ（TODO）</span></div>
+    <div class="dlg-b">
+      <textarea class="input" rows="2" placeholder="簡単なメモを入力（短文）">段取前に金型確認</textarea>
+      <div class="ctl" style="justify-content:flex-end;margin:8px 0 12px;">
+        <span class="hint" style="margin:0;">18/200</span>
+        <button class="btn btn-b">追加</button>
+      </div>
+      <div class="mark r" style="position:relative;display:inline-flex;margin-bottom:6px;">1</div>
+      <div class="note-row"><input type="checkbox" checked /> <span class="done">前日指示書の回収完了</span></div>
+      <div class="note-row"><input type="checkbox" /> <span>段取前に金型確認</span></div>
+      <div class="note-row"><input type="checkbox" /> <span>成型03 保全予告を確認</span></div>
+    </div>
+    <div class="dlg-f"><button class="btn btn-s">閉じる</button></div>
+  </div>
+</div></section>
+
+<!-- 14 setup preview -->
+<section class="page"><div class="dlg-wrap">
+  <div class="dlg" style="width:1180px;">
+    <div class="dlg-h">
+      <span>段取予定プレビュー（編集可）　<small style="font-weight:600;opacity:.9;">生産日 2026-05-21　生産計画合計数 53,079</small></span>
+      <span>×</span>
+    </div>
+    <div class="dlg-b" style="padding-top:10px;">
+      <table>
+        <thead>
+          <tr>
+            <th>ライン</th><th>予定稼働(H)</th><th>操業度</th><th>能率</th><th>生産品種</th><th>当日計画数</th><th>段取まで(H)</th><th>次生産品種</th><th>計画数</th><th>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><span class="tag tag-i">18.5</span></td><td>1.0</td><td>95%</td><td class="l">ブラケットA</td><td>2,400</td><td>6.0</td><td class="l">カバーB</td><td>1,800</td><td class="l">—</td></tr>
+          <tr><td>2</td><td><span class="tag tag-w">20.0</span></td><td>1.1</td><td>98%</td><td class="l">フレームC</td><td>3,100</td><td>4.5</td><td class="l">パネルD</td><td>2,000</td><td class="l">優先</td></tr>
+          <tr><td>3</td><td><span class="tag tag-i">16.0</span></td><td>0.9</td><td>90%</td><td class="l">パネルD</td><td>2,000</td><td>8.0</td><td class="l">ハウジングE</td><td>1,500</td><td class="l">—</td></tr>
+        </tbody>
+      </table>
+      <p class="hint" style="margin-top:8px;">セルは編集可能。編集せず印刷する場合は画面の「段取表印刷」を使用。</p>
+    </div>
+    <div class="dlg-f">
+      <button class="btn btn-b">印刷</button>
+      <button class="btn btn-s">閉じる</button>
+    </div>
+  </div>
+  <div class="mark r" style="left:90px;top:70px;">1</div>
+  <div class="mark r" style="right:120px;bottom:55px;">2</div>
+</div></section>
+
+</body>
+</html>
