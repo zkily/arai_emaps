@@ -20,6 +20,7 @@ from decimal import Decimal
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import ProgrammingError
@@ -40,6 +41,9 @@ from app.modules.master.services.cumulative_cost_service import (
 )
 
 router = APIRouter()
+
+# create_task の戻り値を保持しないと、イベントループの弱参照だけで GC されジョブが queued のまま残る
+_recalc_tasks: set[asyncio.Task] = set()
 
 # マイグレーション未実行時の案内（1146 = テーブル不存在）
 SCHEMA_MIGRATION_HINT = (
@@ -504,10 +508,11 @@ async def start_recalc_job(
                 f"再計算ジョブ用テーブルが未作成です。{SCHEMA_MIGRATION_HINT}",
             ) from e
         raise
-    # セッションを必ずコミットさせてからワーカーを起動するため、
-    # ここでは即座にタスクを投げるが、ワーカー側は独立セッションで再読込する
+    # get_db の commit はレスポンス返却後。先にワーカーを出すと別接続から行が見えず、
+    # 見つからないまま return して status が queued のまま残る。
+    await db.commit()
     username = current_user.username if current_user else None
-    asyncio.create_task(_run_recalc_worker(job_id, username))
+    _spawn_recalc_worker(job_id, username)
     return {"success": True, "data": {"job_id": job_id, "status": "queued", "total_items": len(items)}}
 
 
@@ -607,28 +612,70 @@ async def get_snapshot_detail(
 # ---------------- Worker（独立セッション） ----------------
 
 
+def _spawn_recalc_worker(job_id: int, username: Optional[str]) -> None:
+    task = asyncio.create_task(
+        _run_recalc_worker(job_id, username),
+        name=f"product-cost-recalc-{job_id}",
+    )
+    _recalc_tasks.add(task)
+    task.add_done_callback(_recalc_tasks.discard)
+
+
+async def _mark_recalc_job_failed(job_id: int, message: str) -> None:
+    try:
+        async with AsyncSessionLocal() as db:
+            j = await db.get(ProductCostRecalcJob, job_id)
+            if j and j.status in ("queued", "running"):
+                j.status = "failed"
+                j.message = message[:500]
+                j.finished_at = datetime.now()
+                await db.commit()
+    except Exception:
+        logger.exception("再計算ジョブ {} の失敗状態更新に失敗しました", job_id)
+
+
 async def _run_recalc_worker(job_id: int, username: Optional[str]) -> None:
+    try:
+        await _run_recalc_worker_body(job_id, username)
+    except Exception:
+        logger.exception("累計単価一括再計算ジョブ {} が異常終了しました", job_id)
+        await _mark_recalc_job_failed(job_id, "ワーカー異常終了")
+
+
+async def _run_recalc_worker_body(job_id: int, username: Optional[str]) -> None:
     """バックグラウンドで各アイテムを処理。
 
     1 アイテム = 1 製品×ルートのスナップショットを保存。
     マスタは一括プリロードして効率化。
     失敗しても他のアイテムに影響しない。
     """
-    # ジョブをロード & running に遷移
-    async with AsyncSessionLocal() as db:
-        j = await db.get(ProductCostRecalcJob, job_id)
-        if not j:
-            return
-        j.status = "running"
-        j.started_at = datetime.now()
-        j.message = "running"
-        try:
-            payload = json.loads(j.payload_json) if j.payload_json else {}
-        except Exception:
-            payload = {}
-        items_raw: list[dict[str, Any]] = payload.get("items") or []
-        mode: str = payload.get("mode") or j.mode or "append_snapshot"
-        await db.commit()
+    # ジョブをロード & running に遷移。
+    # 起動側で commit 済みだが、接続の可視タイミングに備えて短い再試行を入れる。
+    payload: dict[str, Any] = {}
+    mode = "append_snapshot"
+    loaded = False
+    for attempt in range(8):
+        async with AsyncSessionLocal() as db:
+            j = await db.get(ProductCostRecalcJob, job_id)
+            if j:
+                j.status = "running"
+                j.started_at = datetime.now()
+                j.message = "running"
+                try:
+                    payload = json.loads(j.payload_json) if j.payload_json else {}
+                except Exception:
+                    payload = {}
+                mode = payload.get("mode") or j.mode or "append_snapshot"
+                await db.commit()
+                loaded = True
+        if loaded:
+            break
+        await asyncio.sleep(0.15 * (attempt + 1))
+    if not loaded:
+        logger.error("再計算ジョブ {} が見つからず開始できません（queued のまま残ります）", job_id)
+        return
+
+    items_raw: list[dict[str, Any]] = payload.get("items") or []
 
     errors: list[dict[str, Any]] = []
     snapshot_ids: list[str] = []
