@@ -1,0 +1,50 @@
+---
+description: 业务页美化以月受注管理为视觉正本（pb-std / 标题条 / 白胶囊按钮 / 筛选 / 合计卡 / 表格 / 对话框）
+globs: frontend/**/*.vue
+alwaysApply: false
+---
+
+# 页面美化（正本：月受注管理）
+
+视觉以 `frontend/src/views/erp/order/OrderMonthlyList.vue`（`om-modern`）和 `frontend/src/styles/page-beautify.css` 为准。美化既有页时只改样式与必要 class，业务逻辑、接口、文案键保持不动。信息密度沿用该页：区块间距 8～12px，表格 `size="small"`。
+
+## 页面骨架
+
+根节点：`{页}-modern pb-std`。背景为浅靛紫径向光 + `linear-gradient(160deg, #f5f7ff, #f1f3fb 45%, #f8f5ff)`。
+
+自上而下：标题条 →（可选进度条）→ 筛选条 → 合计卡网格 → 白底表格区 → 分页。对话框挂在根内，带 `pb-std`。
+
+## 标题条
+
+`page-toolbar pb-hero pb-hero--page`，内放 `page-toolbar-glow` 与 `pb-bubbles`。
+
+- 渐变 `125deg, #4f46e5 → #6d28d9 → #9333ea → #a855f7`，圆角 16px，最低高 76px，内边距 14×18。
+- 左：40px 圆角 12 的半透明图标块 + 白标题（20px / 800）+ 说明（11px，白 86%）。
+- 右：操作按钮，`gap: 10px`，可换行。
+- 标题区禁止 `backdrop-filter`、文字阴影、除气泡以外的动画。气泡只做 `transform` 漂移。
+
+## 工具栏按钮
+
+白底胶囊，类名 `tb-btn` + 语义色 `tb-btn-blue | teal | amber | indigo | green`。高 32px，圆角 999px，字重 700，左图标。颜色用 `--k-rgb / --k-fg / --k-bd / --k-tint / --k-ico`，悬停同色加深并上浮。同一条上每个操作一种颜色，危险操作用玫瑰色系。圆角箭头等排除立体按钮标准时加 `pb-btn-plain`。
+
+对话框里的提交钮用与该操作同色的渐变；取消为浅灰描边，放在提交左侧。
+
+## 筛选条
+
+白卡片，圆角 12px，左边 4px 竖条 `linear-gradient(180deg, #818cf8, #a855f7, #ec4899)`。控件浅底 `#f8fafc`、圆角 9px；悬停描边 `#a5b4fc`，聚焦 `#6366f1` 加 3px 淡圈。期间导航做成内凹分段：左右箭头透明，当前项用 `#a78bfa → #7c3aed`。
+
+## 合计卡
+
+`grid`，`minmax(148px, 1fr)`，间距 8px。白卡片圆角 12px，顶边 3px `--accent` 渐变。左 34px 圆角图标（同色渐变、白字），右灰标签 + 17px 数字（`tabular-nums`）。悬停上浮约 2px，图标微旋；可保留轻微 3D 倾斜。正差绿、负差红。`prefers-reduced-motion` 时关掉位移动画。
+
+## 表格
+
+白底圆角 14px，顶边 3px `#6366f1 → #a855f7 → #ec4899`。表头 `#f5f3ff → #eef2ff`，字色 `#3730a3`。`stripe` + `border` + `size="small"`。代码用靛蓝 chip；正数绿底、负数红底。行首用 `inset` 色条区分状态。行内操作为小胶囊，悬停变成同色渐变白字（查看/编辑靛蓝或蓝，删除玫红）。当前页码 `#818cf8 → #6366f1`。
+
+## 对话框
+
+`align-center`、`show-close=false`、圆角约 16px、`header` 的 padding 为 0。头部为与操作同色的渐变：44px 半透明图标块 + 白标题，可加一行副标题。主体浅色渐变，关键字段放进白卡片。底栏白底、右对齐。
+
+## 模块色
+
+受注域用上面的靛紫。其他模块保持同一结构、圆角、阴影和胶囊按钮，只把标题渐变与 `--accent` 换成该模块已有主色，相邻按钮仍然分色。

@@ -50,6 +50,10 @@ class SupplyPartStock(Base):
     quality_status = Column(String(20), nullable=False, default="良好", comment="品質状態")
     note = Column(Text, nullable=True, comment="備考")
     source = Column(String(20), nullable=False, comment="登録元（transfer/manual）")
+    migration_trigger = Column(
+        String(30), nullable=True, comment="移行トリガー（mass_end/customer_spec）"
+    )
+    migration_reason = Column(String(500), nullable=True, comment="移行理由")
     created_by_user_id = Column(Integer, nullable=True, comment="登録者ID")
     updated_by_user_id = Column(Integer, nullable=True, comment="更新者ID")
     created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")

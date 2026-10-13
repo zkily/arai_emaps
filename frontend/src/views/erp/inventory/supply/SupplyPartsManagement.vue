@@ -8,7 +8,7 @@
         </div>
         <div class="spm-hero-copy">
           <h1 class="pb-hero-title">補給品管理</h1>
-          <p class="pb-hero-desc">現在庫、保管場所、品質状態を台帳で管理します。</p>
+          <p class="pb-hero-desc">補給品専用の保管場所と棚番（A-03-02）で、現在庫と品質を管理します。</p>
         </div>
       </div>
       <div class="header-actions">
@@ -130,10 +130,22 @@
           <el-icon><Download /></el-icon>
           Excel出力
         </el-button>
-        <el-button class="tool-btn" :disabled="!rows.length" @click="printStocktakeSheet">
-          <el-icon><Printer /></el-icon>
-          棚卸表印刷
-        </el-button>
+        <el-tooltip content="保管場所ごとに年1回、この表で実棚を確認します。差異はその場で「調整」に登録します">
+          <span>
+            <el-button class="tool-btn" :disabled="!rows.length" @click="printStocktakeSheet">
+              <el-icon><Printer /></el-icon>
+              棚卸表印刷
+            </el-button>
+          </span>
+        </el-tooltip>
+        <el-tooltip content="いまの一覧を棚番ごとに A4 縦で印刷します。棚番は約 5m 先から読める大きさです。印刷倍率は 100% にしてください">
+          <span>
+            <el-button class="tool-btn" :disabled="!rows.length" @click="printShelfSigns()">
+              <el-icon><Printer /></el-icon>
+              棚番票印刷
+            </el-button>
+          </span>
+        </el-tooltip>
       </div>
     </div>
 
@@ -156,7 +168,12 @@
         <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
         <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
         <el-table-column prop="storage_location" label="保管場所" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="shelf_no" label="棚番" width="90" show-overflow-tooltip />
+        <el-table-column prop="shelf_no" label="棚番" width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="isValidShelf(row.shelf_no)">{{ normalizeShelf(row.shelf_no) }}</span>
+            <span v-else class="num-warn" title="A-03-02 の形式に直してください">{{ row.shelf_no || '未設定' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="on_hand_qty" label="現在庫" width="90" align="right">
           <template #default="{ row }">
             <span class="num-strong">{{ formatNum(row.on_hand_qty) }}</span>
@@ -204,6 +221,12 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="移行" width="96" align="center">
+          <template #default="{ row }">
+            <span v-if="triggerLabel(row.migration_trigger)">{{ triggerLabel(row.migration_trigger) }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="note" label="備考" min-width="180" show-overflow-tooltip />
         <el-table-column label="操作" width="120" align="center" fixed="right">
           <template #default="{ row }">
@@ -232,12 +255,15 @@
           <div class="spm-dialog-icon"><el-icon><Switch /></el-icon></div>
           <div class="spm-dialog-copy">
             <h3>量産品から振替</h3>
-            <p>製品種別を補給品にし、最新倉庫在庫をこの台帳へ移して、在庫取引記録に同数の保留（補給品へ振替）を登録します</p>
+            <p>量産終了、または顧客指定のときだけ種別を補給品にし、倉庫在庫の実数をこの台帳へ移します</p>
           </div>
           <el-icon class="spm-close" @click="transferVisible = false"><Close /></el-icon>
         </div>
       </template>
       <div class="spm-dialog-body spm-dialog-body--compact">
+        <p class="dialog-hint dialog-hint--amber">
+          補給品化は「量産終了」または「顧客指定」のときだけです。入庫数量は倉庫在庫の実数で、ここでは別数量を計算しません。最初に確保する数量は、保守実績と保有台数から生産管理が算出し、量産の最終ロットで作り込んでから振替してください。
+        </p>
         <el-form label-position="top" class="spm-form spm-form--compact">
           <section class="form-section form-section--amber">
             <header class="form-section__title"><span class="form-section__dot" />対象製品</header>
@@ -293,9 +319,25 @@
                 <p v-else class="transfer-preview-empty">製品を選ぶと、ここに表示します</p>
               </el-form-item>
             </div>
+            <div class="form-grid">
+              <el-form-item label="移行トリガー" required>
+                <el-radio-group v-model="transferForm.migration_trigger">
+                  <el-radio value="mass_end">量産終了</el-radio>
+                  <el-radio value="customer_spec">顧客指定</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item label="移行理由" required>
+                <el-input
+                  v-model="transferForm.migration_reason"
+                  maxlength="500"
+                  placeholder="量産終了の時期、または顧客指定の内容"
+                />
+              </el-form-item>
+            </div>
           </section>
           <section class="form-section form-section--sky">
             <header class="form-section__title"><span class="form-section__dot" />保管・品質</header>
+            <p class="dialog-hint">棚番は A-03-02（棚1文字・段2桁・間口2桁）で入力してください。</p>
             <div class="form-grid form-grid--4">
               <el-form-item label="保管場所" required>
                 <SupplyLocationSelect
@@ -305,8 +347,13 @@
                   @manage="openLocations"
                 />
               </el-form-item>
-              <el-form-item label="棚番">
-                <el-input v-model="transferForm.shelf_no" maxlength="50" />
+              <el-form-item label="棚番" required>
+                <el-input
+                  v-model="transferForm.shelf_no"
+                  maxlength="20"
+                  placeholder="A-03-02"
+                  @blur="transferForm.shelf_no = normalizeShelf(transferForm.shelf_no)"
+                />
               </el-form-item>
               <el-form-item label="安全在庫">
                 <el-input-number v-model="transferForm.safety_stock" :min="0" :step="1" controls-position="right" />
@@ -393,14 +440,17 @@
                   </el-option>
                 </el-select>
               </el-form-item>
-              <p v-else class="manual-mode-tip">製品マスタにない補給品です。製品CD・製品名を直接入力してください。</p>
+              <p v-else class="manual-mode-tip">
+                製品マスタにない補給品です。製品CDは自動採番します（8＋連番3桁＋1、例 80011）。
+              </p>
             </div>
             <div class="form-grid form-grid--3">
               <el-form-item label="製品CD" required>
                 <el-input
                   v-model="manualForm.product_cd"
                   maxlength="50"
-                  :disabled="manualFromMaster && !!manualPick"
+                  :disabled="!manualFromMaster || !!manualPick"
+                  :placeholder="!manualFromMaster ? '自動採番' : ''"
                 />
               </el-form-item>
               <el-form-item label="製品名" required>
@@ -436,6 +486,7 @@
           </section>
           <section class="form-section form-section--sky">
             <header class="form-section__title"><span class="form-section__dot" />在庫・保管・品質</header>
+            <p class="dialog-hint">棚番は A-03-02（棚1文字・段2桁・間口2桁）で入力してください。</p>
             <div class="form-grid form-grid--4">
               <el-form-item label="期初数量" required>
                 <el-input-number v-model="manualForm.opening_qty" :min="0" :step="1" controls-position="right" />
@@ -448,8 +499,13 @@
                   @manage="openLocations"
                 />
               </el-form-item>
-              <el-form-item label="棚番">
-                <el-input v-model="manualForm.shelf_no" maxlength="50" />
+              <el-form-item label="棚番" required>
+                <el-input
+                  v-model="manualForm.shelf_no"
+                  maxlength="20"
+                  placeholder="A-03-02"
+                  @blur="manualForm.shelf_no = normalizeShelf(manualForm.shelf_no)"
+                />
               </el-form-item>
               <el-form-item label="安全在庫">
                 <el-input-number v-model="manualForm.safety_stock" :min="0" :step="1" controls-position="right" />
@@ -490,12 +546,15 @@
           <div class="spm-dialog-icon"><el-icon><Location /></el-icon></div>
           <div class="spm-dialog-copy">
             <h3>保管場所管理</h3>
-            <p>補給品の保管場所を登録・編集します。名前を変えると、その場所の補給品もまとめて変わります</p>
+            <p>量産品とは分けた補給品専用棚だけを登録します。名前を変えると、その場所の補給品もまとめて変わります</p>
           </div>
           <el-icon class="spm-close" @click="locationVisible = false"><Close /></el-icon>
         </div>
       </template>
       <div class="spm-dialog-body">
+        <p class="dialog-hint">
+          量産品の置き場とは物理的に分けた補給品専用棚だけを登録してください。品目の住所は、カードの棚番を A-03-02（棚-段-間口）で付けます。
+        </p>
         <section v-if="canCreate || (canEdit && locForm.id)" class="form-section">
           <header class="form-section__title">
             <span class="form-section__dot" />{{ locForm.id ? '保管場所を編集' : '保管場所を追加' }}
@@ -503,7 +562,7 @@
           <el-form label-position="top" class="spm-form">
             <div class="location-form-grid">
               <el-form-item label="保管場所名" required>
-                <el-input v-model="locForm.name" maxlength="100" placeholder="例：第2倉庫 補給品棚" />
+                <el-input v-model="locForm.name" maxlength="100" placeholder="例：補給品専用棚" />
               </el-form-item>
               <el-form-item label="表示順">
                 <el-input-number v-model="locForm.sort_order" :step="1" controls-position="right" />
@@ -524,9 +583,17 @@
             </div>
           </el-form>
         </section>
-        <el-table v-loading="locLoading" :data="locations" size="small" border class="location-table">
+        <el-table
+          v-loading="locLoading"
+          :data="locations"
+          size="small"
+          border
+          class="location-table"
+          max-height="360"
+          :default-sort="{ prop: 'sort_order', order: 'descending' }"
+        >
           <el-table-column prop="name" label="保管場所名" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="sort_order" label="表示順" width="70" align="right" />
+          <el-table-column prop="sort_order" label="表示順" width="96" align="right" sortable />
           <el-table-column prop="usage_count" label="使用中" width="70" align="right" />
           <el-table-column label="状態" width="80">
             <template #default="{ row }">
@@ -536,8 +603,9 @@
             </template>
           </el-table-column>
           <el-table-column prop="note" label="備考" min-width="120" show-overflow-tooltip />
-          <el-table-column v-if="canEdit || canDelete" label="操作" width="130" align="center">
+          <el-table-column label="操作" width="188" align="center">
             <template #default="{ row }">
+              <el-button link type="primary" @click="printLocationShelfSigns(row.name)">棚番票</el-button>
               <el-button v-if="canEdit" link type="primary" @click="editLocation(row as SupplyPartLocation)">編集</el-button>
               <el-tooltip
                 v-if="canDelete"
@@ -602,6 +670,12 @@
             {{ detail.stock.idle_months ?? '—' }}
             <span v-if="detail.stock.idle_months != null" class="muted">（{{ detail.stock.idle_days }} 日）</span>
           </el-descriptions-item>
+          <el-descriptions-item label="移行トリガー">
+            {{ triggerLabel(detail.stock.migration_trigger) || '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="移行理由">
+            {{ detail.stock.migration_reason || '—' }}
+          </el-descriptions-item>
         </el-descriptions>
 
         <section class="form-section form-section--indigo">
@@ -656,8 +730,13 @@
                   @manage="openLocations"
                 />
               </el-form-item>
-              <el-form-item label="棚番">
-                <el-input v-model="editForm.shelf_no" maxlength="50" />
+              <el-form-item label="棚番" required>
+                <el-input
+                  v-model="editForm.shelf_no"
+                  maxlength="20"
+                  placeholder="A-03-02"
+                  @blur="editForm.shelf_no = normalizeShelf(editForm.shelf_no)"
+                />
               </el-form-item>
               <el-form-item label="安全在庫">
                 <el-input-number v-model="editForm.safety_stock" :min="0" :step="1" controls-position="right" />
@@ -682,6 +761,9 @@
 
         <section class="form-section form-section--amber">
           <h3 class="section-title"><span class="form-section__dot" />入出庫</h3>
+          <p class="dialog-hint dialog-hint--amber">
+            現物を動かしたその場で登録してください。あとからまとめて入力しないでください。
+          </p>
           <el-form v-if="canEdit" inline class="txn-form">
             <el-form-item label="区分">
               <el-select v-model="txnForm.txn_type" style="width: 140px">
@@ -771,6 +853,7 @@ import {
   createSupplyPartTransaction,
   deleteSupplyPart,
   deleteSupplyPartLocation,
+  getNextSupplyProductCd,
   getSupplyPartDetail,
   getSupplyPartList,
   getSupplyPartLocations,
@@ -899,6 +982,28 @@ function emptySummary(): SupplyPartListResponse['summary'] {
   }
 }
 
+const SHELF_RE = /^[A-Z]-\d{2}-\d{2}$/
+
+function normalizeShelf(value?: string | null) {
+  return (value || '').trim().toUpperCase()
+}
+
+function isValidShelf(value?: string | null) {
+  return SHELF_RE.test(normalizeShelf(value))
+}
+
+function shelfError(value?: string | null) {
+  if (!normalizeShelf(value)) return '棚番は必須です（例 A-03-02）'
+  if (!isValidShelf(value)) return '棚番は A-03-02 の形式（棚1文字・段2桁・間口2桁）で入力してください'
+  return ''
+}
+
+function triggerLabel(code?: string | null) {
+  if (code === 'mass_end') return '量産終了'
+  if (code === 'customer_spec') return '顧客指定'
+  return ''
+}
+
 function qualityTagType(status?: string | null) {
   const map: Record<string, 'success' | 'danger' | 'warning' | 'info'> = {
     良好: 'success',
@@ -944,7 +1049,12 @@ function emptyCard(): SupplyPartCardForm {
 }
 
 function emptyTransfer() {
-  return { product_cd: '', ...emptyCard() }
+  return {
+    product_cd: '',
+    migration_trigger: '' as '' | 'mass_end' | 'customer_spec',
+    migration_reason: '',
+    ...emptyCard(),
+  }
 }
 
 function emptyManual() {
@@ -964,7 +1074,7 @@ function cardPayload(form: SupplyPartCardForm): SupplyPartCardForm {
     destination_cd: blankToNull(form.destination_cd),
     destination_name: blankToNull(form.destination_name),
     storage_location: (form.storage_location || '').trim(),
-    shelf_no: blankToNull(form.shelf_no),
+    shelf_no: normalizeShelf(form.shelf_no),
     safety_stock: Number(form.safety_stock || 0),
     quality_status: form.quality_status || '良好',
     note: blankToNull(form.note),
@@ -1057,11 +1167,26 @@ async function onTransferProduct(productCd: string) {
 
 async function submitTransfer() {
   if (!canSubmitTransfer.value) return
+  if (!transferForm.migration_trigger) {
+    ElMessage.warning('移行トリガーを選択してください（量産終了 または 顧客指定）')
+    return
+  }
+  if (!transferForm.migration_reason.trim()) {
+    ElMessage.warning('移行理由を入力してください')
+    return
+  }
+  const shelfMsg = shelfError(transferForm.shelf_no)
+  if (shelfMsg) {
+    ElMessage.warning(shelfMsg)
+    return
+  }
   saving.value = true
   try {
     const res = (await transferSupplyPart({
       product_cd: transferForm.product_cd,
       ...cardPayload(transferForm),
+      migration_trigger: transferForm.migration_trigger,
+      migration_reason: transferForm.migration_reason.trim(),
     })) as unknown as SupplyPartTransferResult
     if (res.warning) ElMessage.warning(res.warning)
     else ElMessage.success(`振替しました。補給品へ入庫 ${res.transfer_qty}、在庫取引記録に同数の保留を登録しました。`)
@@ -1096,10 +1221,20 @@ function clearManualProduct() {
   pickedProductType.value = ''
 }
 
-watch(manualFromMaster, () => {
+watch(manualFromMaster, async (fromMaster) => {
   manualPick.value = ''
   clearManualProduct()
+  if (!fromMaster) await fillNextProductCd()
 })
+
+async function fillNextProductCd() {
+  try {
+    const res = (await getNextSupplyProductCd()) as unknown as { product_cd: string }
+    if (!manualFromMaster.value && res?.product_cd) manualForm.product_cd = res.product_cd
+  } catch (error) {
+    showServerError(error, '製品CDの採番に失敗しました')
+  }
+}
 
 function onManualProduct(productCd: string) {
   const found = allProducts.value.find((item) => item.product_cd === productCd)
@@ -1124,6 +1259,11 @@ async function submitManual() {
     ElMessage.warning('製品CD、製品名、保管場所は必須です')
     return
   }
+  const shelfMsg = shelfError(manualForm.shelf_no)
+  if (shelfMsg) {
+    ElMessage.warning(shelfMsg)
+    return
+  }
   if (pickedProductType.value && pickedProductType.value !== '補給品') {
     try {
       await ElMessageBox.confirm(
@@ -1137,16 +1277,22 @@ async function submitManual() {
   }
   saving.value = true
   try {
-    await createSupplyPartManual({
+    const created = (await createSupplyPartManual({
       ...cardPayload(manualForm),
       product_cd: productCd,
       product_name: productName,
       opening_qty: Number(manualForm.opening_qty || 0),
-    })
-    ElMessage.success('登録しました')
+      auto_product_cd: !manualFromMaster.value,
+    })) as unknown as SupplyPartStock
+    ElMessage.success(
+      !manualFromMaster.value && created?.product_cd
+        ? `登録しました（製品CD ${created.product_cd}）`
+        : '登録しました'
+    )
     manualVisible.value = false
     await loadList()
   } catch (error) {
+    if (!manualFromMaster.value) await fillNextProductCd()
     showServerError(error, '登録に失敗しました')
   } finally {
     saving.value = false
@@ -1328,14 +1474,21 @@ async function exportExcel() {
       { header: '月平均出荷', key: 'avg_monthly_demand', width: 11 },
       { header: '滞留月数', key: 'idle_months', width: 10 },
       { header: '最終出庫日', key: 'last_out_date', width: 12 },
+      { header: '移行トリガー', key: 'migration_trigger', width: 12 },
+      { header: '移行理由', key: 'migration_reason', width: 24 },
       { header: '備考', key: 'note', width: 30 },
     ]
-    rows.value.forEach((row) => sheet.addRow(row))
+    rows.value.forEach((row) =>
+      sheet.addRow({
+        ...row,
+        migration_trigger: triggerLabel(row.migration_trigger),
+      })
+    )
     const header = sheet.getRow(1)
     header.font = { bold: true, color: { argb: 'FFFFFFFF' } }
     header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } }
     sheet.views = [{ state: 'frozen', ySplit: 1 }]
-    sheet.autoFilter = { from: 'A1', to: 'O1' }
+    sheet.autoFilter = { from: 'A1', to: 'Q1' }
     const buffer = await workbook.xlsx.writeBuffer()
     saveAs(
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
@@ -1400,7 +1553,7 @@ function printStocktakeSheet() {
           </tr></thead>
           <tbody>${body}</tbody>
         </table>
-        <p class="foot">${items.length} 件</p>
+        <p class="foot">${items.length} 件　保管場所ごとに年1回実施。差異は台帳の「調整」でその場で反映する</p>
       </section>`
     })
     .join('')
@@ -1428,10 +1581,129 @@ function printStocktakeSheet() {
   setTimeout(() => win.print(), 300)
 }
 
+function shelfTitleMm(text: string) {
+  // A4 縦の印刷幅（余白除く約 190mm）に収まる最大字高。標準 A-03-02 は約 48mm。
+  const units = Array.from(text).reduce((sum, ch) => sum + (ch.charCodeAt(0) > 255 ? 1 : 0.55), 0)
+  const fit = Math.floor(190 / Math.max(units, 0.55))
+  return Math.max(24, Math.min(56, fit))
+}
+
+function openShelfSignPrint(list: SupplyPartStock[]) {
+  if (!list.length) {
+    ElMessage.warning('印刷する補給品がありません')
+    return
+  }
+  const groups = new Map<string, { location: string; shelf: string; items: SupplyPartStock[] }>()
+  ;[...list]
+    .sort(
+      (a, b) =>
+        (a.storage_location || '').localeCompare(b.storage_location || '', 'ja') ||
+        (a.shelf_no || '').localeCompare(b.shelf_no || '', 'ja') ||
+        (a.product_name || '').localeCompare(b.product_name || '', 'ja')
+    )
+    .forEach((row) => {
+      const location = row.storage_location || '（保管場所なし）'
+      const shelf = normalizeShelf(row.shelf_no) || row.shelf_no || '未設定'
+      const key = `${location}\0${shelf}`
+      const group = groups.get(key) || { location, shelf, items: [] }
+      group.items.push(row)
+      groups.set(key, group)
+    })
+  const printedAt = todayStr()
+  const pages = [...groups.values()]
+    .map((group) => {
+      const body = group.items
+        .map(
+          (row) => `<tr>
+            <td>${escapeHtml(row.product_name)}</td>
+            <td class="r">${formatNum(row.on_hand_qty)}</td>
+            <td class="c">${escapeHtml(row.quality_status)}</td>
+            <td class="r">${row.idle_months == null ? '—' : escapeHtml(row.idle_months)}</td>
+          </tr>`
+        )
+        .join('')
+      return `<section class="sign">
+        <p class="place">${escapeHtml(group.location)}</p>
+        <h1 class="shelf" style="font-size:${shelfTitleMm(group.shelf)}mm">${escapeHtml(group.shelf)}</h1>
+        <table>
+          <thead><tr>
+            <th>製品名</th>
+            <th style="width:28mm">現在庫</th>
+            <th style="width:32mm">品質状態</th>
+            <th style="width:32mm">滞留月数</th>
+          </tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+        <p class="foot">${group.items.length} 件　印刷日 ${printedAt}</p>
+      </section>`
+    })
+    .join('')
+  const win = window.open('', '_blank')
+  if (!win) {
+    ElMessage.warning('ポップアップがブロックされました。許可してから再度お試しください')
+    return
+  }
+  win.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>補給品 棚番票</title>
+    <style>
+      @page { size: A4 portrait; margin: 10mm 10mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #000; font-family: 'Yu Gothic', 'Meiryo', sans-serif; }
+      .sign { break-after: page; }
+      .sign:last-child { break-after: auto; }
+      .place { margin: 0; text-align: center; font-size: 6mm; font-weight: 700; letter-spacing: 0.3mm; }
+      .shelf {
+        margin: 2mm 0 6mm;
+        text-align: center;
+        font-weight: 900;
+        line-height: 0.85;
+        letter-spacing: 1.2mm;
+        font-family: Impact, 'Arial Narrow', 'Arial Black', sans-serif;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+      th, td { border: 1.4px solid #111; padding: 2.2mm 2mm; vertical-align: middle; }
+      th { background: #111; color: #fff; font-weight: 700; text-align: center; }
+      td { word-break: break-all; }
+      .r { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .c { text-align: center; font-weight: 700; }
+      tr { break-inside: avoid; }
+      .foot { margin: 3mm 0 0; text-align: right; font-size: 9pt; }
+    </style></head><body>${pages}</body></html>`)
+  win.document.close()
+  win.focus()
+  setTimeout(() => win.print(), 300)
+}
+
+function printShelfSigns(list: SupplyPartStock[] = rows.value) {
+  openShelfSignPrint(list)
+}
+
+async function printLocationShelfSigns(locationName: string) {
+  const { year, month } = yearMonth()
+  try {
+    const res = (await getSupplyPartList({
+      year,
+      month,
+      storage_location: locationName,
+    })) as unknown as SupplyPartListResponse
+    if (!res.list?.length) {
+      ElMessage.warning('この保管場所に補給品はありません')
+      return
+    }
+    openShelfSignPrint(res.list)
+  } catch (error) {
+    showServerError(error, '棚番票の作成に失敗しました')
+  }
+}
+
 async function saveCard() {
   if (!detail.value) return
   if (!editForm.storage_location?.trim()) {
     ElMessage.warning('保管場所は必須です')
+    return
+  }
+  const shelfMsg = shelfError(editForm.shelf_no)
+  if (shelfMsg) {
+    ElMessage.warning(shelfMsg)
     return
   }
   saving.value = true
@@ -1495,14 +1767,24 @@ async function loadLocations() {
   }
 }
 
-function resetLocForm() {
-  Object.assign(locForm, { id: 0, name: '', sort_order: 0, is_active: true, note: '' })
+function nextSortOrder() {
+  return locations.value.reduce((max, row) => Math.max(max, Number(row.sort_order) || 0), 0) + 1
 }
 
-function openLocations() {
-  resetLocForm()
+function resetLocForm() {
+  Object.assign(locForm, {
+    id: 0,
+    name: '',
+    sort_order: nextSortOrder(),
+    is_active: true,
+    note: '',
+  })
+}
+
+async function openLocations() {
   locationVisible.value = true
-  loadLocations()
+  await loadLocations()
+  if (!locForm.id) locForm.sort_order = nextSortOrder()
 }
 
 function editLocation(row: SupplyPartLocation) {
@@ -1546,8 +1828,8 @@ async function saveLocation() {
       await createSupplyPartLocation(payload)
       ElMessage.success('追加しました')
     }
-    resetLocForm()
     await loadLocations()
+    resetLocForm()
   } catch (error) {
     showServerError(error, '保管場所の保存に失敗しました')
   } finally {
@@ -1564,8 +1846,11 @@ async function removeLocation(row: SupplyPartLocation) {
   try {
     await deleteSupplyPartLocation(row.id)
     ElMessage.success('削除しました')
-    if (locForm.id === row.id) resetLocForm()
+    const editingDeleted = locForm.id === row.id
+    const addingBlank = !locForm.id && !locForm.name.trim()
     await loadLocations()
+    if (editingDeleted) resetLocForm()
+    else if (addingBlank) locForm.sort_order = nextSortOrder()
   } catch (error) {
     showServerError(error, '保管場所の削除に失敗しました')
   }

@@ -4,13 +4,16 @@
 """
 from __future__ import annotations
 
+import io
 import json
 from calendar import monthrange
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
@@ -39,9 +42,13 @@ from app.modules.master.models import Process
 router = APIRouter(prefix="/inventory-report", tags=["在庫報告"])
 
 _EXCLUDED_PRODUCT_NAME_TOKEN = "加工"
-# 棚卸差異は成型・メッキ・溶接・検査・倉庫のみ対象（ホワイトリスト方式）
-_STOCKTAKE_DIFF_INCLUDED_PROCESS_CDS = frozenset({"KT04", "KT05", "KT07", "KT09", "KT13"})
-_STOCKTAKE_DIFF_INCLUDED_PROCESS_NAMES = frozenset({"成型", "メッキ", "溶接", "検査", "倉庫"})
+# 棚卸差異は切断・面取・成型・メッキ・溶接・検査・倉庫を対象（ホワイトリスト方式）
+_STOCKTAKE_DIFF_INCLUDED_PROCESS_CDS = frozenset(
+    {"KT01", "KT02", "KT04", "KT05", "KT07", "KT09", "KT13"}
+)
+_STOCKTAKE_DIFF_INCLUDED_PROCESS_NAMES = frozenset(
+    {"切断", "面取", "面取り", "成型", "メッキ", "溶接", "検査", "倉庫"}
+)
 _STOCKTAKE_DIFF_MOLDING_EXCLUDED_PRODUCT_NAMES = frozenset(
     name.casefold()
     for name in (
@@ -64,6 +71,26 @@ def _is_stocktake_diff_process(process_cd: Any, process_name: Any) -> bool:
         return cd in _STOCKTAKE_DIFF_INCLUDED_PROCESS_CDS
     name = str(process_name or "").strip().removesuffix("工程")
     return name in _STOCKTAKE_DIFF_INCLUDED_PROCESS_NAMES
+
+
+_TOP_MISMATCH_EXACT_EXCLUDES = frozenset(
+    name.casefold()
+    for name in (
+        "310D CTR",
+        "164B FR",
+        "BY2 FR2",
+    )
+)
+
+
+def _is_top_mismatch_excluded(product_name: Any) -> bool:
+    """差異上位から除外：指定製品名、または「アーチ」「加工」を含む。"""
+    name = " ".join(str(product_name or "").split())
+    if not name:
+        return False
+    if name.casefold() in _TOP_MISMATCH_EXACT_EXCLUDES:
+        return True
+    return "アーチ" in name or "加工" in name
 
 
 def _is_stocktake_diff_detail(row: Dict[str, Any]) -> bool:
@@ -445,12 +472,17 @@ async def _month_stocktake_diff(db: AsyncSession, as_of: date) -> Dict[str, Any]
     proc_names = await _load_process_names(db, proc_cds)
     summary_rows = _build_summary_rows(detail_rows, specs, proc_names)
 
-    # 差異絶対値上位
+    # 差異絶対値上位（指定製品名は順位から除外）
     top_mismatch = sorted(
-        [r for r in detail_rows if int(r.get("diff_qty") or 0) != 0],
+        [
+            r
+            for r in detail_rows
+            if int(r.get("diff_qty") or 0) != 0
+            and not _is_top_mismatch_excluded(r.get("product_name"))
+        ],
         key=lambda r: abs(int(r.get("diff_qty") or 0)),
         reverse=True,
-    )[:15]
+    )[:40]
 
     return {
         "as_of": str(as_of),
@@ -709,6 +741,9 @@ async def _build_quarter_payload(db: AsyncSession, fiscal_year: int, quarter: in
         for item in diff["top_mismatch"]:
             all_top_mismatch.append({**item, "month": month_key, "month_label": month_label})
 
+    all_top_mismatch = [
+        r for r in all_top_mismatch if not _is_top_mismatch_excluded(r.get("product_name"))
+    ]
     all_top_mismatch.sort(key=lambda r: abs(int(r.get("diff_qty") or 0)), reverse=True)
     bulk = await _bulk_disposal_summary(db, quarter_start, quarter_end)
     bulk_by_month = {str(r.get("month") or ""): r for r in bulk.get("by_month", [])}
@@ -803,7 +838,7 @@ async def _build_quarter_payload(db: AsyncSession, fiscal_year: int, quarter: in
         "inventory_series": inventory_series,
         "scrap_series": scrap_series,
         "diff_by_month_process": diff_by_month_process,
-        "top_mismatch": all_top_mismatch[:20],
+        "top_mismatch": all_top_mismatch[:5],
         "bulk_disposal": bulk,
         "previous_quarter": prev_compare,
         "previous_period": prev_compare,
@@ -853,33 +888,11 @@ def _build_highlights(
             highlights.append(
                 {
                     "type": "defect_peak",
-                    "tone": "warn" if (quality_peak[1] or 0) >= 2 else "info",
-                    "title": "廃棄率（新）ピーク月",
+                    "tone": "warn" if (quality_peak[1] or 0) >= 1.5 else "info",
+                    "title": "廃棄率ピーク月",
                     "text": (
-                        f"{quality_peak[0]} の廃棄率（新） {quality_peak[1]:.2f}%"
+                        f"{quality_peak[0]} の廃棄率 {quality_peak[1]:.2f}%"
                         f"（不良＋廃棄 {int(quality_peak[2] or 0):,} 本）"
-                    ),
-                }
-            )
-        rates = [
-            (
-                s.get("month_label"),
-                s.get("all_process_loss_rate_percent"),
-                s.get("sum_defect"),
-                s.get("sum_scrap"),
-            )
-            for s in scrap_series
-        ]
-        peak = max(rates, key=lambda x: (x[1] is not None, x[1] or 0))
-        if peak[1] is not None:
-            highlights.append(
-                {
-                    "type": "scrap_peak",
-                    "tone": "warn" if (peak[1] or 0) >= 2 else "info",
-                    "title": "廃棄率（旧）ピーク月",
-                    "text": (
-                        f"{peak[0]} の廃棄率（旧） {peak[1]:.2f}%"
-                        f"（不良＋廃棄 {int((peak[2] or 0) + (peak[3] or 0)):,} 本）"
                     ),
                 }
             )
@@ -959,6 +972,17 @@ class SaveReportBody(BaseModel):
     action_items: Optional[str] = None
     notes: Optional[str] = None
     regenerate: bool = False
+
+
+class InventoryReportPptxBody(BaseModel):
+    """画面表示中のレポート＋チャート画像から PPT を生成する。"""
+
+    payload: dict
+    monthly_kpis: Optional[List[dict]] = None
+    diff_by_process_avg: Optional[List[dict]] = None
+    diff_by_process_total: Optional[List[dict]] = None
+    bulk_categories: Optional[List[dict]] = None
+    charts: Optional[Dict[str, Optional[str]]] = None
 
 
 @router.get("/quarters")
@@ -1130,3 +1154,44 @@ async def delete_saved_report(
     await db.delete(row)
     await db.commit()
     return {"success": True, "data": {"id": report_id}}
+
+
+@router.post("/pptx")
+async def download_inventory_report_pptx(
+    body: InventoryReportPptxBody,
+    current_user: User = Depends(require_inventory_operation("export")),
+):
+    """在庫報告 PPT（生産管理部／1カード1ページ）。"""
+    try:
+        from app.modules.erp.inventory_report_ppt import build_inventory_report_pptx
+
+        content = build_inventory_report_pptx(
+            {
+                "payload": body.payload or {},
+                "monthly_kpis": body.monthly_kpis or [],
+                "diff_by_process_avg": body.diff_by_process_avg or [],
+                "diff_by_process_total": body.diff_by_process_total or [],
+                "bulk_categories": body.bulk_categories or [],
+                "charts": body.charts or {},
+            }
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name == "pptx":
+            raise HTTPException(
+                status_code=503,
+                detail="PPT生成には python-pptx が必要です。backend venv で pip install python-pptx を実行してください。",
+            ) from exc
+        raise
+    except Exception as exc:
+        logger.exception("在庫報告 PPT 生成に失敗")
+        raise HTTPException(status_code=500, detail=f"PPT生成に失敗しました: {exc}") from exc
+
+    label = str((body.payload or {}).get("label") or "在庫報告").replace("/", "-")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"在庫報告_{label}_{stamp}.pptx"
+    encoded = quote(filename)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )

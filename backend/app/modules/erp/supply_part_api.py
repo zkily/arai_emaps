@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Optional
@@ -50,6 +51,41 @@ STAGNANT_DAYS = 365
 DEMAND_MONTHS = 6
 QUALITY_STATUSES = ("良好", "錆", "汚れ", "その他")
 QUALITY_GOOD = QUALITY_STATUSES[0]
+# 棚番 = 棚1文字 - 段2桁 - 間口2桁（例 A-03-02）
+SHELF_RE = re.compile(r"^[A-Z]-\d{2}-\d{2}$")
+# 未登録品の製品CD: 8 + 連番3桁 + 1（例 80001 の次は 80011）
+UNREGISTERED_CD_RE = re.compile(r"^8(\d{3})1$")
+SHELF_ERROR = "棚番は A-03-02 の形式（棚1文字・段2桁・間口2桁）で入力してください"
+MIGRATION_MASS_END = "mass_end"
+MIGRATION_CUSTOMER = "customer_spec"
+MIGRATION_TRIGGERS = {
+    MIGRATION_MASS_END: "量産終了",
+    MIGRATION_CUSTOMER: "顧客指定",
+}
+
+
+async def _next_unregistered_product_cd(db: AsyncSession) -> str:
+    """製品マスタと補給品台帳の 8xxx1 を見て、中3桁の最大値 + 1 を返す。"""
+    codes: list[str] = []
+    for column in (Product.product_cd, SupplyPartStock.product_cd):
+        rows = (await db.execute(select(column).where(column.like("8___1")))).scalars().all()
+        codes.extend(code for code in rows if code)
+    max_seq = -1
+    for code in codes:
+        matched = UNREGISTERED_CD_RE.fullmatch(code.strip())
+        if matched:
+            max_seq = max(max_seq, int(matched.group(1)))
+    nxt = max_seq + 1
+    if nxt > 999:
+        raise HTTPException(status_code=409, detail="未登録品の製品CDが 89991 まで使用されています")
+    return f"8{nxt:03d}1"
+
+
+def _require_shelf(value: Optional[str]) -> str:
+    text = (value or "").strip().upper()
+    if not SHELF_RE.fullmatch(text):
+        raise ValueError(SHELF_ERROR)
+    return text
 
 
 def _quality_status(v: Optional[str]) -> str:
@@ -63,6 +99,7 @@ QualityStatus = Annotated[str, BeforeValidator(_quality_status)]
 
 
 class SupplyPartManualCreate(BaseModel):
+    auto_product_cd: bool = False
     product_cd: str
     product_name: str
     product_alias: Optional[str] = None
@@ -71,7 +108,7 @@ class SupplyPartManualCreate(BaseModel):
     destination_name: Optional[str] = None
     opening_qty: int = Field(ge=0)
     storage_location: str
-    shelf_no: Optional[str] = None
+    shelf_no: str
     keeper: Optional[str] = None
     safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
@@ -85,15 +122,22 @@ class SupplyPartManualCreate(BaseModel):
             raise ValueError("必須項目です")
         return text
 
+    @field_validator("shelf_no")
+    @classmethod
+    def _shelf(cls, v: str) -> str:
+        return _require_shelf(v)
+
 
 class SupplyPartTransferBody(BaseModel):
     product_cd: str
     storage_location: str
+    migration_trigger: str
+    migration_reason: str
     product_alias: Optional[str] = None
     part_number: Optional[str] = None
     destination_cd: Optional[str] = None
     destination_name: Optional[str] = None
-    shelf_no: Optional[str] = None
+    shelf_no: str
     keeper: Optional[str] = None
     safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
@@ -107,6 +151,29 @@ class SupplyPartTransferBody(BaseModel):
             raise ValueError("必須項目です")
         return text
 
+    @field_validator("shelf_no")
+    @classmethod
+    def _shelf(cls, v: str) -> str:
+        return _require_shelf(v)
+
+    @field_validator("migration_trigger")
+    @classmethod
+    def _trigger(cls, v: str) -> str:
+        text = (v or "").strip()
+        if text not in MIGRATION_TRIGGERS:
+            raise ValueError("移行トリガーは「量産終了」または「顧客指定」を選択してください")
+        return text
+
+    @field_validator("migration_reason")
+    @classmethod
+    def _reason(cls, v: str) -> str:
+        text = (v or "").strip()
+        if not text:
+            raise ValueError("移行理由は必須です")
+        if len(text) > 500:
+            raise ValueError("移行理由は 500 文字以内です")
+        return text
+
 
 class SupplyPartUpdate(BaseModel):
     product_name: Optional[str] = None
@@ -115,7 +182,7 @@ class SupplyPartUpdate(BaseModel):
     destination_cd: Optional[str] = None
     destination_name: Optional[str] = None
     storage_location: str
-    shelf_no: Optional[str] = None
+    shelf_no: str
     keeper: Optional[str] = None
     safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
@@ -128,6 +195,11 @@ class SupplyPartUpdate(BaseModel):
         if not text:
             raise ValueError("保管場所は必須です")
         return text
+
+    @field_validator("shelf_no")
+    @classmethod
+    def _shelf(cls, v: str) -> str:
+        return _require_shelf(v)
 
 
 class SupplyPartTxnBody(BaseModel):
@@ -202,6 +274,8 @@ def _stock_to_dict(
         "quality_status": row.quality_status or QUALITY_GOOD,
         "note": row.note,
         "source": row.source,
+        "migration_trigger": row.migration_trigger,
+        "migration_reason": row.migration_reason,
         "shipment_planned": confirmed,
         "forecast_units": forecast,
         "balance": on_hand - confirmed,
@@ -378,7 +452,14 @@ async def _latest_warehouse_lines(db: AsyncSession, product_cd: str, as_of: date
     ]
 
 
-def _transfer_note(lines: list[dict], raw_qty: int, transfer_qty: int, extra: Optional[str]) -> str:
+def _transfer_note(
+    lines: list[dict],
+    raw_qty: int,
+    transfer_qty: int,
+    trigger: str,
+    reason: str,
+    extra: Optional[str],
+) -> str:
     if lines:
         parts = [
             f"{line['route_cd'] or 'ルートなし'} {line['date']} 倉庫在庫 {line['warehouse_inventory']}"
@@ -388,6 +469,7 @@ def _transfer_note(lines: list[dict], raw_qty: int, transfer_qty: int, extra: Op
     else:
         detail = "生産データの倉庫在庫行なし"
     text = (
+        f"移行トリガー: {MIGRATION_TRIGGERS[trigger]}。理由: {reason}。"
         f"振替元: {detail}。合計 {raw_qty}。"
         f"入庫数量 {transfer_qty}。種別を補給品にし、在庫取引記録に製品倉庫の保留を登録しました。"
     )
@@ -523,6 +605,15 @@ async def search_supply_part_products(
             for product, destination_name in rows
         ]
     }
+
+
+@router.get("/next-product-cd")
+async def next_unregistered_product_cd(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """未登録品の製品CD。5桁、先頭8、中3桁は最大+1、末尾1。"""
+    return {"product_cd": await _next_unregistered_product_cd(db)}
 
 
 @router.get("/transfer-preview")
@@ -665,6 +756,8 @@ async def transfer_supply_part(
     )
     _apply_card_fields(stock, body, current_user.id)
     stock.product_name = _clean(product.product_name, 200) or body.product_cd
+    stock.migration_trigger = body.migration_trigger
+    stock.migration_reason = body.migration_reason
     db.add(stock)
     try:
         await db.flush()
@@ -672,7 +765,14 @@ async def transfer_supply_part(
         raise HTTPException(
             status_code=409, detail="この品番はすでに補給品在庫に登録されています"
         ) from exc
-    note = _transfer_note(lines, raw_qty, transfer_qty, body.note)
+    note = _transfer_note(
+        lines,
+        raw_qty,
+        transfer_qty,
+        body.migration_trigger,
+        body.migration_reason,
+        body.note,
+    )
     _add_txn(db, stock, TXN_TRANSFER_IN, transfer_qty, date.today(), note, current_user.id)
     log = None
     if transfer_qty > 0:
@@ -716,6 +816,8 @@ async def create_supply_part_manual(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_inventory_operation("create")),
 ):
+    if body.auto_product_cd:
+        body.product_cd = await _next_unregistered_product_cd(db)
     if await _existing_stock(db, body.product_cd):
         raise HTTPException(status_code=409, detail="この品番はすでに補給品在庫に登録されています")
     await _ensure_location(db, body.storage_location)

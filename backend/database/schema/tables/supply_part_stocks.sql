@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS `supply_part_stocks` (
   `quality_status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '良好' COMMENT '品質状態',
   `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT '備考',
   `source` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '登録元（transfer/manual）',
+  `migration_trigger` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移行トリガー（mass_end/customer_spec）',
+  `migration_reason` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '移行理由',
   `created_by_user_id` int DEFAULT NULL COMMENT '登録者ID',
   `updated_by_user_id` int DEFAULT NULL COMMENT '更新者ID',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '作成日時',

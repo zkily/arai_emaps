@@ -20,6 +20,8 @@ export interface SupplyPartStock {
   quality_status: string
   note?: string | null
   source: 'transfer' | 'manual' | string
+  migration_trigger?: 'mass_end' | 'customer_spec' | string | null
+  migration_reason?: string | null
   shipment_planned: number
   forecast_units: number
   balance: number
@@ -108,10 +110,13 @@ export interface SupplyPartManualForm extends SupplyPartCardForm {
   product_cd: string
   product_name: string
   opening_qty: number
+  auto_product_cd?: boolean
 }
 
 export interface SupplyPartTransferForm extends SupplyPartCardForm {
   product_cd: string
+  migration_trigger: 'mass_end' | 'customer_spec'
+  migration_reason: string
 }
 
 export interface SupplyPartTransaction {
@@ -205,6 +210,10 @@ export function getSupplyPartTrend(id: number, year: number, month: number, mont
     `${BASE_URL}/${id}/trend`,
     { params: { year, month, months } }
   )
+}
+
+export function getNextSupplyProductCd() {
+  return request.get<{ product_cd: string }>(`${BASE_URL}/next-product-cd`)
 }
 
 export function searchSupplyPartProducts(keyword?: string, limit?: number, supplyOnly = false) {

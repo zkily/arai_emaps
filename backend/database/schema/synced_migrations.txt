@@ -174,3 +174,4 @@
 169_supply_part_locations.sql
 170_supply_part_quality_status.sql
 171_equipment_efficiency_current_rate.sql
+172_supply_part_migration_trigger.sql

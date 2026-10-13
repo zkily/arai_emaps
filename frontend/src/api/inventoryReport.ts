@@ -241,4 +241,30 @@ export const inventoryReportApi = {
     const res = await request.delete(`/api/erp/inventory-report/saved/${id}`)
     return unwrap<{ id: number }>(res)
   },
+
+  /**
+   * 在庫報告 PPT（生産管理部／1カード1ページ）を生成してダウンロードする。
+   */
+  async downloadPptx(body: {
+    payload: QuarterlyReportPayload
+    monthly_kpis?: MonthlyReportKpi[]
+    diff_by_process_avg?: Array<Record<string, unknown>>
+    diff_by_process_total?: Array<Record<string, unknown>>
+    bulk_categories?: Array<{ name?: string; category?: string; count: number; quantity: number }>
+    charts?: Partial<Record<string, string | undefined>>
+  }): Promise<void> {
+    const resp = (await request.post('/api/erp/inventory-report/pptx', body, {
+      responseType: 'blob',
+    })) as unknown as Blob
+    const label = String(body.payload?.label || '在庫報告').replace(/[\\/:*?"<>|]/g, '-')
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
+    const url = window.URL.createObjectURL(resp)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `在庫報告_${label}_${stamp}.pptx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  },
 }
