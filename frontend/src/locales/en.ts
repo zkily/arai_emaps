@@ -702,6 +702,7 @@ export default {
     OP_MANUAL_ORDER_MONTHLY: 'Monthly orders',
     OP_MANUAL_ORDER_DAILY: 'Daily orders',
     OP_MANUAL_SUPPLY_PARTS: 'Supply parts',
+    OP_MANUAL_INVENTORY_REPORT: 'Inventory report',
     OP_MANUAL_OUTSOURCING_WELDING: 'Outsourced welding',
     OP_MANUAL_OUTSOURCING_PLATING: 'Outsourced plating',
     SYSTEM: 'System',

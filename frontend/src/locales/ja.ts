@@ -701,6 +701,7 @@ export default {
     OP_MANUAL_ORDER_MONTHLY: '月受注管理',
     OP_MANUAL_ORDER_DAILY: '日受注管理',
     OP_MANUAL_SUPPLY_PARTS: '補給品管理',
+    OP_MANUAL_INVENTORY_REPORT: '在庫報告管理',
     OP_MANUAL_OUTSOURCING_WELDING: '外注溶接',
     OP_MANUAL_OUTSOURCING_PLATING: '外注メッキ',
     SYSTEM: 'システム管理',

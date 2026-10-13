@@ -105,32 +105,41 @@ const nextAssignDialogInspectorUserId = computed(() => {
       'monitor-page--inspection': isModernMonitor,
       'monitor-page--welding': processKey === 'welding',
       'monitor-page--fullscreen': fullscreen && isModernMonitor,
+      'pb-std': isModernMonitor,
     }"
     v-loading="loading && !hasInitialData"
   >
-    <div class="monitor-header">
-      <div class="monitor-header__left">
-        <span v-if="isModernMonitor" class="monitor-header__brand" aria-hidden="true">
-          <el-icon :size="22"><Monitor /></el-icon>
-        </span>
-        <el-icon v-else :size="26" :color="config.headerIconColor"><Monitor /></el-icon>
-        <div class="monitor-header__titles">
-          <h1 class="monitor-header__title">{{ config.pageTitle }}</h1>
+    <!-- モダン（検査／溶接）：月受注同系ヒーロー -->
+    <div v-if="isModernMonitor" class="monitor-header page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
+      <div class="toolbar-left monitor-header__left">
+        <div class="toolbar-brand">
+          <div class="toolbar-icon-wrap monitor-header__brand" aria-hidden="true">
+            <el-icon class="toolbar-icon" :size="20"><Monitor /></el-icon>
+          </div>
+          <div class="toolbar-text monitor-header__titles">
+            <h1 class="toolbar-title pb-hero-title monitor-header__title">{{ config.pageTitle }}</h1>
+            <p class="toolbar-desc pb-hero-desc">
+              {{
+                isInspection
+                  ? '稼働・能率・不良・次製品指定をリアルタイム監視'
+                  : '稼働・能率・実績をリアルタイム監視'
+              }}
+            </p>
+          </div>
         </div>
         <span class="monitor-header__clock">{{ currentTime }}</span>
         <span
-          v-if="isModernMonitor && lastFetchError"
+          v-if="lastFetchError"
           class="monitor-header__sync monitor-header__sync--error"
           :title="lastFetchError"
         >
           取得失敗
         </span>
       </div>
-      <div class="monitor-header__right">
-        <div
-          v-if="isModernMonitor"
-          class="monitor-header__date-filter"
-        >
+      <div class="toolbar-right monitor-header__right toolbar-actions">
+        <div class="monitor-header__date-filter">
           <label class="monitor-header__date-label" for="monitor-production-day">
             <span class="monitor-header__date-label-icon" aria-hidden="true">
               <el-icon :size="15"><Calendar /></el-icon>
@@ -147,8 +156,43 @@ const nextAssignDialogInspectorUserId = computed(() => {
             @change="onDateChange"
           />
         </div>
+        <el-switch
+          v-model="autoRefresh"
+          active-text="自動更新"
+          size="small"
+          class="monitor-header__auto-switch"
+          @change="onAutoRefreshChange"
+        />
+        <el-button
+          class="tb-btn tb-btn-indigo monitor-header__fullscreen-btn"
+          size="small"
+          :title="fullscreen ? '全画面解除' : '全画面'"
+          @click="toggleFullscreen"
+        >
+          <el-icon><FullScreen /></el-icon>
+          <span class="tb-label">{{ fullscreen ? '解除' : '全画面' }}</span>
+        </el-button>
+        <el-button
+          class="tb-btn tb-btn-teal monitor-header__refresh-btn"
+          size="small"
+          @click="fetchAll"
+        >
+          <el-icon><Refresh /></el-icon>
+          <span class="tb-label">更新</span>
+        </el-button>
+      </div>
+    </div>
+
+    <div v-else class="monitor-header">
+      <div class="monitor-header__left">
+        <el-icon :size="26" :color="config.headerIconColor"><Monitor /></el-icon>
+        <div class="monitor-header__titles">
+          <h1 class="monitor-header__title">{{ config.pageTitle }}</h1>
+        </div>
+        <span class="monitor-header__clock">{{ currentTime }}</span>
+      </div>
+      <div class="monitor-header__right">
         <el-date-picker
-          v-else
           v-model="productionDay"
           type="date"
           value-format="YYYY-MM-DD"
@@ -156,22 +200,11 @@ const nextAssignDialogInspectorUserId = computed(() => {
           style="width: 150px"
           @change="onDateChange"
         />
-        <div v-if="isModernMonitor" class="monitor-header__toolbar-divider" aria-hidden="true" />
         <el-switch
           v-model="autoRefresh"
           active-text="自動更新"
           size="small"
-          :class="{ 'monitor-header__auto-switch': isModernMonitor }"
           @change="onAutoRefreshChange"
-        />
-        <el-button
-          v-if="isModernMonitor"
-          size="small"
-          :icon="FullScreen"
-          circle
-          class="monitor-header__fullscreen-btn"
-          :title="fullscreen ? '全画面解除' : '全画面'"
-          @click="toggleFullscreen"
         />
         <el-button
           size="small"

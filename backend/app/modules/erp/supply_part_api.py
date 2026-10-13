@@ -81,6 +81,20 @@ async def _next_unregistered_product_cd(db: AsyncSession) -> str:
     return f"8{nxt:03d}1"
 
 
+def _shelf_from_location(location: Optional[str]) -> str:
+    """保管場所名の末尾 7 文字を棚番にする（例：…A-03-02 → A-03-02）。"""
+    text = (location or "").strip()
+    if not text:
+        raise ValueError("保管場所は必須です")
+    shelf = text[-7:].upper() if len(text) >= 7 else text.upper()
+    if not SHELF_RE.fullmatch(shelf):
+        raise ValueError(
+            "保管場所名の末尾 7 文字を棚番にします。"
+            "末尾は A-03-02 の形式（棚1文字・段2桁・間口2桁）にしてください"
+        )
+    return shelf
+
+
 def _require_shelf(value: Optional[str]) -> str:
     text = (value or "").strip().upper()
     if not SHELF_RE.fullmatch(text):
@@ -110,8 +124,8 @@ class SupplyPartManualCreate(BaseModel):
     storage_location: str
     shelf_no: str
     keeper: Optional[str] = None
-    safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
+    initial_registered_date: date
     note: Optional[str] = None
 
     @field_validator("product_cd", "product_name", "storage_location")
@@ -139,8 +153,8 @@ class SupplyPartTransferBody(BaseModel):
     destination_name: Optional[str] = None
     shelf_no: str
     keeper: Optional[str] = None
-    safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
+    initial_registered_date: Optional[date] = None
     note: Optional[str] = None
 
     @field_validator("product_cd", "storage_location")
@@ -184,8 +198,8 @@ class SupplyPartUpdate(BaseModel):
     storage_location: str
     shelf_no: str
     keeper: Optional[str] = None
-    safety_stock: int = Field(default=0, ge=0)
     quality_status: QualityStatus = QUALITY_GOOD
+    initial_registered_date: date
     note: Optional[str] = None
 
     @field_validator("storage_location")
@@ -231,6 +245,12 @@ class SupplyPartLocationBody(BaseModel):
             raise ValueError("保管場所名は必須です")
         if len(text) > 100:
             raise ValueError("保管場所名は 100 文字以内です")
+        shelf = text[-7:].upper() if len(text) >= 7 else text.upper()
+        if not SHELF_RE.fullmatch(shelf):
+            raise ValueError(
+                "保管場所名の末尾 7 文字が棚番になります。"
+                "末尾は A-03-02 の形式にしてください（例：補給品棚A-03-02）"
+            )
         return text
 
 
@@ -252,7 +272,6 @@ def _stock_to_dict(
 ) -> dict:
     confirmed, forecast = shipment or (0, 0)
     on_hand = int(row.on_hand_qty or 0)
-    safety = int(row.safety_stock or 0)
     return {
         **(metrics or {}),
         "id": int(row.id),
@@ -265,7 +284,6 @@ def _stock_to_dict(
         "storage_location": row.storage_location or "",
         "shelf_no": row.shelf_no,
         "keeper": row.keeper,
-        "safety_stock": safety,
         "on_hand_qty": on_hand,
         "next_production_date": (
             row.next_production_date.isoformat() if row.next_production_date else None
@@ -276,10 +294,12 @@ def _stock_to_dict(
         "source": row.source,
         "migration_trigger": row.migration_trigger,
         "migration_reason": row.migration_reason,
+        "initial_registered_date": (
+            row.initial_registered_date.isoformat() if row.initial_registered_date else None
+        ),
         "shipment_planned": confirmed,
         "forecast_units": forecast,
         "balance": on_hand - confirmed,
-        "below_safety": safety > 0 and on_hand < safety,
         "short_of_shipment": on_hand < confirmed,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -405,7 +425,9 @@ async def _metrics_map(
         on_hand = int(row.on_hand_qty or 0)
         last_out, last_in = last_map.get(int(row.id), (None, None))
         avg = round(demand_map.get(row.product_cd, 0) / DEMAND_MONTHS, 1)
-        base = last_out or (row.created_at.date() if row.created_at else None)
+        base = last_out or row.initial_registered_date or (
+            row.created_at.date() if row.created_at else None
+        )
         idle_days = (today - base).days if base else None
         result[int(row.id)] = {
             "last_out_date": last_out.isoformat() if last_out else None,
@@ -489,11 +511,18 @@ def _apply_card_fields(row: SupplyPartStock, payload, user_id: int) -> None:
     row.destination_cd = _clean(getattr(payload, "destination_cd", None), 50)
     row.destination_name = _clean(getattr(payload, "destination_name", None), 100)
     row.storage_location = _clean(payload.storage_location, 100) or ""
-    row.shelf_no = _clean(payload.shelf_no, 50)
+    try:
+        row.shelf_no = _shelf_from_location(row.storage_location)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if "keeper" in payload.model_fields_set:
         row.keeper = _clean(payload.keeper, 50)
-    row.safety_stock = int(payload.safety_stock or 0)
+    row.safety_stock = 0
     row.quality_status = payload.quality_status
+    if getattr(payload, "initial_registered_date", None) is not None:
+        row.initial_registered_date = payload.initial_registered_date
+    elif row.initial_registered_date is None:
+        row.initial_registered_date = date.today()
     row.note = _clean(payload.note)
     row.updated_by_user_id = user_id
 
@@ -690,7 +719,7 @@ async def list_supply_parts(
     items = []
     for row in rows:
         item = _stock_to_dict(row, ship_map.get(row.product_cd), metric_map.get(int(row.id)))
-        if alert_only and not (item["below_safety"] or item["short_of_shipment"]):
+        if alert_only and not item["short_of_shipment"]:
             continue
         if stagnant_only and not item["stagnant"]:
             continue
@@ -703,9 +732,7 @@ async def list_supply_parts(
             "count": len(items),
             "on_hand_total": sum(item["on_hand_qty"] for item in items),
             "shipment_total": sum(item["shipment_planned"] for item in items),
-            "alert_count": sum(
-                1 for item in items if item["below_safety"] or item["short_of_shipment"]
-            ),
+            "alert_count": sum(1 for item in items if item["short_of_shipment"]),
             "stagnant_count": sum(1 for item in items if item["stagnant"]),
             "quality_issue_count": sum(
                 1 for item in items if item["quality_status"] != QUALITY_GOOD
@@ -925,10 +952,18 @@ async def update_supply_part_location(
         raise HTTPException(status_code=409, detail="同じ名前の保管場所がすでにあります") from exc
     renamed = 0
     if old_name != body.name:
+        try:
+            new_shelf = _shelf_from_location(body.name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         result = await db.execute(
             update(SupplyPartStock)
             .where(SupplyPartStock.storage_location == old_name)
-            .values(storage_location=body.name, updated_by_user_id=current_user.id)
+            .values(
+                storage_location=body.name,
+                shelf_no=new_shelf,
+                updated_by_user_id=current_user.id,
+            )
         )
         renamed = int(result.rowcount or 0)
     await db.refresh(row)

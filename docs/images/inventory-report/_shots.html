@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>inventory-report shots</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif; color: #0f172a; }
+  .page { width: 1280px; height: 720px; overflow: hidden; page-break-after: always; position: relative; }
+  .page:last-child { page-break-after: auto; }
+  .bg { height: 100%; padding: 12px 14px; background: linear-gradient(160deg,#f5f7ff,#f1f3fb 45%,#f8f5ff); }
+  .hero {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 12px 14px; border-radius: 16px; color: #fff; min-height: 72px;
+    background: linear-gradient(125deg,#4f46e5,#6d28d9 42%,#9333ea 72%,#a855f7);
+  }
+  .hero h1 { margin: 0; font-size: 20px; }
+  .hero p { margin: 3px 0 0; font-size: 11px; opacity: .9; }
+  .left { display: flex; align-items: center; gap: 10px; }
+  .ico { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 760px; }
+  .btn { height: 30px; border-radius: 999px; padding: 0 10px; font-size: 12px; font-weight: 800; background: #fff; border: 1px solid #e2e8f0; }
+  .g { color: #047857; } .a { color: #92400e; } .b { color: #1d4ed8; } .i { color: #3730a3; }
+  .t { color: #0f766e; } .r { color: #be123c; } .v { color: #6d28d9; } .s { color: #334155; }
+  .filter { margin-top: 10px; background: #fff; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; border-left: 4px solid #a855f7; box-shadow: 0 4px 12px rgba(15,23,42,.05); }
+  .field { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 6px 10px; font-size: 13px; }
+  .seg { display: flex; background: #f1f5f9; border-radius: 9px; overflow: hidden; }
+  .seg span { padding: 6px 10px; font-size: 12px; font-weight: 700; color: #64748b; }
+  .seg .on { background: linear-gradient(180deg,#a78bfa,#7c3aed); color: #fff; }
+  .saved { margin-top: 8px; display: flex; gap: 8px; align-items: center; }
+  .chip { background: #fff; border: 1px solid #c4b5fd; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+  .chip.final { border-color: #86efac; color: #047857; }
+  .kpis { margin-top: 10px; display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+  .card { background: #fff; border-radius: 12px; padding: 8px 10px; box-shadow: 0 4px 12px rgba(15,23,42,.05); border-top: 3px solid #6366f1; }
+  .card h3 { margin: 0; font-size: 13px; }
+  .card small { color: #64748b; font-size: 10px; }
+  .nums { display: flex; gap: 8px; margin-top: 6px; }
+  .nums b { display: block; font-size: 16px; }
+  .nums span { font-size: 10px; color: #64748b; }
+  .bar { height: 54px; margin-top: 6px; border-radius: 8px; background: linear-gradient(180deg,#eef2ff,#fff); display: flex; align-items: flex-end; gap: 8px; padding: 6px; }
+  .bar i { display: block; width: 14px; border-radius: 4px 4px 0 0; background: linear-gradient(180deg,#818cf8,#4f46e5); }
+  .mark { position: absolute; z-index: 5; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 800; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .mr { background: #ef4444; } .mb { background: #2563eb; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th { background: #f5f3ff; color: #3730a3; text-align: right; padding: 5px 6px; }
+  th:first-child, td:first-child { text-align: left; }
+  td { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; text-align: right; }
+  .neg { color: #dc2626; font-weight: 700; } .pos { color: #059669; font-weight: 700; }
+  .app { height: 100%; display: flex; background: #f1f5f9; }
+  .rail { width: 64px; background: #0b1220; display: flex; flex-direction: column; align-items: center; padding-top: 12px; gap: 10px; }
+  .rail .ic { width: 42px; height: 42px; border-radius: 12px; background: #111827; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }
+  .rail .ic.on { background: linear-gradient(160deg,#818cf8,#6d28d9); color: #fff; }
+  .fly { position: absolute; left: 72px; top: 36px; display: flex; z-index: 4; }
+  .panel { width: 230px; background: #111827; color: #e2e8f0; border-radius: 12px; padding: 10px 0; border: 1px solid #1f2937; box-shadow: 0 18px 40px rgba(0,0,0,.4); }
+  .panel h4 { margin: 0 12px 8px; font-size: 12px; color: #94a3b8; }
+  .item { padding: 8px 14px; font-size: 13px; }
+  .item.on { background: rgba(109,40,217,.35); }
+  .item.sel { outline: 2px solid #f43f5e; outline-offset: -2px; background: rgba(244,63,94,.2); }
+  .dlg-wrap { height: 100%; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; }
+  .dlg { width: 860px; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 50px rgba(15,23,42,.28); }
+  .dlg.sm { width: 460px; }
+  .dh { background: linear-gradient(125deg,#4f46e5,#7c3aed); color: #fff; padding: 14px 16px; font-weight: 800; }
+  .db { padding: 14px 16px; font-size: 13px; }
+  .db h3 { margin: 8px 0 4px; font-size: 13px; color: #4f46e5; }
+  .df { padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e2e8f0; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <div class="app">
+    <div class="rail"><div class="ic">🏠</div><div class="ic on">ERP</div><div class="ic">MES</div></div>
+    <div style="flex:1;padding:16px;"><div style="color:#94a3b8;margin-bottom:8px;">メイン画面</div><div style="height:560px;border:1px dashed #cbd5e1;border-radius:12px;background:#fff;opacity:.5;"></div></div>
+  </div>
+  <div class="fly">
+    <div class="panel"><h4>ERP管理メニュー</h4><div class="item">受注管理</div><div class="item on">在庫管理 ›</div><div class="item">生産管理</div></div>
+    <div class="panel" style="margin-left:6px;"><h4>在庫管理</h4><div class="item">仕掛品・製品在庫照会</div><div class="item">補給品管理</div><div class="item sel">在庫報告管理</div><div class="item">生産検討会資料</div></div>
+  </div>
+  <div class="mark mr" style="left:78px;top:22px;">1</div>
+  <div class="mark mr" style="left:250px;top:96px;">2</div>
+  <div class="mark mr" style="left:520px;top:148px;">3</div>
+</section>
+
+<section class="page"><div class="bg">
+  <div class="mark mb" style="left:18px;top:16px;">A</div>
+  <div class="hero">
+    <div class="left"><div class="ico">▣</div><div><h1>在庫報告管理 <span style="font-size:14px;opacity:.85;">?</span></h1><p>四半期報告 · Q2 7–9</p></div></div>
+    <div class="btns">
+      <button class="btn s">保存一覧</button>
+      <button class="btn g">レポート生成</button>
+      <button class="btn a">下書き保存</button>
+      <button class="btn b">確定保存</button>
+      <button class="btn i">印刷</button>
+      <button class="btn t">Excel出力</button>
+      <button class="btn r">PDF出力</button>
+      <button class="btn v">PPT出力</button>
+    </div>
+  </div>
+  <div class="mark mr" style="right:120px;top:22px;">1</div>
+  <div class="mark mb" style="left:18px;top:92px;">B</div>
+  <div class="filter">
+    <div class="field">2026年度 ▾</div>
+    <div class="seg"><span>四半期</span><span class="on">半期</span><span>年間</span></div>
+    <div class="seg"><span class="on">上期 4–9</span><span>下期 10–3</span></div>
+  </div>
+  <div class="saved"><span style="font-size:12px;font-weight:800;color:#6d28d9;">保存済み 2</span><span class="chip">2026上期 <small>下書き</small> ×</span><span class="chip final">2026Q1 <small>確定</small> ×</span></div>
+  <div class="kpis">
+    <div class="card"><h3>月末在庫（仕掛品・製品）</h3><small>単位：千本</small><div class="nums"><div><span>7月</span><b>1,240</b></div><div><span>8月</span><b>1,180</b></div><div><span>9月</span><b>1,310</b></div></div><div class="bar"><i style="height:70%"></i><i style="height:62%"></i><i style="height:80%"></i></div></div>
+    <div class="card" style="border-top-color:#0d9488;"><h3>期末仕掛品</h3><small>単位：千本</small><div class="nums"><div><span>7月</span><b>820</b></div><div><span>8月</span><b>790</b></div><div><span>9月</span><b>860</b></div></div></div>
+    <div class="card" style="border-top-color:#f59e0b;"><h3>期末製品</h3><small>目安 375</small><div class="nums"><div><span>7月</span><b>420</b></div><div><span>8月</span><b>390</b></div><div><span>9月</span><b class="neg">360</b></div></div></div>
+  </div>
+</div></section>
+
+<section class="page"><div class="bg">
+  <div class="card" style="border-top-color:#7c3aed;">
+    <h3>理論在庫 vs 棚卸差異（工程別）</h3>
+    <small>対象期間の月平均・単位：千本（検査は倉庫へ合算／切断・面取は差異なし）</small>
+    <table>
+      <thead><tr><th>工程</th><th>工程CD</th><th>対象月数</th><th>理論在庫</th><th>棚卸在庫</th><th>差異</th><th>差異率</th></tr></thead>
+      <tbody>
+        <tr><td>成型</td><td>FM</td><td>3</td><td>520.0</td><td>508.4</td><td class="neg">-11.6</td><td class="neg">-2.2%</td></tr>
+        <tr><td>溶接</td><td>WD</td><td>3</td><td>210.0</td><td>214.2</td><td class="pos">+4.2</td><td class="pos">+2.0%</td></tr>
+        <tr><td>倉庫</td><td>WH</td><td>3</td><td>380.0</td><td>375.0</td><td class="neg">-5.0</td><td class="neg">-1.3%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card" style="margin-top:10px;border-top-color:#f59e0b;">
+    <h3>大量廃棄・保留品・大量不良（対象期間）</h3>
+    <table>
+      <thead><tr><th>発生日</th><th>区分</th><th>工程</th><th>製品</th><th>本数</th><th>状態</th></tr></thead>
+      <tbody>
+        <tr><td>2026-08-12</td><td>大量廃棄</td><td>成型</td><td>ブラケットA</td><td>1,200</td><td>未処理</td></tr>
+        <tr><td>2026-09-03</td><td>大量不良</td><td>検査</td><td>カバーB</td><td>260</td><td>処理済</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div></section>
+
+<section class="page"><div class="dlg-wrap">
+  <div class="dlg">
+    <div class="dh">用語・算出方法の説明<br><small style="font-weight:600;opacity:.9;">このページで使われる名詞の定義と計算ロジック</small></div>
+    <div class="db">
+      <h3>期間・集計対象</h3>
+      <p>年度は4月始まり。四半期 Q1=4–6月。製品名に「加工」を含む製品は全統計から除外。</p>
+      <h3>在庫指標</h3>
+      <p>仕掛品＝切断〜外注検査前の在庫合計。製品＝検査・倉庫・外注倉庫。表示は千本。</p>
+      <h3>品質・棚卸</h3>
+      <p>廃棄率＝1 − Π(1 − 工程別率)。差異＝棚卸在庫 − 理論在庫。一致率 95% 以上が目安。</p>
+      <h3>保存・出力</h3>
+      <p>下書き／確定保存、印刷（A4縦）、Excel複数シート、PDF、PPT（KPIを1枚ずつ）。</p>
+    </div>
+  </div>
+  <div class="mark mr" style="left:220px;top:70px;">1</div>
+</div></section>
+
+<section class="page"><div class="dlg-wrap">
+  <div class="dlg sm">
+    <div class="dh">確定保存</div>
+    <div class="db">確定保存しますか？（報告用として固定されます）</div>
+    <div class="df"><button class="btn s">キャンセル</button><button class="btn b">確定</button></div>
+  </div>
+</div></section>
+
+</body>
+</html>

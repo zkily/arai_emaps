@@ -174,13 +174,11 @@
             <span v-else class="num-warn" title="A-03-02 の形式に直してください">{{ row.shelf_no || '未設定' }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="initial_registered_date" label="最初登録日" width="108" sortable />
         <el-table-column prop="on_hand_qty" label="現在庫" width="90" align="right">
           <template #default="{ row }">
             <span class="num-strong">{{ formatNum(row.on_hand_qty) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column prop="safety_stock" label="安全在庫" width="90" align="right">
-          <template #default="{ row }">{{ formatNum(row.safety_stock) }}</template>
         </el-table-column>
         <el-table-column prop="quality_status" label="品質状態" width="90" align="center">
           <template #default="{ row }">
@@ -337,26 +335,19 @@
           </section>
           <section class="form-section form-section--sky">
             <header class="form-section__title"><span class="form-section__dot" />保管・品質</header>
-            <p class="dialog-hint">棚番は A-03-02（棚1文字・段2桁・間口2桁）で入力してください。</p>
+            <p class="dialog-hint">棚番は保管場所名の末尾 7 文字から自動入力します（例：補給品棚A-03-02 → A-03-02）。</p>
             <div class="form-grid form-grid--4">
               <el-form-item label="保管場所" required>
                 <SupplyLocationSelect
-                  v-model="transferForm.storage_location"
+                  :model-value="transferForm.storage_location"
                   :locations="locations"
                   :can-manage="canManageLocations"
+                  @update:model-value="(v) => onLocationChange(transferForm, v)"
                   @manage="openLocations"
                 />
               </el-form-item>
               <el-form-item label="棚番" required>
-                <el-input
-                  v-model="transferForm.shelf_no"
-                  maxlength="20"
-                  placeholder="A-03-02"
-                  @blur="transferForm.shelf_no = normalizeShelf(transferForm.shelf_no)"
-                />
-              </el-form-item>
-              <el-form-item label="安全在庫">
-                <el-input-number v-model="transferForm.safety_stock" :min="0" :step="1" controls-position="right" />
+                <el-input v-model="transferForm.shelf_no" maxlength="20" placeholder="保管場所から自動" disabled />
               </el-form-item>
               <el-form-item label="品質状態">
                 <el-select v-model="transferForm.quality_status" style="width: 100%">
@@ -486,29 +477,31 @@
           </section>
           <section class="form-section form-section--sky">
             <header class="form-section__title"><span class="form-section__dot" />在庫・保管・品質</header>
-            <p class="dialog-hint">棚番は A-03-02（棚1文字・段2桁・間口2桁）で入力してください。</p>
+            <p class="dialog-hint">棚番は保管場所名の末尾 7 文字から自動入力します（例：補給品棚A-03-02 → A-03-02）。</p>
             <div class="form-grid form-grid--4">
               <el-form-item label="期初数量" required>
                 <el-input-number v-model="manualForm.opening_qty" :min="0" :step="1" controls-position="right" />
               </el-form-item>
+              <el-form-item label="最初登録日" required>
+                <el-date-picker
+                  v-model="manualForm.initial_registered_date"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="最初登録日"
+                  style="width: 100%"
+                />
+              </el-form-item>
               <el-form-item label="保管場所" required>
                 <SupplyLocationSelect
-                  v-model="manualForm.storage_location"
+                  :model-value="manualForm.storage_location"
                   :locations="locations"
                   :can-manage="canManageLocations"
+                  @update:model-value="(v) => onLocationChange(manualForm, v)"
                   @manage="openLocations"
                 />
               </el-form-item>
               <el-form-item label="棚番" required>
-                <el-input
-                  v-model="manualForm.shelf_no"
-                  maxlength="20"
-                  placeholder="A-03-02"
-                  @blur="manualForm.shelf_no = normalizeShelf(manualForm.shelf_no)"
-                />
-              </el-form-item>
-              <el-form-item label="安全在庫">
-                <el-input-number v-model="manualForm.safety_stock" :min="0" :step="1" controls-position="right" />
+                <el-input v-model="manualForm.shelf_no" maxlength="20" placeholder="保管場所から自動" disabled />
               </el-form-item>
               <el-form-item label="品質状態">
                 <el-select v-model="manualForm.quality_status" style="width: 100%">
@@ -553,7 +546,7 @@
       </template>
       <div class="spm-dialog-body">
         <p class="dialog-hint">
-          量産品の置き場とは物理的に分けた補給品専用棚だけを登録してください。品目の住所は、カードの棚番を A-03-02（棚-段-間口）で付けます。
+          量産品の置き場とは物理的に分けた補給品専用棚だけを登録してください。保管場所名の末尾 7 文字が棚番になります（例：補給品棚A-03-02 → 棚番 A-03-02）。
         </p>
         <section v-if="canCreate || (canEdit && locForm.id)" class="form-section">
           <header class="form-section__title">
@@ -562,7 +555,7 @@
           <el-form label-position="top" class="spm-form">
             <div class="location-form-grid">
               <el-form-item label="保管場所名" required>
-                <el-input v-model="locForm.name" maxlength="100" placeholder="例：補給品専用棚" />
+                <el-input v-model="locForm.name" maxlength="100" placeholder="例：補給品棚A-03-02" />
               </el-form-item>
               <el-form-item label="表示順">
                 <el-input-number v-model="locForm.sort_order" :step="1" controls-position="right" />
@@ -651,6 +644,9 @@
       <template v-if="detail">
         <el-descriptions :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="製品CD">{{ detail.stock.product_cd }}</el-descriptions-item>
+          <el-descriptions-item label="最初登録日">
+            {{ detail.stock.initial_registered_date || '—' }}
+          </el-descriptions-item>
           <el-descriptions-item label="現在庫">{{ formatNum(detail.stock.on_hand_qty) }}</el-descriptions-item>
           <el-descriptions-item label="品質状態">
             <el-tag size="small" round :type="qualityTagType(detail.stock.quality_status)">
@@ -723,23 +719,25 @@
               </el-form-item>
               <el-form-item label="保管場所" required>
                 <SupplyLocationSelect
-                  v-model="editForm.storage_location"
+                  :model-value="editForm.storage_location"
                   :locations="locations"
                   :keep-value="detail?.stock.storage_location"
                   :can-manage="canManageLocations"
+                  @update:model-value="(v) => onLocationChange(editForm, v)"
                   @manage="openLocations"
                 />
               </el-form-item>
               <el-form-item label="棚番" required>
-                <el-input
-                  v-model="editForm.shelf_no"
-                  maxlength="20"
-                  placeholder="A-03-02"
-                  @blur="editForm.shelf_no = normalizeShelf(editForm.shelf_no)"
-                />
+                <el-input v-model="editForm.shelf_no" maxlength="20" placeholder="保管場所から自動" disabled />
               </el-form-item>
-              <el-form-item label="安全在庫">
-                <el-input-number v-model="editForm.safety_stock" :min="0" :step="1" controls-position="right" />
+              <el-form-item label="最初登録日" required>
+                <el-date-picker
+                  v-model="editForm.initial_registered_date"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="最初登録日"
+                  style="width: 100%"
+                />
               </el-form-item>
               <el-form-item label="品質状態">
                 <el-select v-model="editForm.quality_status" style="width: 100%">
@@ -988,14 +986,28 @@ function normalizeShelf(value?: string | null) {
   return (value || '').trim().toUpperCase()
 }
 
+function shelfFromLocation(location?: string | null) {
+  const text = (location || '').trim()
+  if (!text) return ''
+  return normalizeShelf(text.length >= 7 ? text.slice(-7) : text)
+}
+
 function isValidShelf(value?: string | null) {
   return SHELF_RE.test(normalizeShelf(value))
 }
 
-function shelfError(value?: string | null) {
-  if (!normalizeShelf(value)) return '棚番は必須です（例 A-03-02）'
-  if (!isValidShelf(value)) return '棚番は A-03-02 の形式（棚1文字・段2桁・間口2桁）で入力してください'
+function shelfError(value?: string | null, location?: string | null) {
+  const shelf = location != null ? shelfFromLocation(location) : normalizeShelf(value)
+  if (!shelf) return '保管場所を選択してください（末尾 7 文字が棚番になります）'
+  if (!isValidShelf(shelf)) {
+    return '保管場所名の末尾 7 文字を棚番にします。末尾は A-03-02 の形式にしてください'
+  }
   return ''
+}
+
+function onLocationChange(form: SupplyPartCardForm, location?: string) {
+  form.storage_location = location || ''
+  form.shelf_no = shelfFromLocation(form.storage_location)
 }
 
 function triggerLabel(code?: string | null) {
@@ -1014,7 +1026,7 @@ function qualityTagType(status?: string | null) {
 }
 
 function rowClass({ row }: { row: SupplyPartStock }) {
-  return row.below_safety || row.short_of_shipment ? 'supply-row-alert' : ''
+  return row.short_of_shipment ? 'supply-row-alert' : ''
 }
 
 function txnLabel(type: string) {
@@ -1042,8 +1054,8 @@ function emptyCard(): SupplyPartCardForm {
     destination_name: '',
     storage_location: '',
     shelf_no: '',
-    safety_stock: 0,
     quality_status: '良好',
+    initial_registered_date: todayStr(),
     note: '',
   }
 }
@@ -1075,8 +1087,8 @@ function cardPayload(form: SupplyPartCardForm): SupplyPartCardForm {
     destination_name: blankToNull(form.destination_name),
     storage_location: (form.storage_location || '').trim(),
     shelf_no: normalizeShelf(form.shelf_no),
-    safety_stock: Number(form.safety_stock || 0),
     quality_status: form.quality_status || '良好',
+    initial_registered_date: form.initial_registered_date || todayStr(),
     note: blankToNull(form.note),
   }
 }
@@ -1175,11 +1187,12 @@ async function submitTransfer() {
     ElMessage.warning('移行理由を入力してください')
     return
   }
-  const shelfMsg = shelfError(transferForm.shelf_no)
+  const shelfMsg = shelfError(transferForm.shelf_no, transferForm.storage_location)
   if (shelfMsg) {
     ElMessage.warning(shelfMsg)
     return
   }
+  transferForm.shelf_no = shelfFromLocation(transferForm.storage_location)
   saving.value = true
   try {
     const res = (await transferSupplyPart({
@@ -1259,11 +1272,16 @@ async function submitManual() {
     ElMessage.warning('製品CD、製品名、保管場所は必須です')
     return
   }
-  const shelfMsg = shelfError(manualForm.shelf_no)
+  if (!manualForm.initial_registered_date) {
+    ElMessage.warning('最初登録日を入力してください')
+    return
+  }
+  const shelfMsg = shelfError(manualForm.shelf_no, manualForm.storage_location)
   if (shelfMsg) {
     ElMessage.warning(shelfMsg)
     return
   }
+  manualForm.shelf_no = shelfFromLocation(manualForm.storage_location)
   if (pickedProductType.value && pickedProductType.value !== '補給品') {
     try {
       await ElMessageBox.confirm(
@@ -1306,9 +1324,9 @@ function fillEdit(stock: SupplyPartStock) {
   editForm.destination_cd = stock.destination_cd || ''
   editForm.destination_name = stock.destination_name || ''
   editForm.storage_location = stock.storage_location || ''
-  editForm.shelf_no = stock.shelf_no || ''
-  editForm.safety_stock = stock.safety_stock || 0
+  editForm.shelf_no = shelfFromLocation(stock.storage_location) || stock.shelf_no || ''
   editForm.quality_status = stock.quality_status || '良好'
+  editForm.initial_registered_date = stock.initial_registered_date || todayStr()
   editForm.note = stock.note || ''
 }
 
@@ -1468,8 +1486,8 @@ async function exportExcel() {
       { header: '納入先名', key: 'destination_name', width: 18 },
       { header: '保管場所', key: 'storage_location', width: 16 },
       { header: '棚番', key: 'shelf_no', width: 10 },
+      { header: '最初登録日', key: 'initial_registered_date', width: 12 },
       { header: '現在庫', key: 'on_hand_qty', width: 10 },
-      { header: '安全在庫', key: 'safety_stock', width: 10 },
       { header: '品質状態', key: 'quality_status', width: 10 },
       { header: '月平均出荷', key: 'avg_monthly_demand', width: 11 },
       { header: '滞留月数', key: 'idle_months', width: 10 },
@@ -1701,11 +1719,16 @@ async function saveCard() {
     ElMessage.warning('保管場所は必須です')
     return
   }
-  const shelfMsg = shelfError(editForm.shelf_no)
+  if (!editForm.initial_registered_date) {
+    ElMessage.warning('最初登録日を入力してください')
+    return
+  }
+  const shelfMsg = shelfError(editForm.shelf_no, editForm.storage_location)
   if (shelfMsg) {
     ElMessage.warning(shelfMsg)
     return
   }
+  editForm.shelf_no = shelfFromLocation(editForm.storage_location)
   saving.value = true
   try {
     await updateSupplyPart(detail.value.stock.id, {
@@ -1801,6 +1824,11 @@ async function saveLocation() {
   const name = locForm.name.trim()
   if (!name) {
     ElMessage.warning('保管場所名を入力してください')
+    return
+  }
+  const locShelfMsg = shelfError(undefined, name)
+  if (locShelfMsg) {
+    ElMessage.warning(locShelfMsg)
     return
   }
   const payload = {

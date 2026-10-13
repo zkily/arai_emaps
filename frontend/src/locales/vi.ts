@@ -592,6 +592,7 @@ export default {
     OP_MANUAL_ORDER_MONTHLY: 'Quản lý đơn hàng tháng',
     OP_MANUAL_ORDER_DAILY: 'Quản lý đơn hàng ngày',
     OP_MANUAL_SUPPLY_PARTS: 'Quản lý hàng bổ sung',
+    OP_MANUAL_INVENTORY_REPORT: 'Báo cáo tồn kho',
     OP_MANUAL_OUTSOURCING_WELDING: 'Hàn gia công ngoài',
     OP_MANUAL_OUTSOURCING_PLATING: 'Mạ gia công ngoài',
     SYSTEM: 'Hệ thống',

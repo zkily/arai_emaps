@@ -1,42 +1,42 @@
 <template>
-  <div class="rc-page" v-loading="pageLoading">
-    <div class="rc-page__bg" aria-hidden="true">
-      <div class="rc-page__orb rc-page__orb--1" />
-      <div class="rc-page__orb rc-page__orb--2" />
-      <div class="rc-page__grid" />
+  <div class="rc-page rc-modern pb-std" v-loading="pageLoading">
+    <div class="page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
+      <div class="toolbar-left">
+        <div class="toolbar-brand">
+          <div class="toolbar-icon-wrap">
+            <el-icon class="toolbar-icon"><Document /></el-icon>
+          </div>
+          <div class="toolbar-text">
+            <h1 class="toolbar-title pb-hero-title">報告センター</h1>
+            <p class="toolbar-desc pb-hero-desc">生成・手動配信・定時配信・送信履歴を一画面で</p>
+          </div>
+        </div>
+        <div class="rc-stat-chips">
+          <div class="rc-chip rc-chip--defs">
+            <span class="rc-chip__label">レポート</span>
+            <b class="rc-chip__value">{{ definitions.length }}</b>
+          </div>
+          <div class="rc-chip rc-chip--sched">
+            <span class="rc-chip__label">スケジュール</span>
+            <b class="rc-chip__value">{{ schedules.length }}</b>
+          </div>
+          <div class="rc-chip rc-chip--logs">
+            <span class="rc-chip__label">履歴</span>
+            <b class="rc-chip__value">{{ logs.length }}</b>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar-right toolbar-actions">
+        <el-button class="tb-btn tb-btn-teal" :loading="pageLoading" @click="loadAll">
+          <el-icon><Refresh /></el-icon>
+          <span class="tb-label">更新</span>
+        </el-button>
+      </div>
     </div>
 
-    <header class="rc-hero">
-      <div class="rc-hero__main">
-        <div class="rc-hero__icon">
-          <el-icon :size="22"><Document /></el-icon>
-        </div>
-        <div class="rc-hero__text">
-          <span class="rc-hero__eyebrow">SYSTEM · REPORT HUB</span>
-          <h1 class="rc-hero__title">報告センター</h1>
-          <p class="rc-hero__desc">生成・手動配信・定時配信・送信履歴を一画面で</p>
-        </div>
-      </div>
-      <div class="rc-hero__aside">
-        <div class="rc-hero__metrics">
-          <div class="rc-metric rc-metric--defs">
-            <span class="rc-metric__label">レポート</span>
-            <b class="rc-metric__value">{{ definitions.length }}</b>
-          </div>
-          <div class="rc-metric rc-metric--sched">
-            <span class="rc-metric__label">スケジュール</span>
-            <b class="rc-metric__value">{{ schedules.length }}</b>
-          </div>
-          <div class="rc-metric rc-metric--logs">
-            <span class="rc-metric__label">履歴</span>
-            <b class="rc-metric__value">{{ logs.length }}</b>
-          </div>
-        </div>
-        <el-button class="rc-hero__refresh" :icon="Refresh" circle size="small" :loading="pageLoading" @click="loadAll" />
-      </div>
-    </header>
-
-    <nav class="rc-tabs" role="tablist">
+    <nav class="rc-tabs-bar" role="tablist" aria-label="報告センタータブ">
       <button
         v-for="tab in tabs"
         :key="tab.name"
@@ -139,18 +139,23 @@
                 <el-option label="PDF" value="pdf" />
                 <el-option label="両方" value="both" />
               </el-select>
-              <el-button class="rc-btn rc-btn--ghost" :icon="View" size="small" :loading="previewLoading" @click="doPreview">プレビュー</el-button>
-              <el-button class="rc-btn rc-btn--ghost" :icon="Download" size="small" @click="doDownload">DL</el-button>
+              <el-button class="tb-btn tb-btn-blue" size="small" :loading="previewLoading" @click="doPreview">
+                <el-icon><View /></el-icon>
+                <span class="tb-label">プレビュー</span>
+              </el-button>
+              <el-button class="tb-btn tb-btn-amber" size="small" @click="doDownload">
+                <el-icon><Download /></el-icon>
+                <span class="tb-label">DL</span>
+              </el-button>
               <el-button
-                class="rc-btn rc-btn--send"
-                type="primary"
-                :icon="Promotion"
+                class="tb-btn tb-btn-green"
                 size="small"
                 :loading="sendLoading"
                 :disabled="!preview?.can_send"
                 @click="doSend"
               >
-                送信
+                <el-icon><Promotion /></el-icon>
+                <span class="tb-label">送信</span>
               </el-button>
             </div>
           </div>
@@ -310,9 +315,13 @@
             <p class="rc-panel__sub">自動送信の頻度・時刻・対象期間を管理</p>
           </div>
         </div>
-        <el-button class="rc-btn rc-btn--sched" type="primary" :icon="Plus" size="small" @click="openScheduleDialog()">新規追加</el-button>
+        <el-button class="tb-btn tb-btn-blue" size="small" @click="openScheduleDialog()">
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">新規追加</span>
+        </el-button>
       </div>
-      <el-table :data="schedules" size="small" class="rc-table rc-table--sched" stripe>
+      <div class="rc-table-wrap">
+      <el-table :data="schedules" size="small" class="rc-table rc-table--sched" stripe border>
         <el-table-column label="レポート" min-width="180">
           <template #default="{ row }">
             <div class="rc-cell-report">
@@ -345,11 +354,12 @@
         <el-table-column prop="next_run_at" label="次回予定" width="160" />
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openScheduleDialog(row)">編集</el-button>
-            <el-button link type="danger" size="small" @click="removeSchedule(row)">削除</el-button>
+            <el-button link type="primary" size="small" class="row-act act-edit" @click="openScheduleDialog(row)">編集</el-button>
+            <el-button link type="danger" size="small" class="row-act act-delete" @click="removeSchedule(row)">削除</el-button>
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </section>
 
     <!-- 送信履歴 -->
@@ -362,9 +372,13 @@
             <p class="rc-panel__sub">直近 100 件の配信結果</p>
           </div>
         </div>
-        <el-button class="rc-btn rc-btn--ghost" :icon="Refresh" size="small" @click="loadLogs">更新</el-button>
+        <el-button class="tb-btn tb-btn-amber" size="small" @click="loadLogs">
+          <el-icon><Refresh /></el-icon>
+          <span class="tb-label">更新</span>
+        </el-button>
       </div>
-      <el-table :data="logs" size="small" class="rc-table rc-table--logs" stripe>
+      <div class="rc-table-wrap">
+      <el-table :data="logs" size="small" class="rc-table rc-table--logs" stripe border>
         <el-table-column label="レポート" min-width="160">
           <template #default="{ row }">{{ definitionName(row.report_code) }}</template>
         </el-table-column>
@@ -388,17 +402,31 @@
         <el-table-column prop="message" label="メッセージ" min-width="180" />
         <el-table-column prop="created_at" label="日時" width="160" />
       </el-table>
+      </div>
     </section>
 
     <!-- スケジュール編集ダイアログ -->
     <el-dialog
       v-model="scheduleDialog"
-      :title="editingSchedule.id ? 'スケジュール編集' : 'スケジュール追加'"
       width="480px"
-      class="rc-dialog"
+      class="rc-dialog pb-std"
       align-center
+      destroy-on-close
+      :show-close="false"
     >
-      <el-form label-width="90px">
+      <template #header>
+        <div class="rc-dlg-header rc-dlg-header--blue">
+          <div class="rc-dlg-icon-wrap">
+            <el-icon class="rc-dlg-icon"><Plus /></el-icon>
+          </div>
+          <div class="rc-dlg-title-wrap">
+            <span class="rc-dlg-title">{{ editingSchedule.id ? 'スケジュール編集' : 'スケジュール追加' }}</span>
+            <span class="rc-dlg-subtitle">定時配信の頻度・時刻・対象期間</span>
+          </div>
+        </div>
+      </template>
+      <div class="rc-dlg-body">
+      <el-form label-width="90px" class="rc-dlg-form">
         <el-form-item label="レポート">
           <el-select v-model="editingSchedule.report_code" :disabled="!!editingSchedule.id" style="width: 100%">
             <el-option v-for="d in definitions" :key="d.report_code" :label="d.report_name" :value="d.report_code" />
@@ -435,9 +463,12 @@
           </el-select>
         </el-form-item>
       </el-form>
+      </div>
       <template #footer>
-        <el-button @click="scheduleDialog = false">キャンセル</el-button>
-        <el-button type="primary" class="rc-btn rc-btn--sched" :loading="savingSchedule" @click="saveSchedule">保存</el-button>
+        <div class="rc-dlg-footer">
+          <el-button class="rc-dlg-btn-cancel" @click="scheduleDialog = false">キャンセル</el-button>
+          <el-button type="primary" class="rc-dlg-btn-submit rc-dlg-btn-submit--blue" :loading="savingSchedule" @click="saveSchedule">保存</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -1239,194 +1270,266 @@ watch(isCuttingReportPreview, (val) => {
 
 <style scoped>
 .rc-page {
-  --rc-bg: #eef6f4;
   --rc-surface: #ffffff;
-  --rc-border: #d7e5e1;
-  --rc-border-strong: #b8d0c8;
-  --rc-text: #0f1f1c;
-  --rc-muted: #5b736c;
-  --rc-primary: #0d9488;
-  --rc-primary-soft: #ccfbf1;
-  --rc-shadow: 0 1px 2px rgba(15, 31, 28, 0.04), 0 8px 24px rgba(13, 148, 136, 0.08);
+  --rc-border: #e0e7ff;
+  --rc-text: #0f172a;
+  --rc-muted: #64748b;
+  --rc-primary: #6366f1;
+  --rc-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 32px -18px rgba(79, 70, 229, 0.3);
   --rc-radius: 14px;
-  --rc-radius-sm: 10px;
+  --rc-radius-sm: 12px;
   position: relative;
-  min-height: 100%;
-  padding: 12px 14px 14px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 12px;
   color: var(--rc-text);
-  overflow: hidden;
-  background: linear-gradient(165deg, #f4fbf9 0%, #eef4f8 48%, #f7f4ef 100%);
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(37, 99, 235, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 60%),
+    linear-gradient(160deg, #eff6ff 0%, #f0f9ff 45%, #f8fafc 100%);
 }
 
-.rc-page__bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.rc-page__grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(13, 148, 136, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(13, 148, 136, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
-}
-
-.rc-page__orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(52px);
-  opacity: 0.55;
-}
-
-.rc-page__orb--1 {
-  width: 260px;
-  height: 260px;
-  top: -80px;
-  right: 6%;
-  background: radial-gradient(circle, rgba(13, 148, 136, 0.32), transparent 70%);
-}
-
-.rc-page__orb--2 {
-  width: 220px;
-  height: 220px;
-  left: -50px;
-  bottom: 8%;
-  background: radial-gradient(circle, rgba(3, 105, 161, 0.22), transparent 70%);
-}
-
-.rc-page > :not(.rc-page__bg) {
+/* ---------- タイトルバー（報告＝青系・他頁と分色） ---------- */
+.rc-modern .page-toolbar {
   position: relative;
-  z-index: 1;
-}
-
-.rc-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: linear-gradient(125deg, #1e40af 0%, #2563eb 38%, #3b82f6 72%, #0ea5e9 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
   margin-bottom: 10px;
-  padding: 14px 16px;
-  border-radius: var(--rc-radius);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: linear-gradient(125deg, rgba(255, 255, 255, 0.97) 0%, rgba(240, 253, 250, 0.92) 55%, rgba(239, 246, 255, 0.9) 100%);
-  box-shadow: var(--rc-shadow);
-  backdrop-filter: blur(8px);
+  overflow: hidden;
+  box-shadow:
+    0 18px 36px -18px rgba(30, 64, 175, 0.55),
+    0 4px 12px -6px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.rc-hero__main {
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
+}
+
+.toolbar-left {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   min-width: 0;
 }
 
-.rc-hero__icon {
+.toolbar-icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
   border-radius: 12px;
-  color: #fff;
-  background: linear-gradient(145deg, #14b8a6, #0f766e);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
-  flex-shrink: 0;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 6px 14px -6px rgba(15, 23, 42, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.12);
 }
 
-.rc-hero__eyebrow {
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: #0d9488;
-  margin-bottom: 2px;
+.toolbar-icon { font-size: 20px; color: #fff; }
+
+.toolbar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.rc-hero__title {
+.toolbar-title {
   margin: 0;
-  font-size: 20px;
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.02em;
+  color: #fff;
 }
 
-.rc-hero__desc {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: var(--rc-muted);
-  line-height: 1.35;
+.toolbar-desc {
+  margin: 0;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.86);
 }
 
-.rc-hero__aside {
+.toolbar-right {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.rc-hero__metrics {
+.rc-stat-chips {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
-.rc-metric {
-  min-width: 72px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  text-align: center;
+.rc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  box-shadow:
+    0 3px 0 rgba(55, 48, 163, 0.35),
+    0 10px 20px -10px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
 }
 
-.rc-metric__label {
-  display: block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-bottom: 1px;
+.rc-chip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
 }
 
-.rc-metric__value {
-  display: block;
-  font-size: 16px;
+.rc-chip--defs::before { background: #5eead4; }
+.rc-chip--sched::before { background: #93c5fd; }
+.rc-chip--logs::before { background: #fcd34d; }
+
+.rc-chip__label { color: rgba(255, 255, 255, 0.78); }
+.rc-chip__value {
   font-weight: 800;
-  line-height: 1.2;
+  font-size: 0.9rem;
+  color: #fff;
   font-variant-numeric: tabular-nums;
 }
 
-.rc-metric--defs {
-  background: #f0fdfa;
-  border-color: #99f6e4;
-  color: #0f766e;
+/* 白地カプセル */
+.tb-btn {
+  --tb-h: 32px;
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #c7d2fe;
+  --k-bd-h: #a5b4fc;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+  --el-button-text-color: var(--k-fg);
+  --el-button-hover-text-color: var(--k-fg-h);
+  --el-button-active-text-color: var(--k-fg-h);
+  --el-button-border-color: var(--k-bd);
+  --el-button-hover-border-color: var(--k-bd-h);
+  --el-button-active-border-color: var(--k-bd-h);
+  position: relative;
+  height: var(--tb-h);
+  min-height: var(--tb-h);
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--k-bd);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--k-fg);
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.tb-btn :deep(.el-icon) {
+  margin-right: 5px;
+  font-size: 15px;
+  color: var(--k-ico);
+}
+.tb-btn:hover,
+.tb-btn:focus {
+  border-color: var(--k-bd-h);
+  color: var(--k-fg-h);
+  background: linear-gradient(135deg, #ffffff 0%, var(--k-tint) 45%, var(--k-tint-h) 100%);
+}
+.tb-btn-blue {
+  --k-rgb: 37 99 235; --k-fg: #1d4ed8; --k-fg-h: #1e40af;
+  --k-bd: #93c5fd; --k-bd-h: #60a5fa; --k-tint: #dbeafe; --k-tint-h: #bfdbfe; --k-ico: #3b82f6;
+}
+.tb-btn-teal {
+  --k-rgb: 13 148 136; --k-fg: #0f766e; --k-fg-h: #115e59;
+  --k-bd: #5eead4; --k-bd-h: #2dd4bf; --k-tint: #ccfbf1; --k-tint-h: #99f6e4; --k-ico: #14b8a6;
+}
+.tb-btn-amber {
+  --k-rgb: 217 119 6; --k-fg: #b45309; --k-fg-h: #92400e;
+  --k-bd: #fcd34d; --k-bd-h: #fbbf24; --k-tint: #fef3c7; --k-tint-h: #fde68a; --k-ico: #f59e0b;
+}
+.tb-btn-indigo {
+  --k-rgb: 79 70 229; --k-fg: #4338ca; --k-fg-h: #3730a3;
+  --k-bd: #a5b4fc; --k-bd-h: #818cf8; --k-tint: #e0e7ff; --k-tint-h: #c7d2fe; --k-ico: #6366f1;
+}
+.tb-btn-green {
+  --k-rgb: 5 150 105; --k-fg: #047857; --k-fg-h: #065f46;
+  --k-bd: #6ee7b7; --k-bd-h: #34d399; --k-tint: #d1fae5; --k-tint-h: #a7f3d0; --k-ico: #10b981;
 }
 
-.rc-metric--sched {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #0369a1;
+.rc-page.rc-modern.pb-std.pb-std .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.2) !important;
+}
+.rc-page.rc-modern.pb-std.pb-std .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.16),
+    0 4px 8px -2px rgba(15, 23, 42, 0.25),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.55) !important;
 }
 
-.rc-metric--logs {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #b45309;
-}
-
-.rc-hero__refresh { flex-shrink: 0; }
-
-.rc-tabs {
-  display: inline-flex;
-  gap: 6px;
-  padding: 4px;
+/* ---------- Tab バー ---------- */
+.rc-tabs-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px 6px 16px;
   margin-bottom: 10px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid var(--rc-border);
-  box-shadow: 0 1px 3px rgba(15, 31, 28, 0.05);
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -16px rgba(79, 70, 229, 0.28);
+}
+
+.rc-tabs-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+  background: linear-gradient(180deg, #818cf8, #a855f7, #ec4899);
 }
 
 .rc-tab {
@@ -1436,7 +1539,7 @@ watch(isCuttingReportPreview, (val) => {
   border: none;
   background: transparent;
   padding: 7px 14px;
-  border-radius: 10px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
@@ -1448,26 +1551,32 @@ watch(isCuttingReportPreview, (val) => {
 .rc-tab__icon { display: inline-flex; opacity: 0.85; }
 
 .rc-tab:hover {
-  color: var(--rc-text);
-  background: #f8fafc;
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+.rc-tab--active {
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(67, 56, 202, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.55);
 }
 
 .rc-tab--send.rc-tab--active {
-  color: #0f766e;
-  background: linear-gradient(180deg, #f0fdfa, #ccfbf1);
-  box-shadow: inset 0 0 0 1px #5eead4, 0 2px 8px rgba(13, 148, 136, 0.12);
+  background: linear-gradient(135deg, #2dd4bf, #0d9488);
 }
-
 .rc-tab--schedule.rc-tab--active {
-  color: #0369a1;
-  background: linear-gradient(180deg, #f0f9ff, #e0f2fe);
-  box-shadow: inset 0 0 0 1px #7dd3fc, 0 2px 8px rgba(3, 105, 161, 0.12);
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+}
+.rc-tab--logs.rc-tab--active {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
 }
 
-.rc-tab--logs.rc-tab--active {
-  color: #b45309;
-  background: linear-gradient(180deg, #fffbeb, #fef3c7);
-  box-shadow: inset 0 0 0 1px #fcd34d, 0 2px 8px rgba(180, 83, 9, 0.1);
+.rc-tab--active .rc-tab__badge {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
 .rc-tab__badge {
@@ -1480,23 +1589,41 @@ watch(isCuttingReportPreview, (val) => {
   line-height: 17px;
   text-align: center;
   color: #fff;
-  background: #0369a1;
+  background: #6366f1;
+  font-variant-numeric: tabular-nums;
 }
 
 .rc-tab__badge--muted { background: #d97706; }
 
 .rc-shell {
+  position: relative;
+  overflow: hidden;
   border-radius: var(--rc-radius);
-  border: 1px solid var(--rc-border);
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e0e7ff;
+  background: #fff;
   box-shadow: var(--rc-shadow);
   padding: 12px;
-  backdrop-filter: blur(6px);
 }
 
-.rc-shell--send { border-top: 3px solid #14b8a6; }
-.rc-shell--schedule { border-top: 3px solid #0ea5e9; }
-.rc-shell--logs { border-top: 3px solid #f59e0b; }
+.rc-shell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.rc-shell--send::before { background: linear-gradient(90deg, #14b8a6, #2dd4bf, #0d9488); }
+.rc-shell--schedule::before { background: linear-gradient(90deg, #3b82f6, #60a5fa, #2563eb); }
+.rc-shell--logs::before { background: linear-gradient(90deg, #f59e0b, #fbbf24, #d97706); }
+
+.rc-shell--schedule .rc-table-wrap::before {
+  background: linear-gradient(90deg, #3b82f6, #6366f1, #06b6d4);
+}
+.rc-shell--logs .rc-table-wrap::before {
+  background: linear-gradient(90deg, #f59e0b, #f97316, #ec4899);
+}
 
 .rc-layout {
   display: grid;
@@ -1617,10 +1744,10 @@ watch(isCuttingReportPreview, (val) => {
 }
 
 .rc-detail {
-  border: 1px solid var(--rc-border);
+  border: 1px solid #e0e7ff;
   border-radius: var(--rc-radius-sm);
   padding: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfa 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   min-height: 280px;
 }
 
@@ -1638,7 +1765,7 @@ watch(isCuttingReportPreview, (val) => {
   gap: 10px;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid #e6f2ef;
+  border-bottom: 1px solid #e0e7ff;
 }
 
 .rc-detail__cat {
@@ -1758,10 +1885,10 @@ watch(isCuttingReportPreview, (val) => {
   min-width: 0;
 }
 
-.rc-stat--period { background: #f0fdfa; border-color: #99f6e4; }
-.rc-stat--count { background: #eff6ff; border-color: #bfdbfe; }
-.rc-stat--fmt { background: #f8fafc; border-color: #cbd5e1; }
-.rc-stat--file { background: #fffbeb; border-color: #fde68a; }
+.rc-stat--period { background: #f0fdfa; border-color: #99f6e4; color: #0f766e; }
+.rc-stat--count { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.rc-stat--fmt { background: #f5f3ff; border-color: #c4b5fd; color: #6d28d9; }
+.rc-stat--file { background: #fffbeb; border-color: #fde68a; color: #b45309; }
 .rc-stat--wide { grid-column: span 1; }
 
 .rc-stat__label {
@@ -2142,6 +2269,7 @@ watch(isCuttingReportPreview, (val) => {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .rc-panel__title-wrap {
@@ -2159,8 +2287,8 @@ watch(isCuttingReportPreview, (val) => {
 }
 
 .rc-panel__dot--sched {
-  background: #0ea5e9;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
+  background: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18);
 }
 
 .rc-panel__dot--logs {
@@ -2173,6 +2301,7 @@ watch(isCuttingReportPreview, (val) => {
   font-size: 15px;
   font-weight: 800;
   line-height: 1.2;
+  color: #1e293b;
 }
 
 .rc-panel__sub {
@@ -2181,33 +2310,57 @@ watch(isCuttingReportPreview, (val) => {
   color: var(--rc-muted);
 }
 
+.rc-table-wrap {
+  position: relative;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(79, 70, 229, 0.25);
+}
+
+.rc-table-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+}
+
 .rc-table {
   width: 100%;
-  border-radius: var(--rc-radius-sm);
-  overflow: hidden;
-}
-
-.rc-table--sched :deep(.el-table__header th) {
-  background: #f0f9ff !important;
-  color: #0369a1;
-}
-
-.rc-table--logs :deep(.el-table__header th) {
-  background: #fffbeb !important;
-  color: #b45309;
 }
 
 .rc-table :deep(.el-table__header th) {
-  background: #f8fafc !important;
-  color: #475569;
+  background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%) !important;
+  color: #3730a3;
   font-size: 11px;
   font-weight: 700;
   padding: 7px 0;
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.rc-table--sched :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #eff6ff 0%, #e0f2fe 100%) !important;
+  color: #1d4ed8;
+}
+
+.rc-table--logs :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%) !important;
+  color: #b45309;
 }
 
 .rc-table :deep(.el-table__body td) {
   font-size: 12px;
   padding: 6px 0;
+}
+
+.rc-table :deep(.el-table__row:hover > td) {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.04) 100%) !important;
 }
 
 .rc-table :deep(.el-table__inner-wrapper::before) {
@@ -2228,9 +2381,17 @@ watch(isCuttingReportPreview, (val) => {
 }
 
 .rc-cell-report__code {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: 4px;
   font-size: 10px;
-  color: var(--rc-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+  font-variant-numeric: tabular-nums;
 }
 
 .rc-pill {
@@ -2244,8 +2405,8 @@ watch(isCuttingReportPreview, (val) => {
 }
 
 .rc-pill--freq {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: #eef2ff;
+  color: #4338ca;
 }
 
 .rc-pill--fmt {
@@ -2263,19 +2424,151 @@ watch(isCuttingReportPreview, (val) => {
   color: #0f766e;
 }
 
+.row-act {
+  --act: #6366f1;
+  --act-to: #4f46e5;
+  padding: 2px 10px !important;
+  height: 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--act) !important;
+  background: color-mix(in srgb, var(--act) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, transparent);
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.row-act + .row-act { margin-left: 4px; }
+
+.row-act:hover {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--act), var(--act-to));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -4px var(--act-to);
+}
+
+.row-act.act-edit { --act: #3b82f6; --act-to: #1d4ed8; }
+.row-act.act-delete { --act: #f43f5e; --act-to: #be123c; }
+
+/* ---------- ダイアログ ---------- */
+.rc-dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.92) 0%, rgba(139, 92, 246, 0.95) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rc-dlg-header--blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.92) 0%, rgba(37, 99, 235, 0.95) 100%);
+}
+
+.rc-dlg-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rc-dlg-icon { font-size: 22px; color: #fff; }
+
+.rc-dlg-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rc-dlg-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.rc-dlg-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+}
+
+.rc-dlg-body { padding: 18px 24px 8px; }
+
+.rc-dlg-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.rc-dlg-btn-cancel {
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-weight: 500;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #475569;
+}
+
+.rc-dlg-btn-submit {
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-weight: 600;
+  border: none !important;
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%) !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+.rc-dlg-btn-submit--blue {
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.rc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.rc-actions__format { width: 100px; }
+
+.rc-modern .rc-actions__format :deep(.el-select__wrapper),
+.rc-modern .rc-field__control :deep(.el-select__wrapper),
+.rc-modern .rc-field__control :deep(.el-input__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow:
+    0 0 0 1px #dfe3f0 inset,
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.rc-modern .rc-detail {
+  border-color: #e0e7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 12px;
+}
+
+.rc-modern .rc-detail__code {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
+}
 
 @media (max-width: 960px) {
-  .rc-hero {
+  .toolbar-left {
     flex-direction: column;
-    align-items: stretch;
-  }
-
-  .rc-hero__aside {
-    justify-content: space-between;
-  }
-
-  .rc-hero__metrics {
-    flex: 1;
+    align-items: flex-start;
   }
 
   .rc-layout {
@@ -2298,6 +2591,41 @@ watch(isCuttingReportPreview, (val) => {
   .rc-actions {
     justify-content: flex-end;
   }
+
+  .rc-a4-summary__grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .rc-page { padding: 8px; }
+  .rc-stat-chips { width: 100%; }
+  .rc-chip { flex: 1; justify-content: center; }
+  .rc-tab { padding: 6px 10px; font-size: 11px; }
+  .rc-actions__format { width: 100%; }
+}
+</style>
+
+<style>
+.rc-dialog.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+.rc-dialog .el-dialog__header {
+  padding: 0;
+  margin: 0;
+}
+.rc-dialog .el-dialog__body {
+  padding: 0;
+  background: linear-gradient(180deg, #fafbff 0%, #f5f6fb 100%);
+}
+.rc-dialog .el-dialog__footer {
+  padding: 14px 24px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
 }
 </style>
 

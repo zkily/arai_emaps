@@ -13,7 +13,6 @@ export interface SupplyPartStock {
   storage_location: string
   shelf_no?: string | null
   keeper?: string | null
-  safety_stock: number
   on_hand_qty: number
   next_production_date?: string | null
   next_production_qty: number
@@ -22,10 +21,10 @@ export interface SupplyPartStock {
   source: 'transfer' | 'manual' | string
   migration_trigger?: 'mass_end' | 'customer_spec' | string | null
   migration_reason?: string | null
+  initial_registered_date?: string | null
   shipment_planned: number
   forecast_units: number
   balance: number
-  below_safety: boolean
   short_of_shipment: boolean
   updated_at?: string | null
   last_out_date?: string | null
@@ -101,8 +100,8 @@ export interface SupplyPartCardForm {
   storage_location: string
   shelf_no?: string | null
   keeper?: string | null
-  safety_stock: number
   quality_status: string
+  initial_registered_date: string
   note?: string | null
 }
 

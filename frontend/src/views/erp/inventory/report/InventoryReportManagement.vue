@@ -11,6 +11,9 @@
           <div class="toolbar-text">
             <h1 class="toolbar-title pb-hero-title">
               在庫報告管理
+              <button type="button" class="rpt-help-btn" title="操作説明を開く" @click="goManual">
+                <el-icon><Document /></el-icon>
+              </button>
               <button type="button" class="rpt-help-btn" title="用語・算出方法の説明" @click="helpVisible = true">
                 <el-icon><QuestionFilled /></el-icon>
               </button>
@@ -495,7 +498,9 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import echarts from '@/utils/echarts'
-import type { ECharts } from '@/utils/echarts'
+
+/** echarts/core の init 戻り値（'echarts' の ECharts 型と冲突しないよう揃える） */
+type ECharts = ReturnType<typeof echarts.init>
 import {
   inventoryReportApi,
   type MonthlyReportKpi,
@@ -556,6 +561,9 @@ const payload = ref<QuarterlyReportPayload | null>(null)
 const savedId = ref<number | null>(null)
 const savedList = ref<SavedReportSummary[]>([])
 const helpVisible = ref(false)
+function goManual() {
+  window.open('/manuals/inventory-report', '_blank', 'noopener,noreferrer')
+}
 
 const invChartRef = ref<HTMLDivElement | null>(null)
 const wipChartRef = ref<HTMLDivElement | null>(null)
@@ -2167,7 +2175,7 @@ async function onExportPpt() {
       monthly_kpis: input.monthlyKpis,
       diff_by_process_avg: input.diffByProcessAvg as unknown as Array<Record<string, unknown>>,
       bulk_categories: input.bulkCategories,
-      charts: input.chartImages,
+      charts: input.chartImages as Partial<Record<string, string | undefined>> | undefined,
     })
     ElMessage.success('PPTを出力しました')
   } catch (error) {

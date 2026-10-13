@@ -21,6 +21,8 @@
 
 成型指示書発行管理は PDF 正本です（`../pdfs/forming-instruction-issue.pdf`、`/manuals/forming-instruction-issue`）。工程全体フローの Markdown（`forming-instruction_ja.md`）は別冊として残します。
 
+在庫報告管理は PDF 正本です（`../pdfs/inventory-report.pdf`、`/manuals/inventory-report`）。
+
 ## 新規マニュアル追加（Markdown）
 
 1. 本フォルダに `{slug}_ja.md` を追加。

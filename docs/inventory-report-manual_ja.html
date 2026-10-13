@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>在庫報告管理 操作説明書</title>
+<style>
+  @page {
+    size: A4; margin: 14mm 13mm 16mm;
+    @top-right { content: "在庫報告管理 操作説明書"; font-family: "Yu Gothic UI","Yu Gothic",Meiryo,sans-serif; font-size: 8pt; color: #94a3b8; }
+    @bottom-center { content: counter(page) " / " counter(pages); font-family: "Yu Gothic UI","Yu Gothic",Meiryo,sans-serif; font-size: 9pt; color: #64748b; }
+  }
+  @page :first { margin: 0; @top-right { content: none; } @bottom-center { content: none; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; color: #0f172a; font-family: "Yu Gothic UI","Yu Gothic",Meiryo,"Hiragino Sans",sans-serif; font-size: 10.5pt; line-height: 1.65; }
+  h2 { font-size: 17pt; margin: 0; font-weight: 800; }
+  p { margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #f1f5f9; color: #334155; font-weight: 700; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code, .kbd { font-family: Consolas,"Yu Gothic UI",Meiryo,sans-serif; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 1px 6px; font-size: 9pt; }
+  .cover { height: 297mm; background: linear-gradient(155deg,#1e3a8a 0%,#1d4ed8 28%,#0e7490 62%,#14b8a6 100%); color: #fff; padding: 28mm 18mm 16mm; page-break-after: always; position: relative; overflow: hidden; }
+  .cover::before, .cover::after { content: ""; position: absolute; border-radius: 50%; background: rgba(255,255,255,.08); }
+  .cover::before { width: 230mm; height: 230mm; right: -80mm; top: -90mm; }
+  .cover::after { width: 170mm; height: 170mm; left: -55mm; bottom: -45mm; }
+  .cover .inner { position: relative; z-index: 1; }
+  .pill { display: inline-block; border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.12); border-radius: 999px; padding: 4px 14px; font-size: 10.5pt; }
+  .cover h1 { font-size: 30pt; line-height: 1.25; margin: 18mm 0 6mm; font-weight: 800; }
+  .cover .lead { font-size: 12pt; margin: 0 0 12mm; }
+  .grid6 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .chip { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; padding: 8px 12px; font-size: 10.5pt; }
+  .meta3 { position: absolute; left: 18mm; right: 18mm; bottom: 16mm; display: grid; grid-template-columns: 1.3fr .8fr 1fr; gap: 10px; z-index: 1; }
+  .meta3 div { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 12px; padding: 10px 12px; font-size: 10pt; }
+  .meta3 small { display: block; opacity: .8; font-size: 8.5pt; }
+  .meta3 b { font-size: 12pt; }
+  .ch { display: flex; align-items: center; gap: 10px; border-bottom: 2.5px solid #4f46e5; padding-bottom: 5px; margin: 2px 0 12px; page-break-after: avoid; }
+  .ch .no { width: 28px; height: 28px; border-radius: 8px; background: #4f46e5; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13pt; flex-shrink: 0; }
+  .sec { border-left: 4px solid #2563eb; padding-left: 10px; margin: 14px 0 8px; color: #1d4ed8; font-size: 12pt; font-weight: 800; page-break-after: avoid; }
+  .step { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+  .step .n { width: 20px; height: 20px; border-radius: 50%; background: #2563eb; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 9pt; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+  .ui-pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 9pt; font-weight: 700; border: 1px solid transparent; }
+  .ui-g { background: #ecfdf5; color: #047857; border-color: #86efac; }
+  .ui-b { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+  .ui-y { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+  .ui-i { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+  .ui-t { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+  .ui-r { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+  .ui-v { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+  .ui-s { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; color: #fff; font-size: 8pt; font-weight: 800; }
+  .badge.r { background: #ef4444; } .badge.b { background: #2563eb; }
+  .neg { color: #dc2626; font-weight: 700; } .pos { color: #16a34a; font-weight: 700; }
+  .info, .ex, .warn { page-break-inside: avoid; border-radius: 10px; padding: 10px 12px 10px 40px; margin: 10px 0; font-size: 10pt; position: relative; }
+  .info { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .ex { background: #f5f3ff; border: 1px solid #c4b5fd; }
+  .warn { background: #fffbeb; border: 1px solid #fde68a; padding-left: 12px; }
+  .info::before, .ex::before { position: absolute; left: 10px; top: 10px; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .info::before { content: "i"; background: #2563eb; }
+  .ex::before { content: "例"; background: #7c3aed; font-size: 8pt; }
+  .toc { page-break-after: always; }
+  .toc-row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dotted #cbd5e1; padding: 5px 0; }
+  .toc-row .hint { color: #64748b; font-size: 9pt; white-space: nowrap; }
+  .toc-row .num { color: #4f46e5; font-weight: 800; margin-right: 6px; }
+  figure.shot { margin: 8px 0 12px; page-break-inside: avoid; }
+  figcaption { margin-top: 4px; font-size: 8.5pt; color: #475569; text-align: center; }
+  figure.shot img { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; display: block; }
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="inner">
+    <span class="pill">Smart-EMAPs ／ 在庫管理</span>
+    <h1>在庫報告管理<br>操作説明書</h1>
+    <p class="lead">四半期・半期・年間の在庫・廃棄・棚卸差異をまとめ、保存して報告する</p>
+    <div class="grid6">
+      <div class="chip">① 年度・期間を選んでレポート生成</div>
+      <div class="chip">② 月末在庫・廃棄率・一致率の確認</div>
+      <div class="chip">③ 工程別の理論在庫と棚卸差異</div>
+      <div class="chip">④ 大量廃棄・保留品・大量不良</div>
+      <div class="chip">⑤ 下書き保存と確定保存</div>
+      <div class="chip">⑥ 印刷・Excel・PDF・PPT</div>
+    </div>
+  </div>
+  <div class="meta3">
+    <div><small>対象画面</small><b>在庫報告管理</b></div>
+    <div><small>版数</small><b>第 1.0 版</b></div>
+    <div><small>作成日</small><b>2026年10月13日</b></div>
+  </div>
+</section>
+
+<section class="toc">
+  <div class="ch"><span class="no">目</span><h2>目次</h2></div>
+  <div class="toc-row"><span><span class="num">1</span>はじめに（目的・用語）</span><span class="hint">年度・千本・差異</span></div>
+  <div class="toc-row"><span><span class="num">2</span>画面を開く</span><span class="hint">ERP → 在庫管理</span></div>
+  <div class="toc-row"><span><span class="num">3</span>画面構成</span><span class="hint">ヘッダー・期間・KPI・表</span></div>
+  <div class="toc-row"><span><span class="num">4</span>期間の選び方</span><span class="hint">四半期・半期・年間</span></div>
+  <div class="toc-row"><span><span class="num">5</span>レポート生成</span><span class="hint">空状態から集計</span></div>
+  <div class="toc-row"><span><span class="num">6</span>KPIカードの見方</span><span class="hint">在庫・廃棄・一致率</span></div>
+  <div class="toc-row"><span><span class="num">7</span>棚卸差異と大量廃棄</span><span class="hint">工程別・明細</span></div>
+  <div class="toc-row"><span><span class="num">8</span>保存・読込・削除</span><span class="hint">下書き／確定</span></div>
+  <div class="toc-row"><span><span class="num">9</span>印刷・Excel・PDF・PPT</span><span class="hint">報告書の出力</span></div>
+  <div class="toc-row"><span><span class="num">10</span>用語・算出方法（ヘルプ）</span><span class="hint">画面内の ?</span></div>
+  <div class="toc-row"><span><span class="num">11</span>メッセージと対処</span><span class="hint">画面に出る文言</span></div>
+  <div class="toc-row"><span><span class="num">12</span>運用上の注意・よくある質問</span><span class="hint">トラブル対応</span></div>
+  <div class="toc-row"><span><span class="num">—</span>文書情報・改訂履歴</span><span class="hint">版数・作成日</span></div>
+  <div class="info">
+    <strong>本書の画面図について</strong><br>
+    画面図は 2026年10月13日 時点の「在庫報告管理」に合わせています。件数・数量は説明用の例です。
+    <span class="badge r">1</span>は操作する場所、<span class="badge b">A</span>は画面の領域を示します。
+  </div>
+</section>
+
+<div class="ch"><span class="no">1</span><h2>はじめに</h2></div>
+<div class="sec">1-1 画面の目的</div>
+<p>「在庫報告管理」は、指定した会計年度の<strong>四半期・半期・年間</strong>について、月末在庫・廃棄・棚卸差異・大量廃棄をまとめて見る画面です。集計結果は下書きまたは確定として保存し、印刷・Excel・PDF・PPT で報告に使います。</p>
+<table>
+  <tr><th>できること</th><th>説明</th></tr>
+  <tr><td>生成</td><td>年度と期間を選び、その時点の集計スナップショットを作る</td></tr>
+  <tr><td>確認</td><td>月末在庫、期末仕掛品・製品、廃棄率・廃棄本数、棚卸一致率、工程別差異、大量廃棄明細</td></tr>
+  <tr><td>保存</td><td>下書き、または報告用の確定。チップから再読込・削除</td></tr>
+  <tr><td>出力</td><td>A4 縦の印刷、複数シートの Excel、画面構成の PDF、KPI を 1 枚ずつにした PPT</td></tr>
+</table>
+<div class="sec">1-2 用語</div>
+<table>
+  <tr><th>用語</th><th>意味</th></tr>
+  <tr><td>年度</td><td>4 月始まり。2026 年度は 2026-04〜2027-03</td></tr>
+  <tr><td>四半期</td><td>Q1=4–6、Q2=7–9、Q3=10–12、Q4=1–3</td></tr>
+  <tr><td>半期／年間</td><td>上期=4–9、下期=10–3、年間=4–3 の 12 か月</td></tr>
+  <tr><td>千本</td><td>在庫・廃棄本数の画面表示単位</td></tr>
+  <tr><td>仕掛品</td><td>切断・面取・成型・メッキ・外注メッキ・溶接・外注溶接・溶接前検査・外注支給前・外注検査前の在庫合計</td></tr>
+  <tr><td>製品</td><td>検査・倉庫・外注倉庫の在庫合計。棚卸の製品側は製品 CD 末尾が「1」の行のみ</td></tr>
+  <tr><td>廃棄率</td><td>主ラインの連乗損失率。<code>1 − Π(1 − 工程別率)</code>。目安 1.5%</td></tr>
+  <tr><td>棚卸差異</td><td>棚卸在庫 − 理論在庫。期間の月平均。プラスは実物が多い</td></tr>
+  <tr><td>一致率</td><td>理論と棚卸が一致した明細の割合。95% 以上が目安</td></tr>
+</table>
+<div class="ex">理論在庫 520.0 千本・棚卸 508.4 千本なら差異は <span class="neg">−11.6</span>（実物が少ない）。期末製品の目安は 375 千本です。</div>
+<div class="info">製品名に「加工」を含む製品は、この画面のすべての統計から除外されます。</div>
+
+<div class="ch pb"><span class="no">2</span><h2>画面を開く</h2></div>
+<figure class="shot">
+  <img src="images/inventory-report/10_menu.png" alt="サイドバーから在庫報告管理を開く" />
+  <figcaption>図 2-1　サイドバーから開く（ERP → 在庫管理 → 在庫報告管理）</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>Smart-EMAPs にログインします。</div></div>
+<div class="step"><span class="n">2</span><div>左サイドバーの <span class="kbd">ERP</span> にマウスを置きます（図 2-1 の <span class="badge r">1</span>）。</div></div>
+<div class="step"><span class="n">3</span><div><span class="kbd">在庫管理</span> にマウスを置きます（<span class="badge r">2</span>）。</div></div>
+<div class="step"><span class="n">4</span><div><span class="kbd">在庫報告管理</span> をクリックします（<span class="badge r">3</span>）。</div></div>
+<div class="info">
+  <strong>メニューに「在庫報告管理」が無いとき</strong><br>
+  ロールにこの画面のメニュー権限がありません。管理者に付与を依頼してください。パスは <code>/erp/inventory/report</code> です。タイトル横の <strong>操作説明</strong> から本書を開けます。隣の <strong>?</strong> は用語・算出方法です。
+</div>
+
+<div class="ch pb"><span class="no">3</span><h2>画面構成</h2></div>
+<figure class="shot">
+  <img src="images/inventory-report/01_overview.png" alt="在庫報告管理のヘッダーとKPI" />
+  <figcaption>図 3-1　ヘッダー・期間・保存済み・KPI。<span class="badge b">A</span>操作、<span class="badge b">B</span>期間、<span class="badge r">1</span>レポート生成</figcaption>
+</figure>
+<figure class="shot">
+  <img src="images/inventory-report/02_tables.png" alt="差異表と大量廃棄明細" />
+  <figcaption>図 3-2　工程別差異と大量廃棄・保留品・大量不良</figcaption>
+</figure>
+<table>
+  <tr><th>No</th><th>エリア</th><th>説明</th></tr>
+  <tr><td><span class="badge b">A</span></td><td>ヘッダー</td><td>タイトル、報告種別、保存一覧・生成・保存・印刷・出力</td></tr>
+  <tr><td><span class="badge b">B</span></td><td>期間バー</td><td>年度、四半期／半期／年間、Q または上期・下期</td></tr>
+  <tr><td><span class="badge b">C</span></td><td>保存済み</td><td>その年度の保存チップ。クリックで読込、× で削除</td></tr>
+  <tr><td><span class="badge b">D</span></td><td>KPI</td><td>月末在庫、期末仕掛品、期末製品、廃棄率、廃棄本数、棚卸一致率</td></tr>
+  <tr><td><span class="badge b">E</span></td><td>差異・明細</td><td>工程別の理論 vs 棚卸、大量廃棄などの表</td></tr>
+</table>
+<div class="sec">3-1 操作ボタン</div>
+<table>
+  <tr><th>ボタン</th><th>動き</th><th>参照</th></tr>
+  <tr><td><span class="ui-pill ui-s">保存一覧</span></td><td>選択年度の保存済み一覧を読み直す</td><td>第 8 章</td></tr>
+  <tr><td><span class="ui-pill ui-g">レポート生成</span></td><td>期間の集計を実行する</td><td>第 5 章</td></tr>
+  <tr><td><span class="ui-pill ui-y">下書き保存</span></td><td>いまの結果を下書きとして保存（生成後のみ）</td><td>第 8 章</td></tr>
+  <tr><td><span class="ui-pill ui-b">確定保存</span></td><td>確認後、報告用として固定保存</td><td>第 8 章</td></tr>
+  <tr><td><span class="ui-pill ui-i">印刷</span></td><td>A4 縦の報告書をブラウザ印刷</td><td>第 9 章</td></tr>
+  <tr><td><span class="ui-pill ui-t">Excel出力</span></td><td>複数シートの .xlsx</td><td>第 9 章</td></tr>
+  <tr><td><span class="ui-pill ui-r">PDF出力</span></td><td>画面構成の PDF を保存</td><td>第 9 章</td></tr>
+  <tr><td><span class="ui-pill ui-v">PPT出力</span></td><td>表紙付きで KPI を 1 枚ずつスライド化</td><td>第 9 章</td></tr>
+</table>
+<div class="warn"><strong>注意：</strong> 生成前は下書き・確定・印刷・Excel・PDF・PPT は押せません。空のときは「年度・報告期間を選び「レポート生成」を実行してください」と出ます。</div>
+
+<div class="ch pb"><span class="no">4</span><h2>期間の選び方</h2></div>
+<div class="step"><span class="n">1</span><div><strong>年度</strong>を選びます。選択肢は当年の前後を含みます（例: 2024〜2027）。</div></div>
+<div class="step"><span class="n">2</span><div><span class="ui-pill ui-i">四半期</span> <span class="ui-pill ui-i">半期</span> <span class="ui-pill ui-i">年間</span> を切り替えます。</div></div>
+<div class="step"><span class="n">3</span><div>四半期なら Q1〜Q4、半期なら上期／下期を選びます。年間は期間ボタンは出ず、4–3 月の 12 か月です。</div></div>
+<p>ヘッダーの副題は「四半期報告 · Q2 7–9」のように、選んだ種別と期間に変わります。各月の数値は、その月の生産集計が存在する最終日時点です。</p>
+
+<div class="ch pb"><span class="no">5</span><h2>レポート生成</h2></div>
+<div class="step"><span class="n">1</span><div>年度と報告期間を合わせます。</div></div>
+<div class="step"><span class="n">2</span><div><span class="ui-pill ui-g">レポート生成</span> を押します。</div></div>
+<div class="step"><span class="n">3</span><div>成功すると「{期間名} を生成しました」と出て、KPI・グラフ・表が表示されます。読込中だった保存の選択は外れ、いま生成した内容になります。</div></div>
+<div class="info">失敗したときは「生成に失敗しました」、またはサーバのメッセージが出ます。期間と元データ（生産集計・棚卸）を確認して再実行してください。</div>
+
+<div class="ch pb"><span class="no">6</span><h2>KPIカードの見方</h2></div>
+<table>
+  <tr><th>カード</th><th>見方</th></tr>
+  <tr><td>月末在庫（仕掛品・製品）</td><td>月ごとの合計と、仕掛／製品の内訳。単位は千本。グラフ付き</td></tr>
+  <tr><td>期末仕掛品</td><td>月ごとの仕掛品在庫（千本）</td></tr>
+  <tr><td>期末製品</td><td>月ごとの製品在庫。目安 375 千本の破線</td></tr>
+  <tr><td>廃棄率</td><td>連乗損失率（%）。目安 1.5% の破線。超過月は注意</td></tr>
+  <tr><td>廃棄本数</td><td>全工程の不良＋廃棄（千本）</td></tr>
+  <tr><td>棚卸一致率</td><td>% と、差異の絶対値合計</td></tr>
+</table>
+<p>マイナスの数量は赤で表示します。前期間比は、同じ報告単位の直前期間の末月と比べます（四半期は前 Q、半期は前半期、年間は前年度）。</p>
+
+<div class="ch pb"><span class="no">7</span><h2>棚卸差異と大量廃棄</h2></div>
+<div class="sec">7-1 理論在庫 vs 棚卸差異</div>
+<p>対象期間の<strong>月平均</strong>を工程別に出します。単位は千本。検査は倉庫へ合算し、切断・面取は差異なしとして扱います。</p>
+<table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>理論在庫</td><td>生産集計から計算上あるべき在庫</td></tr>
+  <tr><td>棚卸在庫</td><td>実地棚卸で数えた在庫</td></tr>
+  <tr><td>差異</td><td>棚卸 − 理論。プラスは実物が多い</td></tr>
+  <tr><td>差異率</td><td>差異 ÷ 理論 × 100。理論が 0 のときは「—」</td></tr>
+</table>
+<div class="sec">7-2 大量廃棄・保留品・大量不良</div>
+<p>「大量廃棄・保留品管理」の登録に加え、生産実績で工程別不良が <strong>200 本</strong>を超える大量不良を自動で併記します。列は発生日、区分、工程、製品、本数（本）、状態です。未処理件数は手動登録の未処理だけが対象です。</p>
+
+<div class="ch pb"><span class="no">8</span><h2>保存・読込・削除</h2></div>
+<div class="sec">8-1 下書き保存</div>
+<div class="step"><span class="n">1</span><div>レポートを生成したあと <span class="ui-pill ui-y">下書き保存</span> を押します。</div></div>
+<div class="step"><span class="n">2</span><div>「下書き保存しました」と出て、上部の保存済みチップに追加されます。</div></div>
+<div class="sec">8-2 確定保存（確認ダイアログ）</div>
+<figure class="shot">
+  <img src="images/inventory-report/04_confirm.png" alt="確定保存の確認" />
+  <figcaption>図 8-1　確定保存の確認。報告用として固定する前に出ます</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div><span class="ui-pill ui-b">確定保存</span> を押します。</div></div>
+<div class="step"><span class="n">2</span><div>「確定保存しますか？（報告用として固定されます）」で <span class="ui-pill ui-b">確定</span> またはキャンセルを選びます。</div></div>
+<div class="step"><span class="n">3</span><div>確定すると「確定保存しました」。チップには「確定」と出ます。</div></div>
+<div class="sec">8-3 読込と削除</div>
+<p><span class="ui-pill ui-s">保存一覧</span> は、選んでいる年度の保存を読み直します。チップをクリックすると「保存済みレポートを読み込みました」となり、年度・期間・内容がその保存に戻ります。× では「保存レポート削除」の確認が出ます。削除は取り消せません。表示中の保存を消すと、画面のレポートも空になります。</p>
+
+<div class="ch pb"><span class="no">9</span><h2>印刷・Excel・PDF・PPT</h2></div>
+<p>いずれも生成後だけ使えます。未生成のときは「先にレポートを生成してください」です。</p>
+<table>
+  <tr><th>出力</th><th>内容</th></tr>
+  <tr><td><span class="ui-pill ui-i">印刷</span></td><td>A4 縦。表紙・KPI・月別表・グラフ・差異・大量廃棄明細</td></tr>
+  <tr><td><span class="ui-pill ui-t">Excel出力</span></td><td>月末在庫、月別 KPI、大量廃棄区分、棚卸差異、明細。ファイル名例 <code>在庫報告_2026上期_….xlsx</code></td></tr>
+  <tr><td><span class="ui-pill ui-r">PDF出力</span></td><td>画面の KPI・グラフ・差異表・明細を PDF で保存</td></tr>
+  <tr><td><span class="ui-pill ui-v">PPT出力</span></td><td>生産管理部・在庫報告の表紙のあと、KPI カードを 1 枚ずつ。画面のグラフを埋め込む</td></tr>
+</table>
+<p>成功メッセージは「Excelを出力しました」「PDFを出力しました」「PPTを出力しました」です。</p>
+
+<div class="ch pb"><span class="no">10</span><h2>用語・算出方法（ヘルプ）</h2></div>
+<p>タイトル横の <strong>?</strong> は、本書とは別の「用語・算出方法の説明」を開きます。期間、在庫、廃棄率、棚卸差異、保存と出力の定義が載っています。</p>
+<figure class="shot">
+  <img src="images/inventory-report/03_help.png" alt="用語・算出方法ダイアログ" />
+  <figcaption>図 10-1　用語・算出方法。<span class="badge r">1</span>定義の一覧</figcaption>
+</figure>
+<table>
+  <tr><th>グループ</th><th>主な内容</th></tr>
+  <tr><td>期間・集計対象</td><td>年度、Q／半期、加工品の除外、月末時点</td></tr>
+  <tr><td>在庫指標</td><td>仕掛品と製品の範囲、前期間比</td></tr>
+  <tr><td>品質指標</td><td>廃棄率の連乗、廃棄本数、目安 1.5% と期末製品 375 千本</td></tr>
+  <tr><td>棚卸差異</td><td>理論、棚卸、差異、差異率、一致率、差異絶対値合計</td></tr>
+  <tr><td>その他</td><td>大量廃棄の併記、保存、印刷、Excel、PDF、PPT</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">11</span><h2>メッセージと対処</h2></div>
+<table>
+  <tr><th>メッセージ</th><th>意味と対処</th></tr>
+  <tr><td>年度・報告期間を選び「レポート生成」を実行してください</td><td>まだ生成も読込もしていない。期間を選んで生成する</td></tr>
+  <tr><td>{期間} を生成しました</td><td>生成成功</td></tr>
+  <tr><td>生成に失敗しました</td><td>通信または元データ。時間をおいて再実行</td></tr>
+  <tr><td>下書き保存しました／確定保存しました</td><td>保存成功。チップを確認</td></tr>
+  <tr><td>保存に失敗しました</td><td>再保存。確定の確認をキャンセルした場合は保存されない</td></tr>
+  <tr><td>保存済みレポートを読み込みました</td><td>チップからの読込成功</td></tr>
+  <tr><td>保存レポートを削除しました</td><td>削除成功。取り消せない</td></tr>
+  <tr><td>先にレポートを生成してください</td><td>出力前に生成または保存の読込が必要</td></tr>
+  <tr><td>Excelを出力しました／PDFを出力しました／PPTを出力しました</td><td>ダウンロード成功</td></tr>
+  <tr><td>Excel出力に失敗しました など</td><td>ブラウザのダウンロード許可を確認して再実行</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">12</span><h2>運用上の注意・よくある質問</h2></div>
+<div class="step"><span class="n">1</span><div><strong>報告に出す前は確定保存してください。</strong> 下書きは作業中の控えです。</div></div>
+<div class="step"><span class="n">2</span><div><strong>確定のあと元データが変わっても、保存済みの中身は自動では書き換わりません。</strong> 最新が必要なら再生成して保存し直します。</div></div>
+<div class="step"><span class="n">3</span><div><strong>「加工」を含む製品名は集計に入りません。</strong> 数が合わないときは製品名を確認してください。</div></div>
+<div class="step"><span class="n">4</span><div><strong>切断・面取の棚卸差異は出しません。</strong> 検査は倉庫に合算されます。</div></div>
+<table>
+  <tr><th>質問</th><th>答え</th></tr>
+  <tr><td>Q1 と 4–6 月は同じですか</td><td>同じです。年度の 4 月始まりです</td></tr>
+  <tr><td>保存一覧が空です</td><td>年度を変えると一覧も変わります。その年度で保存した分だけ出ます</td></tr>
+  <tr><td>ボタンが押せません</td><td>生成前は保存と出力が無効です。先にレポート生成してください</td></tr>
+  <tr><td>一致率が低いです</td><td>95% 未満は原因調査を推奨します。理論棚卸比較や棚卸登録を確認してください</td></tr>
+  <tr><td>? と操作説明の違いは</td><td>? は算出の定義。操作説明は本書です</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">—</span><h2>文書情報</h2></div>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>文書名</td><td>在庫報告管理 操作説明書</td></tr>
+  <tr><td>対象</td><td>ERP → 在庫管理 → 在庫報告管理</td></tr>
+  <tr><td>画面パス</td><td>/erp/inventory/report</td></tr>
+  <tr><td>版数</td><td>第 1.0 版</td></tr>
+  <tr><td>作成日</td><td>2026年10月13日</td></tr>
+  <tr><td>スタイル正本</td><td>月受注管理 操作説明書（order-monthly.pdf）に準拠</td></tr>
+  <tr><td>言語</td><td>日本語</td></tr>
+</table>
+<div class="ch"><span class="no">—</span><h2>改訂履歴</h2></div>
+<table>
+  <tr><th>日付</th><th>版</th><th>内容</th></tr>
+  <tr><td>2026-10-13</td><td>1.0</td><td>現行画面（四半期・半期・年間、KPI、差異、大量廃棄、下書き／確定、印刷・Excel・PDF・PPT、用語ヘルプ）に合わせて新規作成</td></tr>
+</table>
+<p style="font-size:9pt;color:#475569">以上。ボタン名は 2026年10月13日時点の画面表示と一致します。</p>
+</body>
+</html>

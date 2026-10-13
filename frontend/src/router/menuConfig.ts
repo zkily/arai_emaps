@@ -266,6 +266,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'OP_MANUAL_ORDER_MONTHLY', name: '月受注管理', icon: 'Calendar', path: '/manuals/order-monthly', parentCode: 'OPERATION_MANUALS', sortOrder: 13.5 },
   { code: 'OP_MANUAL_ORDER_DAILY', name: '日受注管理', icon: 'Calendar', path: '/manuals/order-daily', parentCode: 'OPERATION_MANUALS', sortOrder: 13.6 },
   { code: 'OP_MANUAL_SUPPLY_PARTS', name: '補給品管理', icon: 'Box', path: '/manuals/supply-parts', parentCode: 'OPERATION_MANUALS', sortOrder: 13.7 },
+  { code: 'OP_MANUAL_INVENTORY_REPORT', name: '在庫報告管理', icon: 'DataBoard', path: '/manuals/inventory-report', parentCode: 'OPERATION_MANUALS', sortOrder: 13.8 },
   { code: 'OP_MANUAL_OUTSOURCING_WELDING', name: '外注溶接', icon: 'Document', path: '/manuals/outsourcing-welding', parentCode: 'OPERATION_MANUALS', sortOrder: 14 },
   { code: 'OP_MANUAL_OUTSOURCING_PLATING', name: '外注メッキ', icon: 'Document', path: '/manuals/outsourcing-plating', parentCode: 'OPERATION_MANUALS', sortOrder: 15 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },

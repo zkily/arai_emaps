@@ -1,18 +1,19 @@
 <template>
-  <div class="nc-page" v-loading="pageLoading">
-    <!-- 顶部：标题 + 统计 + Tab 一体化 -->
-    <header class="nc-top">
-      <div class="nc-top__bar">
-        <div class="nc-top__brand">
-          <div class="nc-top__icon" aria-hidden="true">
-            <el-icon :size="18"><Bell /></el-icon>
+  <div class="nc-page nc-modern pb-std" v-loading="pageLoading">
+    <div class="page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
+      <div class="toolbar-left">
+        <div class="toolbar-brand">
+          <div class="toolbar-icon-wrap">
+            <el-icon class="toolbar-icon"><Bell /></el-icon>
           </div>
-          <div class="nc-top__titles">
-            <h1 class="nc-top__title">通知センター</h1>
-            <span class="nc-top__desc">イベント通知・受信者・テンプレート・外部連携</span>
+          <div class="toolbar-text">
+            <h1 class="toolbar-title pb-hero-title">通知センター</h1>
+            <p class="toolbar-desc pb-hero-desc">イベント通知・受信者・テンプレート・外部連携</p>
           </div>
         </div>
-        <div class="nc-top__stats">
+        <div class="nc-stat-chips">
           <div
             v-for="s in statCards"
             :key="s.key"
@@ -24,26 +25,32 @@
             <span class="nc-chip__label">{{ s.label }}</span>
           </div>
         </div>
-        <el-button :icon="Refresh" circle size="small" class="nc-top__refresh" :loading="pageLoading" @click="loadAll" />
       </div>
-      <nav class="nc-top__tabs" aria-label="通知センタータブ">
-        <button
-          v-for="tab in tabs"
-          :key="tab.name"
-          type="button"
-          class="nc-tab"
-          :class="{ 'nc-tab--active': activeTab === tab.name }"
-          @click="activeTab = tab.name"
-        >
-          <el-icon :size="14"><component :is="tab.icon" /></el-icon>
-          {{ tab.label }}
-          <span v-if="tab.badge" class="nc-tab__badge">{{ tab.badge }}</span>
-        </button>
-      </nav>
-    </header>
+      <div class="toolbar-right toolbar-actions">
+        <el-button class="tb-btn tb-btn-teal" :loading="pageLoading" @click="loadAll">
+          <el-icon><Refresh /></el-icon>
+          <span class="tb-label">更新</span>
+        </el-button>
+      </div>
+    </div>
+
+    <nav class="nc-tabs-bar" aria-label="通知センタータブ">
+      <button
+        v-for="tab in tabs"
+        :key="tab.name"
+        type="button"
+        class="nc-tab"
+        :class="[`nc-tab--${tab.name}`, { 'nc-tab--active': activeTab === tab.name }]"
+        @click="activeTab = tab.name"
+      >
+        <el-icon :size="14"><component :is="tab.icon" /></el-icon>
+        {{ tab.label }}
+        <span v-if="tab.badge" class="nc-tab__badge">{{ tab.badge }}</span>
+      </button>
+    </nav>
 
     <!-- イベント通知 -->
-    <section v-show="activeTab === 'events'" class="nc-panel">
+    <section v-show="activeTab === 'events'" class="nc-panel nc-panel--events">
       <div class="nc-panel__head">
         <h2 class="nc-panel__title">
           イベント通知設定
@@ -51,7 +58,12 @@
         </h2>
       </div>
       <div class="nc-event-grid">
-        <article v-for="row in notifications" :key="row.id" class="nc-event-card" :class="{ 'nc-event-card--off': !row.is_active }">
+        <article
+          v-for="(row, idx) in notifications"
+          :key="row.id"
+          class="nc-event-card"
+          :class="[`nc-event-card--tone-${idx % 6}`, { 'nc-event-card--off': !row.is_active }]"
+        >
           <div class="nc-event-card__top">
             <div class="nc-event-card__title-wrap">
               <span class="nc-event-card__code">{{ row.event_code }}</span>
@@ -89,7 +101,7 @@
               <el-icon><User /></el-icon>
               受信者 {{ recipientCountByEvent(row.event_code) }} 名
             </span>
-            <el-button size="small" text type="primary" @click="goRecipients(row.event_code)">受信者を編集</el-button>
+            <el-button size="small" class="row-act act-edit" @click="goRecipients(row.event_code)">受信者を編集</el-button>
           </div>
           <div v-if="row.event_code === 'INVENTORY_STAGNATION'" class="nc-event-card__schedule">
             <div class="nc-schedule-title">自動巡検（JST 毎日）</div>
@@ -139,7 +151,7 @@
               />
             </div>
             <div v-if="isAdmin" class="nc-schedule-actions">
-              <el-button size="small" type="warning" plain :loading="autoPatrolRunning" @click="runAutoPatrolNow">
+              <el-button size="small" class="tb-btn tb-btn-amber" :loading="autoPatrolRunning" @click="runAutoPatrolNow">
                 今すぐ巡検実行
               </el-button>
             </div>
@@ -150,17 +162,20 @@
     </section>
 
     <!-- メール受信者 -->
-    <section v-show="activeTab === 'recipients'" class="nc-panel">
+    <section v-show="activeTab === 'recipients'" class="nc-panel nc-panel--recipients">
       <div class="nc-panel__head">
         <h2 class="nc-panel__title">
           メール受信者
           <span class="nc-panel__sub">ユーザ・ロール・メール 送信先</span>
         </h2>
         <div class="nc-panel__actions">
-          <el-select v-model="recipientEventFilter" clearable placeholder="イベント絞込" style="width: 180px" size="small">
+          <el-select v-model="recipientEventFilter" clearable placeholder="イベント絞込" class="nc-filter-select" size="small">
             <el-option v-for="ev in notifications" :key="ev.event_code" :label="ev.event_name" :value="ev.event_code" />
           </el-select>
-          <el-button v-if="isAdmin" type="primary" size="small" :icon="Plus" @click="openRecipientDialog()">追加</el-button>
+          <el-button v-if="isAdmin" class="tb-btn tb-btn-blue" size="small" @click="openRecipientDialog()">
+            <el-icon><Plus /></el-icon>
+            <span class="tb-label">追加</span>
+          </el-button>
         </div>
       </div>
       <div class="nc-table-wrap">
@@ -199,10 +214,10 @@
               />
             </template>
           </el-table-column>
-          <el-table-column v-if="isAdmin" label="操作" width="120" align="center">
+          <el-table-column v-if="isAdmin" label="操作" width="140" align="center">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openRecipientDialog(row)">編集</el-button>
-              <el-button link type="danger" size="small" @click="removeRecipient(row)">削除</el-button>
+              <el-button link type="primary" size="small" class="row-act act-edit" @click="openRecipientDialog(row)">編集</el-button>
+              <el-button link type="danger" size="small" class="row-act act-delete" @click="removeRecipient(row)">削除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -210,18 +225,26 @@
     </section>
 
     <!-- メールテンプレート -->
-    <section v-show="activeTab === 'templates'" class="nc-panel">
+    <section v-show="activeTab === 'templates'" class="nc-panel nc-panel--templates">
       <div class="nc-panel__head">
         <h2 class="nc-panel__title">
           メールテンプレート
           <span class="nc-panel__sub">プレースホルダ <code>{変数名}</code> で差し込み</span>
         </h2>
-        <el-button v-if="isAdmin" type="primary" size="small" :icon="Plus" @click="openTemplateDialog()">追加</el-button>
+        <el-button v-if="isAdmin" class="tb-btn tb-btn-amber" size="small" @click="openTemplateDialog()">
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">追加</span>
+        </el-button>
       </div>
       <div class="nc-template-grid">
-        <article v-for="tpl in emailTemplates" :key="tpl.id" class="nc-template-card">
+        <article
+          v-for="(tpl, idx) in emailTemplates"
+          :key="tpl.id"
+          class="nc-template-card"
+          :class="`nc-template-card--tone-${idx % 5}`"
+        >
           <div class="nc-template-card__head">
-            <el-tag size="small" effect="plain">{{ tpl.code }}</el-tag>
+            <el-tag size="small" effect="plain" class="nc-code-tag">{{ tpl.code }}</el-tag>
             <el-switch
               v-if="isAdmin"
               v-model="tpl.is_active"
@@ -236,9 +259,11 @@
             <span v-if="tpl.event_code">{{ eventName(tpl.event_code) }}</span>
           </div>
           <div class="nc-template-card__actions">
-            <el-button size="small" :icon="View" @click="previewTemplate(tpl)">プレビュー</el-button>
-            <el-button v-if="isAdmin" size="small" type="primary" plain @click="openTemplateDialog(tpl)">編集</el-button>
-            <el-button v-if="isAdmin" size="small" type="danger" plain @click="removeTemplate(tpl)">削除</el-button>
+            <el-button size="small" class="row-act act-daily" @click="previewTemplate(tpl)">
+              <el-icon><View /></el-icon>プレビュー
+            </el-button>
+            <el-button v-if="isAdmin" size="small" class="row-act act-edit" @click="openTemplateDialog(tpl)">編集</el-button>
+            <el-button v-if="isAdmin" size="small" class="row-act act-delete" @click="removeTemplate(tpl)">削除</el-button>
           </div>
         </article>
       </div>
@@ -246,7 +271,7 @@
     </section>
 
     <!-- 外部連携 -->
-    <section v-show="activeTab === 'integration'" class="nc-panel">
+    <section v-show="activeTab === 'integration'" class="nc-panel nc-panel--integration">
       <div class="nc-panel__head">
         <h2 class="nc-panel__title">
           外部連携
@@ -287,14 +312,14 @@
               <el-tag size="small" :type="smtpConfig.last_test_result === 'success' ? 'success' : 'danger'">{{ smtpConfig.last_test_result || '—' }}</el-tag>
             </span>
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingSmtp" @click="saveSmtp">保存</el-button>
-              <el-button size="small" :loading="testingSmtp" :disabled="!smtpConfig.is_enabled" @click="testSmtp">テスト</el-button>
+              <el-button v-if="isAdmin" class="tb-btn tb-btn-blue" size="small" :loading="savingSmtp" @click="saveSmtp">保存</el-button>
+              <el-button class="tb-btn tb-btn-teal" size="small" :loading="testingSmtp" :disabled="!smtpConfig.is_enabled" @click="testSmtp">テスト</el-button>
             </div>
           </div>
         </article>
 
         <!-- Slack -->
-        <article class="nc-int-card">
+        <article class="nc-int-card nc-int-card--slack">
           <div class="nc-int-card__header">
             <div class="nc-int-card__brand">
               <div class="nc-int-card__logo nc-int-card__logo--slack">
@@ -313,14 +338,14 @@
           </el-form>
           <div class="nc-int-card__footer">
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingSlack" @click="saveSlack">保存</el-button>
-              <el-button size="small" :loading="testingSlack" @click="testSlack">テスト</el-button>
+              <el-button v-if="isAdmin" class="tb-btn tb-btn-amber" size="small" :loading="savingSlack" @click="saveSlack">保存</el-button>
+              <el-button class="tb-btn tb-btn-indigo" size="small" :loading="testingSlack" @click="testSlack">テスト</el-button>
             </div>
           </div>
         </article>
 
         <!-- LINE -->
-        <article class="nc-int-card">
+        <article class="nc-int-card nc-int-card--line">
           <div class="nc-int-card__header">
             <div class="nc-int-card__brand">
               <div class="nc-int-card__logo nc-int-card__logo--line">
@@ -344,8 +369,8 @@
           </el-form>
           <div class="nc-int-card__footer">
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingLine" @click="saveLine">保存</el-button>
-              <el-button size="small" :loading="testingLine" @click="testLine">テスト</el-button>
+              <el-button v-if="isAdmin" class="tb-btn tb-btn-green" size="small" :loading="savingLine" @click="saveLine">保存</el-button>
+              <el-button class="tb-btn tb-btn-teal" size="small" :loading="testingLine" @click="testLine">テスト</el-button>
             </div>
           </div>
         </article>
@@ -353,8 +378,27 @@
     </section>
 
   <!-- 受信者ダイアログ -->
-  <el-dialog v-model="recipientDialogVisible" :title="recipientEditing ? '受信者編集' : '受信者追加'" width="480px" destroy-on-close class="nc-dialog">
-    <el-form ref="recipientFormRef" :model="recipientForm" :rules="recipientRules" label-width="110px">
+  <el-dialog
+    v-model="recipientDialogVisible"
+    width="480px"
+    destroy-on-close
+    align-center
+    :show-close="false"
+    class="nc-dialog pb-std"
+  >
+    <template #header>
+      <div class="nc-dlg-header nc-dlg-header--blue">
+        <div class="nc-dlg-icon-wrap">
+          <el-icon class="nc-dlg-icon"><User /></el-icon>
+        </div>
+        <div class="nc-dlg-title-wrap">
+          <span class="nc-dlg-title">{{ recipientEditing ? '受信者編集' : '受信者追加' }}</span>
+          <span class="nc-dlg-subtitle">イベントごとの送信先を設定</span>
+        </div>
+      </div>
+    </template>
+    <div class="nc-dlg-body">
+    <el-form ref="recipientFormRef" :model="recipientForm" :rules="recipientRules" label-width="110px" class="nc-dlg-form">
       <el-form-item label="イベント" prop="event_code">
         <el-select v-model="recipientForm.event_code" placeholder="選択" style="width:100%" :disabled="!!recipientEditing">
           <el-option v-for="ev in notifications" :key="ev.event_code" :label="`${ev.event_name} (${ev.event_code})`" :value="ev.event_code" />
@@ -431,15 +475,37 @@
         <el-switch v-model="recipientForm.is_active" />
       </el-form-item>
     </el-form>
+    </div>
     <template #footer>
-      <el-button @click="recipientDialogVisible = false">キャンセル</el-button>
-      <el-button type="primary" :loading="recipientSubmitting" @click="submitRecipient">保存</el-button>
+      <div class="nc-dlg-footer">
+        <el-button class="nc-dlg-btn-cancel" @click="recipientDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" class="nc-dlg-btn-submit nc-dlg-btn-submit--blue" :loading="recipientSubmitting" @click="submitRecipient">保存</el-button>
+      </div>
     </template>
   </el-dialog>
 
   <!-- テンプレートダイアログ -->
-  <el-dialog v-model="templateDialogVisible" :title="templateEditing ? 'テンプレート編集' : 'テンプレート追加'" width="640px" destroy-on-close class="nc-dialog">
-    <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="100px">
+  <el-dialog
+    v-model="templateDialogVisible"
+    width="640px"
+    destroy-on-close
+    align-center
+    :show-close="false"
+    class="nc-dialog pb-std"
+  >
+    <template #header>
+      <div class="nc-dlg-header nc-dlg-header--amber">
+        <div class="nc-dlg-icon-wrap">
+          <el-icon class="nc-dlg-icon"><Document /></el-icon>
+        </div>
+        <div class="nc-dlg-title-wrap">
+          <span class="nc-dlg-title">{{ templateEditing ? 'テンプレート編集' : 'テンプレート追加' }}</span>
+          <span class="nc-dlg-subtitle">件名・本文とプレースホルダを設定</span>
+        </div>
+      </div>
+    </template>
+    <div class="nc-dlg-body">
+    <el-form ref="templateFormRef" :model="templateForm" :rules="templateRules" label-width="100px" class="nc-dlg-form">
       <el-form-item label="コード" prop="code">
         <el-input v-model="templateForm.code" :disabled="!!templateEditing" placeholder="CUTTING_ACTUAL_CONFIRMED" />
       </el-form-item>
@@ -456,9 +522,12 @@
       <el-form-item label="言語"><el-input v-model="templateForm.language" style="width:120px" /></el-form-item>
       <el-form-item v-if="templateEditing" label="有効"><el-switch v-model="templateForm.is_active" /></el-form-item>
     </el-form>
+    </div>
     <template #footer>
-      <el-button @click="templateDialogVisible = false">キャンセル</el-button>
-      <el-button type="primary" :loading="templateSubmitting" @click="submitTemplate">保存</el-button>
+      <div class="nc-dlg-footer">
+        <el-button class="nc-dlg-btn-cancel" @click="templateDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" class="nc-dlg-btn-submit nc-dlg-btn-submit--amber" :loading="templateSubmitting" @click="submitTemplate">保存</el-button>
+      </div>
     </template>
   </el-dialog>
 
@@ -1130,142 +1199,363 @@ onMounted(loadAll)
   --nc-border: #e2e8f0;
   --nc-surface: #fff;
   --nc-muted: #64748b;
-  padding: 8px 12px 16px;
-  max-width: 1360px;
-  margin: 0 auto;
+  padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 100vh;
 }
 
-/* ---- 顶部一体化 ---- */
-.nc-top {
-  margin-bottom: 10px;
-  border-radius: 12px;
-  background: var(--nc-surface);
-  border: 1px solid var(--nc-border);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(99, 102, 241, 0.06);
-  overflow: hidden;
+/* ---------- 背景・タイトルバー（通知＝青绿系・他頁と分色） ---------- */
+.nc-modern {
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(20, 184, 166, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(6, 182, 212, 0.07), transparent 60%),
+    linear-gradient(160deg, #f0fdfa 0%, #f0f9ff 45%, #ecfeff 100%);
 }
 
-.nc-top__bar {
+.nc-modern .page-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #f8faff 0%, #faf5ff 50%, #fdf4ff 100%);
-  border-bottom: 1px solid color-mix(in srgb, var(--nc-accent) 10%, transparent);
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: linear-gradient(125deg, #0f766e 0%, #0d9488 38%, #14b8a6 72%, #06b6d4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  box-shadow:
+    0 18px 36px -18px rgba(15, 118, 110, 0.55),
+    0 4px 12px -6px rgba(20, 184, 166, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.nc-top__brand {
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
+}
+
+.toolbar-left {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.toolbar-icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    0 6px 14px -6px rgba(15, 23, 42, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.12);
+}
+
+.toolbar-icon {
+  font-size: 20px;
+  color: #fff;
+}
+
+.toolbar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toolbar-title {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.toolbar-desc {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.toolbar-right {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.nc-top__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--nc-accent), var(--nc-accent-2));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--nc-accent) 30%, transparent);
-}
-
-.nc-top__titles {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.nc-top__title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #1e1b4b;
-  line-height: 1.2;
-}
-
-.nc-top__desc {
-  font-size: 0.7rem;
-  color: var(--nc-muted);
-  line-height: 1.3;
-}
-
-.nc-top__stats {
+.nc-stat-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex: 1;
-  min-width: 0;
-  justify-content: center;
+  align-items: center;
 }
 
 .nc-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid color-mix(in srgb, var(--chip-accent) 18%, transparent);
-  color: var(--chip-accent);
+  padding: 5px 12px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.7rem;
   white-space: nowrap;
-  backdrop-filter: blur(4px);
+  box-shadow:
+    0 3px 0 rgba(55, 48, 163, 0.35),
+    0 10px 20px -10px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.nc-chip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: var(--chip-accent, #c7d2fe);
 }
 
 .nc-chip__value {
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: #0f172a;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 .nc-chip__label {
-  color: var(--nc-muted);
+  color: rgba(255, 255, 255, 0.78);
 }
 
-.nc-top__refresh {
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.9);
+/* 白地カプセルボタン */
+.tb-btn {
+  --tb-h: 32px;
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #c7d2fe;
+  --k-bd-h: #a5b4fc;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+  --el-button-text-color: var(--k-fg);
+  --el-button-hover-text-color: var(--k-fg-h);
+  --el-button-active-text-color: var(--k-fg-h);
+  --el-button-border-color: var(--k-bd);
+  --el-button-hover-border-color: var(--k-bd-h);
+  --el-button-active-border-color: var(--k-bd-h);
+  position: relative;
+  height: var(--tb-h);
+  min-height: var(--tb-h);
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--k-bd);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--k-fg);
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
-.nc-top__tabs {
+.tb-btn :deep(.el-icon) {
+  margin-right: 5px;
+  font-size: 15px;
+  color: var(--k-ico);
+}
+
+.tb-btn:hover,
+.tb-btn:focus {
+  border-color: var(--k-bd-h);
+  color: var(--k-fg-h);
+  background: linear-gradient(135deg, #ffffff 0%, var(--k-tint) 45%, var(--k-tint-h) 100%);
+}
+
+.tb-btn-blue {
+  --k-rgb: 37 99 235;
+  --k-fg: #1d4ed8;
+  --k-fg-h: #1e40af;
+  --k-bd: #93c5fd;
+  --k-bd-h: #60a5fa;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+}
+.tb-btn-teal {
+  --k-rgb: 13 148 136;
+  --k-fg: #0f766e;
+  --k-fg-h: #115e59;
+  --k-bd: #5eead4;
+  --k-bd-h: #2dd4bf;
+  --k-tint: #ccfbf1;
+  --k-tint-h: #99f6e4;
+  --k-ico: #14b8a6;
+}
+.tb-btn-amber {
+  --k-rgb: 217 119 6;
+  --k-fg: #b45309;
+  --k-fg-h: #92400e;
+  --k-bd: #fcd34d;
+  --k-bd-h: #fbbf24;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #f59e0b;
+}
+.tb-btn-indigo {
+  --k-rgb: 79 70 229;
+  --k-fg: #4338ca;
+  --k-fg-h: #3730a3;
+  --k-bd: #a5b4fc;
+  --k-bd-h: #818cf8;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+}
+.tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-fg-h: #065f46;
+  --k-bd: #6ee7b7;
+  --k-bd-h: #34d399;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+}
+
+.nc-page.nc-modern.pb-std.pb-std .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled) {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.2) !important;
+}
+.nc-page.nc-modern.pb-std.pb-std .tb-btn.tb-btn.el-button.el-button:not(.is-link):not(.is-text):not(.is-disabled):hover {
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.16),
+    0 4px 8px -2px rgba(15, 23, 42, 0.25),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.55) !important;
+}
+
+/* ---------- Tab バー（フィルタ条と同型） ---------- */
+.nc-tabs-bar {
+  position: relative;
   display: flex;
-  gap: 2px;
-  padding: 4px 8px;
-  background: #f8fafc;
+  gap: 4px;
+  padding: 6px 10px 6px 16px;
+  margin-bottom: 10px;
   overflow-x: auto;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 24px -16px rgba(79, 70, 229, 0.28);
+}
+
+.nc-tabs-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+  background: linear-gradient(180deg, #818cf8, #a855f7, #ec4899);
 }
 
 .nc-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border: none;
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
   color: var(--nc-muted);
   font-size: 0.78rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
 }
 
 .nc-tab:hover {
-  color: #334155;
-  background: rgba(255, 255, 255, 0.7);
+  color: #4338ca;
+  background: #eef2ff;
 }
 
 .nc-tab--active {
-  background: #fff;
-  color: var(--nc-accent);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-  font-weight: 600;
+  color: #fff;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.2),
+    0 4px 10px -4px rgba(99, 102, 241, 0.45);
+}
+
+.nc-tab--events.nc-tab--active {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(67, 56, 202, 0.3),
+    0 4px 10px -4px rgba(99, 102, 241, 0.55);
+}
+.nc-tab--recipients.nc-tab--active {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(29, 78, 216, 0.3),
+    0 4px 10px -4px rgba(37, 99, 235, 0.55);
+}
+.nc-tab--templates.nc-tab--active {
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(180, 83, 9, 0.3),
+    0 4px 10px -4px rgba(217, 119, 6, 0.55);
+}
+.nc-tab--integration.nc-tab--active {
+  background: linear-gradient(135deg, #2dd4bf, #0d9488);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(15, 118, 110, 0.3),
+    0 4px 10px -4px rgba(13, 148, 136, 0.55);
+}
+
+.nc-tab--active .nc-tab__badge {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
 }
 
 .nc-tab__badge {
@@ -1279,16 +1569,35 @@ onMounted(loadAll)
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---- 面板 ---- */
+/* ---------- パネル ---------- */
 .nc-panel {
+  position: relative;
+  overflow: hidden;
   background: var(--nc-surface);
-  border-radius: 12px;
-  border: 1px solid var(--nc-border);
+  border-radius: 14px;
+  border: 1px solid #e0e7ff;
   padding: 12px 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 14px 32px -18px rgba(79, 70, 229, 0.3);
 }
+
+.nc-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+}
+.nc-panel--events::before { background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899); }
+.nc-panel--recipients::before { background: linear-gradient(90deg, #3b82f6, #6366f1, #06b6d4); }
+.nc-panel--templates::before { background: linear-gradient(90deg, #f59e0b, #f97316, #ec4899); }
+.nc-panel--integration::before { background: linear-gradient(90deg, #14b8a6, #10b981, #6366f1); }
 
 .nc-panel__head {
   display: flex;
@@ -1302,8 +1611,8 @@ onMounted(loadAll)
 .nc-panel__title {
   margin: 0;
   font-size: 0.92rem;
-  font-weight: 600;
-  color: #0f172a;
+  font-weight: 700;
+  color: #1e293b;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -1319,7 +1628,8 @@ onMounted(loadAll)
 .nc-panel__sub code {
   padding: 0 4px;
   border-radius: 3px;
-  background: #f1f5f9;
+  background: #eef2ff;
+  color: #4338ca;
   font-size: 0.68rem;
 }
 
@@ -1330,7 +1640,26 @@ onMounted(loadAll)
   flex-wrap: wrap;
 }
 
-/* ---- イベント卡片 ---- */
+.nc-filter-select {
+  width: 180px;
+}
+
+.nc-modern .nc-filter-select :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow:
+    0 0 0 1px #dfe3f0 inset,
+    0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.nc-modern .nc-filter-select :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #6366f1 inset,
+    0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+/* ---------- イベントカード ---------- */
 .nc-event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -1338,22 +1667,49 @@ onMounted(loadAll)
 }
 
 .nc-event-card {
+  --accent: #6366f1;
+  position: relative;
   padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--nc-border);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
   background: #fff;
-  border-left: 3px solid var(--nc-accent);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(15, 23, 42, 0.28);
+}
+.nc-event-card--tone-0 { --accent: #6366f1; }
+.nc-event-card--tone-1 { --accent: #10b981; }
+.nc-event-card--tone-2 { --accent: #f59e0b; }
+.nc-event-card--tone-3 { --accent: #3b82f6; }
+.nc-event-card--tone-4 { --accent: #ec4899; }
+.nc-event-card--tone-5 { --accent: #14b8a6; }
+
+.nc-event-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));
 }
 
 .nc-event-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 16px 28px -16px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .nc-event-card--off {
-  opacity: 0.6;
-  border-left-color: #cbd5e1;
+  opacity: 0.65;
+  --accent: #cbd5e1;
 }
 
 .nc-event-card__top {
@@ -1365,17 +1721,23 @@ onMounted(loadAll)
 }
 
 .nc-event-card__code {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
   font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: #94a3b8;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--accent) 75%, #0f172a);
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, #fff);
   text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
 }
 
 .nc-event-card__name {
-  margin: 1px 0 0;
+  margin: 4px 0 0;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
   line-height: 1.25;
 }
@@ -1414,11 +1776,12 @@ onMounted(loadAll)
 }
 
 .nc-channel--on {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #166534;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
 }
 
+.nc-channel--app.nc-channel--on { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
 .nc-channel--email.nc-channel--on { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
 .nc-channel--slack.nc-channel--on { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
 .nc-channel--line.nc-channel--on { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
@@ -1480,19 +1843,35 @@ onMounted(loadAll)
   padding-top: 2px;
 }
 
-/* ---- 表格 ---- */
+/* ---------- テーブル ---------- */
 .nc-table-wrap {
-  border-radius: 8px;
+  position: relative;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--nc-border);
+  border: 1px solid #e0e7ff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(79, 70, 229, 0.25);
+}
+
+.nc-table-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 2;
+  background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
 }
 
 .nc-table :deep(.el-table__header th) {
-  background: #f8fafc !important;
-  font-weight: 600;
+  background: linear-gradient(180deg, #f5f3ff 0%, #eef2ff 100%) !important;
+  font-weight: 700;
   font-size: 0.75rem;
-  color: #475569;
+  color: #3730a3;
   padding: 6px 0;
+  border-bottom: 1px solid #c7d2fe;
 }
 
 .nc-table :deep(.el-table__body td) {
@@ -1500,19 +1879,69 @@ onMounted(loadAll)
   padding: 4px 0;
 }
 
+.nc-table :deep(.el-table__row:hover > td) {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.04) 100%) !important;
+}
+
 .nc-cell-event__name {
   display: block;
-  font-weight: 500;
+  font-weight: 600;
   color: #1e293b;
   font-size: 0.78rem;
 }
 
 .nc-cell-event__code {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: 4px;
   font-size: 0.65rem;
-  color: #94a3b8;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #e0e7ff;
 }
 
-/* ---- テンプレート ---- */
+.row-act {
+  --act: #6366f1;
+  --act-to: #4f46e5;
+  padding: 2px 10px !important;
+  height: 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: var(--act) !important;
+  background: color-mix(in srgb, var(--act) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--act) 22%, transparent);
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.row-act + .row-act {
+  margin-left: 4px;
+}
+
+.row-act:hover {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--act), var(--act-to));
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px -4px var(--act-to);
+}
+
+.row-act.act-daily { --act: #6366f1; --act-to: #4f46e5; }
+.row-act.act-edit { --act: #3b82f6; --act-to: #1d4ed8; }
+.row-act.act-delete { --act: #f43f5e; --act-to: #be123c; }
+
+.nc-modern :deep(.el-tag) {
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+/* ---------- テンプレート ---------- */
 .nc-template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -1520,18 +1949,52 @@ onMounted(loadAll)
 }
 
 .nc-template-card {
+  --accent: #8b5cf6;
+  position: relative;
   padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--nc-border);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  overflow: hidden;
+  background: #fff;
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.2s ease;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(15, 23, 42, 0.28);
+}
+.nc-template-card--tone-0 { --accent: #f59e0b; }
+.nc-template-card--tone-1 { --accent: #8b5cf6; }
+.nc-template-card--tone-2 { --accent: #3b82f6; }
+.nc-template-card--tone-3 { --accent: #10b981; }
+.nc-template-card--tone-4 { --accent: #ec4899; }
+
+.nc-code-tag {
+  color: #b45309 !important;
+  background: #fffbeb !important;
+  box-shadow: inset 0 0 0 1px #fde68a !important;
+}
+
+.nc-template-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));
 }
 
 .nc-template-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 16px 28px -16px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .nc-template-card__head {
@@ -1543,7 +2006,7 @@ onMounted(loadAll)
 .nc-template-card__name {
   margin: 0;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
 }
 
@@ -1575,7 +2038,7 @@ onMounted(loadAll)
   padding-top: 4px;
 }
 
-/* ---- 外部連携 ---- */
+/* ---------- 外部連携 ---------- */
 .nc-integration-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1588,21 +2051,40 @@ onMounted(loadAll)
 
 @media (max-width: 720px) {
   .nc-integration-grid { grid-template-columns: 1fr; }
-  .nc-top__bar { flex-wrap: wrap; }
-  .nc-top__stats { justify-content: flex-start; }
+  .toolbar-left { flex-direction: column; align-items: flex-start; }
+  .nc-stat-chips { justify-content: flex-start; }
 }
 
 .nc-int-card {
-  border-radius: 10px;
-  border: 1px solid var(--nc-border);
+  --accent: #6366f1;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
   padding: 10px 12px;
   background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 22px -16px rgba(15, 23, 42, 0.28);
+}
+
+.nc-int-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 35%, transparent));
 }
 
 .nc-int-card--smtp {
-  border-color: #c7d2fe;
+  --accent: #6366f1;
   background: linear-gradient(180deg, #fafaff 0%, #fff 100%);
 }
+
+.nc-int-card--slack { --accent: #f59e0b; }
+.nc-int-card--line { --accent: #10b981; }
 
 .nc-int-card__header {
   display: flex;
@@ -1620,18 +2102,22 @@ onMounted(loadAll)
 .nc-int-card__brand h3 {
   margin: 0;
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .nc-int-card__logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f1f5f9;
   flex-shrink: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.1),
+    0 4px 10px -4px rgba(15, 23, 42, 0.2);
 }
 
 .nc-int-card__logo img {
@@ -1647,7 +2133,7 @@ onMounted(loadAll)
 
 .nc-int-card__status {
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .nc-int-card__status.is-on { color: #059669; }
@@ -1662,6 +2148,11 @@ onMounted(loadAll)
   color: var(--nc-muted);
   padding-bottom: 0;
   line-height: 1.4;
+}
+
+.nc-int-form :deep(.el-input__wrapper),
+.nc-int-form :deep(.el-input-number) {
+  border-radius: 9px;
 }
 
 .nc-int-card__footer {
@@ -1686,9 +2177,133 @@ onMounted(loadAll)
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
-/* ---- 预览 / 提示 ---- */
+/* ---------- ダイアログ ---------- */
+.nc-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.nc-dialog :deep(.el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+.nc-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  background: linear-gradient(180deg, #fafbff 0%, #f5f6fb 100%);
+}
+
+.nc-dialog :deep(.el-dialog__footer) {
+  padding: 14px 24px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+}
+
+.nc-dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.nc-dlg-header--blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.92) 0%, rgba(37, 99, 235, 0.95) 100%);
+}
+
+.nc-dlg-header--amber {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.92) 0%, rgba(217, 119, 6, 0.95) 100%);
+}
+
+.nc-dlg-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nc-dlg-icon {
+  font-size: 22px;
+  color: #fff;
+}
+
+.nc-dlg-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nc-dlg-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  line-height: 1.3;
+}
+
+.nc-dlg-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 500;
+}
+
+.nc-dlg-body {
+  padding: 18px 24px 8px;
+}
+
+.nc-dlg-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.nc-dlg-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.nc-dlg-btn-cancel {
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-weight: 500;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #475569;
+}
+
+.nc-dlg-btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #000;
+}
+
+.nc-dlg-btn-submit {
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-weight: 600;
+  border: none !important;
+}
+
+.nc-dlg-btn-submit--blue {
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.nc-dlg-btn-submit--amber {
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+}
+
+/* ---------- プレビュー / ヒント ---------- */
 .nc-preview__field {
   margin-bottom: 14px;
 }
@@ -1709,7 +2324,7 @@ onMounted(loadAll)
 
 .nc-preview__body {
   padding: 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #f8fafc;
   border: 1px solid var(--nc-border);
   font-size: 0.8125rem;
@@ -1728,5 +2343,46 @@ onMounted(loadAll)
   font-size: 0.68rem;
   color: var(--nc-muted);
   line-height: 1.4;
+}
+
+.nc-line-hint code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.65rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-event-card,
+  .nc-template-card,
+  .row-act,
+  .tb-btn {
+    transition: none;
+  }
+}
+</style>
+
+<!-- ダイアログは teleport されるため、枠まわりは非 scoped で保証 -->
+<style>
+.nc-dialog.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+.nc-dialog .el-dialog__header {
+  padding: 0;
+  margin: 0;
+}
+.nc-dialog .el-dialog__body {
+  padding: 0;
+  background: linear-gradient(180deg, #fafbff 0%, #f5f6fb 100%);
+}
+.nc-dialog .el-dialog__footer {
+  padding: 14px 24px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
 }
 </style>

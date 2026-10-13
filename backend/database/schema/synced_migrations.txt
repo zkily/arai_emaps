@@ -175,3 +175,4 @@
 170_supply_part_quality_status.sql
 171_equipment_efficiency_current_rate.sql
 172_supply_part_migration_trigger.sql
+173_supply_part_initial_registered_date.sql

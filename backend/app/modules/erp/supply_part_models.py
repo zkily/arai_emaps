@@ -54,6 +54,7 @@ class SupplyPartStock(Base):
         String(30), nullable=True, comment="移行トリガー（mass_end/customer_spec）"
     )
     migration_reason = Column(String(500), nullable=True, comment="移行理由")
+    initial_registered_date = Column(Date, nullable=True, comment="最初登録日")
     created_by_user_id = Column(Integer, nullable=True, comment="登録者ID")
     updated_by_user_id = Column(Integer, nullable=True, comment="更新者ID")
     created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")

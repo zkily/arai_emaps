@@ -136,6 +136,15 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     pageMenuCode: 'ERP_INVENTORY_SUPPLY_PARTS',
   },
   {
+    slug: 'inventory-report',
+    menuCode: 'OP_MANUAL_INVENTORY_REPORT',
+    pageTitle: '在庫報告管理',
+    pdfFile: 'inventory-report.pdf',
+    sortOrder: 15.1,
+    category: 'pageOperation',
+    pageMenuCode: 'ERP_INVENTORY_REPORT',
+  },
+  {
     slug: 'forming-instruction-issue',
     menuCode: 'OP_MANUAL_FORMING_INSTRUCTION_ISSUE',
     pageTitle: '成型指示書発行管理',
