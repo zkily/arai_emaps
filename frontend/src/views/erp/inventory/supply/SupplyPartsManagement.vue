@@ -27,7 +27,12 @@
       </div>
     </div>
 
-    <div class="stat-row">
+    <el-tabs v-model="activeTab" class="page-tabs">
+      <el-tab-pane label="在庫一覧" name="stock" />
+      <el-tab-pane label="出荷管理" name="shipments" />
+    </el-tabs>
+
+    <div v-if="activeTab === 'stock'" class="stat-row">
       <div class="stat-card">
         <span class="stat-card__icon"><el-icon><Box /></el-icon></span>
         <div class="stat-card__body">
@@ -69,6 +74,37 @@
       </div>
     </div>
 
+    <div v-else class="stat-row">
+      <div class="stat-card stat-card--sky">
+        <span class="stat-card__icon"><el-icon><Goods /></el-icon></span>
+        <div class="stat-card__body">
+          <span>予定合計</span>
+          <strong>{{ formatNum(shipmentSummary.planned_total) }}</strong>
+        </div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__icon"><el-icon><Box /></el-icon></span>
+        <div class="stat-card__body">
+          <span>実績合計</span>
+          <strong>{{ formatNum(shipmentSummary.actual_total) }}</strong>
+        </div>
+      </div>
+      <div class="stat-card stat-card--rose" :class="{ 'stat-card--alert': shipmentSummary.not_shipped_count > 0 }">
+        <span class="stat-card__icon"><el-icon><WarningFilled /></el-icon></span>
+        <div class="stat-card__body">
+          <span>未出荷</span>
+          <strong>{{ shipmentSummary.not_shipped_count }}</strong>
+        </div>
+      </div>
+      <div class="stat-card stat-card--amber" :class="{ 'stat-card--stagnant': shipmentSummary.short_count > 0 }">
+        <span class="stat-card__icon"><el-icon><Clock /></el-icon></span>
+        <div class="stat-card__body">
+          <span>不足</span>
+          <strong>{{ shipmentSummary.short_count }}</strong>
+        </div>
+      </div>
+    </div>
+
     <div class="toolbar">
       <span class="toolbar__label">対象月</span>
       <el-date-picker
@@ -78,27 +114,24 @@
         placeholder="対象月"
         :clearable="false"
         class="month-picker"
-        @change="loadList"
       />
       <el-input
         v-model="keyword"
         clearable
-        placeholder="製品CD・製品名・品番・保管場所"
+        :placeholder="activeTab === 'stock' ? '製品CD・製品名・品番・保管場所' : '製品CD・製品名・品番'"
         class="keyword"
-        @keyup.enter="loadList"
-        @clear="loadList"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
       <el-select
+        v-if="activeTab === 'stock'"
         v-model="locationFilter"
         clearable
         filterable
         placeholder="保管場所"
         class="filter-select"
-        @change="loadList"
       >
         <el-option v-for="item in locations" :key="item.id" :label="item.name" :value="item.name" />
       </el-select>
@@ -108,7 +141,6 @@
         filterable
         placeholder="納入先"
         class="filter-select"
-        @change="loadList"
       >
         <el-option
           v-for="item in destinationOptions"
@@ -117,15 +149,10 @@
           :value="item.cd"
         />
       </el-select>
-      <el-checkbox v-model="alertOnly" class="alert-check" @change="loadList">警告のみ</el-checkbox>
-      <el-checkbox v-model="stagnantOnly" class="alert-check stagnant-check" @change="loadList">
+      <el-checkbox v-if="activeTab === 'stock'" v-model="stagnantOnly" class="stagnant-check">
         滞留のみ
       </el-checkbox>
-      <el-button class="search-btn" @click="loadList">
-        <el-icon><Search /></el-icon>
-        検索
-      </el-button>
-      <div class="toolbar__right">
+      <div v-if="activeTab === 'stock'" class="toolbar__right">
         <el-button class="tool-btn" :disabled="!rows.length" :loading="exporting" @click="exportExcel">
           <el-icon><Download /></el-icon>
           Excel出力
@@ -149,7 +176,7 @@
       </div>
     </div>
 
-    <div class="table-card">
+    <div v-if="activeTab === 'stock'" class="table-card">
       <el-table
         v-loading="loading"
         :data="rows"
@@ -157,6 +184,7 @@
         stripe
         size="small"
         class="data-table"
+        :height="stockTableHeight"
         :row-class-name="rowClass"
         @row-click="openDetail"
       >
@@ -168,13 +196,39 @@
         <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
         <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
         <el-table-column prop="storage_location" label="保管場所" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="shelf_no" label="棚番" width="100" show-overflow-tooltip>
+        <el-table-column prop="shelf_no" label="棚番" width="110" align="center" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="isValidShelf(row.shelf_no)">{{ normalizeShelf(row.shelf_no) }}</span>
-            <span v-else class="num-warn" title="A-03-02 の形式に直してください">{{ row.shelf_no || '未設定' }}</span>
+            <span
+              v-if="row.shelf_no"
+              class="shelf-chip"
+              :class="shelfToneClass(row.shelf_no)"
+              :style="shelfToneStyle(row.shelf_no)"
+              :title="shelfToneHint(row.shelf_no)"
+            >
+              <template v-if="shelfParts(row.shelf_no)">
+                <span>{{ shelfParts(row.shelf_no)!.prefix }}</span>
+                <span class="shelf-bay" :class="shelfBayClass(row.shelf_no)">
+                  {{ shelfParts(row.shelf_no)!.bay }}
+                </span>
+              </template>
+              <template v-else>{{ row.shelf_no }}</template>
+            </span>
+            <span v-else class="muted">未設定</span>
           </template>
         </el-table-column>
-        <el-table-column prop="initial_registered_date" label="最初登録日" width="108" sortable />
+        <el-table-column prop="initial_registered_date" label="最初登録日" width="118" align="center" sortable>
+          <template #default="{ row }">
+            <span
+              v-if="row.initial_registered_date"
+              class="reg-date"
+              :class="registeredDateTone(row.initial_registered_date)"
+              :title="registeredDateHint(row.initial_registered_date)"
+            >
+              {{ row.initial_registered_date }}
+            </span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="on_hand_qty" label="現在庫" width="90" align="right">
           <template #default="{ row }">
             <span class="num-strong">{{ formatNum(row.on_hand_qty) }}</span>
@@ -238,6 +292,125 @@
         </el-table-column>
       </el-table>
     </div>
+
+    <template v-else>
+      <div class="table-card ship-block">
+        <h2 class="ship-block__title">当月出荷予定</h2>
+        <el-table
+          v-loading="shipmentsLoading"
+          :data="shipmentPlanned"
+          border
+          stripe
+          size="small"
+          class="data-table"
+          empty-text="この月の出荷予定・実績はありません"
+          @row-click="openShipmentRow"
+        >
+          <el-table-column prop="product_cd" label="製品CD" width="90" fixed>
+            <template #default="{ row }">
+              <span class="cd-text">{{ row.product_cd }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="destination_summary" label="納入先" min-width="140" show-overflow-tooltip />
+          <el-table-column label="予定日" width="120" align="center">
+            <template #header>
+              <el-tooltip content="日受注管理の日付（確定本数がある最早日）。日受注側を変更するとここに反映されます">
+                <span>予定日</span>
+              </el-tooltip>
+            </template>
+            <template #default="{ row }">
+              <div class="plan-date">
+                <span v-if="row.planned_date" :title="plannedDateHint(row)">{{ row.planned_date }}</span>
+                <span v-else class="muted">未設定</span>
+                <span
+                  v-if="row.planned_date && (row.planned_date_count || 0) > 1"
+                  class="plan-date__src"
+                  :title="plannedDateHint(row)"
+                >
+                  他{{ (row.planned_date_count || 1) - 1 }}日
+                </span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="planned_qty" label="予定本数" width="96" align="right">
+            <template #default="{ row }">{{ formatNum(row.planned_qty) }}</template>
+          </el-table-column>
+          <el-table-column prop="actual_qty" label="実績本数" width="96" align="right">
+            <template #default="{ row }">{{ formatNum(row.actual_qty) }}</template>
+          </el-table-column>
+          <el-table-column prop="diff_qty" label="差分" width="90" align="right">
+            <template #default="{ row }">
+              <span :class="{ 'num-warn': row.diff_qty < 0 }">{{ formatNum(row.diff_qty) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="現在庫" width="90" align="right">
+            <template #default="{ row }">
+              <span v-if="row.stock_id != null" class="num-strong">{{ formatNum(row.on_hand_qty) }}</span>
+              <span v-else class="muted">未登録</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状態" width="150" align="center">
+            <template #default="{ row }">
+              <div class="ship-status" @click.stop>
+                <el-tag size="small" round :type="shipmentStatusType(row.status)">
+                  {{ shipmentStatusLabel(row.status) }}
+                </el-tag>
+                <el-button
+                  v-if="canEdit && row.status !== 'shipped' && row.status !== 'done'"
+                  link
+                  type="success"
+                  size="small"
+                  @click="setShipped(row as SupplyPartShipmentPlanned, true)"
+                >
+                  出荷済
+                </el-button>
+                <el-button
+                  v-else-if="canEdit && row.status === 'shipped'"
+                  link
+                  type="info"
+                  size="small"
+                  @click="setShipped(row as SupplyPartShipmentPlanned, false)"
+                >
+                  取消
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div class="table-card ship-block">
+        <h2 class="ship-block__title">当月実出荷</h2>
+        <el-table
+          v-loading="shipmentsLoading"
+          :data="shipmentActual"
+          border
+          stripe
+          size="small"
+          class="data-table"
+          empty-text="この月の実出荷はありません"
+          @row-click="openShipmentRow"
+        >
+          <el-table-column prop="occurred_date" label="日付" width="110" />
+          <el-table-column prop="product_cd" label="製品CD" width="90">
+            <template #default="{ row }">
+              <span class="cd-text">{{ row.product_cd }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="quantity" label="数量" width="90" align="right">
+            <template #default="{ row }">{{ formatNum(row.quantity) }}</template>
+          </el-table-column>
+          <el-table-column prop="balance_after" label="出庫後残高" width="110" align="right">
+            <template #default="{ row }">{{ formatNum(row.balance_after) }}</template>
+          </el-table-column>
+          <el-table-column prop="note" label="備考" min-width="180" show-overflow-tooltip />
+        </el-table>
+      </div>
+    </template>
 
     <el-dialog
       v-model="transferVisible"
@@ -412,7 +585,7 @@
                   v-model="manualPick"
                   filterable
                   clearable
-                  placeholder="種別が補給品・製品CD末尾が 1 の製品から選択"
+                  placeholder="製品種別が補給品の製品から選択"
                   no-data-text="該当する補給品がありません"
                   :filter-method="filterProducts"
                   :loading="productSearching"
@@ -528,8 +701,9 @@
 
     <el-dialog
       v-model="locationVisible"
-      width="760px"
-      class="spm-dialog pb-std"
+      width="min(1120px, 96vw)"
+      top="4vh"
+      class="spm-dialog spm-dialog--locations pb-std"
       :show-close="false"
       append-to-body
     >
@@ -544,76 +718,150 @@
           <el-icon class="spm-close" @click="locationVisible = false"><Close /></el-icon>
         </div>
       </template>
-      <div class="spm-dialog-body">
-        <p class="dialog-hint">
-          量産品の置き場とは物理的に分けた補給品専用棚だけを登録してください。保管場所名の末尾 7 文字が棚番になります（例：補給品棚A-03-02 → 棚番 A-03-02）。
-        </p>
-        <section v-if="canCreate || (canEdit && locForm.id)" class="form-section">
-          <header class="form-section__title">
-            <span class="form-section__dot" />{{ locForm.id ? '保管場所を編集' : '保管場所を追加' }}
-          </header>
-          <el-form label-position="top" class="spm-form">
-            <div class="location-form-grid">
-              <el-form-item label="保管場所名" required>
-                <el-input v-model="locForm.name" maxlength="100" placeholder="例：補給品棚A-03-02" />
-              </el-form-item>
-              <el-form-item label="表示順">
-                <el-input-number v-model="locForm.sort_order" :step="1" controls-position="right" />
-              </el-form-item>
-              <el-form-item label="使用">
-                <el-switch v-model="locForm.is_active" />
-              </el-form-item>
-            </div>
-            <el-form-item label="備考">
-              <el-input v-model="locForm.note" maxlength="255" />
-            </el-form-item>
-            <div class="location-form-actions">
-              <el-button v-if="locForm.id" @click="resetLocForm">編集をやめる</el-button>
-              <el-button class="dialog-save" :loading="locSaving" @click="saveLocation">
-                <el-icon><Check /></el-icon>
-                {{ locForm.id ? '更新' : '追加' }}
-              </el-button>
-            </div>
-          </el-form>
-        </section>
-        <el-table
-          v-loading="locLoading"
-          :data="locations"
-          size="small"
-          border
-          class="location-table"
-          max-height="360"
-          :default-sort="{ prop: 'sort_order', order: 'descending' }"
-        >
-          <el-table-column prop="name" label="保管場所名" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="sort_order" label="表示順" width="96" align="right" sortable />
-          <el-table-column prop="usage_count" label="使用中" width="70" align="right" />
-          <el-table-column label="状態" width="80">
-            <template #default="{ row }">
-              <el-tag size="small" :type="row.is_active ? 'success' : 'info'">
-                {{ row.is_active ? '使用' : '停止' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="note" label="備考" min-width="120" show-overflow-tooltip />
-          <el-table-column label="操作" width="188" align="center">
-            <template #default="{ row }">
-              <el-button link type="primary" @click="printLocationShelfSigns(row.name)">棚番票</el-button>
-              <el-button v-if="canEdit" link type="primary" @click="editLocation(row as SupplyPartLocation)">編集</el-button>
-              <el-tooltip
-                v-if="canDelete"
-                :disabled="row.usage_count === 0"
-                content="使用中のため削除できません。使用を停止してください"
-              >
-                <span>
-                  <el-button link type="danger" :disabled="row.usage_count > 0" @click="removeLocation(row as SupplyPartLocation)">
-                    削除
+      <div class="spm-dialog-body location-dialog-body">
+        <div class="location-layout">
+          <aside class="location-layout__side">
+            <p class="dialog-hint location-side-hint">
+              末尾 7 文字が棚番（例：補給品棚A-03-02 → A-03-02）
+            </p>
+            <section v-if="canCreate || (canEdit && locForm.id)" class="form-section location-side-section">
+              <header class="form-section__title">
+                <span class="form-section__dot" />{{ locForm.id ? '保管場所を編集' : '保管場所を追加' }}
+              </header>
+              <el-form label-position="top" class="spm-form location-side-form" size="small">
+                <el-form-item label="保管場所名" required>
+                  <el-input v-model="locForm.name" maxlength="100" placeholder="例：補給品棚A-03-02" />
+                </el-form-item>
+                <div class="location-form-grid location-form-grid--side">
+                  <el-form-item label="表示順">
+                    <el-input-number v-model="locForm.sort_order" :step="1" controls-position="right" />
+                  </el-form-item>
+                  <el-form-item label="使用">
+                    <el-switch v-model="locForm.is_active" />
+                  </el-form-item>
+                </div>
+                <el-form-item label="備考">
+                  <el-input v-model="locForm.note" maxlength="255" />
+                </el-form-item>
+                <div class="location-form-actions">
+                  <el-button v-if="locForm.id" size="small" @click="resetLocForm">編集をやめる</el-button>
+                  <el-button class="dialog-save" size="small" :loading="locSaving" @click="saveLocation">
+                    <el-icon><Check /></el-icon>
+                    {{ locForm.id ? '更新' : '追加' }}
                   </el-button>
-                </span>
-              </el-tooltip>
-            </template>
-          </el-table-column>
-        </el-table>
+                </div>
+              </el-form>
+            </section>
+            <section v-if="canEdit" class="form-section form-section--amber location-side-section">
+              <header class="form-section__title"><span class="form-section__dot" />保管場所の入れ替え</header>
+              <p class="dialog-hint dialog-hint--amber location-side-hint">
+                2場所の補給品を入れ替え。棚番も相手先に更新。
+              </p>
+              <div class="location-swap-grid location-swap-grid--side">
+                <el-form-item label="保管場所 A" required class="location-side-form-item">
+                  <el-select
+                    v-model="swapForm.idA"
+                    filterable
+                    clearable
+                    size="small"
+                    placeholder="選択"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="item in locations"
+                      :key="`swap-a-${item.id}`"
+                      :label="`${item.name}（${item.usage_count} 件）`"
+                      :value="item.id"
+                      :disabled="item.id === swapForm.idB"
+                    />
+                  </el-select>
+                </el-form-item>
+                <div class="location-swap-arrow" aria-hidden="true">
+                  <el-icon :size="16"><Switch /></el-icon>
+                </div>
+                <el-form-item label="保管場所 B" required class="location-side-form-item">
+                  <el-select
+                    v-model="swapForm.idB"
+                    filterable
+                    clearable
+                    size="small"
+                    placeholder="選択"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="item in locations"
+                      :key="`swap-b-${item.id}`"
+                      :label="`${item.name}（${item.usage_count} 件）`"
+                      :value="item.id"
+                      :disabled="item.id === swapForm.idA"
+                    />
+                  </el-select>
+                </el-form-item>
+                <div class="location-swap-actions">
+                  <el-button
+                    class="dialog-save dialog-save--amber"
+                    size="small"
+                    :loading="swapSaving"
+                    :disabled="!swapForm.idA || !swapForm.idB"
+                    @click="submitLocationSwap"
+                  >
+                    <el-icon><Switch /></el-icon>
+                    入れ替える
+                  </el-button>
+                </div>
+              </div>
+            </section>
+          </aside>
+          <section class="location-layout__list">
+            <header class="location-list-head">
+              <span class="location-list-head__title">保管場所一覧</span>
+              <span class="location-list-head__count">{{ locations.length }} 件</span>
+            </header>
+            <el-table
+              v-loading="locLoading"
+              :data="locations"
+              size="small"
+              border
+              class="location-table"
+              :height="locationTableHeight"
+              :default-sort="{ prop: 'sort_order', order: 'descending' }"
+            >
+              <el-table-column prop="name" label="保管場所名" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="sort_order" label="表示順" width="88" align="right" sortable />
+              <el-table-column prop="usage_count" label="使用中" width="70" align="right" />
+              <el-table-column label="状態" width="72">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.is_active ? 'success' : 'info'">
+                    {{ row.is_active ? '使用' : '停止' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="note" label="備考" min-width="110" show-overflow-tooltip />
+              <el-table-column label="操作" width="168" align="center" fixed="right">
+                <template #default="{ row }">
+                  <el-button link type="primary" @click="printLocationShelfSigns(row.name)">棚番票</el-button>
+                  <el-button v-if="canEdit" link type="primary" @click="editLocation(row as SupplyPartLocation)">編集</el-button>
+                  <el-tooltip
+                    v-if="canDelete"
+                    :disabled="row.usage_count === 0"
+                    content="使用中のため削除できません。使用を停止してください"
+                  >
+                    <span>
+                      <el-button
+                        link
+                        type="danger"
+                        :disabled="row.usage_count > 0"
+                        @click="removeLocation(row as SupplyPartLocation)"
+                      >
+                        削除
+                      </el-button>
+                    </span>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+        </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
@@ -645,7 +893,15 @@
         <el-descriptions :column="2" border size="small" class="detail-desc">
           <el-descriptions-item label="製品CD">{{ detail.stock.product_cd }}</el-descriptions-item>
           <el-descriptions-item label="最初登録日">
-            {{ detail.stock.initial_registered_date || '—' }}
+            <span
+              v-if="detail.stock.initial_registered_date"
+              class="reg-date"
+              :class="registeredDateTone(detail.stock.initial_registered_date)"
+              :title="registeredDateHint(detail.stock.initial_registered_date)"
+            >
+              {{ detail.stock.initial_registered_date }}
+            </span>
+            <span v-else class="muted">—</span>
           </el-descriptions-item>
           <el-descriptions-item label="現在庫">{{ formatNum(detail.stock.on_hand_qty) }}</el-descriptions-item>
           <el-descriptions-item label="品質状態">
@@ -855,9 +1111,12 @@ import {
   getSupplyPartDetail,
   getSupplyPartList,
   getSupplyPartLocations,
+  getSupplyPartShipments,
   getSupplyPartTrend,
+  updateSupplyPartShipmentPlan,
   previewSupplyPartTransfer,
   searchSupplyPartProducts,
+  swapSupplyPartLocations,
   transferSupplyPart,
   updateSupplyPart,
   updateSupplyPartLocation,
@@ -865,6 +1124,10 @@ import {
   type SupplyPartDetail,
   type SupplyPartListResponse,
   type SupplyPartLocation,
+  type SupplyPartShipmentActual,
+  type SupplyPartShipmentPlanned,
+  type SupplyPartShipmentResponse,
+  type SupplyPartShipmentStatus,
   type SupplyPartProductOption,
   type SupplyPartStock,
   type SupplyPartTransferPreview,
@@ -882,8 +1145,28 @@ const locationVisible = ref(false)
 const locLoading = ref(false)
 const locSaving = ref(false)
 const locForm = reactive({ id: 0, name: '', sort_order: 0, is_active: true, note: '' })
+const swapForm = reactive({ idA: null as number | null, idB: null as number | null })
+const swapSaving = ref(false)
+/** 表头 + 15 行（small 行高約 39px） */
+const LOCATION_LIST_ROWS = 8
+const locationTableHeight = 40 + LOCATION_LIST_ROWS * 39
+/** 一覧ヘッダ分を足した左側の最大高さ */
+const locationSideMaxHeight = `${locationTableHeight + 48}px`
+/** 在庫一覧：表头 + 15 行分の高さ（超過分はスクロール） */
+const STOCK_LIST_ROWS = 11
+const stockTableHeight = 40 + STOCK_LIST_ROWS * 39
 
+const activeTab = ref<'stock' | 'shipments'>('stock')
 const loading = ref(false)
+const shipmentsLoading = ref(false)
+const shipmentPlanned = ref<SupplyPartShipmentPlanned[]>([])
+const shipmentActual = ref<SupplyPartShipmentActual[]>([])
+const shipmentSummary = ref<SupplyPartShipmentResponse['summary']>({
+  planned_total: 0,
+  actual_total: 0,
+  not_shipped_count: 0,
+  short_count: 0,
+})
 const saving = ref(false)
 const productSearching = ref(false)
 const rows = ref<SupplyPartStock[]>([])
@@ -899,7 +1182,6 @@ const trendLoading = ref(false)
 const trendChartRef = ref<HTMLDivElement>()
 let trendChart: ReturnType<typeof echarts.init> | null = null
 const keyword = ref('')
-const alertOnly = ref(false)
 const monthValue = ref(currentMonth())
 const allProducts = ref<SupplyPartProductOption[]>([])
 const productKeyword = ref('')
@@ -919,7 +1201,7 @@ const manualVisible = ref(false)
 const detailVisible = ref(false)
 const preview = ref<SupplyPartTransferPreview | null>(null)
 const detail = ref<SupplyPartDetail | null>(null)
-const manualFromMaster = ref(true)
+const manualFromMaster = ref(false)
 const manualPick = ref('')
 const pickedProductType = ref('')
 
@@ -969,6 +1251,34 @@ function formatDecimal(value: number | null | undefined) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 1 })
 }
 
+function registeredDateAgeDays(value?: string | null) {
+  if (!value) return null
+  const d = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return null
+  return Math.floor((Date.now() - d.getTime()) / 86400000)
+}
+
+/** 最初登録日の経過年数に応じた浅色トーン */
+function registeredDateTone(value?: string | null) {
+  const days = registeredDateAgeDays(value)
+  if (days == null) return 'reg-date--empty'
+  if (days < 0) return 'reg-date--future'
+  if (days <= 90) return 'reg-date--fresh'
+  if (days <= 365) return 'reg-date--year'
+  if (days <= 365 * 3) return 'reg-date--aged'
+  return 'reg-date--old'
+}
+
+function registeredDateHint(value?: string | null) {
+  const days = registeredDateAgeDays(value)
+  if (days == null) return ''
+  if (days < 0) return '未来日'
+  if (days <= 90) return '登録から 90 日以内'
+  if (days <= 365) return '登録から 1 年以内'
+  if (days <= 365 * 3) return '登録から 1〜3 年'
+  return '登録から 3 年以上'
+}
+
 function emptySummary(): SupplyPartListResponse['summary'] {
   return {
     count: 0,
@@ -994,6 +1304,59 @@ function shelfFromLocation(location?: string | null) {
 
 function isValidShelf(value?: string | null) {
   return SHELF_RE.test(normalizeShelf(value))
+}
+
+const SHELF_COLOR_COUNT = 33
+
+/** 棚番 A-03-02 の 2・3 項目（段・間口）で色を決める。33 色循環 */
+function shelfColorIndex(value?: string | null) {
+  const shelf = normalizeShelf(value)
+  const matched = shelf.match(/^([A-Z])-(\d{2})-(\d{2})$/)
+  if (!matched) return null
+  const level = Number(matched[2])
+  const bay = Number(matched[3])
+  return (level * 10 + bay) % SHELF_COLOR_COUNT
+}
+
+function shelfToneClass(value?: string | null) {
+  const shelf = normalizeShelf(value)
+  if (!shelf) return 'shelf-chip--empty'
+  if (!isValidShelf(shelf)) return 'shelf-chip--invalid'
+  return ''
+}
+
+function shelfToneStyle(value?: string | null) {
+  const index = shelfColorIndex(value)
+  if (index == null) return undefined
+  const hue = Math.round((index * 360) / SHELF_COLOR_COUNT)
+  return {
+    color: `hsl(${hue} 52% 28%)`,
+    background: `hsl(${hue} 72% 94%)`,
+    borderColor: `hsl(${hue} 48% 78%)`,
+  }
+}
+
+function shelfToneHint(value?: string | null) {
+  const shelf = normalizeShelf(value)
+  if (!shelf) return '棚番未設定'
+  if (!isValidShelf(shelf)) return 'A-03-02 の形式に直してください'
+  const matched = shelf.match(/^([A-Z])-(\d{2})-(\d{2})$/)
+  if (!matched) return `棚番 ${shelf}`
+  return `段 ${matched[2]} / 間口 ${matched[3]}`
+}
+
+function shelfParts(value?: string | null) {
+  const shelf = normalizeShelf(value)
+  const matched = shelf.match(/^([A-Z]-\d{2}-)(\d{2})$/)
+  if (!matched) return null
+  return { prefix: matched[1], bay: matched[2] }
+}
+
+/** 末尾2桁（間口）01 / 02 / 03 を文字色で区別 */
+function shelfBayClass(value?: string | null) {
+  const bay = shelfParts(value)?.bay
+  if (bay === '01' || bay === '02' || bay === '03') return `shelf-bay--${bay}`
+  return 'shelf-bay--other'
 }
 
 function shelfError(value?: string | null, location?: string | null) {
@@ -1119,7 +1482,6 @@ async function loadList() {
       year,
       month,
       keyword: keyword.value.trim() || undefined,
-      alert_only: alertOnly.value,
       storage_location: locationFilter.value || undefined,
       destination_cd: destinationFilter.value || undefined,
       stagnant_only: stagnantOnly.value,
@@ -1135,6 +1497,111 @@ async function loadList() {
     loading.value = false
   }
 }
+
+const SHIPMENT_STATUS_LABEL: Record<string, string> = {
+  not_shipped: '未出荷',
+  partial: '一部出荷',
+  done: '出荷済',
+  shipped: '出荷済',
+  over: '超過',
+  no_plan: '予定なし',
+}
+
+function shipmentStatusLabel(status: SupplyPartShipmentStatus) {
+  return SHIPMENT_STATUS_LABEL[status] || status
+}
+
+function shipmentStatusType(status: SupplyPartShipmentStatus) {
+  if (status === 'not_shipped') return 'danger'
+  if (status === 'partial' || status === 'over') return 'warning'
+  if (status === 'done' || status === 'shipped') return 'success'
+  return 'info'
+}
+
+async function loadShipments() {
+  const { year, month } = yearMonth()
+  if (!year || !month) return
+  shipmentsLoading.value = true
+  try {
+    const res = (await getSupplyPartShipments({
+      year,
+      month,
+      keyword: keyword.value.trim() || undefined,
+      destination_cd: destinationFilter.value || undefined,
+    })) as unknown as SupplyPartShipmentResponse
+    shipmentPlanned.value = res.planned || []
+    shipmentActual.value = res.actual || []
+    shipmentSummary.value = res.summary || shipmentSummary.value
+  } catch (error) {
+    showServerError(error, '出荷一覧の取得に失敗しました')
+  } finally {
+    shipmentsLoading.value = false
+  }
+}
+
+function openShipmentRow(row: { stock_id: number | null }) {
+  if (!row.stock_id) return
+  openDetail({ id: row.stock_id } as SupplyPartStock)
+}
+
+function plannedDateHint(row: {
+  planned_date?: string | null
+  planned_date_count?: number
+}) {
+  if (!row.planned_date) return '日受注管理に日付がありません'
+  const extra =
+    (row.planned_date_count || 0) > 1 ? `（同月に ${row.planned_date_count} 日分の日受注）` : ''
+  return `日受注管理の日付（最早）${extra}`
+}
+
+async function setShipped(
+  row: { product_cd: string; stock_id: number | null },
+  isShipped: boolean
+) {
+  if (isShipped && row.stock_id == null) {
+    ElMessage.warning('補給品台帳に未登録のため出荷済にできません')
+    return
+  }
+  const { year, month } = yearMonth()
+  try {
+    const res = (await updateSupplyPartShipmentPlan({
+      year,
+      month,
+      product_cd: row.product_cd,
+      is_shipped: isShipped,
+    })) as unknown as { shipped_qty?: number }
+    if (isShipped) {
+      const qty = Number(res.shipped_qty || 0)
+      ElMessage.success(
+        qty > 0 ? `出荷済にし、実出荷 ${formatNum(qty)} を登録しました` : '出荷済にしました'
+      )
+    } else {
+      ElMessage.success('出荷済を取り消し、実出荷を取り消しました')
+    }
+    await loadShipments()
+    if (activeTab.value === 'stock') await loadList()
+  } catch (error) {
+    const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+    if (typeof detail === 'string' && detail) ElMessage.error(detail)
+    else showServerError(error, '状態の更新に失敗しました')
+  }
+}
+
+let filterTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleReload(delayMs = 0) {
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    filterTimer = null
+    if (activeTab.value === 'shipments') loadShipments()
+    else loadList()
+  }, delayMs)
+}
+
+watch(keyword, () => scheduleReload(300))
+watch([monthValue, locationFilter, destinationFilter, stagnantOnly], () => scheduleReload(0))
+watch(activeTab, (tab) => {
+  if (tab === 'shipments') loadShipments()
+})
 
 async function loadProducts(supplyOnly = false) {
   allProducts.value = []
@@ -1212,14 +1679,17 @@ async function submitTransfer() {
   }
 }
 
-function openManual() {
+async function openManual() {
   Object.assign(manualForm, emptyManual())
-  manualFromMaster.value = true
   manualPick.value = ''
   pickedProductType.value = ''
   productKeyword.value = ''
+  if (manualFromMaster.value) {
+    manualFromMaster.value = false
+  } else {
+    await fillNextProductCd()
+  }
   manualVisible.value = true
-  loadProducts(true)
 }
 
 function clearManualProduct() {
@@ -1237,7 +1707,12 @@ function clearManualProduct() {
 watch(manualFromMaster, async (fromMaster) => {
   manualPick.value = ''
   clearManualProduct()
-  if (!fromMaster) await fillNextProductCd()
+  if (fromMaster) {
+    // 製品マスタ：製品種別が補給品のみ（未台帳登録）
+    await loadProducts(true)
+  } else {
+    await fillNextProductCd()
+  }
 })
 
 async function fillNextProductCd() {
@@ -1547,28 +2022,42 @@ function printStocktakeSheet() {
           (row, index) => `<tr>
             <td class="c">${index + 1}</td>
             <td>${escapeHtml(row.shelf_no)}</td>
-            <td>${escapeHtml(row.product_cd)}</td>
             <td>${escapeHtml(row.product_name)}</td>
             <td>${escapeHtml(row.part_number)}</td>
+            <td class="c">${escapeHtml(row.initial_registered_date || '')}</td>
             <td class="r">${formatNum(row.on_hand_qty)}</td>
-            <td></td><td></td><td></td>
+            <td></td>
+            <td class="note">${escapeHtml(row.note || '')}</td>
           </tr>`
         )
         .join('')
       return `<section class="page">
-        <h1>補給品 棚卸表</h1>
-        <div class="meta">
-          <span>保管場所：<b>${escapeHtml(location)}</b></span>
-          <span>印刷日：${printedAt}</span>
-          <span>棚卸日：＿＿＿＿＿＿</span>
-          <span>担当：＿＿＿＿＿＿</span>
-        </div>
         <table>
-          <thead><tr>
-            <th style="width:32px">No</th><th style="width:70px">棚番</th><th style="width:80px">製品CD</th>
-            <th>製品名</th><th style="width:90px">品番</th><th style="width:70px">帳簿在庫</th>
-            <th style="width:70px">実棚数</th><th style="width:60px">差異</th><th style="width:90px">備考</th>
-          </tr></thead>
+          <thead>
+            <tr class="head-banner">
+              <th colspan="8">
+                <div class="banner">
+                  <h1>補給品 棚卸表</h1>
+                  <div class="meta">
+                    <span>保管場所：<b>${escapeHtml(location)}</b></span>
+                    <span>印刷日：${printedAt}</span>
+                    <span>棚卸日：＿＿＿＿＿＿</span>
+                    <span>担当：＿＿＿＿＿＿</span>
+                  </div>
+                </div>
+              </th>
+            </tr>
+            <tr class="col-head">
+              <th style="width:36px">No</th>
+              <th style="width:72px">棚番</th>
+              <th>製品名</th>
+              <th style="width:100px">品番</th>
+              <th style="width:100px">最初登録日</th>
+              <th style="width:72px">帳簿在庫</th>
+              <th style="width:72px">実棚数</th>
+              <th style="width:180px">備考</th>
+            </tr>
+          </thead>
           <tbody>${body}</tbody>
         </table>
         <p class="foot">${items.length} 件　保管場所ごとに年1回実施。差異は台帳の「調整」でその場で反映する</p>
@@ -1582,16 +2071,25 @@ function printStocktakeSheet() {
   }
   win.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>補給品棚卸表</title>
     <style>
-      @page { size: A4 portrait; margin: 12mm; }
+      @page { size: A4 landscape; margin: 10mm; }
       body { font-family: 'Meiryo', 'Yu Gothic', sans-serif; font-size: 11px; color: #111; margin: 0; }
       .page { page-break-after: always; }
       .page:last-child { page-break-after: auto; }
-      h1 { font-size: 18px; margin: 0 0 6px; }
-      .meta { display: flex; gap: 18px; margin-bottom: 8px; font-size: 12px; }
       table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #555; padding: 5px 4px; height: 18px; }
-      th { background: #e5e7eb; font-weight: 700; }
+      thead { display: table-header-group; }
+      th, td { border: 1px solid #555; padding: 5px 6px; height: 18px; vertical-align: top; }
+      tr.col-head th { background: #e5e7eb; font-weight: 700; }
+      tr.head-banner th {
+        border: none;
+        background: #fff;
+        padding: 0 0 8px;
+        text-align: left;
+        font-weight: 400;
+      }
+      .banner h1 { font-size: 18px; margin: 0 0 6px; font-weight: 700; }
+      .meta { display: flex; gap: 22px; font-size: 12px; flex-wrap: wrap; }
       .r { text-align: right; } .c { text-align: center; }
+      td.note { white-space: pre-wrap; word-break: break-word; }
       .foot { text-align: right; margin: 4px 0 0; }
     </style></head><body>${pages}</body></html>`)
   win.document.close()
@@ -1771,6 +2269,7 @@ async function submitTxn() {
     txnForm.note = ''
     await reloadDetail()
     await loadList()
+    if (activeTab.value === 'shipments') await loadShipments()
   } catch (error) {
     showServerError(error, '入出庫の登録に失敗しました')
   } finally {
@@ -1806,8 +2305,64 @@ function resetLocForm() {
 
 async function openLocations() {
   locationVisible.value = true
+  swapForm.idA = null
+  swapForm.idB = null
   await loadLocations()
   if (!locForm.id) locForm.sort_order = nextSortOrder()
+}
+
+async function submitLocationSwap() {
+  if (!swapForm.idA || !swapForm.idB) {
+    ElMessage.warning('入れ替える保管場所を2つ選択してください')
+    return
+  }
+  if (swapForm.idA === swapForm.idB) {
+    ElMessage.warning('同じ保管場所は入れ替えできません')
+    return
+  }
+  const locA = locations.value.find((item) => item.id === swapForm.idA)
+  const locB = locations.value.find((item) => item.id === swapForm.idB)
+  if (!locA || !locB) {
+    ElMessage.warning('保管場所が見つかりません')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      [
+        `「${escapeHtml(locA.name)}」（${locA.usage_count} 件）と`,
+        `「${escapeHtml(locB.name)}」（${locB.usage_count} 件）の補給品を入れ替えますか？`,
+        '棚番も相手の保管場所名に合わせて更新されます。',
+      ].join('<br>'),
+      '保管場所の入れ替え',
+      {
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        confirmButtonText: '入れ替える',
+        cancelButtonText: 'キャンセル',
+      }
+    )
+  } catch {
+    return
+  }
+  swapSaving.value = true
+  try {
+    const res = (await swapSupplyPartLocations(swapForm.idA, swapForm.idB)) as unknown as {
+      moved_a_to_b: number
+      moved_b_to_a: number
+    }
+    ElMessage.success(
+      `入れ替えました（A→B ${res.moved_a_to_b} 件 / B→A ${res.moved_b_to_a} 件）`
+    )
+    swapForm.idA = null
+    swapForm.idB = null
+    await loadLocations()
+    await loadList()
+    if (detailVisible.value) await reloadDetail()
+  } catch (error) {
+    showServerError(error, '保管場所の入れ替えに失敗しました')
+  } finally {
+    swapSaving.value = false
+  }
 }
 
 function editLocation(row: SupplyPartLocation) {
@@ -1892,6 +2447,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (filterTimer) clearTimeout(filterTimer)
   window.removeEventListener('resize', onResize)
   disposeTrendChart()
 })
@@ -2083,6 +2639,53 @@ onBeforeUnmount(() => {
   color: #64748b;
 }
 
+.page-tabs {
+  margin: 2px 0 10px;
+}
+.page-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+.page-tabs :deep(.el-tabs__item) {
+  font-weight: 700;
+}
+.page-tabs :deep(.el-tabs__item.is-active) {
+  color: #0f766e;
+}
+.page-tabs :deep(.el-tabs__active-bar) {
+  background-color: #0f766e;
+}
+.ship-block {
+  padding-bottom: 8px;
+}
+.ship-block + .ship-block {
+  margin-top: 12px;
+}
+.ship-block__title {
+  margin: 8px 14px 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f766e;
+}
+.plan-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.plan-date__src {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f766e;
+  line-height: 1;
+}
+.ship-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 /* ---------- 検索バー ---------- */
 .toolbar {
   position: relative;
@@ -2151,10 +2754,15 @@ onBeforeUnmount(() => {
   margin-right: 4px;
 }
 .stagnant-check {
+  height: 32px;
+  margin-right: 0;
+  padding: 0 12px;
+  border-radius: 9px;
   background: #fffbeb;
-  border-color: #fde68a;
+  border: 1px solid #fde68a;
 }
 .stagnant-check :deep(.el-checkbox__label) {
+  font-weight: 700;
   color: #b45309;
 }
 .stagnant-check :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
@@ -2173,45 +2781,6 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 0 0 1px #0d9488,
     0 0 0 3px rgba(13, 148, 136, 0.15);
-}
-.alert-check {
-  height: 32px;
-  margin-right: 0;
-  padding: 0 12px;
-  border-radius: 9px;
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-}
-.alert-check :deep(.el-checkbox__label) {
-  font-weight: 700;
-  color: #be123c;
-}
-.alert-check :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
-  background-color: #e11d48;
-  border-color: #e11d48;
-}
-.toolbar .search-btn {
-  --k-rgb: 13 148 136;
-  height: 32px;
-  padding: 0 18px;
-  border-radius: 9px;
-  font-weight: 700;
-  color: #fff;
-  border: 1px solid #0f766e;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #14b8a6, #0f766e);
-}
-.toolbar .search-btn:hover,
-.toolbar .search-btn:focus-visible {
-  color: #fff;
-  border-color: #115e59;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 52%),
-    linear-gradient(135deg, #2dd4bf, #0d9488);
-}
-.toolbar .search-btn .el-icon {
-  margin-right: 4px;
 }
 
 /* ---------- 一覧 ---------- */
@@ -2252,6 +2821,92 @@ onBeforeUnmount(() => {
   color: #0f766e;
   font-family: Consolas, Monaco, monospace;
 }
+.shelf-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  font-family: Consolas, Monaco, 'Yu Gothic UI', sans-serif;
+  border: 1px solid transparent;
+}
+.shelf-bay {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.shelf-bay--01 {
+  color: #047857;
+}
+.shelf-bay--02 {
+  color: #1d4ed8;
+}
+.shelf-bay--03 {
+  color: #c2410c;
+}
+.shelf-bay--other {
+  color: inherit;
+  opacity: 0.92;
+}
+.shelf-chip--invalid {
+  color: #b45309;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.shelf-chip--empty {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+.reg-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.reg-date--fresh {
+  color: #0f766e;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.reg-date--year {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.reg-date--aged {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.reg-date--old {
+  color: #9f1239;
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.reg-date--future {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.reg-date--empty {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
 .num-strong {
   font-weight: 700;
   color: #0f172a;
@@ -2288,19 +2943,126 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #94a3b8;
 }
+.location-dialog-body {
+  padding: 10px 14px 8px;
+}
+.location-layout {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.location-layout__side {
+  min-width: 0;
+  max-height: v-bind(locationSideMaxHeight);
+  overflow: auto;
+  padding-right: 2px;
+}
+.location-side-hint {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.location-side-section {
+  margin-bottom: 8px !important;
+  padding: 8px 10px 6px !important;
+}
+.location-side-section:last-child {
+  margin-bottom: 0 !important;
+}
+.location-side-section .form-section__title {
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.location-side-form :deep(.el-form-item),
+.location-side-form-item {
+  margin-bottom: 6px !important;
+}
+.location-side-form :deep(.el-form-item__label) {
+  margin-bottom: 2px !important;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.location-layout__list {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #ccebe6;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.location-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.location-list-head__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+.location-list-head__count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
 .location-form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px 80px;
   gap: 0 12px;
 }
+.location-form-grid--side {
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 0 8px;
+}
 .location-form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 2px;
+}
+.location-swap-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: end;
+}
+.location-swap-grid--side {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.location-swap-grid--side .location-swap-arrow {
+  margin: 0 0 2px;
+  height: 18px;
+}
+.location-swap-grid--side .location-swap-actions {
+  padding-bottom: 2px;
+  justify-content: flex-end;
+}
+.location-swap-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  margin-bottom: 18px;
+  color: #d97706;
+}
+.location-swap-actions {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 18px;
 }
 .location-table {
-  margin-top: 12px;
   width: 100%;
+}
+:global(.el-dialog.spm-dialog--locations) {
+  max-width: 96vw;
 }
 :deep(.supply-row-alert) {
   --el-table-tr-bg-color: #fff1f2;
@@ -2577,14 +3339,30 @@ onBeforeUnmount(() => {
   margin-bottom: 2px !important;
   line-height: 18px;
 }
+@media (max-width: 960px) {
+  .location-layout {
+    grid-template-columns: 1fr;
+  }
+  .location-layout__side {
+    max-height: none;
+    overflow: visible;
+  }
+}
 @media (max-width: 760px) {
   .form-grid--3,
   .form-grid--4,
   .manual-mode-row {
     grid-template-columns: 1fr 1fr;
   }
-  .transfer-target-row {
+  .transfer-target-row,
+  .location-swap-grid {
     grid-template-columns: 1fr;
+  }
+  .location-swap-arrow,
+  .location-swap-actions {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    justify-content: flex-start;
   }
   .form-grid .span-3,
   .form-grid .span-4 {

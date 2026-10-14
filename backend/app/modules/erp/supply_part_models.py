@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -56,6 +57,28 @@ class SupplyPartStock(Base):
     migration_reason = Column(String(500), nullable=True, comment="移行理由")
     initial_registered_date = Column(Date, nullable=True, comment="最初登録日")
     created_by_user_id = Column(Integer, nullable=True, comment="登録者ID")
+    updated_by_user_id = Column(Integer, nullable=True, comment="更新者ID")
+    created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")
+    updated_at = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=True, comment="更新日時"
+    )
+
+
+class SupplyPartShipmentPlan(Base):
+    """対象月・製品ごとの出荷状態。予定日は日受注（order_daily.date）から取得する。"""
+
+    __tablename__ = "supply_part_shipment_plans"
+    __table_args__ = (
+        UniqueConstraint("year", "month", "product_cd", name="uk_supply_ship_plan_month_product"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="ID")
+    year = Column(Integer, nullable=False, comment="年")
+    month = Column(Integer, nullable=False, comment="月")
+    product_cd = Column(String(50), nullable=False, comment="製品CD")
+    planned_date = Column(Date, nullable=True, comment="（未使用・互換用）")
+    is_shipped = Column(Boolean, nullable=False, default=False, comment="手動出荷済")
+    shipment_txn_id = Column(BigInteger, nullable=True, comment="出荷済で作成した実出荷ID")
     updated_by_user_id = Column(Integer, nullable=True, comment="更新者ID")
     created_at = Column(DateTime, default=func.now(), nullable=True, comment="作成日時")
     updated_at = Column(

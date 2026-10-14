@@ -176,3 +176,6 @@
 171_equipment_efficiency_current_rate.sql
 172_supply_part_migration_trigger.sql
 173_supply_part_initial_registered_date.sql
+174_supply_part_shipment_plan.sql
+175_supply_part_shipment_plan_is_shipped.sql
+176_supply_part_shipment_plan_txn.sql

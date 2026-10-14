@@ -192,6 +192,18 @@ export function deleteSupplyPartLocation(id: number) {
   return request.delete<{ deleted: boolean }>(`${BASE_URL}/locations/${id}`)
 }
 
+export function swapSupplyPartLocations(locationIdA: number, locationIdB: number) {
+  return request.post<{
+    location_a: SupplyPartLocation
+    location_b: SupplyPartLocation
+    moved_a_to_b: number
+    moved_b_to_a: number
+  }>(`${BASE_URL}/locations/swap`, {
+    location_id_a: locationIdA,
+    location_id_b: locationIdB,
+  })
+}
+
 export function getSupplyPartList(params: {
   year: number
   month: number
@@ -202,6 +214,82 @@ export function getSupplyPartList(params: {
   stagnant_only?: boolean
 }) {
   return request.get<SupplyPartListResponse>(BASE_URL, { params })
+}
+
+export type SupplyPartShipmentStatus =
+  | 'not_shipped'
+  | 'partial'
+  | 'done'
+  | 'shipped'
+  | 'over'
+  | 'no_plan'
+  | string
+
+export interface SupplyPartShipmentPlanned {
+  product_cd: string
+  product_name: string
+  part_number?: string | null
+  stock_id: number | null
+  on_hand_qty: number | null
+  destination_summary: string
+  planned_date?: string | null
+  planned_date_count?: number
+  planned_date_source?: 'order_daily' | null
+  is_shipped?: boolean
+  planned_qty: number
+  actual_qty: number
+  diff_qty: number
+  status: SupplyPartShipmentStatus
+}
+
+export interface SupplyPartShipmentActual {
+  id: number
+  stock_id: number
+  product_cd: string
+  product_name: string
+  part_number?: string | null
+  occurred_date: string | null
+  quantity: number
+  balance_after: number
+  note?: string | null
+}
+
+export interface SupplyPartShipmentResponse {
+  year: number
+  month: number
+  summary: {
+    planned_total: number
+    actual_total: number
+    not_shipped_count: number
+    short_count: number
+  }
+  planned: SupplyPartShipmentPlanned[]
+  actual: SupplyPartShipmentActual[]
+}
+
+export function getSupplyPartShipments(params: {
+  year: number
+  month: number
+  keyword?: string
+  destination_cd?: string
+}) {
+  return request.get<SupplyPartShipmentResponse>(`${BASE_URL}/shipments`, { params })
+}
+
+export function updateSupplyPartShipmentPlan(data: {
+  year: number
+  month: number
+  product_cd: string
+  is_shipped: boolean
+}) {
+  return request.put<{
+    product_cd: string
+    year: number
+    month: number
+    is_shipped: boolean
+    shipment_txn_id?: number | null
+    shipped_qty?: number
+  }>(`${BASE_URL}/shipments/plan`, data)
 }
 
 export function getSupplyPartTrend(id: number, year: number, month: number, months = 12) {

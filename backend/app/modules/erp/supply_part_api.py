@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import re
 from datetime import date
 from decimal import Decimal
@@ -19,10 +20,11 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.database.models import ProductionSummary
-from app.modules.erp.models import OrderMonthly
+from app.modules.erp.models import OrderDaily, OrderMonthly
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.erp.supply_part_models import (
     SupplyPartLocation,
+    SupplyPartShipmentPlan,
     SupplyPartStock,
     SupplyPartTransaction,
 )
@@ -62,6 +64,7 @@ MIGRATION_TRIGGERS = {
     MIGRATION_MASS_END: "量産終了",
     MIGRATION_CUSTOMER: "顧客指定",
 }
+SHIPMENT_PLAN_NOTE = "出荷予定から出荷済"
 
 
 async def _next_unregistered_product_cd(db: AsyncSession) -> str:
@@ -252,6 +255,26 @@ class SupplyPartLocationBody(BaseModel):
                 "末尾は A-03-02 の形式にしてください（例：補給品棚A-03-02）"
             )
         return text
+
+
+class SupplyPartShipmentPlanBody(BaseModel):
+    year: int
+    month: int = Field(ge=1, le=12)
+    product_cd: str
+    is_shipped: bool = False
+
+    @field_validator("product_cd")
+    @classmethod
+    def _product_cd(cls, v: str) -> str:
+        text = (v or "").strip()
+        if not text:
+            raise ValueError("製品CDは必須です")
+        return text
+
+
+class SupplyPartLocationSwapBody(BaseModel):
+    location_id_a: int = Field(ge=1)
+    location_id_b: int = Field(ge=1)
 
 
 def _clean(value: Optional[str], limit: int | None = None) -> Optional[str]:
@@ -590,7 +613,7 @@ def _add_txn(
 async def search_supply_part_products(
     keyword: Optional[str] = Query(None),
     limit: int = Query(30, ge=1, le=2000),
-    supply_only: bool = Query(False, description="製品種別が補給品かつ製品CD末尾が 1 のみ"),
+    supply_only: bool = Query(False, description="製品種別が補給品のみ"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -605,9 +628,7 @@ async def search_supply_part_products(
     if registered:
         stmt = stmt.where(Product.product_cd.not_in(registered))
     if supply_only:
-        stmt = stmt.where(
-            Product.product_type == SUPPLY_PRODUCT_TYPE, Product.product_cd.like("%1")
-        )
+        stmt = stmt.where(Product.product_type == SUPPLY_PRODUCT_TYPE)
     text = (keyword or "").strip()
     if text:
         like = f"%{text}%"
@@ -928,6 +949,70 @@ async def create_supply_part_location(
     return _location_to_dict(row)
 
 
+@router.post("/locations/swap")
+async def swap_supply_part_locations(
+    body: SupplyPartLocationSwapBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("edit")),
+):
+    """2つの保管場所に紐づく補給品を一括で入れ替える（棚番も先方の保管場所名に合わせて更新）。"""
+    if body.location_id_a == body.location_id_b:
+        raise HTTPException(status_code=400, detail="同じ保管場所は入れ替えできません")
+    res = await db.execute(
+        select(SupplyPartLocation)
+        .where(SupplyPartLocation.id.in_((body.location_id_a, body.location_id_b)))
+        .with_for_update()
+    )
+    rows = {int(row.id): row for row in res.scalars().all()}
+    loc_a = rows.get(body.location_id_a)
+    loc_b = rows.get(body.location_id_b)
+    if not loc_a or not loc_b:
+        raise HTTPException(status_code=404, detail="保管場所が見つかりません")
+    name_a = loc_a.name
+    name_b = loc_b.name
+    try:
+        shelf_a = _shelf_from_location(name_a)
+        shelf_b = _shelf_from_location(name_b)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    tmp_name = f"__SWAP_TMP_{loc_a.id}_{loc_b.id}__"
+    # A → 一時 → B、B → A（保管場所名の衝突を避ける）
+    r1 = await db.execute(
+        update(SupplyPartStock)
+        .where(SupplyPartStock.storage_location == name_a)
+        .values(storage_location=tmp_name, updated_by_user_id=current_user.id)
+    )
+    r2 = await db.execute(
+        update(SupplyPartStock)
+        .where(SupplyPartStock.storage_location == name_b)
+        .values(
+            storage_location=name_a,
+            shelf_no=shelf_a,
+            updated_by_user_id=current_user.id,
+        )
+    )
+    r3 = await db.execute(
+        update(SupplyPartStock)
+        .where(SupplyPartStock.storage_location == tmp_name)
+        .values(
+            storage_location=name_b,
+            shelf_no=shelf_b,
+            updated_by_user_id=current_user.id,
+        )
+    )
+    moved_a_to_b = int(r1.rowcount or 0)
+    moved_b_to_a = int(r2.rowcount or 0)
+    # r3 should equal moved_a_to_b
+    _ = r3
+    return {
+        "location_a": _location_to_dict(loc_a, moved_b_to_a),
+        "location_b": _location_to_dict(loc_b, moved_a_to_b),
+        "moved_a_to_b": moved_a_to_b,
+        "moved_b_to_a": moved_b_to_a,
+    }
+
+
 @router.put("/locations/{location_id}")
 async def update_supply_part_location(
     location_id: int,
@@ -1002,6 +1087,495 @@ async def delete_supply_part_location(
     await db.delete(row)
     await db.flush()
     return {"deleted": True}
+
+
+def _shipment_compare_status(planned: int, actual: int) -> str:
+    if planned <= 0 and actual > 0:
+        return "no_plan"
+    if planned > 0 and actual <= 0:
+        return "not_shipped"
+    if actual < planned:
+        return "partial"
+    if actual > planned:
+        return "over"
+    return "done"
+
+
+def _destination_summary(destinations: list[tuple[str, str]]) -> str:
+    if not destinations:
+        return ""
+    first = destinations[0][1] or destinations[0][0]
+    extra = len(destinations) - 1
+    if extra <= 0:
+        return first
+    return f"{first} 他{extra}件"
+
+
+def _month_span(year: int, month: int) -> tuple[date, date]:
+    start = date(year, month, 1)
+    if month == 12:
+        return start, date(year + 1, 1, 1)
+    return start, date(year, month + 1, 1)
+
+
+def _keyword_hit(text: str, *values: Optional[str]) -> bool:
+    needle = text.strip().lower()
+    if not needle:
+        return True
+    return any(needle in (value or "").lower() for value in values)
+
+
+@router.get("/shipments")
+async def list_supply_part_shipments(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    keyword: Optional[str] = Query(None),
+    destination_cd: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """対象月の出荷予定（月受注・補給品）と実出荷（shipment_out）の対照。"""
+    today = date.today()
+    target_year = year or today.year
+    target_month = month or today.month
+    dest = _clean(destination_cd)
+    text = (keyword or "").strip()
+    start, end = _month_span(target_year, target_month)
+
+    order_stmt = select(OrderMonthly).where(
+        OrderMonthly.year == target_year,
+        OrderMonthly.month == target_month,
+        OrderMonthly.product_type == SUPPLY_PRODUCT_TYPE,
+    )
+    if dest:
+        order_stmt = order_stmt.where(OrderMonthly.destination_cd == dest)
+    order_rows = (await db.execute(order_stmt)).scalars().all()
+
+    planned_by_cd: dict[str, dict] = {}
+    for row in order_rows:
+        code = (row.product_cd or "").strip()
+        if not code:
+            continue
+        bucket = planned_by_cd.setdefault(
+            code,
+            {"qty": 0, "name": row.product_name or "", "dests": [], "seen": set()},
+        )
+        bucket["qty"] += int(row.forecast_total_units or 0)
+        if not bucket["name"] and row.product_name:
+            bucket["name"] = row.product_name
+        dest_cd = (row.destination_cd or "").strip()
+        if dest_cd and dest_cd not in bucket["seen"]:
+            bucket["seen"].add(dest_cd)
+            bucket["dests"].append((dest_cd, row.destination_name or ""))
+
+    txn_stmt = (
+        select(SupplyPartTransaction, SupplyPartStock)
+        .join(SupplyPartStock, SupplyPartStock.id == SupplyPartTransaction.stock_id)
+        .where(
+            SupplyPartTransaction.txn_type == TXN_SHIPMENT_OUT,
+            SupplyPartTransaction.occurred_date >= start,
+            SupplyPartTransaction.occurred_date < end,
+        )
+        .order_by(SupplyPartTransaction.occurred_date.desc(), SupplyPartTransaction.id.desc())
+    )
+    if dest:
+        planned_codes = list(planned_by_cd.keys())
+        dest_match = SupplyPartStock.destination_cd == dest
+        if planned_codes:
+            txn_stmt = txn_stmt.where(
+                or_(dest_match, SupplyPartStock.product_cd.in_(planned_codes))
+            )
+        else:
+            txn_stmt = txn_stmt.where(dest_match)
+    txn_rows = (await db.execute(txn_stmt)).all()
+
+    codes = set(planned_by_cd.keys())
+    codes.update(stock.product_cd for _, stock in txn_rows if stock.product_cd)
+    stocks: dict[str, SupplyPartStock] = {}
+    if codes:
+        stock_rows = (
+            (
+                await db.execute(
+                    select(SupplyPartStock).where(SupplyPartStock.product_cd.in_(list(codes)))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        stocks = {row.product_cd: row for row in stock_rows}
+
+    missing = [code for code in codes if code not in stocks]
+    products: dict[str, Product] = {}
+    if missing:
+        product_rows = (
+            (
+                await db.execute(select(Product).where(Product.product_cd.in_(missing)))
+            )
+            .scalars()
+            .all()
+        )
+        products = {row.product_cd: row for row in product_rows}
+
+    shipped_map: dict[str, bool] = {}
+    if codes:
+        plan_rows = (
+            (
+                await db.execute(
+                    select(SupplyPartShipmentPlan).where(
+                        SupplyPartShipmentPlan.year == target_year,
+                        SupplyPartShipmentPlan.month == target_month,
+                        SupplyPartShipmentPlan.product_cd.in_(list(codes)),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        shipped_map = {row.product_cd: bool(row.is_shipped) for row in plan_rows}
+
+    # 日受注管理の「日付」列（order_daily.date）から出荷予定日を取得
+    # 優先: 確定本数>0 の最早日 / なければ対象月の日受注行の最早日
+    daily_auto: dict[str, dict] = {}
+    if codes:
+        code_list = list(codes)
+
+        def _daily_agg(product_cds: list[str], confirmed_only: bool):
+            stmt = (
+                select(
+                    OrderDaily.product_cd,
+                    func.min(OrderDaily.date),
+                    func.count(func.distinct(OrderDaily.date)),
+                )
+                .where(
+                    OrderDaily.product_type == SUPPLY_PRODUCT_TYPE,
+                    OrderDaily.date >= start,
+                    OrderDaily.date < end,
+                    OrderDaily.product_cd.in_(product_cds),
+                )
+                .group_by(OrderDaily.product_cd)
+            )
+            if dest:
+                stmt = stmt.where(OrderDaily.destination_cd == dest)
+            if confirmed_only:
+                stmt = stmt.where(OrderDaily.confirmed_units > 0)
+            return db.execute(stmt)
+
+        for code, min_date, day_count in (await _daily_agg(code_list, True)).all():
+            if code and min_date:
+                daily_auto[code] = {"date": min_date, "count": int(day_count or 0)}
+        missing_daily = [code for code in code_list if code not in daily_auto]
+        if missing_daily:
+            for code, min_date, day_count in (await _daily_agg(missing_daily, False)).all():
+                if code and min_date:
+                    daily_auto[code] = {"date": min_date, "count": int(day_count or 0)}
+
+    actual_qty: dict[str, int] = {}
+    actual: list[dict] = []
+    for txn, stock in txn_rows:
+        qty = abs(int(txn.quantity or 0))
+        actual_qty[stock.product_cd] = actual_qty.get(stock.product_cd, 0) + qty
+        if not _keyword_hit(text, stock.product_cd, stock.product_name, stock.part_number):
+            continue
+        actual.append(
+            {
+                "id": int(txn.id),
+                "stock_id": int(stock.id),
+                "product_cd": stock.product_cd,
+                "product_name": stock.product_name,
+                "part_number": stock.part_number,
+                "occurred_date": txn.occurred_date.isoformat() if txn.occurred_date else None,
+                "quantity": qty,
+                "balance_after": int(txn.balance_after or 0),
+                "note": txn.note,
+            }
+        )
+
+    planned: list[dict] = []
+    for code in sorted(codes):
+        stock = stocks.get(code)
+        product = products.get(code)
+        bucket = planned_by_cd.get(code) or {"qty": 0, "name": "", "dests": []}
+        planned_qty = int(bucket["qty"])
+        shipped = int(actual_qty.get(code, 0))
+        if planned_qty <= 0 and shipped <= 0:
+            continue
+        product_name = (
+            (stock.product_name if stock else None)
+            or bucket.get("name")
+            or (product.product_name if product else None)
+            or ""
+        )
+        part_number = (stock.part_number if stock else None) or (
+            product.part_number if product else None
+        )
+        if not _keyword_hit(text, code, product_name, part_number, bucket.get("name")):
+            continue
+        auto_info = daily_auto.get(code) or {}
+        auto_date: date | None = auto_info.get("date")
+        auto_count = int(auto_info.get("count") or 0)
+        marked_shipped = bool(shipped_map.get(code))
+        status = (
+            "shipped"
+            if marked_shipped
+            else _shipment_compare_status(planned_qty, shipped)
+        )
+        planned.append(
+            {
+                "product_cd": code,
+                "product_name": product_name,
+                "part_number": part_number,
+                "stock_id": int(stock.id) if stock else None,
+                "on_hand_qty": int(stock.on_hand_qty) if stock else None,
+                "destination_summary": _destination_summary(list(bucket.get("dests") or [])),
+                "planned_date": auto_date.isoformat() if auto_date else None,
+                "planned_date_count": auto_count,
+                "planned_date_source": "order_daily" if auto_date else None,
+                "is_shipped": marked_shipped,
+                "planned_qty": planned_qty,
+                "actual_qty": shipped,
+                "diff_qty": shipped - planned_qty,
+                "status": status,
+            }
+        )
+    planned.sort(
+        key=lambda item: (
+            item["planned_date"] is None,
+            item["planned_date"] or "",
+            item["product_cd"],
+        )
+    )
+
+    return {
+        "year": target_year,
+        "month": target_month,
+        "summary": {
+            "planned_total": sum(item["planned_qty"] for item in planned),
+            "actual_total": sum(item["actual_qty"] for item in planned),
+            "not_shipped_count": sum(1 for item in planned if item["status"] == "not_shipped"),
+            "short_count": sum(
+                1
+                for item in planned
+                if item["status"]
+                not in ("shipped", "done", "over")
+                and item["planned_qty"] > 0
+                and item["actual_qty"] < item["planned_qty"]
+            ),
+        },
+        "planned": planned,
+        "actual": actual,
+    }
+
+
+def _ship_occurred_date(year: int, month: int, preferred: date | None) -> date:
+    start, end = _month_span(year, month)
+    last_day = date(year, month, calendar.monthrange(year, month)[1])
+    if preferred and start <= preferred < end:
+        return preferred
+    today = date.today()
+    if start <= today < end:
+        return today
+    return last_day
+
+
+async def _recalc_stock_on_hand(db: AsyncSession, stock: SupplyPartStock) -> None:
+    """取引明細を日付順に再生し、残高と現在庫を揃える。"""
+    rows = (
+        (
+            await db.execute(
+                select(SupplyPartTransaction)
+                .where(SupplyPartTransaction.stock_id == stock.id)
+                .order_by(
+                    SupplyPartTransaction.occurred_date.asc(),
+                    SupplyPartTransaction.id.asc(),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    balance = 0
+    for txn in rows:
+        balance += int(txn.quantity or 0)
+        if balance < 0:
+            raise HTTPException(status_code=400, detail="在庫が不足しています")
+        txn.balance_after = balance
+    stock.on_hand_qty = balance
+
+
+async def _order_daily_first_date(
+    db: AsyncSession, product_cd: str, start: date, end: date
+) -> date | None:
+    confirmed = (
+        await db.execute(
+            select(func.min(OrderDaily.date)).where(
+                OrderDaily.product_cd == product_cd,
+                OrderDaily.product_type == SUPPLY_PRODUCT_TYPE,
+                OrderDaily.date >= start,
+                OrderDaily.date < end,
+                OrderDaily.confirmed_units > 0,
+            )
+        )
+    ).scalar_one_or_none()
+    if confirmed:
+        return confirmed
+    return (
+        await db.execute(
+            select(func.min(OrderDaily.date)).where(
+                OrderDaily.product_cd == product_cd,
+                OrderDaily.product_type == SUPPLY_PRODUCT_TYPE,
+                OrderDaily.date >= start,
+                OrderDaily.date < end,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+@router.put("/shipments/plan")
+async def update_supply_part_shipment_plan(
+    body: SupplyPartShipmentPlanBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_inventory_operation("edit")),
+):
+    """出荷済：差額を実出荷へ登録。取消：紐づく実出荷を削除して在庫を戻す。"""
+    product_cd = body.product_cd
+    start, end = _month_span(body.year, body.month)
+    plan_res = await db.execute(
+        select(SupplyPartShipmentPlan).where(
+            SupplyPartShipmentPlan.year == body.year,
+            SupplyPartShipmentPlan.month == body.month,
+            SupplyPartShipmentPlan.product_cd == product_cd,
+        )
+    )
+    plan = plan_res.scalar_one_or_none()
+
+    if not body.is_shipped:
+        stock = None
+        if plan and plan.shipment_txn_id:
+            txn_res = await db.execute(
+                select(SupplyPartTransaction).where(
+                    SupplyPartTransaction.id == plan.shipment_txn_id
+                )
+            )
+            txn = txn_res.scalar_one_or_none()
+            if txn:
+                stock_res = await db.execute(
+                    select(SupplyPartStock)
+                    .where(SupplyPartStock.id == txn.stock_id)
+                    .with_for_update()
+                )
+                stock = stock_res.scalar_one_or_none()
+                await db.delete(txn)
+                await db.flush()
+                if stock:
+                    await _recalc_stock_on_hand(db, stock)
+        if plan:
+            await db.delete(plan)
+            await db.flush()
+        return {
+            "product_cd": product_cd,
+            "year": body.year,
+            "month": body.month,
+            "is_shipped": False,
+            "shipment_txn_id": None,
+            "shipped_qty": 0,
+        }
+
+    if plan and plan.is_shipped:
+        return {
+            "product_cd": product_cd,
+            "year": body.year,
+            "month": body.month,
+            "is_shipped": True,
+            "shipment_txn_id": int(plan.shipment_txn_id) if plan.shipment_txn_id else None,
+            "shipped_qty": 0,
+        }
+
+    stock_res = await db.execute(
+        select(SupplyPartStock)
+        .where(SupplyPartStock.product_cd == product_cd)
+        .with_for_update()
+    )
+    stock = stock_res.scalar_one_or_none()
+    if not stock:
+        raise HTTPException(
+            status_code=400,
+            detail="補給品台帳に未登録のため出荷済にできません。先に台帳へ登録してください",
+        )
+
+    planned_qty = int(
+        (
+            await db.execute(
+                select(func.coalesce(func.sum(OrderMonthly.forecast_total_units), 0)).where(
+                    OrderMonthly.year == body.year,
+                    OrderMonthly.month == body.month,
+                    OrderMonthly.product_type == SUPPLY_PRODUCT_TYPE,
+                    OrderMonthly.product_cd == product_cd,
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    actual_qty = int(
+        (
+            await db.execute(
+                select(func.coalesce(func.sum(func.abs(SupplyPartTransaction.quantity)), 0)).where(
+                    SupplyPartTransaction.product_cd == product_cd,
+                    SupplyPartTransaction.txn_type == TXN_SHIPMENT_OUT,
+                    SupplyPartTransaction.occurred_date >= start,
+                    SupplyPartTransaction.occurred_date < end,
+                )
+            )
+        ).scalar_one()
+        or 0
+    )
+    remain = max(planned_qty - actual_qty, 0)
+    preferred = await _order_daily_first_date(db, product_cd, start, end)
+    occurred = _ship_occurred_date(body.year, body.month, preferred)
+    txn_id = None
+    shipped_qty = 0
+    if remain > 0:
+        if int(stock.on_hand_qty or 0) < remain:
+            raise HTTPException(
+                status_code=400,
+                detail=f"現在庫が不足しています（必要 {remain} / 現在庫 {int(stock.on_hand_qty or 0)}）",
+            )
+        txn = _add_txn(
+            db,
+            stock,
+            TXN_SHIPMENT_OUT,
+            -remain,
+            occurred,
+            SHIPMENT_PLAN_NOTE,
+            current_user.id,
+        )
+        await db.flush()
+        await db.refresh(txn)
+        txn_id = int(txn.id)
+        shipped_qty = remain
+
+    if plan is None:
+        plan = SupplyPartShipmentPlan(
+            year=body.year,
+            month=body.month,
+            product_cd=product_cd,
+            is_shipped=True,
+            shipment_txn_id=txn_id,
+            updated_by_user_id=current_user.id,
+        )
+        db.add(plan)
+    else:
+        plan.is_shipped = True
+        plan.shipment_txn_id = txn_id
+        plan.updated_by_user_id = current_user.id
+    await db.flush()
+    return {
+        "product_cd": product_cd,
+        "year": body.year,
+        "month": body.month,
+        "is_shipped": True,
+        "shipment_txn_id": txn_id,
+        "shipped_qty": shipped_qty,
+    }
 
 
 @router.get("/{stock_id}")
