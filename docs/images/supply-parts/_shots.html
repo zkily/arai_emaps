@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>supply-parts shots</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic UI","Yu Gothic",Meiryo,sans-serif; background: #94a3b8; }
+  .page { width: 1280px; height: 720px; background: #f8fafc; page-break-after: always; overflow: hidden; position: relative; }
+  .badge { position: absolute; z-index: 20; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .badge.r { background: #ef4444; } .badge.b { background: #2563eb; }
+  /* sidebar */
+  .app { display: flex; height: 100%; }
+  .side { width: 220px; background: #0f172a; color: #e2e8f0; padding: 16px 0; }
+  .side .logo { padding: 8px 18px 18px; font-weight: 800; color: #5eead4; }
+  .side .item { padding: 8px 18px; font-size: 13px; }
+  .side .item.active { background: #134e4a; color: #fff; border-left: 3px solid #14b8a6; }
+  .side .sub { padding-left: 34px; font-size: 12px; color: #94a3b8; }
+  .side .sub.hot { color: #5eead4; font-weight: 700; background: rgba(20,184,166,.15); }
+  .main { flex: 1; background: #e2e8f0; padding: 24px; }
+  .fake-page { background: #fff; border-radius: 12px; height: 100%; opacity: .35; }
+  .ring { position: absolute; border: 3px solid #ef4444; border-radius: 8px; pointer-events: none; }
+  /* stock page */
+  .hero { background: linear-gradient(125deg,#115e59 0%,#0f766e 30%,#0d9488 62%,#0891b2 100%); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 4px 4px; }
+  .hero h1 { margin: 0; font-size: 20px; }
+  .hero p { margin: 2px 0 0; font-size: 12px; opacity: .9; }
+  .hbtn { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: 6px; }
+  .hbtn.t { background: linear-gradient(135deg,#f59e0b,#d97706); color: #fff; border: 1px solid rgba(255,255,255,.7); }
+  .hbtn.m { background: #fff; color: #0f766e; border: 1px solid #fff; }
+  .tabs { display: flex; gap: 0; background: #fff; border-bottom: 1px solid #e2e8f0; padding: 0 16px; }
+  .tab { padding: 10px 16px; font-size: 13px; color: #64748b; }
+  .tab.on { color: #0f766e; font-weight: 800; border-bottom: 2px solid #0d9488; }
+  .stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; padding: 12px 16px; background: linear-gradient(180deg,#e6f7f5,#f8fafc); }
+  .stats4 { grid-template-columns: repeat(4,1fr); }
+  .sc { background: #fff; border: 1px solid #ccfbf1; border-radius: 10px; padding: 10px 12px; border-left: 3px solid #0d9488; }
+  .sc.sky { border-left-color: #0284c7; } .sc.ind { border-left-color: #4f46e5; } .sc.rose { border-left-color: #e11d48; } .sc.amb { border-left-color: #f59e0b; }
+  .sc span { display: block; font-size: 11px; color: #64748b; } .sc strong { font-size: 18px; color: #0f172a; }
+  .tb { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .inp { height: 28px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 8px; font-size: 12px; background: #fff; color: #334155; min-width: 100px; }
+  .chk { font-size: 12px; color: #334155; }
+  .tbtn { height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid #99f6e4; background: #f0fdfa; color: #0f766e; font-size: 12px; font-weight: 700; }
+  table.dt { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.dt th { background: #f1f5f9; padding: 6px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; color: #475569; }
+  table.dt td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+  table.dt tr.alert td { background: #fff1f2; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+  .chip.ok { background: #ecfdf5; color: #047857; } .chip.warn { background: #fff7ed; color: #c2410c; }
+  .chip.info { background: #eff6ff; color: #1d4ed8; } .chip.green { background: #dcfce7; color: #166534; }
+  .link { color: #0f766e; font-weight: 700; margin-right: 8px; } .dang { color: #e11d48; font-weight: 700; }
+  .wrap { padding: 0 16px 16px; background: linear-gradient(180deg,#e6f7f5,#f8fafc); }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .ship-title { margin: 12px 16px 6px; font-size: 14px; color: #0f766e; }
+  /* dialogs */
+  .mask { position: absolute; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: flex-start; justify-content: center; padding-top: 40px; }
+  .dlg { width: 920px; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+  .dlg.wide { width: 1050px; }
+  .dlg.narrow { width: 480px; margin-top: 120px; }
+  .dh { background: linear-gradient(125deg,#115e59,#0d9488,#0891b2); color: #fff; padding: 14px 18px; display: flex; gap: 12px; align-items: center; }
+  .dh.amber { background: linear-gradient(125deg,#b45309,#d97706,#f59e0b); }
+  .dh h3 { margin: 0; font-size: 16px; } .dh p { margin: 2px 0 0; font-size: 11px; opacity: .92; }
+  .db { padding: 14px 18px; font-size: 12px; max-height: 520px; overflow: hidden; }
+  .hint { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px; color: #92400e; }
+  .hint.sky { background: #ecfeff; border-color: #a5f3fc; color: #0e7490; }
+  .sec { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .sec.amber { border-color: #fcd34d; background: #fffbeb22; }
+  .sec.sky { border-color: #67e8f9; background: #ecfeff22; }
+  .sec h4 { margin: 0 0 8px; font-size: 12px; color: #0f766e; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .grid3 { grid-template-columns: 1fr 1fr 1fr; }
+  .grid4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .lab { font-size: 11px; color: #64748b; margin-bottom: 2px; }
+  .fld { height: 28px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; padding: 0 8px; display: flex; align-items: center; color: #0f172a; }
+  .df { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 18px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+  .btn { height: 32px; padding: 0 16px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid #cbd5e1; background: #fff; }
+  .btn.pri { background: #0d9488; color: #fff; border-color: #0d9488; }
+  .btn.amb { background: #d97706; color: #fff; border-color: #d97706; }
+  .btn.dang { background: #e11d48; color: #fff; border-color: #e11d48; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 720px; background: #fff; box-shadow: -8px 0 30px rgba(0,0,0,.25); }
+  .mini-t { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
+  .mini-t th, .mini-t td { border: 1px solid #e2e8f0; padding: 4px 6px; }
+  .mini-t th { background: #f1f5f9; }
+  .layout2 { display: grid; grid-template-columns: 280px 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+
+<!-- 1 menu -->
+<section class="page">
+  <div class="app">
+    <div class="side">
+      <div class="logo">Smart-EMAPs</div>
+      <div class="item">ホーム</div>
+      <div class="item active">ERP</div>
+      <div class="sub">生産管理</div>
+      <div class="sub hot">在庫管理</div>
+      <div class="sub" style="padding-left:48px;color:#5eead4;font-weight:700">補給品管理</div>
+      <div class="sub" style="padding-left:48px">在庫報告管理</div>
+      <div class="item">MES</div>
+      <div class="item">システム管理</div>
+    </div>
+    <div class="main"><div class="fake-page"></div></div>
+  </div>
+  <div class="badge r" style="left:18px;top:118px">1</div>
+  <div class="badge r" style="left:48px;top:188px">2</div>
+  <div class="badge r" style="left:70px;top:218px">3</div>
+  <div class="ring" style="left:12px;top:210px;width:200px;height:28px"></div>
+</section>
+
+<!-- 2 stock overview -->
+<section class="page">
+  <div class="hero">
+    <div>
+      <h1>補給品管理</h1>
+      <p>補給品専用の保管場所と棚番（A-03-02）で、現在庫と品質を管理します。</p>
+    </div>
+    <div>
+      <span class="hbtn m">保管場所管理</span>
+      <span class="hbtn t">量産品から振替</span>
+      <span class="hbtn m">手動登録</span>
+    </div>
+  </div>
+  <div class="tabs"><div class="tab on">在庫一覧</div><div class="tab">出荷管理</div></div>
+  <div class="stats">
+    <div class="sc"><span>件数</span><strong>48</strong></div>
+    <div class="sc sky"><span>現在庫合計</span><strong>12,450</strong></div>
+    <div class="sc ind"><span>品質異常</span><strong>2</strong></div>
+    <div class="sc rose"><span>警告</span><strong>3</strong></div>
+    <div class="sc amb"><span>長期滞留</span><strong>5</strong></div>
+  </div>
+  <div class="tb">
+    <span style="font-size:12px;color:#64748b">対象月</span>
+    <div class="inp">2026-10</div>
+    <div class="inp" style="min-width:220px">製品CD・製品名・品番・保管場所</div>
+    <div class="inp">保管場所</div>
+    <div class="inp">納入先</div>
+    <span class="chk">☐ 滞留のみ</span>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <span class="tbtn">Excel出力</span>
+      <span class="tbtn">棚卸表印刷</span>
+      <span class="tbtn">棚番票印刷</span>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <table class="dt">
+        <tr><th>製品CD</th><th>製品名</th><th>品番</th><th>保管場所</th><th>棚番</th><th>最初登録日</th><th>現在庫</th><th>品質</th><th>月平均出荷</th><th>滞留月数</th><th>登録元</th><th>操作</th></tr>
+        <tr class="alert"><td>12341</td><td>サンプルA</td><td>PN-A</td><td>補給品棚A-03-02</td><td>A-03-02</td><td>2024-05-12</td><td>80</td><td><span class="chip ok">良好</span></td><td>120.0</td><td>2</td><td><span class="chip warn">振替</span></td><td><span class="link">編集</span><span class="dang">削除</span></td></tr>
+        <tr><td>12351</td><td>サンプルB</td><td>PN-B</td><td>補給品棚B-01-01</td><td>B-01-01</td><td>2025-01-08</td><td>240</td><td><span class="chip ok">良好</span></td><td>15.5</td><td>8</td><td><span class="chip info">手動</span></td><td><span class="link">編集</span><span class="dang">削除</span></td></tr>
+        <tr><td>80011</td><td>サンプルC</td><td>—</td><td>補給品棚A-03-03</td><td>A-03-03</td><td>2026-09-01</td><td>12</td><td><span class="chip warn">錆</span></td><td>0.0</td><td>14</td><td><span class="chip info">手動</span></td><td><span class="link">編集</span><span class="dang">削除</span></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="badge b" style="left:20px;top:18px">A</div>
+  <div class="badge b" style="left:20px;top:88px">B</div>
+  <div class="badge b" style="left:20px;top:128px">C</div>
+  <div class="badge b" style="left:20px;top:210px">D</div>
+  <div class="badge b" style="left:20px;top:280px">E</div>
+  <div class="badge r" style="right:290px;top:28px">1</div>
+  <div class="badge r" style="right:170px;top:28px">2</div>
+  <div class="badge r" style="right:50px;top:28px">3</div>
+</section>
+
+<!-- 3 shipments -->
+<section class="page">
+  <div class="hero">
+    <div><h1>補給品管理</h1><p>補給品専用の保管場所と棚番（A-03-02）で、現在庫と品質を管理します。</p></div>
+    <div><span class="hbtn m">保管場所管理</span><span class="hbtn t">量産品から振替</span><span class="hbtn m">手動登録</span></div>
+  </div>
+  <div class="tabs"><div class="tab">在庫一覧</div><div class="tab on">出荷管理</div></div>
+  <div class="stats stats4">
+    <div class="sc sky"><span>予定合計</span><strong>860</strong></div>
+    <div class="sc"><span>実績合計</span><strong>420</strong></div>
+    <div class="sc rose"><span>未出荷</span><strong>4</strong></div>
+    <div class="sc amb"><span>不足</span><strong>1</strong></div>
+  </div>
+  <div class="tb">
+    <span style="font-size:12px;color:#64748b">対象月</span>
+    <div class="inp">2026-10</div>
+    <div class="inp" style="min-width:200px">製品CD・製品名・品番</div>
+    <div class="inp">納入先</div>
+  </div>
+  <div class="ship-title">当月出荷予定</div>
+  <div class="wrap" style="padding-top:0">
+    <div class="card">
+      <table class="dt">
+        <tr><th>製品CD</th><th>製品名</th><th>納入先</th><th>予定日</th><th>予定本数</th><th>実績本数</th><th>差分</th><th>現在庫</th><th>状態</th></tr>
+        <tr class="alert"><td>12341</td><td>サンプルA</td><td>納入先X</td><td>2026-10-08</td><td>200</td><td>0</td><td style="color:#e11d48">-200</td><td>80</td><td><span class="chip warn">未出荷</span> <span class="link">出荷済</span></td></tr>
+        <tr><td>12351</td><td>サンプルB</td><td>納入先Y</td><td>2026-10-15</td><td>100</td><td>100</td><td>0</td><td>240</td><td><span class="chip green">出荷済</span> <span class="link">取消</span></td></tr>
+        <tr><td>99991</td><td>未登録品</td><td>納入先Z</td><td>2026-10-20</td><td>50</td><td>0</td><td style="color:#e11d48">-50</td><td class="muted">未登録</td><td><span class="chip warn">未出荷</span></td></tr>
+      </table>
+    </div>
+    <div class="ship-title" style="margin-left:0">当月実出荷</div>
+    <div class="card">
+      <table class="dt">
+        <tr><th>日付</th><th>製品CD</th><th>製品名</th><th>数量</th><th>出庫後残高</th><th>備考</th></tr>
+        <tr><td>2026-10-15</td><td>12351</td><td>サンプルB</td><td>100</td><td>240</td><td>出荷管理から登録</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="badge b" style="left:140px;top:88px">A</div>
+  <div class="badge r" style="right:80px;top:290px">1</div>
+</section>
+
+<!-- 4 transfer -->
+<section class="page" style="background:#64748b">
+  <div class="mask">
+    <div class="dlg">
+      <div class="dh amber">
+        <div><h3>量産品から振替</h3><p>量産終了、または顧客指定のときだけ種別を補給品にし、倉庫在庫の実数をこの台帳へ移します</p></div>
+      </div>
+      <div class="db">
+        <div class="hint">補給品化は「量産終了」または「顧客指定」のときだけです。入庫数量は倉庫在庫の実数で、ここでは別数量を計算しません。</div>
+        <div class="sec amber">
+          <h4>対象製品</h4>
+          <div class="grid">
+            <div><div class="lab">製品 ※</div><div class="fld">12341 サンプルA</div></div>
+            <div>
+              <div class="lab">最新倉庫在庫（振替対象）</div>
+              <table class="mini-t"><tr><th>ルート</th><th>基準日</th><th>倉庫在庫</th></tr><tr><td>R-STD11</td><td>2026-10-09</td><td>480</td></tr></table>
+            </div>
+            <div><div class="lab">移行トリガー ※</div><div class="fld">● 量産終了　○ 顧客指定</div></div>
+            <div><div class="lab">移行理由 ※</div><div class="fld">2026-09 量産終了</div></div>
+          </div>
+        </div>
+        <div class="sec sky">
+          <h4>保管・品質</h4>
+          <div class="hint sky">棚番は保管場所名の末尾 7 文字から自動入力します（例：補給品棚A-03-02 → A-03-02）。</div>
+          <div class="grid4">
+            <div><div class="lab">保管場所 ※</div><div class="fld">補給品棚A-03-02</div></div>
+            <div><div class="lab">棚番 ※</div><div class="fld">A-03-02</div></div>
+            <div><div class="lab">品質状態</div><div class="fld">良好</div></div>
+            <div><div class="lab">備考</div><div class="fld"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="df"><span class="btn">キャンセル</span><span class="btn amb">振替する</span></div>
+    </div>
+  </div>
+  <div class="badge r" style="left:220px;top:210px">1</div>
+  <div class="badge r" style="left:220px;top:300px">2</div>
+  <div class="badge r" style="left:700px;top:300px">3</div>
+  <div class="badge r" style="left:220px;top:400px">4</div>
+  <div class="badge r" style="right:80px;top:560px">5</div>
+</section>
+
+<!-- 5 manual -->
+<section class="page" style="background:#64748b">
+  <div class="mask">
+    <div class="dlg">
+      <div class="dh">
+        <div><h3>手動登録</h3><p>生産データにない補給品も製品と期初数量を入力して登録できます（倉庫在庫は移動しません）</p></div>
+      </div>
+      <div class="db">
+        <div class="sec">
+          <h4>製品情報</h4>
+          <div class="lab">登録方法</div>
+          <div class="fld" style="width:360px;margin-bottom:8px">○ 製品マスタから選ぶ　● 未登録品を入力</div>
+          <div class="hint sky">製品マスタにない補給品です。製品CDは自動採番します（8＋連番3桁＋1、例 80011）。</div>
+          <div class="grid3">
+            <div><div class="lab">製品CD ※</div><div class="fld">80011（自動）</div></div>
+            <div><div class="lab">製品名 ※</div><div class="fld">サンプルC</div></div>
+            <div><div class="lab">品番</div><div class="fld"></div></div>
+            <div><div class="lab">別名</div><div class="fld"></div></div>
+            <div><div class="lab">納入先CD</div><div class="fld">選択…</div></div>
+            <div><div class="lab">納入先名</div><div class="fld">自動入力</div></div>
+          </div>
+        </div>
+        <div class="sec sky">
+          <h4>在庫・保管・品質</h4>
+          <div class="grid4">
+            <div><div class="lab">期初数量 ※</div><div class="fld">12</div></div>
+            <div><div class="lab">最初登録日 ※</div><div class="fld">2026-09-01</div></div>
+            <div><div class="lab">保管場所 ※</div><div class="fld">補給品棚A-03-03</div></div>
+            <div><div class="lab">棚番 ※</div><div class="fld">A-03-03</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="df"><span class="btn">キャンセル</span><span class="btn pri">登録</span></div>
+    </div>
+  </div>
+  <div class="badge r" style="left:240px;top:200px">1</div>
+  <div class="badge r" style="left:240px;top:320px">2</div>
+  <div class="badge r" style="left:240px;top:430px">3</div>
+  <div class="badge r" style="right:90px;top:560px">4</div>
+</section>
+
+<!-- 6 locations -->
+<section class="page" style="background:#64748b">
+  <div class="mask" style="padding-top:24px">
+    <div class="dlg wide">
+      <div class="dh">
+        <div><h3>保管場所管理</h3><p>量産品とは分けた補給品専用棚だけを登録します。名前を変えると、その場所の補給品もまとめて変わります</p></div>
+      </div>
+      <div class="db">
+        <div class="layout2">
+          <div>
+            <div class="hint sky">末尾 7 文字が棚番（例：補給品棚A-03-02 → A-03-02）</div>
+            <div class="sec">
+              <h4>保管場所を追加</h4>
+              <div class="lab">保管場所名 ※</div><div class="fld" style="margin-bottom:6px">補給品棚C-02-01</div>
+              <div class="grid"><div><div class="lab">表示順</div><div class="fld">10</div></div><div><div class="lab">使用</div><div class="fld">ON</div></div></div>
+              <div style="margin-top:8px;text-align:right"><span class="btn pri">追加</span></div>
+            </div>
+            <div class="sec amber">
+              <h4>保管場所の入れ替え</h4>
+              <div class="lab">保管場所 A / B</div>
+              <div class="fld" style="margin-bottom:6px">A-03-02 ↔ B-01-01</div>
+              <span class="btn amb">入れ替える</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight:800;margin-bottom:6px;color:#0f766e">保管場所一覧 <span style="font-weight:400;color:#64748b">3 件</span></div>
+            <table class="mini-t">
+              <tr><th>保管場所名</th><th>表示順</th><th>使用中</th><th>状態</th><th>操作</th></tr>
+              <tr><td>補給品棚A-03-02</td><td>30</td><td>12</td><td>使用</td><td><span class="link">棚番票</span> <span class="link">編集</span></td></tr>
+              <tr><td>補給品棚B-01-01</td><td>20</td><td>8</td><td>使用</td><td><span class="link">棚番票</span> <span class="link">編集</span></td></tr>
+              <tr><td>補給品棚A-03-03</td><td>10</td><td>0</td><td>使用</td><td><span class="link">棚番票</span> <span class="link">編集</span> <span class="dang">削除</span></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="df"><span class="btn">閉じる</span></div>
+    </div>
+  </div>
+  <div class="badge r" style="left:140px;top:200px">1</div>
+  <div class="badge r" style="left:140px;top:380px">2</div>
+  <div class="badge r" style="left:520px;top:200px">3</div>
+</section>
+
+<!-- 7 detail -->
+<section class="page" style="background:#94a3b8">
+  <div style="opacity:.4;padding:12px"><div class="hero"><div><h1>補給品管理</h1></div></div></div>
+  <div class="drawer">
+    <div class="dh">
+      <div><h3>12341 サンプルA</h3><p>補給品詳細｜保管・品質の編集と入出庫の登録</p></div>
+    </div>
+    <div class="db" style="max-height:none">
+      <table class="mini-t" style="margin-bottom:10px">
+        <tr><th>製品CD</th><td>12341</td><th>最初登録日</th><td>2024-05-12</td></tr>
+        <tr><th>現在庫</th><td>80</td><th>品質状態</th><td>良好</td></tr>
+        <tr><th>最終出庫日</th><td>2026-08-01</td><th>滞留月数</th><td>2（62 日）</td></tr>
+      </table>
+      <div class="sec sky"><h4>在庫推移（直近 12 ヶ月）</h4><div style="height:70px;background:linear-gradient(180deg,#ecfeff,#fff);border:1px dashed #67e8f9;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#0e7490">グラフ</div></div>
+      <div class="sec"><h4>保管・品質</h4>
+        <div class="grid3">
+          <div><div class="lab">保管場所</div><div class="fld">補給品棚A-03-02</div></div>
+          <div><div class="lab">棚番</div><div class="fld">A-03-02</div></div>
+          <div><div class="lab">品質状態</div><div class="fld">良好</div></div>
+        </div>
+        <div style="text-align:right;margin-top:6px"><span class="btn pri">保存</span></div>
+      </div>
+      <div class="sec amber"><h4>入出庫</h4>
+        <div class="fld" style="gap:12px">区分: 実出荷　数量: 10　日付: 2026-10-14　<span class="btn amb">登録</span></div>
+      </div>
+      <div class="sec"><h4>当月出荷（月受注・種別が補給品）</h4>
+        <table class="mini-t"><tr><th>納入先</th><th>確定本数</th><th>内示本数</th></tr><tr><td>納入先X</td><td>200</td><td>0</td></tr></table>
+      </div>
+    </div>
+  </div>
+  <div class="badge r" style="right:40px;top:200px">1</div>
+  <div class="badge r" style="right:40px;top:360px">2</div>
+  <div class="badge r" style="right:40px;top:460px">3</div>
+</section>
+
+<!-- 8 confirm delete -->
+<section class="page" style="background:#64748b">
+  <div class="mask">
+    <div class="dlg narrow">
+      <div style="padding:18px 20px">
+        <div style="font-weight:800;font-size:16px;margin-bottom:10px">削除の確認</div>
+        <p style="font-size:13px;line-height:1.7;margin:0 0 8px">補給品「12341 サンプルA」を削除しますか？</p>
+        <p style="font-size:12px;color:#64748b;margin:0 0 8px">現在庫 80 と入出庫履歴もすべて削除され、元に戻せません。</p>
+        <p style="font-size:12px;color:#b45309;margin:0">振替時に在庫取引記録へ登録した「補給品へ振替」の保留も削除します（製品種別は変更しません）。</p>
+      </div>
+      <div class="df"><span class="btn">キャンセル</span><span class="btn dang">削除する</span></div>
+    </div>
+  </div>
+  <div class="badge r" style="left:420px;top:280px">1</div>
+</section>
+
+</body>
+</html>

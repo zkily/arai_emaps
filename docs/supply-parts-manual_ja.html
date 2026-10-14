@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>補給品管理 操作説明書</title>
+<style>
+  @page {
+    size: A4; margin: 14mm 13mm 16mm;
+    @top-right { content: "補給品管理 操作説明書"; font-family: "Yu Gothic UI","Yu Gothic",Meiryo,sans-serif; font-size: 8pt; color: #94a3b8; }
+    @bottom-center { content: counter(page) " / " counter(pages); font-family: "Yu Gothic UI","Yu Gothic",Meiryo,sans-serif; font-size: 9pt; color: #64748b; }
+  }
+  @page :first { margin: 0; @top-right { content: none; } @bottom-center { content: none; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; color: #0f172a; font-family: "Yu Gothic UI","Yu Gothic",Meiryo,"Hiragino Sans",sans-serif; font-size: 10.5pt; line-height: 1.65; }
+  h2 { font-size: 17pt; margin: 0; font-weight: 800; }
+  p { margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; page-break-inside: avoid; }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #f1f5f9; color: #334155; font-weight: 700; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code, .kbd { font-family: Consolas,"Yu Gothic UI",Meiryo,sans-serif; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 1px 6px; font-size: 9pt; }
+  .cover { height: 297mm; background: linear-gradient(155deg,#1e3a8a 0%,#1d4ed8 28%,#0e7490 62%,#14b8a6 100%); color: #fff; padding: 28mm 18mm 16mm; page-break-after: always; position: relative; overflow: hidden; }
+  .cover::before, .cover::after { content: ""; position: absolute; border-radius: 50%; background: rgba(255,255,255,.08); }
+  .cover::before { width: 230mm; height: 230mm; right: -80mm; top: -90mm; }
+  .cover::after { width: 170mm; height: 170mm; left: -55mm; bottom: -45mm; }
+  .cover .inner { position: relative; z-index: 1; }
+  .pill { display: inline-block; border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.12); border-radius: 999px; padding: 4px 14px; font-size: 10.5pt; }
+  .cover h1 { font-size: 30pt; line-height: 1.25; margin: 18mm 0 6mm; font-weight: 800; }
+  .cover .lead { font-size: 12pt; margin: 0 0 12mm; }
+  .grid6 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .chip { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 10px; padding: 8px 12px; font-size: 10.5pt; }
+  .meta3 { position: absolute; left: 18mm; right: 18mm; bottom: 16mm; display: grid; grid-template-columns: 1.3fr .8fr 1fr; gap: 10px; z-index: 1; }
+  .meta3 div { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28); border-radius: 12px; padding: 10px 12px; font-size: 10pt; }
+  .meta3 small { display: block; opacity: .8; font-size: 8.5pt; }
+  .meta3 b { font-size: 12pt; }
+  .ch { display: flex; align-items: center; gap: 10px; border-bottom: 2.5px solid #4f46e5; padding-bottom: 5px; margin: 2px 0 12px; page-break-after: avoid; }
+  .ch .no { width: 28px; height: 28px; border-radius: 8px; background: #4f46e5; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13pt; flex-shrink: 0; }
+  .sec { border-left: 4px solid #2563eb; padding-left: 10px; margin: 14px 0 8px; color: #1d4ed8; font-size: 12pt; font-weight: 800; page-break-after: avoid; }
+  .step { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+  .step .n { width: 20px; height: 20px; border-radius: 50%; background: #2563eb; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 9pt; font-weight: 800; flex-shrink: 0; margin-top: 2px; }
+  .ui-pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 9pt; font-weight: 700; border: 1px solid transparent; }
+  .ui-g { background: #ecfdf5; color: #047857; border-color: #86efac; }
+  .ui-b { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+  .ui-y { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+  .ui-t { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+  .ui-r { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+  .ui-s { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; color: #fff; font-size: 8pt; font-weight: 800; }
+  .badge.r { background: #ef4444; } .badge.b { background: #2563eb; }
+  .neg { color: #dc2626; font-weight: 700; }
+  .info, .ex, .warn { page-break-inside: avoid; border-radius: 10px; padding: 10px 12px 10px 40px; margin: 10px 0; font-size: 10pt; position: relative; }
+  .info { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .ex { background: #f5f3ff; border: 1px solid #c4b5fd; }
+  .warn { background: #fffbeb; border: 1px solid #fde68a; padding-left: 12px; }
+  .info::before, .ex::before { position: absolute; left: 10px; top: 10px; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .info::before { content: "i"; background: #2563eb; }
+  .ex::before { content: "例"; background: #7c3aed; font-size: 8pt; }
+  .toc { page-break-after: always; }
+  .toc-row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dotted #cbd5e1; padding: 5px 0; }
+  .toc-row .hint { color: #64748b; font-size: 9pt; white-space: nowrap; }
+  .toc-row .num { color: #4f46e5; font-weight: 800; margin-right: 6px; }
+  figure.shot { margin: 8px 0 12px; page-break-inside: avoid; }
+  figcaption { margin-top: 4px; font-size: 8.5pt; color: #475569; text-align: center; }
+  figure.shot img { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; display: block; }
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="inner">
+    <span class="pill">Smart-EMAPs ／ 在庫管理</span>
+    <h1>補給品管理<br>操作説明書</h1>
+    <p class="lead">補給品台帳の現在庫・品質・出荷を、専用棚番で登録・確認する</p>
+    <div class="grid6">
+      <div class="chip">① 在庫一覧で現在庫・警告・滞留を確認</div>
+      <div class="chip">② 出荷管理で予定と実出荷を追う</div>
+      <div class="chip">③ 量産品から振替（倉庫在庫を移す）</div>
+      <div class="chip">④ 手動登録（倉庫は動かさない）</div>
+      <div class="chip">⑤ 詳細で入出庫・保管・品質を更新</div>
+      <div class="chip">⑥ 保管場所・棚番票・Excel・棚卸表</div>
+    </div>
+  </div>
+  <div class="meta3">
+    <div><small>対象画面</small><b>補給品管理</b></div>
+    <div><small>版数</small><b>第 2.0 版</b></div>
+    <div><small>作成日</small><b>2026年10月14日</b></div>
+  </div>
+</section>
+
+<section class="toc">
+  <div class="ch"><span class="no">目</span><h2>目次</h2></div>
+  <div class="toc-row"><span><span class="num">1</span>はじめに</span><span class="hint">目的・台帳・用語</span></div>
+  <div class="toc-row"><span><span class="num">2</span>画面を開く</span><span class="hint">ERP → 在庫管理</span></div>
+  <div class="toc-row"><span><span class="num">3</span>画面構成</span><span class="hint">在庫一覧／出荷管理</span></div>
+  <div class="toc-row"><span><span class="num">4</span>在庫一覧の見方</span><span class="hint">警告・滞留・列</span></div>
+  <div class="toc-row"><span><span class="num">5</span>出荷管理</span><span class="hint">予定・出荷済・実出荷</span></div>
+  <div class="toc-row"><span><span class="num">6</span>量産品から振替</span><span class="hint">倉庫在庫を台帳へ</span></div>
+  <div class="toc-row"><span><span class="num">7</span>手動登録</span><span class="hint">マスタ／未登録品</span></div>
+  <div class="toc-row"><span><span class="num">8</span>補給品詳細（編集・入出庫）</span><span class="hint">ドロワー</span></div>
+  <div class="toc-row"><span><span class="num">9</span>保管場所管理</span><span class="hint">追加・入替・棚番票</span></div>
+  <div class="toc-row"><span><span class="num">10</span>削除</span><span class="hint">台帳と振替保留</span></div>
+  <div class="toc-row"><span><span class="num">11</span>Excel・棚卸表・棚番票</span><span class="hint">印刷と出力</span></div>
+  <div class="toc-row"><span><span class="num">12</span>操作権限</span><span class="hint">在庫管理の権限</span></div>
+  <div class="toc-row"><span><span class="num">13</span>メッセージと対処</span><span class="hint">画面に出る文言</span></div>
+  <div class="toc-row"><span><span class="num">14</span>運用上の注意・FAQ</span><span class="hint">よくある質問</span></div>
+  <div class="toc-row"><span><span class="num">—</span>文書情報・改訂履歴</span><span class="hint">版数・作成日</span></div>
+  <div class="info">
+    <strong>本書の画面図について</strong><br>
+    画面図は 2026年10月14日 時点の「補給品管理」に合わせています。件数・数量は説明用の例です。
+    <span class="badge r">1</span>は操作する場所、<span class="badge b">A</span>は画面の領域を示します。
+  </div>
+</section>
+
+<div class="ch"><span class="no">1</span><h2>はじめに</h2></div>
+<div class="sec">1-1 画面の目的</div>
+<p>「補給品管理」は、量産が終わった品や顧客指定の補給用在庫を、<strong>製品ごとの台帳</strong>で管理する画面です。専用の保管場所・棚番（例 <code>A-03-02</code>）と品質状態を持ち、入出庫と出荷予定を追います。</p>
+<table>
+  <tr><th>できること</th><th>説明</th></tr>
+  <tr><td>在庫一覧</td><td>現在庫・品質・滞留・警告を一覧で確認</td></tr>
+  <tr><td>出荷管理</td><td>当月の出荷予定（日受注）と実出荷、出荷済の登録</td></tr>
+  <tr><td>量産品から振替</td><td>製品種別を補給品にし、最新倉庫在庫を台帳へ移す</td></tr>
+  <tr><td>手動登録</td><td>倉庫を動かさず台帳だけ作る（マスタ選択／未登録品の自動採番）</td></tr>
+  <tr><td>詳細・入出庫</td><td>保管・品質の編集、生産入庫／実出荷／調整、履歴</td></tr>
+  <tr><td>保管場所</td><td>追加・編集・入れ替え・棚番票印刷</td></tr>
+</table>
+<div class="sec">1-2 台帳の考え方</div>
+<p>1 製品 CD につき 1 台帳です。振替は倉庫在庫の実数を入庫し、同数を在庫取引記録の「保留」に登録します。手動登録は倉庫を動かしません。現物を動かしたら、その場で入出庫（または出荷管理の出荷済）を登録してください。</p>
+<div class="sec">1-3 用語</div>
+<table>
+  <tr><th>用語</th><th>意味</th></tr>
+  <tr><td>棚番</td><td>保管場所名の末尾 7 文字（例：補給品棚A-03-02 → A-03-02）。自動入力で手入力不可</td></tr>
+  <tr><td>警告</td><td>当月の出荷予定に対して現在庫が足りない行（一覧の赤系統）</td></tr>
+  <tr><td>長期滞留</td><td>最終出庫（未出庫は登録日）から規定日数（既定 365 日）以上残っている</td></tr>
+  <tr><td>月平均出荷</td><td>対象月を含む直近 N ヶ月（既定 6）の受注確定本数の月平均</td></tr>
+  <tr><td>移行トリガー</td><td>振替時の「量産終了」または「顧客指定」</td></tr>
+  <tr><td>実出荷</td><td>台帳から出庫する区分。出荷管理の「出荷済」でも登録される</td></tr>
+</table>
+<div class="ex">品質状態は「良好」「錆」「汚れ」「その他」など（サーバ設定）。良好以外は「品質異常」カードに集計されます。</div>
+
+<div class="ch pb"><span class="no">2</span><h2>画面を開く</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/10_menu.png" alt="サイドバーから補給品管理を開く" />
+  <figcaption>図 2-1　サイドバー（ERP → 在庫管理 → 補給品管理）</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>Smart-EMAPs にログインします。</div></div>
+<div class="step"><span class="n">2</span><div>左サイドバーの <span class="kbd">ERP</span> にマウスを置きます（図 2-1 の <span class="badge r">1</span>）。</div></div>
+<div class="step"><span class="n">3</span><div><span class="kbd">在庫管理</span> にマウスを置きます（<span class="badge r">2</span>）。</div></div>
+<div class="step"><span class="n">4</span><div><span class="kbd">補給品管理</span> をクリックします（<span class="badge r">3</span>）。パスは <code>/erp/inventory/supply-parts</code> です。</div></div>
+<div class="info">メニューに無いときは在庫管理のメニュー権限がありません。タイトル横の書類アイコンから本書（操作説明）を開けます。</div>
+
+<div class="ch pb"><span class="no">3</span><h2>画面構成</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/01_stock.png" alt="在庫一覧タブ" />
+  <figcaption>図 3-1　在庫一覧。<span class="badge b">A</span>ヘッダー <span class="badge b">B</span>タブ <span class="badge b">C</span>集計 <span class="badge b">D</span>条件 <span class="badge b">E</span>一覧　<span class="badge r">1</span>保管場所 <span class="badge r">2</span>振替 <span class="badge r">3</span>手動登録</figcaption>
+</figure>
+<figure class="shot">
+  <img src="images/supply-parts/02_shipments.png" alt="出荷管理タブ" />
+  <figcaption>図 3-2　出荷管理。予定表と実出荷表。<span class="badge r">1</span>出荷済／取消</figcaption>
+</figure>
+<table>
+  <tr><th>No</th><th>エリア</th><th>説明</th></tr>
+  <tr><td><span class="badge b">A</span></td><td>ヘッダー</td><td>タイトルと 3 ボタン（保管場所管理／量産品から振替／手動登録）</td></tr>
+  <tr><td><span class="badge b">B</span></td><td>タブ</td><td><span class="kbd">在庫一覧</span> と <span class="kbd">出荷管理</span></td></tr>
+  <tr><td><span class="badge b">C</span></td><td>集計カード</td><td>タブごとに内容が変わる（第 4・5 章）</td></tr>
+  <tr><td><span class="badge b">D</span></td><td>条件バー</td><td>対象月・キーワード・納入先など。在庫一覧のみ保管場所・滞留のみ・出力ボタン</td></tr>
+  <tr><td><span class="badge b">E</span></td><td>一覧</td><td>台帳、または出荷予定／実出荷</td></tr>
+</table>
+<div class="sec">3-1 操作ボタン</div>
+<table>
+  <tr><th>ボタン</th><th>動き</th><th>参照</th></tr>
+  <tr><td><span class="ui-pill ui-t">保管場所管理</span></td><td>保管場所ダイアログを開く</td><td>第 9 章</td></tr>
+  <tr><td><span class="ui-pill ui-y">量産品から振替</span></td><td>振替ダイアログ（新規権限が必要）</td><td>第 6 章</td></tr>
+  <tr><td><span class="ui-pill ui-t">手動登録</span></td><td>手動登録ダイアログ（新規権限が必要）</td><td>第 7 章</td></tr>
+  <tr><td><span class="ui-pill ui-t">Excel出力</span></td><td>在庫一覧を Excel 出力</td><td>第 11 章</td></tr>
+  <tr><td><span class="ui-pill ui-t">棚卸表印刷</span></td><td>保管場所ごとの実棚確認用表</td><td>第 11 章</td></tr>
+  <tr><td><span class="ui-pill ui-t">棚番票印刷</span></td><td>棚番を大きく A4 縦印刷</td><td>第 11 章</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">4</span><h2>在庫一覧の見方</h2></div>
+<div class="sec">4-1 集計カード</div>
+<table>
+  <tr><th>カード</th><th>内容</th></tr>
+  <tr><td>件数</td><td>条件に合う台帳の件数</td></tr>
+  <tr><td>現在庫合計</td><td>現在庫の合計本数</td></tr>
+  <tr><td>品質異常</td><td>品質が「良好」以外の件数</td></tr>
+  <tr><td>警告</td><td>出荷予定に対し在庫不足の件数</td></tr>
+  <tr><td>長期滞留</td><td>規定日数以上動いていない件数</td></tr>
+</table>
+<div class="sec">4-2 条件バー</div>
+<p><strong>対象月</strong>は月平均出荷や出荷連携の基準月です。<strong>キーワード</strong>は製品 CD・製品名・品番・保管場所。<strong>保管場所</strong>・<strong>納入先</strong>で絞り込み、<strong>滞留のみ</strong>で長期滞留だけ表示します。変更すると一覧が自動で再読込されます。</p>
+<div class="sec">4-3 列の見方</div>
+<table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>棚番</td><td>色分けチップ。未設定は「未設定」</td></tr>
+  <tr><td>最初登録日</td><td>台帳に載せた日。古いほど色が濃くなる</td></tr>
+  <tr><td>滞留月数</td><td>最終出庫（未出庫は登録日）からの月数。12 以上は強調</td></tr>
+  <tr><td>登録元</td><td>振替／手動</td></tr>
+  <tr><td>移行</td><td>量産終了／顧客指定（振替時）</td></tr>
+  <tr><td>操作</td><td>編集（または詳細）／削除</td></tr>
+</table>
+<div class="warn"><strong>注意：</strong> 行全体をクリックしても詳細が開きます。警告行は背景が赤系統です。</div>
+
+<div class="ch pb"><span class="no">5</span><h2>出荷管理</h2></div>
+<p>タブ <span class="kbd">出荷管理</span> では、対象月の出荷予定と実出荷を見ます。予定は日受注管理の確定本数（種別が補給品）から来ます。</p>
+<div class="sec">5-1 集計</div>
+<table>
+  <tr><th>カード</th><th>内容</th></tr>
+  <tr><td>予定合計</td><td>当月予定本数の合計</td></tr>
+  <tr><td>実績合計</td><td>当月実出荷の合計</td></tr>
+  <tr><td>未出荷</td><td>まだ出荷済にしていない予定の件数</td></tr>
+  <tr><td>不足</td><td>予定に対して現在庫が足りない件数</td></tr>
+</table>
+<div class="sec">5-2 当月出荷予定</div>
+<table>
+  <tr><th>列・操作</th><th>説明</th></tr>
+  <tr><td>予定日</td><td>日受注の確定がある最早日。複数日あると「他 N 日」</td></tr>
+  <tr><td>差分</td><td>実績 − 予定。マイナスは不足</td></tr>
+  <tr><td>現在庫</td><td>台帳があれば本数。未登録は「未登録」</td></tr>
+  <tr><td>状態</td><td>未出荷／一部出荷／出荷済</td></tr>
+  <tr><td><span class="ui-pill ui-g">出荷済</span></td><td>編集権限があるとき。台帳へ実出荷を登録し状態を出荷済にする</td></tr>
+  <tr><td>取消</td><td>出荷済を戻し、登録した実出荷も取り消す</td></tr>
+</table>
+<div class="info">台帳未登録の行は出荷済にできません（「補給品台帳に未登録のため出荷済にできません」）。先に振替または手動登録してください。行クリックで台帳詳細が開きます（stock_id がある場合）。</div>
+<div class="sec">5-3 当月実出荷</div>
+<p>対象月に登録された実出荷の履歴です。日付・数量・出庫後残高・備考を確認できます。</p>
+
+<div class="ch pb"><span class="no">6</span><h2>量産品から振替</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/03_transfer.png" alt="量産品から振替ダイアログ" />
+  <figcaption>図 6-1　振替。<span class="badge r">1</span>製品 <span class="badge r">2</span>トリガー <span class="badge r">3</span>理由 <span class="badge r">4</span>保管 <span class="badge r">5</span>振替する</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div><span class="ui-pill ui-y">量産品から振替</span> を開きます。</div></div>
+<div class="step"><span class="n">2</span><div>製品を選びます。右側に最新倉庫在庫（ルート・基準日・倉庫在庫）が出ます。</div></div>
+<div class="step"><span class="n">3</span><div>移行トリガー（量産終了／顧客指定）と移行理由を入力します。</div></div>
+<div class="step"><span class="n">4</span><div>保管場所を選びます。棚番は自動。品質・備考は任意です。</div></div>
+<div class="step"><span class="n">5</span><div><span class="ui-pill ui-y">振替する</span> を押します。</div></div>
+<div class="sec">6-1 振替で行うこと</div>
+<table>
+  <tr><th>対象</th><th>内容</th></tr>
+  <tr><td>製品マスタ</td><td>製品種別を「補給品」に変更</td></tr>
+  <tr><td>台帳</td><td>新規作成（登録元＝振替）。品番・別名・納入先はマスタから継承可</td></tr>
+  <tr><td>入庫数量</td><td>基準日以前の最新生産データの倉庫在庫を全ルート合計（負なら 0）</td></tr>
+  <tr><td>入出庫履歴</td><td>「振替入庫」を当日で登録</td></tr>
+  <tr><td>在庫取引記録</td><td>同数の保留（補給品へ振替）を登録し、倉庫側から差し引く</td></tr>
+</table>
+<div class="warn"><strong>注意：</strong> すでに台帳がある製品は振替できません。倉庫合計が 0 以下でも振替は可能ですが警告が出ます。最初に確保する数量は生産管理が算出し、量産最終ロットで作り込んでから振替してください。</div>
+
+<div class="ch pb"><span class="no">7</span><h2>手動登録</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/04_manual.png" alt="手動登録ダイアログ" />
+  <figcaption>図 7-1　手動登録。<span class="badge r">1</span>登録方法 <span class="badge r">2</span>製品情報 <span class="badge r">3</span>期初・保管 <span class="badge r">4</span>登録</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div><span class="ui-pill ui-t">手動登録</span> を開きます。</div></div>
+<div class="step"><span class="n">2</span><div>登録方法を選びます。<strong>製品マスタから選ぶ</strong>（種別が補給品で未台帳）または<strong>未登録品を入力</strong>（製品 CD 自動採番、例 80011）。</div></div>
+<div class="step"><span class="n">3</span><div>製品名・期初数量・最初登録日・保管場所を入力します。棚番は自動です。</div></div>
+<div class="step"><span class="n">4</span><div><span class="ui-pill ui-t">登録</span> を押します。</div></div>
+<div class="info">マスタ選択で種別が補給品以外のときは確認が出ます。手動登録は倉庫在庫を移しません。量産倉庫を移すときは振替を使ってください。</div>
+
+<div class="ch pb"><span class="no">8</span><h2>補給品詳細（編集・入出庫）</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/06_detail.png" alt="補給品詳細ドロワー" />
+  <figcaption>図 8-1　詳細。<span class="badge r">1</span>保管・品質の保存 <span class="badge r">2</span>入出庫登録 <span class="badge r">3</span>当月出荷</figcaption>
+</figure>
+<div class="sec">8-1 開き方</div>
+<p>在庫一覧の行クリック、または「編集／詳細」。出荷管理でも stock_id がある行をクリックすると同じドロワーが開きます。</p>
+<div class="sec">8-2 保管・品質</div>
+<p>製品名・品番・別名・納入先・保管場所・最初登録日・品質・備考を編集し <span class="ui-pill ui-t">保存</span> します（編集権限が必要）。製品 CD と棚番（保管場所連動）は手では変えません。</p>
+<div class="sec">8-3 入出庫</div>
+<table>
+  <tr><th>区分</th><th>現在庫</th><th>使いどころ</th></tr>
+  <tr><td>生産入庫</td><td>＋</td><td>補給品を生産して棚に入れたとき（1 以上）</td></tr>
+  <tr><td>実出荷</td><td>−</td><td>出荷したとき（1 以上）。最終出庫日・滞留の基準になる</td></tr>
+  <tr><td>調整</td><td>増減</td><td>棚卸差異など。減らすときはマイナス</td></tr>
+</table>
+<p>日付・数量・備考を入れて <span class="ui-pill ui-y">登録</span> します。現物を動かしたその場で登録してください。</p>
+<div class="sec">8-4 その他のブロック</div>
+<ul>
+  <li><strong>在庫推移</strong> … 直近 12 ヶ月のグラフ</li>
+  <li><strong>当月出荷</strong> … 月受注で種別が補給品の確定・内示本数</li>
+  <li><strong>入出庫履歴</strong> … 日付・区分・数量・残高・備考</li>
+</ul>
+
+<div class="ch pb"><span class="no">9</span><h2>保管場所管理</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/05_locations.png" alt="保管場所管理ダイアログ" />
+  <figcaption>図 9-1　保管場所。<span class="badge r">1</span>追加／編集 <span class="badge r">2</span>入れ替え <span class="badge r">3</span>一覧・棚番票</figcaption>
+</figure>
+<div class="sec">9-1 追加・編集</div>
+<p>保管場所名（必須）・表示順・使用・備考を入力し追加／更新します。名前の末尾 7 文字が棚番になります。名前を変えると、その場所の補給品の保管場所名と棚番もまとめて更新されます。</p>
+<div class="sec">9-2 入れ替え</div>
+<p>保管場所 A と B を選び <span class="ui-pill ui-y">入れ替える</span> と、双方の補給品が入れ替わり、棚番も相手側に合わせます。確認ダイアログが出ます。</p>
+<div class="sec">9-3 一覧の操作</div>
+<table>
+  <tr><th>操作</th><th>内容</th></tr>
+  <tr><td>棚番票</td><td>その保管場所の補給品だけ棚番票を印刷</td></tr>
+  <tr><td>編集</td><td>左側のフォームに読み込む</td></tr>
+  <tr><td>削除</td><td>使用中件数 0 のときだけ可。使用中は「使用を停止」してから</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">10</span><h2>削除</h2></div>
+<figure class="shot">
+  <img src="images/supply-parts/07_delete.png" alt="削除の確認" />
+  <figcaption>図 10-1　削除の確認。振替由来の場合は保留削除の説明も出る</figcaption>
+</figure>
+<div class="step"><span class="n">1</span><div>一覧の <span class="ui-pill ui-r">削除</span>（削除権限が必要）を押します。</div></div>
+<div class="step"><span class="n">2</span><div>内容を確認し <span class="ui-pill ui-r">削除する</span> を選びます。</div></div>
+<p>現在庫と入出庫履歴はすべて消え、元に戻せません。振替登録の場合、在庫取引記録の「補給品へ振替」保留も削除します（製品種別は補給品のままです）。</p>
+
+<div class="ch pb"><span class="no">11</span><h2>Excel・棚卸表・棚番票</h2></div>
+<table>
+  <tr><th>操作</th><th>内容</th></tr>
+  <tr><td><span class="ui-pill ui-t">Excel出力</span></td><td>いまの在庫一覧条件の内容を Excel で保存</td></tr>
+  <tr><td><span class="ui-pill ui-t">棚卸表印刷</span></td><td>保管場所ごとに年 1 回の実棚確認用。差異はその場で詳細の「調整」へ</td></tr>
+  <tr><td><span class="ui-pill ui-t">棚番票印刷</span></td><td>一覧を棚番ごとに A4 縦。約 5m 先から読める大きさ。印刷倍率は 100%</td></tr>
+</table>
+<div class="info">一覧が空のときは各ボタンは押せません。ポップアップがブロックされると警告が出ます。ブラウザで許可して再実行してください。</div>
+
+<div class="ch pb"><span class="no">12</span><h2>操作権限</h2></div>
+<p>在庫管理モジュールの操作権限（新規・編集・削除）を使います。</p>
+<table>
+  <tr><th>権限</th><th>できること</th></tr>
+  <tr><td>閲覧のみ</td><td>一覧・出荷・詳細の参照。振替・手動・入出庫・出荷済は出ない／無効</td></tr>
+  <tr><td>新規</td><td>振替・手動登録・保管場所の追加</td></tr>
+  <tr><td>編集</td><td>詳細の保存・入出庫・出荷済／取消・保管場所の編集・入れ替え</td></tr>
+  <tr><td>削除</td><td>台帳削除・保管場所削除（使用中 0）</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">13</span><h2>メッセージと対処</h2></div>
+<table>
+  <tr><th>メッセージ</th><th>意味と対処</th></tr>
+  <tr><td>振替しました。補給品へ入庫 N、…保留を登録しました</td><td>振替成功</td></tr>
+  <tr><td>登録しました（製品CD …）</td><td>手動登録成功（自動採番時は CD を表示）</td></tr>
+  <tr><td>入出庫を登録しました／保存しました</td><td>詳細での登録・保存成功</td></tr>
+  <tr><td>出荷済にし、実出荷 N を登録しました</td><td>出荷管理での出荷済成功</td></tr>
+  <tr><td>出荷済を取り消し、実出荷を取り消しました</td><td>取消成功</td></tr>
+  <tr><td>補給品台帳に未登録のため出荷済にできません</td><td>先に振替または手動登録</td></tr>
+  <tr><td>移行トリガーを選択してください／移行理由を入力</td><td>振替の必須入力</td></tr>
+  <tr><td>製品CD、製品名、保管場所は必須です</td><td>手動登録の必須</td></tr>
+  <tr><td>この製品の種別は「…」です。…このまま登録しますか？</td><td>種別が補給品以外の手動登録確認</td></tr>
+  <tr><td>削除しました（在庫取引記録の振替保留 N 件も削除）</td><td>振替由来の削除</td></tr>
+  <tr><td>使用中のため削除できません</td><td>保管場所に台帳が残っている</td></tr>
+  <tr><td>ポップアップがブロックされました</td><td>印刷・棚番票。ブラウザで許可</td></tr>
+  <tr><td>Excel 出力に失敗しました</td><td>通信またはダウンロード制限を確認</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">14</span><h2>運用上の注意・よくある質問</h2></div>
+<div class="step"><span class="n">1</span><div><strong>振替と手動を使い分けてください。</strong> 倉庫の実数を移すのは振替だけです。</div></div>
+<div class="step"><span class="n">2</span><div><strong>現物を動かしたらその場で入出庫または出荷済を登録</strong>してください。まとめ入力は避けてください。</div></div>
+<div class="step"><span class="n">3</span><div><strong>棚番は保管場所名に従います。</strong> 場所名の付け方（末尾 7 文字）を統一してください。</div></div>
+<div class="step"><span class="n">4</span><div><strong>出荷予定は日受注側が正</strong>です。予定日や本数が違うときは日受注管理を直します。</div></div>
+<table>
+  <tr><th>質問</th><th>答え</th></tr>
+  <tr><td>振替ボタンが無い</td><td>新規権限がありません。管理者に依頼してください</td></tr>
+  <tr><td>同じ製品をまた振替したい</td><td>台帳があるため不可。詳細で入出庫するか、削除後に再振替（運用に注意）</td></tr>
+  <tr><td>警告が消えない</td><td>現在庫を増やす（入庫）か、予定側を見直す</td></tr>
+  <tr><td>棚番票が小さい</td><td>印刷倍率を 100% にする</td></tr>
+  <tr><td>滞留のみに出る条件は</td><td>最終出庫（未出庫は登録日）から規定日数以上（既定 365 日）</td></tr>
+</table>
+
+<div class="ch pb"><span class="no">—</span><h2>文書情報</h2></div>
+<table>
+  <tr><th>項目</th><th>内容</th></tr>
+  <tr><td>文書名</td><td>補給品管理 操作説明書</td></tr>
+  <tr><td>対象</td><td>ERP → 在庫管理 → 補給品管理</td></tr>
+  <tr><td>画面パス</td><td>/erp/inventory/supply-parts</td></tr>
+  <tr><td>版数</td><td>第 2.0 版</td></tr>
+  <tr><td>作成日</td><td>2026年10月14日</td></tr>
+  <tr><td>スタイル正本</td><td>月受注管理 操作説明書（order-monthly.pdf）に準拠</td></tr>
+  <tr><td>言語</td><td>日本語</td></tr>
+</table>
+<div class="ch"><span class="no">—</span><h2>改訂履歴</h2></div>
+<table>
+  <tr><th>日付</th><th>版</th><th>内容</th></tr>
+  <tr><td>2026-10-09</td><td>1.0</td><td>初版（在庫一覧・振替・手動・詳細・保管場所・Excel・棚卸表）</td></tr>
+  <tr><td>2026-10-14</td><td>2.0</td><td>出荷管理タブ、棚番票、保管場所入れ替え、実出荷区分、現行 UI に合わせて全面改訂</td></tr>
+</table>
+<p style="font-size:9pt;color:#475569">以上。ボタン名は 2026年10月14日時点の画面表示と一致します。</p>
+</body>
+</html>

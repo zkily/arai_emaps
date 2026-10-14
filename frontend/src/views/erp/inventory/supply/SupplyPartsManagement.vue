@@ -7,7 +7,12 @@
           <el-icon :size="20"><Box /></el-icon>
         </div>
         <div class="spm-hero-copy">
-          <h1 class="pb-hero-title">補給品管理</h1>
+          <h1 class="pb-hero-title">
+            補給品管理
+            <button type="button" class="spm-help-btn" title="操作説明を開く" @click="goManual">
+              <el-icon><Document /></el-icon>
+            </button>
+          </h1>
           <p class="pb-hero-desc">補給品専用の保管場所と棚番（A-03-02）で、現在庫と品質を管理します。</p>
         </div>
       </div>
@@ -1087,6 +1092,7 @@ import {
   Check,
   Clock,
   Close,
+  Document,
   Download,
   EditPen,
   Goods,
@@ -1139,6 +1145,9 @@ import SupplyLocationSelect from './SupplyLocationSelect.vue'
 
 const { canCreate, canEdit, canDelete } = useInventoryOperationPermission()
 const canManageLocations = computed(() => canCreate.value || canEdit.value)
+function goManual() {
+  window.open('/manuals/supply-parts', '_blank', 'noopener,noreferrer')
+}
 
 const locations = ref<SupplyPartLocation[]>([])
 const locationVisible = ref(false)
@@ -2502,9 +2511,29 @@ onBeforeUnmount(() => {
 }
 .spm-hero-copy .pb-hero-title {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: #fff;
+}
+.spm-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.spm-help-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.06);
 }
 .spm-hero-copy .pb-hero-desc {
   margin: 0;

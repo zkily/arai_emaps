@@ -23,6 +23,8 @@
 
 在庫報告管理は PDF 正本です（`../pdfs/inventory-report.pdf`、`/manuals/inventory-report`）。
 
+補給品管理は PDF 正本です（`../pdfs/supply-parts.pdf`、`/manuals/supply-parts`）。
+
 ## 新規マニュアル追加（Markdown）
 
 1. 本フォルダに `{slug}_ja.md` を追加。
