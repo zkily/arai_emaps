@@ -248,6 +248,8 @@ export interface SupplyPartShipmentActual {
   product_cd: string
   product_name: string
   part_number?: string | null
+  destination_cd?: string | null
+  destination_name?: string | null
   occurred_date: string | null
   quantity: number
   balance_after: number
@@ -257,11 +259,15 @@ export interface SupplyPartShipmentActual {
 export interface SupplyPartShipmentResponse {
   year: number
   month: number
+  actual_date_from?: string | null
+  actual_date_to?: string | null
   summary: {
     planned_total: number
     actual_total: number
     not_shipped_count: number
     short_count: number
+    actual_list_total?: number
+    actual_list_count?: number
   }
   planned: SupplyPartShipmentPlanned[]
   actual: SupplyPartShipmentActual[]
@@ -272,6 +278,8 @@ export function getSupplyPartShipments(params: {
   month: number
   keyword?: string
   destination_cd?: string
+  actual_date_from?: string
+  actual_date_to?: string
 }) {
   return request.get<SupplyPartShipmentResponse>(`${BASE_URL}/shipments`, { params })
 }

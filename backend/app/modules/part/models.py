@@ -26,6 +26,7 @@ class PartStock(Base):
     supplier_name = Column(String(50))
     lead_time = Column(Integer, default=0)
     order_quantity = Column(Integer, default=0)
+    receiving_qty = Column(Integer, nullable=False, default=0, comment="受入数")
     order_bundle_quantity = Column(Integer, default=0)
     order_amount = Column(Numeric(15, 2), default=0.00)
     last_updated = Column(DateTime, default=func.now(), onupdate=func.now())

@@ -111,19 +111,19 @@
     </div>
 
     <div class="toolbar">
-      <span class="toolbar__label">対象月</span>
+      <span class="toolbar__label">{{ activeTab === 'shipments' ? '対象月（予定）' : '対象月' }}</span>
       <el-date-picker
         v-model="monthValue"
         type="month"
         value-format="YYYY-MM"
-        placeholder="対象月"
+        :placeholder="activeTab === 'shipments' ? '出荷予定の対象月' : '対象月'"
         :clearable="false"
         class="month-picker"
       />
       <el-input
         v-model="keyword"
         clearable
-        :placeholder="activeTab === 'stock' ? '製品CD・製品名・品番・保管場所' : '製品CD・製品名・品番'"
+        :placeholder="activeTab === 'stock' ? '製品CD・製品名・品番・保管場所' : '製品CD・製品名・品番（予定・実出荷）'"
         class="keyword"
       >
         <template #prefix>
@@ -198,7 +198,7 @@
             <span class="cd-text">{{ row.product_cd }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip sortable />
         <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
         <el-table-column prop="storage_location" label="保管場所" min-width="120" show-overflow-tooltip />
         <el-table-column prop="shelf_no" label="棚番" width="110" align="center" show-overflow-tooltip>
@@ -387,7 +387,29 @@
       </div>
 
       <div class="table-card ship-block">
-        <h2 class="ship-block__title">当月実出荷</h2>
+        <div class="ship-block__head">
+          <h2 class="ship-block__title">実出荷</h2>
+          <div class="ship-actual-filters">
+            <span class="toolbar__label">発生日</span>
+            <el-date-picker
+              v-model="actualDateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              clearable
+              unlink-panels
+              class="actual-date-range"
+            />
+            <span class="ship-actual-meta">
+              {{ formatNum(shipmentSummary.actual_list_count || shipmentActual.length) }} 件
+              ／ 合計 {{ formatNum(shipmentSummary.actual_list_total ?? 0) }}
+            </span>
+          </div>
+        </div>
+        <p class="ship-actual-hint">
+          既定は全期間の実出荷です。上部のキーワード・納入先、および発生日で絞り込めます（対象月は出荷予定側のみ）。
+        </p>
         <el-table
           v-loading="shipmentsLoading"
           :data="shipmentActual"
@@ -395,10 +417,10 @@
           stripe
           size="small"
           class="data-table"
-          empty-text="この月の実出荷はありません"
+          empty-text="条件に一致する実出荷はありません"
           @row-click="openShipmentRow"
         >
-          <el-table-column prop="occurred_date" label="日付" width="110" />
+          <el-table-column prop="occurred_date" label="日付" width="110" sortable />
           <el-table-column prop="product_cd" label="製品CD" width="90">
             <template #default="{ row }">
               <span class="cd-text">{{ row.product_cd }}</span>
@@ -406,6 +428,14 @@
           </el-table-column>
           <el-table-column prop="product_name" label="製品名" min-width="160" show-overflow-tooltip />
           <el-table-column prop="part_number" label="品番" min-width="110" show-overflow-tooltip />
+          <el-table-column label="納入先" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.destination_name || row.destination_cd">
+                {{ row.destination_name || row.destination_cd }}
+              </span>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="quantity" label="数量" width="90" align="right">
             <template #default="{ row }">{{ formatNum(row.quantity) }}</template>
           </el-table-column>
@@ -1175,7 +1205,11 @@ const shipmentSummary = ref<SupplyPartShipmentResponse['summary']>({
   actual_total: 0,
   not_shipped_count: 0,
   short_count: 0,
+  actual_list_total: 0,
+  actual_list_count: 0,
 })
+/** 実出荷一覧の発生日フィルタ（未指定＝全期間） */
+const actualDateRange = ref<[string, string] | null>(null)
 const saving = ref(false)
 const productSearching = ref(false)
 const rows = ref<SupplyPartStock[]>([])
@@ -1532,11 +1566,14 @@ async function loadShipments() {
   if (!year || !month) return
   shipmentsLoading.value = true
   try {
+    const [from, to] = actualDateRange.value || []
     const res = (await getSupplyPartShipments({
       year,
       month,
       keyword: keyword.value.trim() || undefined,
       destination_cd: destinationFilter.value || undefined,
+      actual_date_from: from || undefined,
+      actual_date_to: to || undefined,
     })) as unknown as SupplyPartShipmentResponse
     shipmentPlanned.value = res.planned || []
     shipmentActual.value = res.actual || []
@@ -1607,7 +1644,9 @@ function scheduleReload(delayMs = 0) {
 }
 
 watch(keyword, () => scheduleReload(300))
-watch([monthValue, locationFilter, destinationFilter, stagnantOnly], () => scheduleReload(0))
+watch([monthValue, locationFilter, destinationFilter, stagnantOnly, actualDateRange], () =>
+  scheduleReload(0)
+)
 watch(activeTab, (tab) => {
   if (tab === 'shipments') loadShipments()
 })
@@ -2689,11 +2728,38 @@ onBeforeUnmount(() => {
 .ship-block + .ship-block {
   margin-top: 12px;
 }
+.ship-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 8px 14px 4px;
+}
 .ship-block__title {
-  margin: 8px 14px 6px;
+  margin: 0;
   font-size: 14px;
   font-weight: 800;
   color: #0f766e;
+}
+.ship-actual-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.actual-date-range {
+  width: 260px;
+}
+.ship-actual-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+.ship-actual-hint {
+  margin: 0 14px 8px;
+  font-size: 11px;
+  color: #64748b;
 }
 .plan-date {
   display: flex;

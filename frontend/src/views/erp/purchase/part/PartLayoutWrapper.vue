@@ -14,7 +14,7 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOper
 
 <style scoped>
 .part-layout {
-  min-height: 100%;
   width: 100%;
+  min-height: 100%;
 }
 </style>

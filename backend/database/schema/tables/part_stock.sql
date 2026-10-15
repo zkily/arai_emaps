@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS `part_stock` (
   `supplier_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '仕入先名',
   `lead_time` int DEFAULT '0' COMMENT 'リードタイム(日)',
   `order_quantity` int DEFAULT '0' COMMENT '注文数',
+  `receiving_qty` int NOT NULL DEFAULT '0' COMMENT '受入数',
   `order_bundle_quantity` int DEFAULT '0' COMMENT '注文細目数',
   `order_amount` decimal(15,2) DEFAULT '0.00' COMMENT '注文金額',
   `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

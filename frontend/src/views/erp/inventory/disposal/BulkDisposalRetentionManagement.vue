@@ -3,7 +3,8 @@
     <div class="page-ambient" aria-hidden="true" />
 
     <div class="bdr-inner">
-      <header class="toolbar toolbar-elevated pb-hero pb-hero--page">
+      <header class="toolbar toolbar-elevated page-toolbar pb-hero pb-hero--page">
+        <div class="page-toolbar-glow" aria-hidden="true" />
         <div class="toolbar-fx pb-bubbles" aria-hidden="true" />
         <div class="toolbar-brand">
           <div class="brand-icon">
@@ -323,7 +324,7 @@
       append-to-body
       align-center
       class="bdr-dialog bdr-dialog--edit pb-std"
-      :show-close="true"
+      :show-close="false"
     >
       <template #header>
         <div class="dlg-header">
@@ -1310,8 +1311,9 @@ onMounted(async () => {
   --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.08),
     0 2px 8px rgba(15, 23, 42, 0.04);
   position: relative;
-  min-height: 100%;
-  padding: 14px 16px 22px;
+  width: 100%;
+  min-height: 100vh;
+  padding: 12px;
   box-sizing: border-box;
   overflow: hidden;
   color: #0f172a;
@@ -1324,14 +1326,17 @@ onMounted(async () => {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: linear-gradient(155deg, #eef4ff 0%, #f7f9fc 38%, #fff8f1 100%);
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(225, 29, 72, 0.08), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(234, 88, 12, 0.08), transparent 60%),
+    linear-gradient(160deg, #fff1f2 0%, #fff7ed 45%, #f8fafc 100%);
 }
 
 .bdr-inner {
   position: relative;
   z-index: 1;
-  max-width: 1480px;
-  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1475,7 +1480,7 @@ onMounted(async () => {
 /* KPI */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 12px;
 }
 
@@ -2098,9 +2103,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 1100px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .filter-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2110,8 +2112,23 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .kpi-grid {
-    grid-template-columns: 1fr;
+  .bdr-page {
+    padding: 8px;
+  }
+  .toolbar {
+    min-height: auto;
+    padding: 12px 14px;
+  }
+  .toolbar-chips {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+  .toolbar-actions {
+    width: 100%;
+  }
+  .toolbar-title {
+    font-size: 1rem;
   }
   .filter-grid {
     grid-template-columns: 1fr 1fr;
@@ -2125,21 +2142,42 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 480px) {
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .filter-item.span-2 {
+    grid-column: span 1;
+  }
+  .toolbar-actions .action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
 /* ============================================================
  * 页面美化：現代UI・色分け（大量廃棄・保留品 / amber→orange→rose 警告系）
  * ============================================================ */
 
-/* ---------- ヒーローヘッダー ---------- */
+/* ---------- ヒーローヘッダー（廃棄・保留＝琥珀→玫紅・他頁と分色） ---------- */
 .bdr-modern .toolbar-elevated {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: linear-gradient(135deg, #b45309 0%, #ea580c 32%, #e11d48 70%, #be185d 100%);
+  background: linear-gradient(125deg, #9f1239 0%, #be123c 32%, #e11d48 68%, #f97316 100%);
   box-shadow:
-    0 14px 30px -20px rgba(190, 18, 60, 0.55),
-    0 2px 8px -4px rgba(234, 88, 12, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.16) inset;
+    0 18px 36px -18px rgba(159, 18, 57, 0.55),
+    0 4px 12px -6px rgba(225, 29, 72, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.bdr-modern .page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
 }
 .bdr-modern .toolbar-fx {
   position: absolute;
@@ -2271,22 +2309,32 @@ onMounted(async () => {
   color: #0f172a;
 }
 
-/* ---------- ヘッダー操作：白地ピル（濃色ヒーロー上） ---------- */
+/* ---------- ヘッダー操作：白地カプセル（分色） ---------- */
 .bdr-modern .toolbar-actions .action-btn {
-  --k-rgb: 37 99 235;
-  --k-tint: #dbeafe;
-  --k-tint-h: #bfdbfe;
-  --k-ico: #2563eb;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 10px;
-  color: #1e40af;
+  --k-rgb: 5 150 105;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+  height: 32px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #047857;
   background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid #6ee7b7;
   box-shadow:
     inset 0 1px 0 #fff,
     inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
     0 2px 6px -1px rgba(76, 5, 25, 0.35);
+}
+.bdr-modern .toolbar-actions .action-btn--primary {
+  --k-rgb: 5 150 105;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+  color: #047857;
+  border-color: #6ee7b7;
 }
 .bdr-modern .toolbar-actions .action-btn--notify {
   --k-rgb: 217 119 6;
@@ -2294,13 +2342,15 @@ onMounted(async () => {
   --k-tint-h: #fde68a;
   --k-ico: #d97706;
   color: #92400e;
+  border-color: #fcd34d;
 }
 .bdr-modern .toolbar-actions .action-btn--print {
-  --k-rgb: 124 58 237;
-  --k-tint: #ede9fe;
-  --k-tint-h: #ddd6fe;
-  --k-ico: #7c3aed;
-  color: #5b21b6;
+  --k-rgb: 37 99 235;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+  color: #1d4ed8;
+  border-color: #93c5fd;
 }
 .bdr-modern .toolbar-actions .action-btn:hover:not(:disabled),
 .bdr-modern .toolbar-actions .action-btn:focus-visible {
@@ -2519,8 +2569,14 @@ onMounted(async () => {
 .bdr-dialog .el-dialog__header {
   padding: 0;
   margin: 0;
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: linear-gradient(125deg, #9f1239 0%, #be123c 40%, #e11d48 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.bdr-dialog--edit .el-dialog__header {
+  background: linear-gradient(125deg, #9f1239 0%, #be123c 40%, #e11d48 100%);
+}
+.bdr-dialog--notify .el-dialog__header {
+  background: linear-gradient(125deg, #b45309 0%, #d97706 45%, #f59e0b 100%);
 }
 .bdr-dialog .el-dialog__headerbtn {
   top: 12px;
@@ -2561,10 +2617,12 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .dlg-header-icon--new {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 .dlg-header-icon--edit {
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 .dlg-header-text {
   flex: 1;
@@ -2605,7 +2663,7 @@ onMounted(async () => {
   gap: 8px;
 }
 .dlg-btn {
-  border-radius: 8px;
+  border-radius: 999px;
   font-weight: 700;
   font-size: 12px;
   padding: 7px 16px;
@@ -2617,7 +2675,7 @@ onMounted(async () => {
   color: #64748b;
 }
 .dlg-btn--save {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #e11d48, #be123c);
   border: none;
   display: inline-flex;
   align-items: center;

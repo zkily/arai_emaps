@@ -1131,16 +1131,20 @@ async def list_supply_part_shipments(
     month: Optional[int] = Query(None, ge=1, le=12),
     keyword: Optional[str] = Query(None),
     destination_cd: Optional[str] = Query(None),
+    actual_date_from: Optional[date] = Query(None, description="実出荷の発生日（開始）"),
+    actual_date_to: Optional[date] = Query(None, description="実出荷の発生日（終了）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """対象月の出荷予定（月受注・補給品）と実出荷（shipment_out）の対照。"""
+    """対象月の出荷予定と、条件付きの実出荷一覧（既定は全期間）。"""
     today = date.today()
     target_year = year or today.year
     target_month = month or today.month
     dest = _clean(destination_cd)
     text = (keyword or "").strip()
     start, end = _month_span(target_year, target_month)
+    if actual_date_from and actual_date_to and actual_date_from > actual_date_to:
+        raise HTTPException(status_code=400, detail="実出荷の期間指定が正しくありません")
 
     order_stmt = select(OrderMonthly).where(
         OrderMonthly.year == target_year,
@@ -1168,7 +1172,8 @@ async def list_supply_part_shipments(
             bucket["seen"].add(dest_cd)
             bucket["dests"].append((dest_cd, row.destination_name or ""))
 
-    txn_stmt = (
+    # 対象月の実出荷（出荷予定との対照用。actual_qty にのみ使う）
+    month_txn_stmt = (
         select(SupplyPartTransaction, SupplyPartStock)
         .join(SupplyPartStock, SupplyPartStock.id == SupplyPartTransaction.stock_id)
         .where(
@@ -1176,21 +1181,46 @@ async def list_supply_part_shipments(
             SupplyPartTransaction.occurred_date >= start,
             SupplyPartTransaction.occurred_date < end,
         )
-        .order_by(SupplyPartTransaction.occurred_date.desc(), SupplyPartTransaction.id.desc())
     )
     if dest:
         planned_codes = list(planned_by_cd.keys())
         dest_match = SupplyPartStock.destination_cd == dest
         if planned_codes:
-            txn_stmt = txn_stmt.where(
+            month_txn_stmt = month_txn_stmt.where(
                 or_(dest_match, SupplyPartStock.product_cd.in_(planned_codes))
             )
         else:
-            txn_stmt = txn_stmt.where(dest_match)
-    txn_rows = (await db.execute(txn_stmt)).all()
+            month_txn_stmt = month_txn_stmt.where(dest_match)
+    month_txn_rows = (await db.execute(month_txn_stmt)).all()
+
+    # 実出荷一覧（既定は全期間。期間・キーワード・納入先で絞り込み）
+    actual_stmt = (
+        select(SupplyPartTransaction, SupplyPartStock)
+        .join(SupplyPartStock, SupplyPartStock.id == SupplyPartTransaction.stock_id)
+        .where(SupplyPartTransaction.txn_type == TXN_SHIPMENT_OUT)
+        .order_by(SupplyPartTransaction.occurred_date.desc(), SupplyPartTransaction.id.desc())
+    )
+    if actual_date_from:
+        actual_stmt = actual_stmt.where(
+            SupplyPartTransaction.occurred_date >= actual_date_from
+        )
+    if actual_date_to:
+        actual_stmt = actual_stmt.where(SupplyPartTransaction.occurred_date <= actual_date_to)
+    if dest:
+        actual_stmt = actual_stmt.where(SupplyPartStock.destination_cd == dest)
+    if text:
+        like = f"%{text}%"
+        actual_stmt = actual_stmt.where(
+            or_(
+                SupplyPartStock.product_cd.like(like),
+                SupplyPartStock.product_name.like(like),
+                SupplyPartStock.part_number.like(like),
+            )
+        )
+    actual_txn_rows = (await db.execute(actual_stmt)).all()
 
     codes = set(planned_by_cd.keys())
-    codes.update(stock.product_cd for _, stock in txn_rows if stock.product_cd)
+    codes.update(stock.product_cd for _, stock in month_txn_rows if stock.product_cd)
     stocks: dict[str, SupplyPartStock] = {}
     if codes:
         stock_rows = (
@@ -1270,12 +1300,13 @@ async def list_supply_part_shipments(
                     daily_auto[code] = {"date": min_date, "count": int(day_count or 0)}
 
     actual_qty: dict[str, int] = {}
-    actual: list[dict] = []
-    for txn, stock in txn_rows:
+    for txn, stock in month_txn_rows:
         qty = abs(int(txn.quantity or 0))
         actual_qty[stock.product_cd] = actual_qty.get(stock.product_cd, 0) + qty
-        if not _keyword_hit(text, stock.product_cd, stock.product_name, stock.part_number):
-            continue
+
+    actual: list[dict] = []
+    for txn, stock in actual_txn_rows:
+        qty = abs(int(txn.quantity or 0))
         actual.append(
             {
                 "id": int(txn.id),
@@ -1283,6 +1314,8 @@ async def list_supply_part_shipments(
                 "product_cd": stock.product_cd,
                 "product_name": stock.product_name,
                 "part_number": stock.part_number,
+                "destination_cd": stock.destination_cd,
+                "destination_name": stock.destination_name,
                 "occurred_date": txn.occurred_date.isoformat() if txn.occurred_date else None,
                 "quantity": qty,
                 "balance_after": int(txn.balance_after or 0),
@@ -1348,6 +1381,8 @@ async def list_supply_part_shipments(
     return {
         "year": target_year,
         "month": target_month,
+        "actual_date_from": actual_date_from.isoformat() if actual_date_from else None,
+        "actual_date_to": actual_date_to.isoformat() if actual_date_to else None,
         "summary": {
             "planned_total": sum(item["planned_qty"] for item in planned),
             "actual_total": sum(item["actual_qty"] for item in planned),
@@ -1360,6 +1395,8 @@ async def list_supply_part_shipments(
                 and item["planned_qty"] > 0
                 and item["actual_qty"] < item["planned_qty"]
             ),
+            "actual_list_total": sum(item["quantity"] for item in actual),
+            "actual_list_count": len(actual),
         },
         "planned": planned,
         "actual": actual,

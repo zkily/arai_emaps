@@ -24,6 +24,7 @@ class PartStockBase(BaseModel):
     supplier_name: Optional[str] = None
     lead_time: Optional[int] = 0
     order_quantity: Optional[int] = 0
+    receiving_qty: Optional[int] = 0
     order_bundle_quantity: Optional[int] = 0
     order_amount: Optional[Decimal] = None
     remarks: Optional[str] = ""
@@ -52,6 +53,7 @@ class PartStockUpdate(BaseModel):
     supplier_name: Optional[str] = None
     lead_time: Optional[int] = None
     order_quantity: Optional[int] = None
+    receiving_qty: Optional[int] = None
     order_bundle_quantity: Optional[int] = None
     order_amount: Optional[Decimal] = None
     remarks: Optional[str] = None

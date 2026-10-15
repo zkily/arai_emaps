@@ -11,6 +11,7 @@ export interface PartQuantityUpdate {
   usage_quantity?: number
   manual_usage?: number
   order_quantity?: number
+  receiving_qty?: number
   order_bundle_quantity?: number
   order_amount?: number
   usage_plan_qty?: number
@@ -44,6 +45,7 @@ export async function updatePartQuantities(params: PartQuantityUpdate): Promise<
       if (params.usage_quantity !== undefined) body.planned_usage = params.usage_quantity
       if (params.manual_usage !== undefined) body.manual_usage = params.manual_usage
       if (params.order_quantity !== undefined) body.order_quantity = params.order_quantity
+      if (params.receiving_qty !== undefined) body.receiving_qty = params.receiving_qty
       if (params.order_bundle_quantity !== undefined) body.order_bundle_quantity = params.order_bundle_quantity
       if (params.order_amount !== undefined) body.order_amount = params.order_amount
       if (params.usage_plan_qty !== undefined) body.usage_plan_qty = params.usage_plan_qty

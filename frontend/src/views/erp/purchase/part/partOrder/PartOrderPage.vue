@@ -186,6 +186,14 @@
               <span>部品使用管理</span>
             </div>
             <div
+              class="tab-item tab-item--receiving"
+              :class="{ active: activeTab === 'receiving' }"
+              @click="handleTabChange('receiving')"
+            >
+              <el-icon><Download /></el-icon>
+              <span>部品受入数</span>
+            </div>
+            <div
               class="tab-item tab-item--order"
               :class="{ active: activeTab === 'order' }"
               @click="handleTabChange('order')"
@@ -205,6 +213,13 @@
           <div v-if="showOrderQuantityTotal" class="table-order-total">
             <span class="table-order-total__label">注文本数 合計</span>
             <b class="table-order-total__value">{{ orderQuantityTotal.toLocaleString('ja-JP') }}</b>
+            <span v-if="pagination.total > filteredTableData.length" class="table-order-total__note">
+              表示中 {{ filteredTableData.length }}件
+            </span>
+          </div>
+          <div v-else-if="showReceivingQtyTotal" class="table-order-total table-order-total--recv">
+            <span class="table-order-total__label">受入数 合計</span>
+            <b class="table-order-total__value">{{ receivingQtyTotal.toLocaleString('ja-JP') }}</b>
             <span v-if="pagination.total > filteredTableData.length" class="table-order-total__note">
               表示中 {{ filteredTableData.length }}件
             </span>
@@ -230,6 +245,25 @@
               注文書発行
             </el-button>
           </div>
+          <div class="table-actions" v-if="activeTab === 'orderHistory'">
+            <el-button
+              class="history-print-btn"
+              :loading="historyExportLoading"
+              @click="printOrderHistory"
+            >
+              <el-icon><Printer /></el-icon>
+              印刷
+            </el-button>
+            <el-button
+              type="primary"
+              class="history-pdf-btn"
+              :loading="historyExportLoading"
+              @click="exportOrderHistoryPdf"
+            >
+              <el-icon><Document /></el-icon>
+              PDF出力
+            </el-button>
+          </div>
           <div class="table-actions" v-if="activeTab === 'initial'">
             <el-button type="primary" @click="handleSetMonthStart" class="month-start-btn">
               <el-icon><Calendar /></el-icon>
@@ -248,8 +282,7 @@
             @cell-click="handleTableCellClick"
             class="modern-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="110" align="center" sortable />
             <el-table-column
@@ -345,25 +378,6 @@
                 >{{ formatValue(row.stock_trend) }}</span>
               </template>
             </el-table-column>
-            <el-table-column
-              label="注文本数"
-              width="140"
-              align="center"
-              class-name="order-quantity-column"
-            >
-              <template #default="{ row }">
-                <el-input-number
-                  :model-value="(row.order_quantity === 0 ? undefined : row.order_quantity)"
-                  :min="0"
-                  :max="999999"
-                  :precision="0"
-                  :controls="false"
-                  size="small"
-                  class="order-quantity-input"
-                  @update:model-value="(val) => { row.order_quantity = val ?? 0; handleOrderQuantityChange(row); }"
-                />
-              </template>
-            </el-table-column>
           </el-table>
         </div>
 
@@ -377,8 +391,7 @@
             @cell-click="handleTableCellClick"
             class="modern-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -479,6 +492,98 @@
           </el-table>
         </div>
 
+        <!-- 部品受入数テーブル -->
+        <div class="table-content" v-if="activeTab === 'receiving'">
+          <el-table
+            v-loading="loading"
+            :data="filteredTableData"
+            stripe
+            border
+            @cell-click="handleTableCellClick"
+            class="modern-table"
+            :default-sort="{ prop: 'part_name', order: 'ascending' }"
+            height="100%"
+          >
+            <el-table-column prop="date" label="日付" width="120" align="center" sortable />
+            <el-table-column
+              prop="supplier_name"
+              label="仕入先"
+              width="150"
+              show-overflow-tooltip
+              sortable
+            />
+            <el-table-column prop="part_cd" label="部品CD" width="120" align="center" />
+            <el-table-column
+              prop="part_name"
+              label="部品名"
+              :sort-method="comparePartName"
+              class-name="part-name-cell"
+              min-width="180"
+              show-overflow-tooltip
+              sortable
+            />
+            <el-table-column
+              prop="current_stock"
+              label="現在在庫"
+              width="120"
+              align="center"
+              class-name="current-stock-column"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': row.current_stock < 0 }">{{
+                  formatValue(row.current_stock)
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="stock_trend"
+              label="在庫推移"
+              width="110"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <span
+                  class="usage-quantity-readonly"
+                  :class="{ 'negative-number': isNegative(row.stock_trend) }"
+                >{{ formatValue(row.stock_trend) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="order_quantity"
+              label="注文本数"
+              width="110"
+              align="center"
+              class-name="order-quantity-column"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': isNegative(row.order_quantity) }">{{
+                  formatValue(row.order_quantity)
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="受入数"
+              width="140"
+              align="center"
+              class-name="receiving-quantity-column"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  :model-value="(row.receiving_qty === 0 ? undefined : row.receiving_qty)"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  :controls="false"
+                  size="small"
+                  class="receiving-quantity-input"
+                  @update:model-value="(val) => { row.receiving_qty = val ?? 0; handleReceivingQtyChange(row); }"
+                />
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
         <!-- 部品注文テーブル -->
         <div class="table-content" v-if="activeTab === 'order'">
           <el-table
@@ -489,8 +594,7 @@
             @cell-click="handleTableCellClick"
             class="modern-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column prop="part_cd" label="部品CD" width="120" align="center" />
@@ -594,8 +698,7 @@
             @cell-click="handleTableCellClick"
             class="modern-table order-history-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
             show-summary
             :summary-method="getOrderHistorySummaries"
           >
@@ -659,8 +762,7 @@
             @cell-click="handleTableCellClick"
             class="modern-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="110" align="center" sortable />
             <el-table-column
@@ -714,14 +816,30 @@
           </el-table>
         </div>
 
-        <!-- ページネーション -->
+        <!-- ページネーション：左＝合計 / 右＝操作 -->
         <div class="pagination-wrapper">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span v-if="showOrderQuantityTotal" class="pagination-summary__item pagination-summary__item--order">
+              <span class="pagination-summary__label">注文本数</span>
+              <b class="pagination-summary__value">{{ orderQuantityTotal.toLocaleString('ja-JP') }}</b>
+            </span>
+            <span v-else-if="showReceivingQtyTotal" class="pagination-summary__item pagination-summary__item--recv">
+              <span class="pagination-summary__label">受入数</span>
+              <b class="pagination-summary__value">{{ receivingQtyTotal.toLocaleString('ja-JP') }}</b>
+            </span>
+          </div>
           <el-pagination
             v-model:current-page="pagination.page"
             v-model:page-size="pagination.page_size"
             :page-sizes="[30, 50, 100, 200]"
             :total="pagination.total"
-            layout="total, sizes, prev, pager, next, jumper"
+            layout="sizes, prev, pager, next, jumper"
+            small
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
             class="modern-pagination"
@@ -1371,6 +1489,7 @@ import {
   CircleCheckFilled,
   Bell,
   View,
+  Download,
 } from '@element-plus/icons-vue'
 import {
   syncPartStockFromMaster,
@@ -1422,6 +1541,8 @@ interface PartOrderItem {
   usage_plan_qty: number
   stock_trend: number
   order_quantity: number
+  /** 受入数（在庫加算に使用。注文本数は注文履歴用） */
+  receiving_qty: number
   order_bundle_quantity: number
   /** 部品マスタ：部品材料・収容数・決済種類（一覧 API で付与） */
   part_material?: string | null
@@ -1457,6 +1578,8 @@ const dataGenerationDialogVisible = ref(false)
 const printConfirmDialogVisible = ref(false)
 const printPdfSaving = ref(false)
 const printLoading = ref(false)
+/** 部品注文履歴の印刷・PDF出力 */
+const historyExportLoading = ref(false)
 /** 注文書発行ダイアログ：対象月・画面で絞り込んだ仕入先の注文 */
 const printOrders = ref<PartOrderItem[]>([])
 /** ダイアログを開いた時点の画面の仕入先絞り込み */
@@ -1626,19 +1749,26 @@ const filteredTableData = computed(() => {
   return tableData.value
 })
 
-/** 注文本数列のあるタブ（部品日別在庫・注文・部品注文履歴）で表示中行の注文本数を合計 */
+/** 注文本数列のあるタブ（注文・部品注文履歴）で表示中行の注文本数を合計 */
 const showOrderQuantityTotal = computed(() =>
-  ['stock', 'order', 'orderHistory'].includes(activeTab.value),
+  ['order', 'orderHistory'].includes(activeTab.value),
 )
 const orderQuantityTotal = computed(() => {
   const rows = activeTab.value === 'orderHistory' ? orderHistoryData.value : tableData.value
   return rows.reduce((sum, row) => sum + (Number(row.order_quantity) || 0), 0)
 })
 
+/** 部品受入数タブ：表示中行の受入数合計 */
+const showReceivingQtyTotal = computed(() => activeTab.value === 'receiving')
+const receivingQtyTotal = computed(() =>
+  tableData.value.reduce((sum, row) => sum + (Number(row.receiving_qty) || 0), 0),
+)
+
 const mapPartStockRow = (item: any): PartOrderItem => {
   const usage_quantity = item.planned_usage || 0
   const manual_usage = Number(item.manual_usage) || 0
   const order_quantity = item.order_quantity || 0
+  const receiving_qty = Number(item.receiving_qty) || 0
   const ppb = Number(item.pieces_per_bundle) || 1
   let order_bundle_quantity = 0
   let order_amount = 0
@@ -1653,6 +1783,7 @@ const mapPartStockRow = (item: any): PartOrderItem => {
     usage_plan_qty: Number(item.usage_plan_qty) || 0,
     stock_trend: Number(item.stock_trend) || 0,
     order_quantity,
+    receiving_qty,
     order_bundle_quantity,
     order_amount,
   }
@@ -2115,6 +2246,321 @@ const getOrderHistorySummaries = (param: {
   return sums
 }
 
+const escapeHtml = (value: unknown) =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
+  )
+
+/** 印刷／PDF用に注文履歴を全件取得（現在の期間・フィルター） */
+const loadAllOrderHistoryForExport = async (): Promise<PartOrderItem[]> => {
+  if (!searchForm.dateRange || searchForm.dateRange.length !== 2) {
+    ElMessage.warning('期間を選択してください')
+    return []
+  }
+  const apiParams = {
+    ...buildPartStockListParams({ order_only: true }),
+    page: 1,
+    pageSize: 10000,
+  }
+  const result = await getPartStockList(apiParams)
+  const list = (result as any)?.data?.list ?? []
+  if ((result as any)?.success === false) {
+    ElMessage.error('注文履歴の取得に失敗しました')
+    return []
+  }
+  return list
+    .filter((item: any) => excludePartsStatusZero(item))
+    .map((item: any) => mapPartStockRow(item))
+}
+
+const HISTORY_ROWS_PER_PAGE = 28
+
+const ORDER_HISTORY_REPORT_STYLES = `
+@page { size: A4 portrait; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+body {
+  font-family: 'Yu Gothic', 'Yu Gothic UI', 'Meiryo', 'Hiragino Sans', sans-serif;
+  color: #0f172a;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.oh-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 10mm 10mm 12mm;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  page-break-after: always;
+  break-after: page;
+}
+.oh-page:last-child { page-break-after: auto; break-after: auto; }
+.oh-head {
+  flex-shrink: 0;
+  margin-bottom: 4mm;
+  padding-bottom: 3mm;
+  border-bottom: 0.5mm solid #5b21b6;
+}
+.oh-title {
+  margin: 0 0 2mm;
+  font-size: 16pt;
+  font-weight: 800;
+  color: #4c1d95;
+  letter-spacing: 0.04em;
+}
+.oh-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2mm 5mm;
+  font-size: 9pt;
+  color: #475569;
+}
+.oh-meta b { color: #0f172a; font-weight: 700; }
+.oh-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 8.5pt;
+}
+.oh-table th, .oh-table td {
+  border: 0.2mm solid #cbd5e1;
+  padding: 1.2mm 1.4mm;
+  vertical-align: middle;
+  word-break: break-all;
+}
+.oh-table th {
+  background: #f5f3ff;
+  color: #5b21b6;
+  font-weight: 700;
+  text-align: center;
+}
+.oh-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.oh-table td.center { text-align: center; }
+.oh-table tbody tr:nth-child(even) td { background: #fafafa; }
+.oh-table tfoot td {
+  background: #f8fafc;
+  font-weight: 700;
+}
+.oh-foot {
+  flex-shrink: 0;
+  margin-top: auto;
+  padding-top: 3mm;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8pt;
+  color: #64748b;
+}
+`
+
+const buildOrderHistoryReportHtml = (rows: PartOrderItem[]): string => {
+  const sorted = [...rows].sort((a, b) => {
+    const d = String(a.date || '').localeCompare(String(b.date || ''))
+    if (d !== 0) return d
+    return String(a.part_name || '').localeCompare(String(b.part_name || ''), 'ja')
+  })
+  const totalQty = sorted.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0)
+  const totalAmt = sorted.reduce((s, r) => s + Math.round(Number(r.order_amount) || 0), 0)
+  const period = headerDateRangeText.value
+  const supplierText =
+    searchForm.supplier.length > 0 ? searchForm.supplier.join('、') : '全て'
+  const partText = searchForm.part_cd?.trim() || '全て'
+  const printedAt = getTodayJapanStr().replace(/-/g, '/')
+  const pages: PartOrderItem[][] = []
+  for (let i = 0; i < sorted.length; i += HISTORY_ROWS_PER_PAGE) {
+    pages.push(sorted.slice(i, i + HISTORY_ROWS_PER_PAGE))
+  }
+  if (pages.length === 0) pages.push([])
+
+  const colgroup = `
+    <col style="width:12%"><col style="width:10%"><col style="width:18%">
+    <col style="width:14%"><col style="width:12%"><col style="width:8%">
+    <col style="width:8%"><col style="width:10%"><col style="width:8%">`
+
+  return pages
+    .map((pageRows, pageIdx) => {
+      const isLast = pageIdx === pages.length - 1
+      const body = pageRows
+        .map(
+          (r) => `
+        <tr>
+          <td class="center">${escapeHtml(String(r.date || '').slice(0, 10))}</td>
+          <td class="center">${escapeHtml(r.part_cd)}</td>
+          <td>${escapeHtml(r.part_name)}</td>
+          <td>${escapeHtml(r.supplier_name)}</td>
+          <td>${escapeHtml(r.standard_spec)}</td>
+          <td class="num">${escapeHtml(formatNumber(r.current_stock))}</td>
+          <td class="num">${escapeHtml(formatNumber(r.order_quantity))}</td>
+          <td class="num">${escapeHtml(
+            Math.round(Number(r.order_amount) || 0)
+              ? formatCurrency(Math.round(Number(r.order_amount) || 0))
+              : '',
+          )}</td>
+          <td>${escapeHtml(r.remarks)}</td>
+        </tr>`,
+        )
+        .join('')
+      const foot = isLast
+        ? `<tfoot>
+            <tr>
+              <td colspan="2">合計</td>
+              <td colspan="4">${sorted.length.toLocaleString('ja-JP')} 件</td>
+              <td class="num">${totalQty.toLocaleString('ja-JP')}</td>
+              <td class="num">${formatCurrency(totalAmt)}</td>
+              <td></td>
+            </tr>
+          </tfoot>`
+        : ''
+      return `
+      <div class="oh-page">
+        <div class="oh-head">
+          <h1 class="oh-title">部品注文履歴</h1>
+          <div class="oh-meta">
+            <span>期間：<b>${escapeHtml(period)}</b></span>
+            <span>仕入先：<b>${escapeHtml(supplierText)}</b></span>
+            <span>部品：<b>${escapeHtml(partText)}</b></span>
+            <span>出力日：<b>${escapeHtml(printedAt)}</b></span>
+          </div>
+        </div>
+        <table class="oh-table">
+          <colgroup>${colgroup}</colgroup>
+          <thead>
+            <tr>
+              <th>日付</th><th>部品CD</th><th>部品名</th><th>仕入先</th><th>規格</th>
+              <th>現在在庫</th><th>注文本数</th><th>注文金額</th><th>備考</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+          ${foot}
+        </table>
+        <div class="oh-foot">
+          <span>Smart-EMAPs ／ 部品在庫管理</span>
+          <span>${pageIdx + 1} / ${pages.length}</span>
+        </div>
+      </div>`
+    })
+    .join('')
+}
+
+const generateOrderHistoryPdfBlob = async (rows: PartOrderItem[]): Promise<Blob> => {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'order-history-capture')
+  iframe.style.cssText =
+    'position:fixed;left:-12000px;top:0;width:210mm;border:0;opacity:0;pointer-events:none'
+  document.body.appendChild(iframe)
+  try {
+    const doc = iframe.contentDocument
+    if (!doc) throw new Error('iframe document')
+    doc.open()
+    doc.write(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${ORDER_HISTORY_REPORT_STYLES}</style></head><body>${buildOrderHistoryReportHtml(rows)}</body></html>`,
+    )
+    doc.close()
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 280)))
+
+    const pages = Array.from(doc.querySelectorAll<HTMLElement>('.oh-page'))
+    if (pages.length === 0) throw new Error('.oh-page not found')
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await html2canvas(pages[i], {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      })
+      if (i > 0) pdf.addPage('a4', 'p')
+      pdf.addImage(
+        canvas.toDataURL('image/jpeg', 0.92),
+        'JPEG',
+        0,
+        0,
+        pageWidth,
+        pageHeight,
+        undefined,
+        'FAST',
+      )
+    }
+    return pdf.output('blob')
+  } finally {
+    iframe.remove()
+  }
+}
+
+const orderHistoryExportFileName = (): string => {
+  const [start, end] = searchForm.dateRange || []
+  const s = (start || '').replace(/-/g, '')
+  const e = (end || '').replace(/-/g, '')
+  return `部品注文履歴_${s}_${e}.pdf`
+}
+
+const printOrderHistory = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+  historyExportLoading.value = true
+  try {
+    const rows = await loadAllOrderHistoryForExport()
+    if (!rows.length) {
+      ElMessage.warning('印刷対象の注文履歴がありません')
+      return
+    }
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください')
+      return
+    }
+    printWindow.document.write(`
+      <html>
+      <head>
+        <title>部品注文履歴</title>
+        <meta charset="UTF-8">
+        <style>${ORDER_HISTORY_REPORT_STYLES}</style>
+      </head>
+      <body>${buildOrderHistoryReportHtml(rows)}</body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.onload = () => {
+      printWindow.print()
+      setTimeout(() => printWindow.close(), 800)
+    }
+  } catch (e: unknown) {
+    console.error('注文履歴印刷エラー:', e)
+    ElMessage.error((e as Error)?.message || '印刷に失敗しました')
+  } finally {
+    historyExportLoading.value = false
+  }
+}
+
+const exportOrderHistoryPdf = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+  historyExportLoading.value = true
+  try {
+    const rows = await loadAllOrderHistoryForExport()
+    if (!rows.length) {
+      ElMessage.warning('出力対象の注文履歴がありません')
+      return
+    }
+    const blob = await generateOrderHistoryPdfBlob(rows)
+    const fileName = orderHistoryExportFileName()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`PDFを出力しました（${fileName}）`)
+  } catch (e: unknown) {
+    console.error('注文履歴PDF出力エラー:', e)
+    ElMessage.error((e as Error)?.message || 'PDF出力に失敗しました')
+  } finally {
+    historyExportLoading.value = false
+  }
+}
+
 const handleTabChange = (tabName: string | number) => {
   activeTab.value = String(tabName)
   refreshListForActiveTab()
@@ -2171,7 +2617,7 @@ const commitQty = (val: number | null | undefined): number => {
   return Number.isFinite(n) ? n : 0
 }
 
-/** 同一部品の現在在庫を一覧へ反映（使用数調整・注文本数更新後） */
+/** 同一部品の現在在庫を一覧へ反映（使用数調整・受入数更新後） */
 const patchCurrentStockForPart = async (partCd: string) => {
   if (!partCd) return
   try {
@@ -2221,6 +2667,26 @@ const handleManualUsageChange = async (row: PartOrderItem, committed?: number | 
   } catch (error: any) {
     console.error('使用数調整更新失敗:', error)
     ElMessage.error(`使用数調整の更新に失敗しました: ${error.message || 'ネットワークエラー'}`)
+  }
+}
+
+const handleReceivingQtyChange = async (row: PartOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+  const next = commitQty(row.receiving_qty)
+  row.receiving_qty = next
+  try {
+    const response = await updatePartStock(row.id, { receiving_qty: next })
+    if ((response as any)?.success) {
+      const data = (response as any)?.data
+      if (data?.current_stock !== undefined) row.current_stock = data.current_stock
+      if (data?.stock_trend !== undefined) row.stock_trend = Number(data.stock_trend) || 0
+      await patchCurrentStockForPart(row.part_cd)
+    } else {
+      ElMessage.error('受入数の更新に失敗しました')
+    }
+  } catch (error: any) {
+    console.error('受入数更新失敗:', error)
+    ElMessage.error(`受入数の更新に失敗しました: ${error.message || 'ネットワークエラー'}`)
   }
 }
 
@@ -3409,12 +3875,6 @@ const printSheetInfo = computed(() => {
   return { parts: layout.rows.length, pages: layout.pages.length, tierCount: layout.tierCount }
 })
 
-const escapeHtml = (value: unknown) =>
-  String(value ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string,
-  )
-
 const generatePrintHtml = (items: PartOrderItem[]) => {
   const { y, m, days, rows, tierCount, compact, pages } = buildOrderSheetLayout(
     items,
@@ -3792,12 +4252,24 @@ onMounted(() => {
   --po-ink: #0f172a;
   --po-muted: #64748b;
   --po-line: #e2e8f0;
+  /* アプリヘッダー(48) + タブ(36)。ウィンドウ高さに追従しテーブルが残りを埋める */
+  --po-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--po-app-chrome));
+  height: calc(100dvh - var(--po-app-chrome));
+  max-height: calc(100vh - var(--po-app-chrome));
+  max-height: calc(100dvh - var(--po-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 10px 12px;
   background:
     radial-gradient(1200px 380px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
     radial-gradient(900px 320px at 100% 0%, rgba(139, 92, 246, 0.09), transparent 60%),
     linear-gradient(180deg, #f5f7fc 0%, #eef1f8 100%);
-  min-height: 100vh;
   animation: pageFadeIn 0.45s ease-out;
 }
 
@@ -3826,8 +4298,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
   padding: 10px 18px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
   border-radius: 14px;
   color: white;
@@ -3986,7 +4459,8 @@ onMounted(() => {
 
 /* ===== Filter Bar ===== */
 .search-section {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .search-container {
@@ -4240,8 +4714,13 @@ onMounted(() => {
 
 
 
-/* テーブルエリア */
+/* テーブルエリア：残り高さを flex で埋める */
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -4253,13 +4732,21 @@ onMounted(() => {
 }
 
 .table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
 .table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 7px 12px;
   background: linear-gradient(180deg, #fbfcff 0%, #f3f5fb 100%);
   border-bottom: 1px solid #e6e9f4;
@@ -4341,6 +4828,12 @@ onMounted(() => {
   --tab-glow: rgba(5, 150, 105, 0.35);
 }
 
+.tab-item--receiving {
+  --tab-color: #0d9488;
+  --tab-gradient: linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%);
+  --tab-glow: rgba(13, 148, 136, 0.35);
+}
+
 .tab-item--order {
   --tab-color: #d97706;
   --tab-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
@@ -4392,13 +4885,30 @@ onMounted(() => {
 }
 
 .table-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
 .modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   overflow: hidden;
   border: none;
   background: white;
+}
+
+.table-content :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-content :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 .order-history-table :deep(.el-table__footer-wrapper .el-table__cell) {
@@ -4454,25 +4964,129 @@ onMounted(() => {
 }
 
 .pagination-wrapper {
-  padding: 7px 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 5px 12px;
   background: linear-gradient(180deg, #f8f9fd 0%, #f1f4fa 100%);
   border-top: 1px solid #e6e9f4;
-  display: flex;
-  justify-content: center;
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--order {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.pagination-summary__item--order .pagination-summary__label {
+  color: #92400e;
+}
+
+.pagination-summary__item--order .pagination-summary__value {
+  color: #b45309;
+}
+
+.pagination-summary__item--recv {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+}
+
+.pagination-summary__item--recv .pagination-summary__label {
+  color: #115e59;
+}
+
+.pagination-summary__item--recv .pagination-summary__value {
+  color: #0f766e;
 }
 
 .modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
   --el-pagination-button-color: #64748b;
   --el-pagination-hover-color: #4f46e5;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  min-height: 26px;
+  font-size: 12px;
+  padding: 0 4px;
 }
 
 .modern-pagination :deep(.el-pager li),
 .modern-pagination :deep(.btn-prev),
 .modern-pagination :deep(.btn-next) {
-  border-radius: 7px;
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
+  border-radius: 6px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  margin: 0 2px;
+  margin: 0 1px;
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
@@ -4489,12 +5103,13 @@ onMounted(() => {
   color: #ffffff;
   border-color: transparent;
   background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.3);
 }
 
-.modern-pagination :deep(.el-pagination__total) {
-  font-weight: 600;
-  color: #475569;
+.modern-pagination :deep(.el-pagination__jump) {
+  margin-left: 4px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 /* データ生成ダイアログ - コンパクト */
@@ -4808,6 +5423,7 @@ onMounted(() => {
 /* Laptop: <= 1024px */
 @media (max-width: 1024px) {
   .part-order-container {
+    --po-app-chrome: 80px;
     padding: 8px 10px;
   }
 
@@ -4927,8 +5543,18 @@ onMounted(() => {
   }
 
   .pagination-wrapper {
-    padding: 6px 8px;
+    padding: 5px 8px;
     overflow-x: auto;
+  }
+
+  .pagination-summary {
+    width: 100%;
+  }
+
+  .modern-pagination {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 
   :deep(.el-pagination) {
@@ -5049,6 +5675,7 @@ onMounted(() => {
 /* 数量列：字号加大一号、粗体 */
 :deep(.el-table td.current-stock-column .cell),
 :deep(.el-table td.usage-quantity-column .cell),
+:deep(.el-table td.receiving-quantity-column .cell),
 :deep(.el-table td.order-quantity-column .cell) {
   font-size: 14px;
   font-weight: 700;
@@ -5065,11 +5692,16 @@ onMounted(() => {
   color: #059669;
 }
 
+:deep(.el-table th.receiving-quantity-column) {
+  color: #0d9488;
+}
+
 :deep(.el-table th.order-quantity-column) {
   color: #d97706;
 }
 
 :deep(.el-table td.usage-quantity-column .el-input-number .el-input__inner),
+:deep(.el-table td.receiving-quantity-column .el-input-number .el-input__inner),
 :deep(.el-table td.order-quantity-column .el-input-number .el-input__inner) {
   font-size: 14px !important;
   font-weight: 700 !important;
@@ -5199,10 +5831,6 @@ onMounted(() => {
   font-weight: 700 !important;
 }
 
-.table-section {
-  margin-bottom: 8px;
-}
-
 /* 注文本数：文字色とフォーカス色のみアンバー */
 :deep(.order-quantity-input .el-input__inner) {
   color: #b45309 !important;
@@ -5214,6 +5842,19 @@ onMounted(() => {
 
 :deep(.el-table .order-quantity-input .el-input__wrapper.is-focus) {
   box-shadow: 0 0 0 1px #f59e0b inset, 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+/* 受入数：文字色とフォーカス色のみティール */
+:deep(.receiving-quantity-input .el-input__inner) {
+  color: #0f766e !important;
+}
+
+:deep(.el-table .receiving-quantity-input .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #5eead4 inset;
+}
+
+:deep(.el-table .receiving-quantity-input .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #14b8a6 inset, 0 0 0 3px rgba(20, 184, 166, 0.15);
 }
 
 /* 负数显示样式 */
@@ -5527,7 +6168,7 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* 現在在庫・使用数・注文本数：大きめ・太字・黒 */
+/* 現在在庫・使用数・受入数・注文本数：大きめ・太字・黒 */
 :deep(.el-table.modern-table td.current-stock-column .cell),
 :deep(.el-table.modern-table td.usage-quantity-column .cell),
 :deep(.el-table.modern-table td.order-quantity-column .cell) {
@@ -5670,6 +6311,26 @@ onMounted(() => {
   font-size: 10px;
   color: #a16207;
   opacity: 0.85;
+}
+
+.table-order-total--recv {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    inset 0 -2px 0 rgba(13, 148, 136, 0.08);
+}
+
+.table-order-total--recv .table-order-total__label {
+  color: #115e59;
+}
+
+.table-order-total--recv .table-order-total__value {
+  color: #0f766e;
+}
+
+.table-order-total--recv .table-order-total__note {
+  color: #0f766e;
 }
 
 /* 部品名セル：クリックで在庫推移グラフ */
@@ -5855,6 +6516,11 @@ onMounted(() => {
   --po-tab: #059669;
   --po-tab-2: #34d399;
   --po-tab-edge: #065f46;
+}
+.po-modern.po-tab-receiving {
+  --po-tab: #0d9488;
+  --po-tab-2: #2dd4bf;
+  --po-tab-edge: #115e59;
 }
 .po-modern.po-tab-order {
   --po-tab: #d97706;
@@ -6148,6 +6814,22 @@ onMounted(() => {
 .po-modern .table-actions .reorder-btn:hover,
 .po-modern .table-actions .reorder-btn:focus-visible {
   border-color: #f59e0b;
+}
+.po-modern .table-actions .history-print-btn {
+  --k-rgb: 124 58 237;
+  color: #5b21b6;
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+}
+.po-modern .table-actions .history-print-btn:hover,
+.po-modern .table-actions .history-print-btn:focus-visible {
+  color: #4c1d95;
+  background: #ede9fe;
+  border-color: #8b5cf6;
+}
+.po-modern .table-actions .history-pdf-btn {
+  --k-rgb: 124 58 237;
+  border: 1px solid #6d28d9;
 }
 
 /* 表ヘッダー：タブ色の淡いグラデーション＋下端アクセント線 */

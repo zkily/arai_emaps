@@ -98,8 +98,9 @@ _MISSING_MANUAL_USAGE_DETAIL = (
 
 
 # current_stock / stock_trend 再計算の入力（これらの更新後は当該部品を日付順に再計算する）
+# 注: order_quantity（注文本数）は注文履歴用。在庫加算は receiving_qty（受入数）を用いる。
 _STOCK_RECALC_FIELDS = frozenset(
-    {"initial_stock", "order_quantity", "adjustment_quantity", "planned_usage", "manual_usage"}
+    {"initial_stock", "receiving_qty", "adjustment_quantity", "planned_usage", "manual_usage"}
 )
 
 
@@ -163,10 +164,11 @@ def _apply_part_stock_formula(
     1 部品分の current_stock / stock_trend を日付昇順で再計算する（in-place）。
 
     計算式:
-      current_stock = initial_stock + order_quantity + adjustment_quantity
+      current_stock = initial_stock + receiving_qty + adjustment_quantity
                       - (planned_usage + manual_usage) + 前日の current_stock
       stock_trend   = 同上。ただし切替日以降は planned_usage の代わりに usage_plan_qty を減算する
                       （manual_usage は手入力の調整として切替日前後とも減算する）。
+      ※ order_quantity（注文本数）は注文履歴用であり、在庫加算には含めない。
     """
     to_calc = sorted(
         (r for r in part_rows if r.date is not None and r.date >= start_date), key=_row_sort_key
@@ -177,7 +179,7 @@ def _apply_part_stock_formula(
     for r in to_calc:
         base = (
             _int_qty(r.initial_stock)
-            + _int_qty(r.order_quantity)
+            + _int_qty(getattr(r, "receiving_qty", 0))
             + _int_qty(r.adjustment_quantity)
         )
         usage = _effective_usage(r)
@@ -267,6 +269,7 @@ def _stock_to_dict(r: PartStock) -> dict:
         "supplier_name": getattr(r, "supplier_name", None),
         "lead_time": getattr(r, "lead_time", None),
         "order_quantity": getattr(r, "order_quantity", None),
+        "receiving_qty": getattr(r, "receiving_qty", None),
         "order_bundle_quantity": getattr(r, "order_bundle_quantity", None),
         "order_amount": _safe_float(getattr(r, "order_amount", None)),
         "remarks": getattr(r, "remarks", None) or "",
@@ -444,7 +447,9 @@ async def calculate_part_stock(
       4) stock_transaction_logs（KT07・実績+不良を日×製品で符号付き合算）× BOM（KT07 部品行・構成比）→ planned_usage
       5) production_summarys.welding_actual_plan × BOM（KT07 部品行・構成比・歩留）→ usage_plan_qty
       6) 実効使用数 = planned_usage + manual_usage。
-         current_stock は -実効使用数、stock_trend は
+         current_stock / stock_trend の加算項は initial_stock + receiving_qty + adjustment_quantity
+         （order_quantity＝注文本数は注文履歴用で在庫加算に含めない）。
+         減算は -実効使用数、stock_trend は
          「実績使用数(planned_usage) の最終 >0 日までは -実効使用数、
            翌日以降は -(usage_plan_qty + manual_usage)」で部品ごとに日付順再計算する。
     """
@@ -939,7 +944,8 @@ async def cancel_part_stock_order(
     """
     注文取消:
       同一部品・同日に他の行があり、かつ本行が注文以外の数量を持たない（手入力注文で追加された行）場合は行ごと削除。
-      それ以外は注文数・注文束数・注文金額を 0 に戻す。いずれも現在在庫・在庫推移を再計算する。
+      それ以外は注文数・注文束数・注文金額を 0 に戻す（受入数は在庫実績のため残す）。
+      行削除時のみ現在在庫・在庫推移を再計算する。
     """
     row = (await db.execute(select(PartStock).where(PartStock.id == item_id))).scalar_one_or_none()
     if not row:
@@ -960,7 +966,13 @@ async def cancel_part_stock_order(
     ).scalar() or 0
     order_only_row = not any(
         _int_qty(getattr(row, f))
-        for f in ("initial_stock", "adjustment_quantity", "planned_usage", "manual_usage")
+        for f in (
+            "initial_stock",
+            "adjustment_quantity",
+            "planned_usage",
+            "manual_usage",
+            "receiving_qty",
+        )
     )
 
     if sibling_count > 0 and order_only_row:

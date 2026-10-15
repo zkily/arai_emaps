@@ -179,3 +179,4 @@
 174_supply_part_shipment_plan.sql
 175_supply_part_shipment_plan_is_shipped.sql
 176_supply_part_shipment_plan_txn.sql
+177_part_stock_receiving_qty.sql

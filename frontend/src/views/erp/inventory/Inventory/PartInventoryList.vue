@@ -165,6 +165,11 @@
             <span :class="numClass(row.adjustment_quantity)">{{ formatNum(row.adjustment_quantity) }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="receiving_qty" label="受入数" width="80" align="right">
+          <template #default="{ row }">
+            <span :class="numClass(row.receiving_qty)">{{ formatNum(row.receiving_qty) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="order_quantity" label="注文数" width="80" align="right">
           <template #default="{ row }">
             <span :class="numClass(row.order_quantity)">{{ formatNum(row.order_quantity) }}</span>
@@ -213,6 +218,7 @@ export interface PartStockInquiryRow {
   usage_plan_qty?: number | null
   stock_trend?: number | null
   adjustment_quantity?: number | null
+  receiving_qty?: number | null
   order_quantity?: number | null
   order_bundle_quantity?: number | null
   unit?: string | null
@@ -238,6 +244,7 @@ const STAT_FIELDS: { key: keyof PartStockInquiryRow; label: string }[] = [
   { key: 'planned_usage', label: '使用数' },
   { key: 'manual_usage', label: '使用数調整' },
   { key: 'usage_plan_qty', label: '計画使用' },
+  { key: 'receiving_qty', label: '受入数' },
   { key: 'order_quantity', label: '注文数' }
 ]
 
@@ -257,6 +264,7 @@ const SUMMARY_NUM_KEYS = new Set([
   'usage_plan_qty',
   'stock_trend',
   'adjustment_quantity',
+  'receiving_qty',
   'order_quantity',
   'order_bundle_quantity'
 ])
@@ -435,6 +443,7 @@ function exportCsv() {
     '計画使用',
     '推移',
     '調整数',
+    '受入数',
     '注文数',
     '注文本数',
     '単位',
@@ -468,6 +477,7 @@ function exportCsv() {
         row.usage_plan_qty ?? '',
         row.stock_trend ?? '',
         row.adjustment_quantity ?? '',
+        row.receiving_qty ?? '',
         row.order_quantity ?? '',
         row.order_bundle_quantity ?? '',
         row.unit ?? '',
@@ -1062,6 +1072,11 @@ onMounted(() => {
   --sc: #0284c7;
   --sc-rgb: 2, 132, 199;
   --sc-ink: #0369a1;
+}
+.piq-modern .stat-card--receiving_qty {
+  --sc: #0d9488;
+  --sc-rgb: 13, 148, 136;
+  --sc-ink: #0f766e;
 }
 .piq-modern .stat-card--order_quantity {
   --sc: #059669;
