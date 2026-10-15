@@ -32,13 +32,15 @@
           index="/dashboard"
           class="menu-item-home menu-item-top"
         >
-          <SidebarCollapsedEntry
-            code="DASHBOARD"
-            :label="t('menu.DASHBOARD')"
-            :is-collapsed="isCollapsed"
-          >
-            <el-icon><HomeFilled /></el-icon>
-          </SidebarCollapsedEntry>
+          <MenuOpenLink path="/dashboard" class="menu-open-link--entry">
+            <SidebarCollapsedEntry
+              code="DASHBOARD"
+              :label="t('menu.DASHBOARD')"
+              :is-collapsed="isCollapsed"
+            >
+              <el-icon><HomeFilled /></el-icon>
+            </SidebarCollapsedEntry>
+          </MenuOpenLink>
         </el-menu-item>
 
         <SidebarShortcutsSection :is-collapsed="isCollapsed" class="sb-root sb-root--shortcuts" />
@@ -72,6 +74,7 @@ import { useI18n } from 'vue-i18n'
 import { buildTree, type MenuTreeNode } from '@/composables/useMenuTree'
 import { useMenuPermissions } from '@/composables/useMenuPermissions'
 import { SIDEBAR_ROOT_MENU_CODES } from '@/config/sidebarMenu'
+import MenuOpenLink from '@/components/layout/MenuOpenLink.vue'
 import MenuTreeItem from '@/components/layout/MenuTreeItem.vue'
 import SidebarShortcutsSection from '@/components/layout/SidebarShortcutsSection.vue'
 import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
@@ -589,6 +592,7 @@ const toggleCollapse = () => {
   position: relative;
   display: flex !important;
   align-items: center !important;
+  gap: 8px;
   min-width: 0 !important;
   height: 34px !important;
   line-height: 34px !important;
@@ -612,14 +616,28 @@ const toggleCollapse = () => {
   font-weight: 600;
 }
 
+/* アイコン枠（a ラップ含む）と文字の間は gap で確保。内部余白は付けない */
 .sbm-popper .el-menu--popup .el-menu-item > .el-icon,
+.sbm-popper .el-menu--popup .el-menu-item > .menu-open-link--icon,
 .sbm-popper .el-menu--popup .el-sub-menu__title > .el-icon:not(.el-sub-menu__icon-arrow) {
   flex-shrink: 0;
   width: 16px !important;
-  margin: 0 8px 0 0 !important;
-  font-size: 15px;
+  margin: 0 !important;
   color: rgba(var(--sc-rgb), 0.85);
   transition: color 0.15s ease;
+}
+
+.sbm-popper .el-menu--popup .el-menu-item > .el-icon,
+.sbm-popper .el-menu--popup .el-menu-item > .menu-open-link--icon > .el-icon,
+.sbm-popper .el-menu--popup .el-sub-menu__title > .el-icon:not(.el-sub-menu__icon-arrow) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+  font-size: 15px;
+  overflow: hidden;
 }
 
 .sbm-popper .el-menu--popup .el-menu-item > span,
@@ -665,6 +683,7 @@ const toggleCollapse = () => {
 }
 
 .sbm-popper .el-menu--popup .el-menu-item:hover > .el-icon,
+.sbm-popper .el-menu--popup .el-menu-item:hover > .menu-open-link--icon > .el-icon,
 .sbm-popper .el-menu--popup .el-sub-menu__title:hover > .el-icon:not(.el-sub-menu__icon-arrow) {
   color: var(--sc);
 }
@@ -692,8 +711,52 @@ const toggleCollapse = () => {
     inset 0 -2px 0 rgba(0, 0, 0, 0.18) !important;
 }
 
-.sbm-popper .el-menu--popup .el-menu-item.is-active > .el-icon {
+.sbm-popper .el-menu--popup .el-menu-item.is-active > .el-icon,
+.sbm-popper .el-menu--popup .el-menu-item.is-active > .menu-open-link--icon > .el-icon {
   color: #fff;
+}
+
+a.menu-open-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: inherit;
+}
+
+a.menu-open-link--icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+a.menu-open-link--label {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+a.menu-open-link--entry {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.sidebar-el-menu > .el-menu-item .el-menu-tooltip__trigger {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.sidebar-el-menu.is-sb-collapsed > .el-menu-item > a.menu-open-link--entry,
+.sidebar-el-menu.is-sb-collapsed > .el-menu-item .el-menu-tooltip__trigger > a.menu-open-link--entry {
+  width: 100%;
+  justify-content: center;
 }
 
 .sbm-popper .el-menu--popup .el-menu-item.menu-item-home:not(.is-active) {

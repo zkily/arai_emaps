@@ -699,8 +699,6 @@
             class="modern-table order-history-table"
             :default-sort="{ prop: 'part_name', order: 'ascending' }"
             height="100%"
-            show-summary
-            :summary-method="getOrderHistorySummaries"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column prop="part_cd" label="部品CD" width="120" align="center" />
@@ -2212,38 +2210,6 @@ const formatCurrency = (num: number): string => {
 const formatUnitPrice = (value: unknown): string => {
   const n = Number(value) || 0
   return n ? `¥${n.toLocaleString('ja-JP', { maximumFractionDigits: 2 })}` : ''
-}
-
-/** 部品注文履歴テーブル合計行（表示中ページの行のみ集計） */
-const getOrderHistorySummaries = (param: {
-  columns: { property?: string }[]
-  data: PartOrderItem[]
-}) => {
-  const { columns, data } = param
-  const sums: string[] = []
-  columns.forEach((column, index) => {
-    const prop = column.property
-    if (index === 0) {
-      sums[index] = '合計'
-      return
-    }
-    if (prop === 'part_cd') {
-      sums[index] = data.length ? `${data.length}件` : ''
-      return
-    }
-    if (prop === 'order_quantity') {
-      const t = data.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0)
-      sums[index] = t ? t.toLocaleString('ja-JP') : ''
-      return
-    }
-    if (prop === 'order_amount') {
-      const t = data.reduce((s, r) => s + Math.round(Number(r.order_amount) || 0), 0)
-      sums[index] = t ? formatCurrency(t) : ''
-      return
-    }
-    sums[index] = ''
-  })
-  return sums
 }
 
 const escapeHtml = (value: unknown) =>

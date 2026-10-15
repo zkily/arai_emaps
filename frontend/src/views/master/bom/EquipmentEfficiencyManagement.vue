@@ -130,8 +130,8 @@
           :label="`${process.label} (${getProcessCount(process.value)})`"
           :name="process.value"
         >
+          <div v-if="process.value === activeProcessTab" class="ee-table-body">
           <el-table
-            v-if="process.value === activeProcessTab"
             :data="efficiencyList"
             v-loading="loading"
             stripe
@@ -142,7 +142,7 @@
             :empty-text="'データがありません'"
             :default-sort="tableDefaultSort"
             :row-class-name="getRowClassName"
-            height="calc(100vh - 260px)"
+            height="100%"
             @sort-change="handleSortChange"
           >
             <el-table-column type="index" label="#" width="48" align="center" :index="tableIndexMethod" />
@@ -251,26 +251,40 @@
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
       </el-tabs>
-      <!-- 結果バー + ページング -->
-      <div class="ee-result-bar">
-        <span>表示: <b>{{ efficiencyList.length }}</b> / <b>{{ total }}</b> 件</span>
-        <span v-if="activeProcessTab !== 'all'" class="ee-proc-tag" :class="`ee-proc-tag--${activeProcessTab}`">
-          {{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程
-        </span>
-        <div class="ee-pagination-wrap">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :total="total"
-            :page-sizes="[20, 50, 100]"
-            layout="total, sizes, prev, pager, next, jumper"
-            size="small"
-            background
-            @size-change="handlePageSizeChange"
-          />
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span
+            v-if="activeProcessTab !== 'all'"
+            class="pagination-summary__item ee-proc-tag"
+            :class="`ee-proc-tag--${activeProcessTab}`"
+          >
+            {{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程
+          </span>
         </div>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[20, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          size="small"
+          background
+          class="modern-pagination"
+          @current-change="loadData"
+          @size-change="handlePageSizeChange"
+        />
       </div>
     </div>
 
@@ -478,7 +492,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Tools,
@@ -724,6 +738,14 @@ const handleTabChange = () => {
 
 const tableIndexMethod = (index: number) => (currentPage.value - 1) * pageSize.value + index + 1
 
+const pageRangeText = computed(() => {
+  const n = total.value
+  if (!n) return '0'
+  const start = pageSize.value * (currentPage.value - 1) + 1
+  const end = Math.min(pageSize.value * currentPage.value, n)
+  return `${start}–${end}`
+})
+
 let keywordSearchTimer: ReturnType<typeof setTimeout> | null = null
 const scheduleKeywordSearch = () => {
   if (keywordSearchTimer) clearTimeout(keywordSearchTimer)
@@ -738,6 +760,7 @@ const scheduleKeywordSearch = () => {
 
 const handlePageSizeChange = () => {
   currentPage.value = 1
+  loadData()
 }
 
 const getRowClassName = () => 'ee-row'
@@ -1335,15 +1358,8 @@ const handleExportExcel = async () => {
   }
 }
 
-let listWatchReady = false
-watch([currentPage, pageSize], () => {
-  if (!listWatchReady) return
-  loadData()
-})
-
 onMounted(async () => {
   await Promise.all([loadEquipmentOptions(), loadProductOptions(), loadFilterOptions()])
-  listWatchReady = true
   await loadData()
 })
 </script>
@@ -1351,7 +1367,15 @@ onMounted(async () => {
 <style scoped>
 /* ===== Layout ===== */
 .ee-container {
-  min-height: 100vh;
+  --ee-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(100vh - var(--ee-app-chrome));
+  height: calc(100dvh - var(--ee-app-chrome));
+  max-height: calc(100vh - var(--ee-app-chrome));
+  max-height: calc(100dvh - var(--ee-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 12px 16px 20px;
   display: flex;
   flex-direction: column;
@@ -1362,6 +1386,7 @@ onMounted(async () => {
 
 /* ===== Header（olive → lime → gold） ===== */
 .ee-header {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1468,6 +1493,7 @@ onMounted(async () => {
 
 /* ===== Toolbar ===== */
 .ee-toolbar {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1623,7 +1649,8 @@ onMounted(async () => {
 .ee-table-wrap {
   position: relative;
   overflow: hidden;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding-top: 3px;
@@ -1635,12 +1662,37 @@ onMounted(async () => {
 
 /* 工程タブ：工程ごとに色分け */
 .ee-tabs {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.ee-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.ee-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.ee-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.ee-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .ee-tabs > :deep(.el-tabs__header) {
+  flex-shrink: 0;
   margin: 0;
   padding: 8px 12px;
   background: #fafcf6;
@@ -1718,12 +1770,18 @@ onMounted(async () => {
 }
 
 .ee-tabs > :deep(.el-tabs__content) {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .ee-tabs > :deep(.el-tabs__content .el-tab-pane) {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 一覧：文字色・背景を統一、1行表示 */
@@ -1937,39 +1995,83 @@ onMounted(async () => {
   margin-left: 0;
 }
 
-/* Result bar */
-.ee-result-bar {
+/* Pagination bar */
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #edf2e3;
+  background: linear-gradient(180deg, #fff 0%, #fafcf6 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 6px 16px;
-  font-size: 12px;
-  color: #64748b;
-  background: #fafcf6;
-  border-top: 1px solid #edf2e3;
-}
-
-.ee-result-bar b {
-  color: #4d7c0f;
-}
-
-.ee-pagination-wrap {
-  flex: 1 1 auto;
-  display: flex;
-  justify-content: flex-end;
+  gap: 6px;
   min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pagination-summary__value {
+  font-weight: 700;
+  color: #4d7c0f;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0ea5e9;
+}
+
+.pagination-bar .modern-pagination {
   margin-left: auto;
 }
 
-.ee-pagination-wrap :deep(.el-pagination) {
+.pagination-bar :deep(.el-pagination) {
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 4px;
+  font-size: 12px;
 }
 
-.ee-pagination-wrap :deep(.el-pager li.is-active) {
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+
+.pagination-bar :deep(.el-pager li.is-active) {
   color: #fff;
+  font-weight: 700;
   background: linear-gradient(135deg, #84cc16, #4d7c0f) !important;
 }
 

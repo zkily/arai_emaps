@@ -32,9 +32,9 @@ alwaysApply: false
 
 ## 页面骨架
 
-根节点：`{页}-modern pb-std`。页面背景用与该页标题条同系的浅径向光（不要一律靛紫底）。
+根节点：`{页}-modern pb-std`。页面背景用与该页标题条同系的浅径向光（不要一律靛紫底）。根容器按「表格高度」做成纵向 flex，占满 `layout-content` 可视高度。
 
-自上而下：标题条 →（可选进度条）→ 筛选条 → 合计卡网格 → 白底表格区 → 分页。对话框挂在根内，带 `pb-std`。
+自上而下：标题条 →（可选进度条）→ 筛选条 → 合计卡网格 → 白底表格区（flex 吃剩余高度）→ 分页。对话框挂在根内，带 `pb-std`。
 
 ## 标题条
 
@@ -46,11 +46,18 @@ alwaysApply: false
 | 示例页面 | 标题条渐变方向 |
 |----------|----------------|
 | 月受注管理 | 靛→紫 `#4f46e5 → #6d28d9 → #9333ea → #a855f7` |
+| 受注管理（ホーム） | 深空青→天蓝 `#0c4a6e → #0369a1 → #0ea5e9 → #38bdf8` |
 | 通知センター | 青绿→青 `#0f766e → #0d9488 → #14b8a6 → #06b6d4` |
 | 報告センター | 蓝→天蓝 `#1e40af → #2563eb → #3b82f6 → #0ea5e9` |
 | 検査モニタ | 绿→翠绿 `#047857 → #059669 → #10b981 → #34d399` |
 | 溶接モニタ | 橙→琥珀 `#c2410c → #ea580c → #f59e0b → #fbbf24` |
 | 大量廃棄・保留品管理 | 玫红→橙 `#9f1239 → #be123c → #e11d48 → #f97316` |
+| 材料在庫照会 | 紫→品红 `#5b21b6 → #7c3aed → #a855f7 → #d946ef` |
+| 部品在庫照会 | 棕橙→橙 `#7c2d12 → #c2410c → #ea580c → #fb923c` |
+| 在庫取引登録 | 深青→青 `#155e75 → #0e7490 → #0891b2 → #22d3ee` |
+| 顧客マスタ管理 | 玫红→粉 `#831843 → #9d174d → #db2777 → #f472b6` |
+| 製品ルートマスタ | 深紫→淡紫 `#4c1d95 → #6d28d9 → #8b5cf6 → #c4b5fd` |
+| 製品工程BOM管理 | 橄榄→亮绿 `#3f6212 → #4d7c0f → #65a30d → #a3e635` |
 
 - 标题区禁止 `backdrop-filter`、文字阴影、除气泡以外的动画。气泡只做 `transform` 漂移。
 - 阴影用与该页主色同系的深色（如绿页用 `rgba(4, 120, 87, 0.55)`），不要一律紫色阴影。
@@ -71,7 +78,25 @@ alwaysApply: false
 
 ## 表格
 
-白底圆角 14px，顶边 3px `#6366f1 → #a855f7 → #ec4899`。表头 `#f5f3ff → #eef2ff`，字色 `#3730a3`。`stripe` + `border` + `size="small"`。代码用靛蓝 chip；正数绿底、负数红底。行首用 `inset` 色条区分状态。行内操作为小胶囊，悬停变成同色渐变白字（查看/编辑靛蓝或蓝，删除玫红）。当前页码 `#818cf8 → #6366f1`。
+白底圆角 14px，顶边 3px `#6366f1 → #a855f7 → #ec4899`（可按页主色替换）。表头与分组列可用分色，字色与主色同系。`stripe` + `border` + `size="small"`。代码用靛蓝 chip；正数绿底、负数红底。行首用 `inset` 色条区分状态。行内操作为小胶囊，悬停变成同色渐变白字（查看/编辑靛蓝或蓝，删除玫红）。当前页码可与页主色一致。
+
+**固定列（必须）**：`fixed="left|right"` 的单元格背景必须用不透明 Hex（如 `#eef2ff` / `#f8fafc`），禁止 `rgba(..., 0.0x)`；斑马纹与 hover 同样用不透明色。否则横向滚动时固定列下方会透出滚动内容。EP2 sticky 类名：`el-table-fixed-column--left/right`。
+
+### 表格高度（flex 填满窗口 · 必须）
+
+列表页表格要随窗口高度伸缩，占满标题条／筛选／合计卡以外的剩余空间；**表体内部出现上下滚动条**，不要整页被表格撑长。
+
+1. **根容器**：`display: flex; flex-direction: column;`，高度用视口减去顶栏+标签（约 `84px`）：`height / max-height: calc(100dvh - var(--*-app-chrome))`（兼写 `100vh`），`min-height: 0; overflow: hidden; box-sizing: border-box;`。禁止再用 `min-height: 100vh` 把页面撑出双滚动。
+2. **上方区块**（标题条、进度、筛选、合计卡）：`flex-shrink: 0`。
+3. **表格区**（`.table-section`）：`flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden;`。
+4. **`el-table`**：`height="100%"`，样式上 `flex: 1 1 auto; height: 100% !important;`，并对 `:deep(.el-table__inner-wrapper) { height: 100%; }`；`:deep(.el-table__body-wrapper) { overflow-y: auto !important; }` 保证行多时表体有纵向滚动条。
+5. **分页条**（表格区底部，`flex-shrink: 0`）：
+   - **左侧**：合计类信息（件数 + 与当前 Tab／业务相关的数量合计），用小 pill 展示，不要塞进分页组件的 `total`。
+   - **右侧**：`el-pagination`（`margin-left: auto`），`small`，字号约 12px、按钮约 26px；`layout` 用 `sizes, prev, pager, next, jumper`（件数改由左侧合计显示）。
+   - 整体：`display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;`。
+6. **去掉表内合计行**：若 `el-table` 有 `show-summary` / `summary-method`（或表脚「合計」行），**一律去掉**；合计只保留在分页条左侧 pill（及上方 KPI 卡如有）。勿表脚与底栏重复显示。
+
+正本高度：`OrderMonthlyList.vue`；分页左合计＋右小分页：`PartOrderPage.vue` / `MaterialOrderPage.vue`。后续同类列表页默认按此做。
 
 ## 对话框
 

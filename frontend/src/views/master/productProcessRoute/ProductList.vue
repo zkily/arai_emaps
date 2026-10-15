@@ -29,13 +29,7 @@
         highlight-current-row
         size="small"
         class="product-table modern-table"
-        :header-cell-style="{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: '#fff',
-          fontWeight: '600',
-          fontSize: '12px',
-          padding: '6px 8px',
-        }"
+        height="100%"
         @row-click="handleClick"
       >
         <el-table-column prop="product_cd" label="製品CD" width="100" align="center">
@@ -52,7 +46,7 @@
         v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[20, 50, 100]"
-        layout="prev, pager, next, total"
+        layout="prev, pager, next"
         size="small"
         @current-change="handlePageChange"
         @size-change="handlePageChange"
@@ -127,15 +121,15 @@ const handleClick = (row: Product) => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   padding: 8px;
   background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .page-header.compact {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
+  flex-shrink: 0;
+  background: linear-gradient(125deg, #4c1d95 0%, #6d28d9 50%, #8b5cf6 100%);
+  border-radius: 10px;
   padding: 8px 12px;
   margin-bottom: 8px;
 }
@@ -159,13 +153,18 @@ const handleClick = (row: Product) => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: rgba(255, 255, 255, 0.95);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .sub-title {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 800;
   color: #fff;
   line-height: 1.2;
   white-space: nowrap;
@@ -174,38 +173,74 @@ const handleClick = (row: Product) => {
 }
 
 .search-section.compact {
+  flex-shrink: 0;
   margin-bottom: 8px;
 }
 
 .search-input {
   width: 100%;
 }
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 9px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.search-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #8b5cf6 inset,
+    0 0 0 3px rgba(139, 92, 246, 0.15);
+}
 
 .search-prefix-ico {
-  color: #94a3b8;
+  color: #a78bfa;
 }
 
 .table-wrapper {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   min-height: 120px;
 }
 
 .code-cell {
   font-family: 'Consolas', 'Monaco', monospace;
-  font-weight: 600;
-  color: #667eea;
+  font-weight: 700;
+  color: #6d28d9;
   font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f5f3ff;
+  box-shadow: inset 0 0 0 1px #ddd6fe;
 }
 
 .pagination-wrapper {
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
-  padding: 8px 0;
+  padding: 8px 0 2px;
+}
+
+.product-table :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%) !important;
+  color: #5b21b6 !important;
+  font-weight: 700;
+  font-size: 12px;
+  border-bottom: 2px solid #c4b5fd !important;
+}
+
+.product-table :deep(.el-table__body tr:hover > td) {
+  background: #faf5ff !important;
+}
+
+.product-table :deep(.el-table__body tr.current-row > td) {
+  background: #ede9fe !important;
 }
 
 .product-table :deep(.el-table__cell) {
   padding: 6px 8px;
   font-size: 12px;
+}
+
+.pagination-wrapper :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
 }
 </style>

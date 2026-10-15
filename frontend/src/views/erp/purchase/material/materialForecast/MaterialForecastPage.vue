@@ -210,116 +210,146 @@
 
     <!-- データテーブル -->
     <div class="table-section">
-      <!-- 製品別一覧 -->
-      <el-table
-        v-if="activeTab === 'detail'"
-        :data="tableData"
-        v-loading="loading"
-        stripe
-        border
-        class="data-table detail-table"
-        :header-cell-style="headerCellStyle"
-        :row-class-name="tableRowClassName"
-        show-summary
-        :summary-method="getDetailSummary"
-        height="650"
-      >
-        <el-table-column prop="year" label="年" width="80" align="center" />
-        <el-table-column prop="month" label="月" width="80" align="center" />
-        <el-table-column prop="supplier_name" label="仕入先" width="130" sortable>
-          <template #default="{ row }">
-            <span class="supplier-cell">{{ row.supplier_name || '-' }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="material_name" label="材料名" width="150" sortable>
-          <template #default="{ row }">
-            <span>{{ row.material_name || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="product_name" label="製品名" width="160" sortable>
-          <template #default="{ row }">
-            <span class="product-name">{{ row.product_name }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="forecast_units" label="内示数量" width="100" align="right">
-          <template #default="{ row }">
-            <span class="number-cell">{{ formatNumber(row.forecast_units) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="lot_size" label="ロットサイズ" width="130" align="right">
-          <template #default="{ row }">
-            <span class="number-cell">{{ row.lot_size || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="material_required" label="材料必要数" width="120" align="right">
-          <template #default="{ row }">
-            <span
-              class="number-cell highlight"
-              :class="{ 'no-data': row.material_required === null }"
-            >
-              {{ row.material_required !== null ? row.material_required : '-' }}
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 材料別集計 -->
-      <el-table
-        v-else
-        :data="summaryData"
-        v-loading="loading"
-        stripe
-        border
-        class="data-table summary-table"
-        :header-cell-style="headerCellStyle"
-        :row-class-name="tableRowClassName"
-        height="650"
-      >
-        <el-table-column prop="supplier_name" label="仕入先" width="150" sortable>
-          <template #default="{ row }">
-            <span class="supplier-cell">{{ row.supplier_name || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="material_name" label="材料名" width="160" sortable>
-          <template #default="{ row }">
-            <div class="material-cell">
-              <span class="material-name">{{ row.material_name || '-' }}</span>
-              <!-- <span class="material-cd">{{ row.material_cd }}</span> -->
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="product_count" label="製品数" width="90" align="center">
-          <template #default="{ row }">
-            <el-tag type="info" size="small">{{ row.product_count }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="total_forecast_units" label="内示数量合計" width="140" align="right">
-          <template #default="{ row }">
-            <span class="number-cell">{{ formatNumber(row.total_forecast_units) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="avg_lot_size" label="平均ロットサイズ" width="150" align="right">
-          <template #default="{ row }">
-            <span class="number-cell">{{
-              row.avg_lot_size ? Math.round(row.avg_lot_size) : '-'
-            }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="total_material_required"
-          label="材料必要数合計"
-          width="150"
-          align="right"
+      <div class="table-card__body">
+        <!-- 製品別一覧 -->
+        <el-table
+          v-if="activeTab === 'detail'"
+          :data="pagedTableData"
+          v-loading="loading"
+          stripe
+          border
+          size="small"
+          class="data-table detail-table"
+          :header-cell-style="headerCellStyle"
+          :row-class-name="tableRowClassName"
+          height="100%"
         >
-          <template #default="{ row }">
-            <span class="number-cell highlight-total">
-              {{ row.total_material_required !== null ? row.total_material_required : '-' }}
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
+          <el-table-column prop="year" label="年" width="80" align="center" />
+          <el-table-column prop="month" label="月" width="80" align="center" />
+          <el-table-column prop="supplier_name" label="仕入先" width="130" sortable>
+            <template #default="{ row }">
+              <span class="supplier-cell">{{ row.supplier_name || '-' }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="material_name" label="材料名" width="150" sortable>
+            <template #default="{ row }">
+              <span>{{ row.material_name || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_name" label="製品名" width="160" sortable>
+            <template #default="{ row }">
+              <span class="product-name">{{ row.product_name }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="forecast_units" label="内示数量" width="100" align="right">
+            <template #default="{ row }">
+              <span class="number-cell">{{ formatNumber(row.forecast_units) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="lot_size" label="ロットサイズ" width="130" align="right">
+            <template #default="{ row }">
+              <span class="number-cell">{{ row.lot_size || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="material_required" label="材料必要数" width="120" align="right">
+            <template #default="{ row }">
+              <span
+                class="number-cell highlight"
+                :class="{ 'no-data': row.material_required === null }"
+              >
+                {{ row.material_required !== null ? row.material_required : '-' }}
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <!-- 材料別集計 -->
+        <el-table
+          v-else
+          :data="pagedSummaryData"
+          v-loading="loading"
+          stripe
+          border
+          size="small"
+          class="data-table summary-table"
+          :header-cell-style="headerCellStyle"
+          :row-class-name="tableRowClassName"
+          height="100%"
+        >
+          <el-table-column prop="supplier_name" label="仕入先" width="150" sortable>
+            <template #default="{ row }">
+              <span class="supplier-cell">{{ row.supplier_name || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="material_name" label="材料名" width="160" sortable>
+            <template #default="{ row }">
+              <div class="material-cell">
+                <span class="material-name">{{ row.material_name || '-' }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="product_count" label="製品数" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag type="info" size="small">{{ row.product_count }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="total_forecast_units" label="内示数量合計" width="140" align="right">
+            <template #default="{ row }">
+              <span class="number-cell">{{ formatNumber(row.total_forecast_units) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="avg_lot_size" label="平均ロットサイズ" width="150" align="right">
+            <template #default="{ row }">
+              <span class="number-cell">{{
+                row.avg_lot_size ? Math.round(row.avg_lot_size) : '-'
+              }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="total_material_required"
+            label="材料必要数合計"
+            width="150"
+            align="right"
+          >
+            <template #default="{ row }">
+              <span class="number-cell highlight-total">
+                {{ row.total_material_required !== null ? row.total_material_required : '-' }}
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ listCount.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--qty">
+            <span class="pagination-summary__label">内示数量</span>
+            <b class="pagination-summary__value">{{ formatNumber(listForecastTotal) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--mat">
+            <span class="pagination-summary__label">材料必要数</span>
+            <b class="pagination-summary__value">{{ formatNumber(listMaterialRequiredTotal) }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[15, 30, 50, 100]"
+          :total="listCount"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -379,8 +409,39 @@ const searchForm = reactive({
 
 const pagination = reactive({
   page: 1,
-  pageSize: 15,
+  pageSize: 50,
   total: 0,
+})
+
+const listCount = computed(() =>
+  activeTab.value === 'detail' ? tableData.value.length : summaryData.value.length,
+)
+
+const pagedTableData = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return tableData.value.slice(start, start + pagination.pageSize)
+})
+
+const pagedSummaryData = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return summaryData.value.slice(start, start + pagination.pageSize)
+})
+
+const listForecastTotal = computed(() => {
+  if (activeTab.value === 'detail') {
+    return tableData.value.reduce((sum, row) => sum + (Number(row.forecast_units) || 0), 0)
+  }
+  return summaryData.value.reduce((sum, row) => sum + (Number(row.total_forecast_units) || 0), 0)
+})
+
+const listMaterialRequiredTotal = computed(() => {
+  if (activeTab.value === 'detail') {
+    return tableData.value.reduce((sum, row) => sum + (Number(row.material_required) || 0), 0)
+  }
+  return summaryData.value.reduce(
+    (sum, row) => sum + (Number(row.total_material_required) || 0),
+    0,
+  )
 })
 
 // 计算可用年份
@@ -458,70 +519,6 @@ const tableRowClassName = ({ rowIndex }: { rowIndex: number }) => {
 const formatNumber = (num: number | null) => {
   if (num === null || num === undefined) return '-'
   return num.toLocaleString()
-}
-
-// 计算製品別一覧合计
-const getDetailSummary = (param: { columns: any[]; data: any[] }) => {
-  const { columns, data } = param
-  const sums: string[] = []
-
-  // 判断是否只有年月筛选条件（可以使用stats数据）
-  const hasOnlyYearMonthFilter =
-    searchForm.year && searchForm.month && !searchForm.supplier_cd && !searchForm.keyword
-
-  columns.forEach((column, index) => {
-    if (index === 0) {
-      // 年列
-      sums[index] = '合计'
-    } else if (index === 1) {
-      // 月列
-      sums[index] = ''
-    } else if (column.property === 'forecast_units') {
-      // 内示数量合计 - 现在显示全部数据，所以计算全部数据的合计
-      let sum = 0
-      if (hasOnlyYearMonthFilter && stats.value.total_forecast_units) {
-        // 使用统计数据（所有数据的合计）
-        sum = stats.value.total_forecast_units
-      } else {
-        // 计算全部数据合计
-        const values = tableData.value.map((item) => Number(item[column.property]))
-        sum = values.reduce((prev, curr) => {
-          const value = Number(curr)
-          if (!isNaN(value)) {
-            return prev + curr
-          } else {
-            return prev
-          }
-        }, 0)
-      }
-      sums[index] = formatNumber(sum)
-    } else if (column.property === 'material_required') {
-      // 材料必要数合计 - 现在显示全部数据，所以计算全部数据的合计
-      let sum = 0
-      if (hasOnlyYearMonthFilter && stats.value.total_material_required) {
-        // 使用统计数据（所有数据的合计）
-        sum = stats.value.total_material_required
-      } else {
-        // 计算全部数据合计
-        const values = tableData.value.map((item) => {
-          const value = item[column.property]
-          return value !== null && value !== undefined ? Number(value) : 0
-        })
-        sum = values.reduce((prev, curr) => {
-          if (!isNaN(curr)) {
-            return prev + curr
-          } else {
-            return prev
-          }
-        }, 0)
-      }
-      sums[index] = sum > 0 ? sum.toFixed(1) : '-'
-    } else {
-      sums[index] = ''
-    }
-  })
-
-  return sums
 }
 
 // 防抖搜索
@@ -650,12 +647,10 @@ const handleTabChange = () => {
 const handleSizeChange = (size: number) => {
   pagination.pageSize = size
   pagination.page = 1
-  fetchData()
 }
 
 const handlePageChange = (page: number) => {
   pagination.page = page
-  fetchData()
 }
 
 const refreshData = () => {
@@ -1216,7 +1211,18 @@ onMounted(() => {
 
 <style scoped>
 .material-forecast-container {
-  min-height: 100%;
+  --mf-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--mf-app-chrome));
+  height: calc(100dvh - var(--mf-app-chrome));
+  max-height: calc(100vh - var(--mf-app-chrome));
+  max-height: calc(100dvh - var(--mf-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
   background: linear-gradient(180deg, #f5f3ff 0%, #f8fafc 38%, #f8fafc 100%);
 }
@@ -1227,13 +1233,14 @@ onMounted(() => {
 
 /* ---------- ヒーロー ---------- */
 .page-header {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   border-radius: 14px;
   background: linear-gradient(125deg, #4c51bf 0%, #5a67d8 36%, #667eea 62%, #764ba2 100%);
   box-shadow:
@@ -1339,7 +1346,8 @@ onMounted(() => {
 
 /* ---------- KPI カード（色分け・動きなし） ---------- */
 .stats-container {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .stats-grid {
@@ -1443,9 +1451,10 @@ onMounted(() => {
 
 /* ---------- 検索カード ---------- */
 .search-section {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   padding: 12px 16px 10px;
   border-radius: 12px;
   border: 1px solid #e4e1fb;
@@ -1625,6 +1634,7 @@ onMounted(() => {
 
 /* ---------- タブ（セグメントピル） ---------- */
 .tab-section {
+  flex-shrink: 0;
   padding: 8px 12px 6px;
   border-radius: 12px 12px 0 0;
   border: 1px solid #e4e1fb;
@@ -1634,6 +1644,9 @@ onMounted(() => {
 
 .custom-tabs :deep(.el-tabs__header) {
   margin: 0;
+}
+.custom-tabs :deep(.el-tabs__content) {
+  display: none;
 }
 
 .custom-tabs :deep(.el-tabs__nav-wrap::after),
@@ -1684,7 +1697,12 @@ onMounted(() => {
 
 /* ---------- テーブル ---------- */
 .table-section {
-  padding: 0 12px 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   border-radius: 0 0 12px 12px;
   border: 1px solid #e4e1fb;
   border-top: none;
@@ -1692,8 +1710,29 @@ onMounted(() => {
   box-shadow: 0 10px 24px -20px rgba(91, 33, 182, 0.4);
 }
 
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 12px;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 .data-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
   border-radius: 10px;
   overflow: hidden;
   --el-table-border-color: #ece9f8;
@@ -1730,43 +1769,6 @@ onMounted(() => {
 
 .data-table :deep(.el-table__body tr:last-child td) {
   border-bottom: none;
-}
-
-/* 合計行 */
-.data-table :deep(.el-table__footer td) {
-  padding: 9px 6px;
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.4;
-  color: #334155;
-  background: #f7f5ff !important;
-  border-top: 2px solid #c4b5fd;
-  border-bottom: none;
-}
-
-.data-table :deep(.el-table__footer td:first-child) {
-  color: #5b21b6;
-}
-
-.data-table :deep(.el-table__footer td[class*='is-right']) {
-  color: #5b21b6;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.data-table :deep(.el-table__body-wrapper) {
-  overflow-y: auto;
-}
-
-/* el-table の height 属性と揃えること */
-.detail-table,
-.summary-table {
-  height: 650px;
-}
-
-.detail-table :deep(.el-table__inner-wrapper),
-.summary-table :deep(.el-table__inner-wrapper) {
-  height: 100%;
 }
 
 .data-table :deep(.el-scrollbar__thumb) {
@@ -1833,11 +1835,104 @@ onMounted(() => {
   color: #cbd5e1;
 }
 
-.pagination-container {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
-  margin-top: 4px;
-  padding: 8px 0 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 12px;
+  border-top: 1px solid #e4e1fb;
+  background: linear-gradient(180deg, #faf8ff 0%, #f8fafc 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--qty {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #6d28d9; }
+.pagination-summary__item--qty .pagination-summary__value { color: #5b21b6; }
+.pagination-summary__item--mat {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.pagination-summary__item--mat .pagination-summary__label { color: #b45309; }
+.pagination-summary__item--mat .pagination-summary__value { color: #92400e; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #7c3aed;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  padding: 0 4px;
+}
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
+}
+.modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 800;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
 }
 
 /* ---------- レスポンシブ ---------- */

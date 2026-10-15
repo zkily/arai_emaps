@@ -32,10 +32,8 @@
       :data="rows"
       border
       stripe
-      show-summary
-      :summary-method="summary"
-      :max-height="520"
       size="small"
+      class="stock-table"
     >
       <el-table-column prop="supplier_name" label="外注先" width="160" fixed="left" show-overflow-tooltip />
       <el-table-column prop="product_cd" label="製品CD" width="86" align="center" class-name="col-code" />
@@ -93,7 +91,6 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { TableColumnCtx } from 'element-plus'
 import { type PlatingStockItem, type PlatingStockTrendItem } from '@/api/outsourcing'
 import { useLedger } from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
@@ -143,22 +140,6 @@ function stockClass(value: number | null | undefined): string {
   return 'is-pos'
 }
 
-function summary({ columns }: { columns: TableColumnCtx<PlatingStockItem>[] }): string[] {
-  const sumKeys = [
-    'month_initial',
-    'month_order_qty',
-    'month_receiving_qty',
-    'month_defect_qty',
-    'current_stock',
-  ]
-  return columns.map((col, i) => {
-    if (i === 0) return '合計'
-    if (!sumKeys.includes(col.property)) return ''
-    const key = col.property as keyof PlatingStockItem
-    return formatNum(rows.value.reduce((s, r) => s + (Number(r[key]) || 0), 0))
-  })
-}
-
 async function load() {
   if (!props.asOf) return
   const seq = ++loadSeq
@@ -192,11 +173,27 @@ defineExpose({ reload: load })
 </script>
 
 <style scoped>
+.stock-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .kpi-strip {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+}
+
+.stock-table {
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .kpi {

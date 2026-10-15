@@ -137,22 +137,8 @@
       </div>
     </section>
 
-    <section ref="tableWrapRef" class="pul-table-wrap">
-      <div class="pul-result-bar">
-        <span class="pul-result-text">{{ pagination.total }} 件中 {{ list.length }} 件を表示</span>
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[20, 50, 100]"
-          :layout="paginationLayout"
-          size="small"
-          background
-          @current-change="loadList"
-          @size-change="loadList"
-        />
-      </div>
-
+    <section class="pul-table-wrap">
+      <div class="pul-table-body">
       <el-table
         v-loading="loading"
         :data="list"
@@ -161,7 +147,7 @@
         class="pul-table"
         :header-cell-style="headerCellStyle"
         :default-sort="{ prop: 'master_product_name', order: 'ascending' }"
-        :height="tableHeight"
+        height="100%"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="product_cd" label="製品CD" width="72" :fixed="tableFixed" show-overflow-tooltip>
@@ -320,6 +306,33 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          :layout="paginationLayout"
+          size="small"
+          background
+          class="modern-pagination"
+          @current-change="loadList"
+          @size-change="loadList"
+        />
+      </div>
     </section>
 
     <el-dialog
@@ -729,14 +742,12 @@ const outsourceEmailPreview = ref<OutsourceOrderEmailPreview | null>(null)
 const outsourceUserIds = ref<number[]>([])
 const outsourceUsers = ref<UserListItem[]>([])
 
-const tableWrapRef = ref<HTMLElement | null>(null)
-const tableHeight = ref(480)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
 
 const tableFixed = computed<'left' | false>(() => (viewportWidth.value >= 900 ? 'left' : false))
 const tableFixedRight = computed<'right' | false>(() => (viewportWidth.value >= 900 ? 'right' : false))
 const paginationLayout = computed(() =>
-  viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next'
+  viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next, jumper'
 )
 const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(680px, 96vw)' : '680px'))
 const printDialogWidth = computed(() => (viewportWidth.value < 480 ? 'min(400px, 96vw)' : '420px'))
@@ -763,6 +774,14 @@ const printPerPage = computed(() => (printTarget.value?.is_inoac_layout ? 16 : 2
 
 const filters = reactive({ keyword: '', product_cd: '', destination_name: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
+
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
 
 const outsourceRowCount = computed(
   () => list.value.filter((r) => normalizeSupplyType(r.supply_type) === '外注').length,
@@ -974,7 +993,6 @@ async function loadList() {
     ElMessage.error('一覧の取得に失敗しました')
   } finally {
     loading.value = false
-    requestAnimationFrame(updateLayoutMetrics)
   }
 }
 
@@ -995,11 +1013,6 @@ async function fetchAllListForPrint(): Promise<ProductUseLabelConfig[]> {
 }
 
 function updateLayoutMetrics() {
-  const wrap = tableWrapRef.value
-  if (!wrap) return
-  const top = wrap.getBoundingClientRect().top
-  const h = window.innerHeight - top - 24
-  tableHeight.value = Math.max(320, Math.min(h, 720))
   viewportWidth.value = window.innerWidth
 }
 
@@ -1366,8 +1379,16 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .pul-page {
+  --pul-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
   padding: 12px 16px 16px;
-  min-height: 100%;
+  height: calc(100vh - var(--pul-app-chrome));
+  height: calc(100dvh - var(--pul-app-chrome));
+  max-height: calc(100vh - var(--pul-app-chrome));
+  max-height: calc(100dvh - var(--pul-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1379,6 +1400,7 @@ onBeforeUnmount(() => {
 
 /* ── ヒーロー ── */
 .pul-hero {
+  flex-shrink: 0;
   border-radius: 14px;
   padding: 14px 18px;
   background: linear-gradient(135deg, #312e81 0%, #4338ca 42%, #6366f1 72%, #818cf8 100%);
@@ -1498,6 +1520,7 @@ onBeforeUnmount(() => {
 
 /* ── ツールバー ── */
 .pul-toolbar-card {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 12px;
   border: 1px solid rgba(99, 102, 241, 0.12);
@@ -1656,7 +1679,7 @@ onBeforeUnmount(() => {
 
 /* ── テーブル ── */
 .pul-table-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1671,32 +1694,119 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
-.pul-result-bar {
+.pul-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 14px;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.pul-result-text {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  white-space: nowrap;
+.pul-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.pul-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.pul-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .pul-table {
-  flex: 1;
-  min-height: 0;
-  padding: 0 10px 10px;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
 }
 
-.pul-table :deep(.el-table__inner-wrapper) {
-  border-radius: 0 0 10px 10px;
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+
+.pagination-summary__item--range .pagination-summary__label {
+  color: #0e7490;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #155e75;
+}
+
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #0891b2;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .pul-table :deep(.el-table__header-wrapper th.el-table__cell) {
@@ -2204,6 +2314,19 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 768px) {
+  .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-bar :deep(.modern-pagination) {
+    margin-left: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 640px) {
   .pul-edit-grid,
   .pul-edit-grid--3 {
@@ -2424,10 +2547,9 @@ onBeforeUnmount(() => {
   padding-top: 15px;
 }
 
-.pum-modern .pul-result-bar {
-  padding-top: 11px;
-  background: linear-gradient(180deg, #ecfeff 0%, #f8feff 100%);
-  border-bottom-color: var(--hx-line);
+.pum-modern .pagination-bar {
+  border-top-color: var(--hx-line);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
 }
 
 .pum-modern .pul-field-label {
@@ -2601,10 +2723,10 @@ onBeforeUnmount(() => {
     inset 0 1px 1px rgba(255, 255, 255, 0.5);
 }
 
-.pum-modern .pul-result-bar :deep(.el-pager li.is-active) {
+.pum-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   border-radius: 6px;
-  background: linear-gradient(135deg, var(--hx-2), var(--hx-3));
+  background: linear-gradient(135deg, var(--hx-2), var(--hx-3)) !important;
   box-shadow: 0 2px 0 var(--hx-1);
 }
 

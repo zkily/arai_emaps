@@ -93,74 +93,90 @@
           </div>
         </template>
 
-        <el-table
-          :data="filteredInspectionHistory"
-          stripe
-          class="modern-table"
-          :height="tableHeight"
-        >
-          <el-table-column prop="inspection_date" label="検品日" width="100" align="center">
-            <template #default="{ row }">
-              <span>{{ formatDate(row.inspection_date) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="log_time" label="時間" width="80" align="center">
-            <template #default="{ row }">
-              <span>{{ row.log_time || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="material_name" label="材料名" width="160" align="center">
-            <template #default="{ row }">
-              <span class="material-name">{{ row.material_name || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="supplier" label="仕入先" width="120" align="center">
-            <template #default="{ row }">
-              <span>{{ row.supplier || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="manufacture_no" label="製造番号" width="150" align="center">
-            <template #default="{ row }">
-              <span>{{ row.manufacture_no || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="quantity" label="数量" width="80" align="center">
-            <template #default="{ row }">
-              <span>{{ row.quantity || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="outer_diameter1" label="外径1" width="80" align="center">
-            <template #default="{ row }">
-              <span>{{ row.outer_diameter1 || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="outer_diameter2" label="外径2" width="80" align="center">
-            <template #default="{ row }">
-              <span>{{ row.outer_diameter2 || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="inspector_name" label="検品者" width="120" align="center">
-            <template #default="{ row }">
-              <span class="inspector-name">{{ row.inspector_name || '-' }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" fixed="right" width="100" align="center">
-            <template #default="{ row }">
-              <el-button size="small" type="info" link @click="viewInspectionDetail(row)"
-                >詳細</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
+        <div class="table-card__body">
+          <el-table
+            :data="filteredInspectionHistory"
+            stripe
+            border
+            size="small"
+            class="modern-table"
+            height="100%"
+          >
+            <el-table-column prop="inspection_date" label="検品日" width="100" align="center">
+              <template #default="{ row }">
+                <span>{{ formatDate(row.inspection_date) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="log_time" label="時間" width="80" align="center">
+              <template #default="{ row }">
+                <span>{{ row.log_time || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="material_name" label="材料名" width="160" align="center">
+              <template #default="{ row }">
+                <span class="material-name">{{ row.material_name || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="supplier" label="仕入先" width="120" align="center">
+              <template #default="{ row }">
+                <span>{{ row.supplier || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="manufacture_no" label="製造番号" width="150" align="center">
+              <template #default="{ row }">
+                <span>{{ row.manufacture_no || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="quantity" label="数量" width="80" align="center">
+              <template #default="{ row }">
+                <span>{{ row.quantity || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="outer_diameter1" label="外径1" width="80" align="center">
+              <template #default="{ row }">
+                <span>{{ row.outer_diameter1 || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="outer_diameter2" label="外径2" width="80" align="center">
+              <template #default="{ row }">
+                <span>{{ row.outer_diameter2 || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="inspector_name" label="検品者" width="120" align="center">
+              <template #default="{ row }">
+                <span class="inspector-name">{{ row.inspector_name || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" fixed="right" width="100" align="center">
+              <template #default="{ row }">
+                <el-button size="small" type="info" link @click="viewInspectionDetail(row)"
+                  >詳細</el-button
+                >
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
-        <!-- 分页组件 -->
-        <div class="pagination-container">
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ totalRecords.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--qty">
+              <span class="pagination-summary__label">表示数量</span>
+              <b class="pagination-summary__value">{{ pageQuantityTotal.toLocaleString('ja-JP') }}</b>
+            </span>
+          </div>
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="totalRecords"
-            layout="total, sizes, prev, pager, next, jumper"
+            layout="sizes, prev, pager, next, jumper"
+            small
+            class="modern-pagination"
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
           />
@@ -198,12 +214,15 @@
           </div>
         </template>
 
+        <div class="table-card__body">
         <el-table
-          :data="filteredQualityStandards"
+          :data="pagedQualityStandards"
           stripe
+          border
+          size="small"
           class="modern-table quality-standards-table"
           v-loading="loading"
-          :height="tableHeight"
+          height="100%"
         >
           <el-table-column
             prop="material_name"
@@ -261,6 +280,34 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{
+                filteredQualityStandards.length.toLocaleString('ja-JP')
+              }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--active">
+              <span class="pagination-summary__label">有効</span>
+              <b class="pagination-summary__value">{{ standardsActiveCount.toLocaleString('ja-JP') }}</b>
+            </span>
+          </div>
+          <el-pagination
+            v-model:current-page="standardsPage"
+            v-model:page-size="standardsPageSize"
+            :page-sizes="[20, 50, 100, 200]"
+            :total="filteredQualityStandards.length"
+            layout="sizes, prev, pager, next, jumper"
+            small
+            class="modern-pagination"
+            @size-change="handleStandardsSizeChange"
+            @current-change="handleStandardsPageChange"
+          />
+        </div>
       </el-card>
     </div>
 
@@ -536,11 +583,6 @@ const monthShortcuts = [
 const inspectionDetailVisible = ref(false)
 const selectedInspectionDetail = ref<any>(null)
 
-// 计算表格高度，使布局更紧凑
-const tableHeight = computed(() => {
-  return window.innerHeight - 320
-})
-
 // 获取唯一的材料名列表（用于筛选）
 const materialNameOptions = computed(() => {
   const names = qualityStandards.value
@@ -556,6 +598,31 @@ const filteredQualityStandards = computed(() => {
   }
   return qualityStandards.value.filter((item) => item.material_name === selectedMaterialName.value)
 })
+
+const standardsPage = ref(1)
+const standardsPageSize = ref(50)
+
+const pagedQualityStandards = computed(() => {
+  const start = (standardsPage.value - 1) * standardsPageSize.value
+  return filteredQualityStandards.value.slice(start, start + standardsPageSize.value)
+})
+
+const standardsActiveCount = computed(
+  () => filteredQualityStandards.value.filter((item) => item.status === 1).length,
+)
+
+const pageQuantityTotal = computed(() =>
+  filteredInspectionHistory.value.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0),
+)
+
+function handleStandardsPageChange(page: number) {
+  standardsPage.value = page
+}
+
+function handleStandardsSizeChange(size: number) {
+  standardsPageSize.value = size
+  standardsPage.value = 1
+}
 
 // 検品履歴筛选相关
 const selectedSupplier = ref<string[]>([])
@@ -701,8 +768,7 @@ const handleTabChange = (tabName: string | number): void => {
 
 // 材料名筛选处理
 const handleMaterialNameFilter = (): void => {
-  // 筛选逻辑已在computed属性中实现，这里可以添加其他逻辑
-  console.log('材料名筛选:', selectedMaterialName.value)
+  standardsPage.value = 1
 }
 
 const filterHistory = (): void => {
@@ -1403,16 +1469,28 @@ onMounted((): void => {
 
 <style scoped>
 .inspection-container {
+  --mri-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--mri-app-chrome));
+  height: calc(100dvh - var(--mri-app-chrome));
+  max-height: calc(100vh - var(--mri-app-chrome));
+  max-height: calc(100dvh - var(--mri-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: 100vh;
 }
 
 .page-header {
+  flex-shrink: 0;
   background: white;
   border-radius: 12px;
   padding: 16px 20px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -1488,7 +1566,8 @@ onMounted((): void => {
 
 /* タブ区域 */
 .tabs-section {
-  margin-bottom: 12px;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .modern-tabs {
@@ -1496,6 +1575,12 @@ onMounted((): void => {
   border-radius: 12px;
   padding: 8px 16px 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.tabs-section :deep(.el-tabs__header) {
+  margin: 0;
+}
+.tabs-section :deep(.el-tabs__content) {
+  display: none;
 }
 
 .tab-label {
@@ -1511,22 +1596,33 @@ onMounted((): void => {
 
 /* 内容区域 */
 .content-section {
-  margin-bottom: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow: hidden;
 }
 
 .list-card,
 .inspection-card,
 .history-card,
 .standards-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   border: none;
+  overflow: hidden;
 }
 
 .list-card :deep(.el-card__header),
 .inspection-card :deep(.el-card__header),
 .history-card :deep(.el-card__header),
 .standards-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -1535,7 +1631,30 @@ onMounted((): void => {
 .inspection-card :deep(.el-card__body),
 .history-card :deep(.el-card__body),
 .standards-card :deep(.el-card__body) {
-  padding: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .card-header {
@@ -1567,30 +1686,105 @@ onMounted((): void => {
   flex-wrap: wrap;
 }
 
-.pagination-container {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
-  padding: 8px 0;
-  margin-top: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 12px;
+  border-top: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #f5f3ff 0%, #f8fafc 100%);
 }
-
-.pagination-container :deep(.el-pagination) {
-  font-size: 0.875rem;
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
-
-.pagination-container :deep(.el-pagination .el-pagination__sizes),
-.pagination-container :deep(.el-pagination .el-pager li),
-.pagination-container :deep(.el-pagination .btn-prev),
-.pagination-container :deep(.el-pagination .btn-next) {
-  height: 28px;
-  line-height: 28px;
-  font-size: 0.875rem;
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--qty {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #1d4ed8; }
+.pagination-summary__item--qty .pagination-summary__value { color: #1e40af; }
+.pagination-summary__item--active {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.pagination-summary__item--active .pagination-summary__label { color: #047857; }
+.pagination-summary__item--active .pagination-summary__value { color: #065f46; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #6366f1;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  padding: 0 4px;
+}
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
 }
 
 /* 表格样式 */
 .modern-table {
-  border-radius: 8px;
-  overflow: hidden;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
 }
 
 .modern-table :deep(.el-table__header-wrapper) {
@@ -2264,45 +2458,10 @@ onMounted((): void => {
 }
 
 /* 品質基準設定テーブルスタイル */
-.quality-standards-table {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.quality-standards-table :deep(.el-table__header-wrapper) {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: #f8fafc;
-}
-
-.quality-standards-table :deep(.el-table__body-wrapper) {
-  max-height: calc(100vh - 350px);
-  overflow-y: auto;
-}
-
 .quality-standards-table :deep(.el-table th),
 .quality-standards-table :deep(.el-table td) {
   padding: 6px 0;
   font-size: 0.8125rem;
-}
-
-.quality-standards-table :deep(.el-table__body-wrapper::-webkit-scrollbar) {
-  width: 8px;
-}
-
-.quality-standards-table :deep(.el-table__body-wrapper::-webkit-scrollbar-track) {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.quality-standards-table :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb) {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.quality-standards-table :deep(.el-table__body-wrapper::-webkit-scrollbar-thumb:hover) {
-  background: #a8a8a8;
 }
 
 /* レスポンシブデザイン */
@@ -2331,11 +2490,6 @@ onMounted((): void => {
   .info-display {
     grid-template-columns: 1fr;
     gap: 8px;
-  }
-
-  .quality-standards-table {
-    height: calc(100vh - 300px) !important;
-    max-height: calc(100vh - 300px) !important;
   }
 
   .modern-table {
@@ -2453,6 +2607,10 @@ onMounted((): void => {
   --sc-soft: #e0f2fe;
   --sc-ink: #075985;
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid #e0e7ff;
@@ -2475,9 +2633,19 @@ onMounted((): void => {
 }
 .mri-modern .history-card :deep(.el-card__header),
 .mri-modern .standards-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 10px 14px;
   background: linear-gradient(90deg, var(--sc-soft) 0%, #fff 70%);
   border-bottom: 1px solid #e2e8f0;
+}
+.mri-modern .history-card :deep(.el-card__body),
+.mri-modern .standards-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
 }
 .mri-modern .card-title {
   font-size: 14px;
@@ -2565,13 +2733,11 @@ onMounted((): void => {
   font-weight: 600;
   color: #047857;
 }
-.mri-modern .pagination-container {
-  margin: 4px -12px -12px;
-  padding: 8px 0;
+.mri-modern .pagination-bar {
   background: linear-gradient(180deg, #f5f3ff 0%, #f8fafc 100%);
   border-top: 1px solid #e0e7ff;
 }
-.mri-modern .pagination-container :deep(.el-pager li.is-active) {
+.mri-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   font-weight: 800;
   border-radius: 6px;

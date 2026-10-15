@@ -180,3 +180,8 @@
 175_supply_part_shipment_plan_is_shipped.sql
 176_supply_part_shipment_plan_txn.sql
 177_part_stock_receiving_qty.sql
+178_remove_part_receiving_history_menu.sql
+179_remove_warehouse_daily_stock.sql
+180_production_equipment_capacity.sql
+181_machines_availability_rate.sql
+182_machines_efficiency_to_availability_rate.sql

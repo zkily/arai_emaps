@@ -26,10 +26,14 @@
       :index="item.path"
       class="shortcut-item shortcut-item--pinned"
     >
-      <el-icon class="shortcut-kind-icon"><StarFilled /></el-icon>
+      <MenuOpenLink :path="item.path" class="menu-open-link--icon">
+        <el-icon class="shortcut-kind-icon"><StarFilled /></el-icon>
+      </MenuOpenLink>
       <template #title>
         <span class="shortcut-row">
-          <span class="shortcut-label" :title="labelForItem(item)">{{ labelForItem(item) }}</span>
+          <MenuOpenLink :path="item.path" class="menu-open-link--label">
+            <span class="shortcut-label" :title="labelForItem(item)">{{ labelForItem(item) }}</span>
+          </MenuOpenLink>
           <button
             type="button"
             class="shortcut-remove"
@@ -49,10 +53,14 @@
       :index="item.path"
       class="shortcut-item shortcut-item--frequent"
     >
-      <el-icon class="shortcut-kind-icon"><Clock /></el-icon>
+      <MenuOpenLink :path="item.path" class="menu-open-link--icon">
+        <el-icon class="shortcut-kind-icon"><Clock /></el-icon>
+      </MenuOpenLink>
       <template #title>
         <span class="shortcut-row">
-          <span class="shortcut-label" :title="labelForItem(item)">{{ labelForItem(item) }}</span>
+          <MenuOpenLink :path="item.path" class="menu-open-link--label">
+            <span class="shortcut-label" :title="labelForItem(item)">{{ labelForItem(item) }}</span>
+          </MenuOpenLink>
           <button
             type="button"
             class="shortcut-remove"
@@ -73,6 +81,7 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Star, StarFilled, Clock, Close } from '@element-plus/icons-vue'
+import MenuOpenLink from '@/components/layout/MenuOpenLink.vue'
 import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
 import { useMenuLabel } from '@/composables/useMenuLabel'

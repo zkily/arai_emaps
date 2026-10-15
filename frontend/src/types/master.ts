@@ -197,7 +197,8 @@ export interface MachineItem {
   available_from?: string
   available_to?: string
   calendar_id?: number
-  efficiency?: number
+  /** 可動率（%・小数第1位） */
+  availability_rate?: number
   available_qty?: number
   use_in_cpsat?: boolean
   note?: string

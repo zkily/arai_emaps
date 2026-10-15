@@ -369,8 +369,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'material_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -512,8 +511,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'material_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -583,8 +581,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'material_name', order: 'ascending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
@@ -715,10 +712,7 @@
             border
             class="modern-table order-history-table"
             :default-sort="{ prop: 'date', order: 'descending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
-            show-summary
-            :summary-method="getOrderHistorySummaries"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
@@ -812,8 +806,7 @@
                 stripe
                 class="modern-table unused-receiving-table"
                 :default-sort="{ prop: 'material_name', order: 'ascending' }"
-                height="calc(100vh - 300px)"
-                :max-height="780"
+                height="100%"
                 size="small"
               >
             <el-table-column prop="material_cd" label="材料CD" width="118" align="center" />
@@ -872,8 +865,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'created_at', order: 'descending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
             <el-table-column
@@ -1001,8 +993,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'date', order: 'descending' }"
-            height="calc(100vh - 280px)"
-            :max-height="800"
+            height="100%"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -1055,14 +1046,53 @@
           </el-table>
         </div>
 
-        <!-- ページネーション -->
+        <!-- ページネーション：左＝合計 / 右＝操作（小さめ） -->
         <div class="pagination-wrapper" v-if="activeTab !== 'unusedReceiving'">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span
+              v-if="activeTab === 'stock' || activeTab === 'initial'"
+              class="pagination-summary__item pagination-summary__item--stock"
+            >
+              <span class="pagination-summary__label">在庫数</span>
+              <b class="pagination-summary__value">{{ pageStockTotal.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">束</span>
+            </span>
+            <span
+              v-if="activeTab === 'usage' || activeTab === 'stock'"
+              class="pagination-summary__item pagination-summary__item--usage"
+            >
+              <span class="pagination-summary__label">使用数</span>
+              <b class="pagination-summary__value">{{ pageUsageTotal.toLocaleString('ja-JP') }}</b>
+            </span>
+            <span
+              v-if="activeTab === 'order' || activeTab === 'orderHistory' || activeTab === 'stock'"
+              class="pagination-summary__item pagination-summary__item--order"
+            >
+              <span class="pagination-summary__label">注文束数</span>
+              <b class="pagination-summary__value">{{ pageOrderQtyTotal.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">束</span>
+            </span>
+            <span
+              v-if="activeTab === 'order' || activeTab === 'orderHistory' || activeTab === 'sub'"
+              class="pagination-summary__item pagination-summary__item--bundle"
+            >
+              <span class="pagination-summary__label">注文本数</span>
+              <b class="pagination-summary__value">{{ pageOrderBundleTotal.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">本</span>
+            </span>
+          </div>
           <el-pagination
             v-model:current-page="pagination.page"
             v-model:page-size="pagination.page_size"
             :page-sizes="[30, 50, 100, 200]"
             :total="pagination.total"
-            layout="total, sizes, prev, pager, next, jumper"
+            layout="sizes, prev, pager, next, jumper"
+            small
             @size-change="handleSizeChange"
             @current-change="handleCurrentChange"
             class="modern-pagination"
@@ -2267,6 +2297,20 @@ const filteredTableData = computed(() => {
   return tableData.value
 })
 
+/** ページネーション左：表示中行の合計 */
+const pageStockTotal = computed(() =>
+  filteredTableData.value.reduce((sum, row) => sum + (Number(row.current_stock) || 0), 0),
+)
+const pageUsageTotal = computed(() =>
+  filteredTableData.value.reduce((sum, row) => sum + (Number(row.usage_quantity) || 0), 0),
+)
+const pageOrderQtyTotal = computed(() =>
+  filteredTableData.value.reduce((sum, row) => sum + (Number(row.order_quantity) || 0), 0),
+)
+const pageOrderBundleTotal = computed(() =>
+  filteredTableData.value.reduce((sum, row) => sum + (Number(row.order_bundle_quantity) || 0), 0),
+)
+
 // 注文があるデータをフィルタリング
 const selectedOrderItems = computed(() => {
   return tableData.value.filter((row) => row.order_quantity && row.order_quantity > 0)
@@ -3255,48 +3299,6 @@ const formatValueWithUnit = (value: number | null | undefined, unit: string = ''
 // 格式化货币，添加日本円マーク和3位数逗号
 const formatCurrency = (num: number): string => {
   return `¥${Math.round(num).toLocaleString('ja-JP')}`
-}
-
-/** 材料注文履歴テーブル合計行（表示中ページの行のみ集計） */
-const getOrderHistorySummaries = (param: {
-  columns: { property?: string }[]
-  data: MaterialOrderItem[]
-}) => {
-  const { columns, data } = param
-  const sums: string[] = []
-  columns.forEach((column, index) => {
-    const prop = column.property
-    if (index === 0) {
-      sums[index] = '合計'
-      return
-    }
-    if (prop === 'material_cd') {
-      sums[index] = data.length ? `${data.length}件` : ''
-      return
-    }
-    if (prop === 'order_quantity') {
-      const t = data.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0)
-      sums[index] = t ? String(t) : ''
-      return
-    }
-    if (prop === 'order_bundle_quantity') {
-      const t = data.reduce((s, r) => s + (Number(r.order_bundle_quantity) || 0), 0)
-      sums[index] = t ? String(t) : ''
-      return
-    }
-    if (prop === 'bundle_weight') {
-      const t = data.reduce((s, r) => s + Math.round(Number(r.bundle_weight) || 0), 0)
-      sums[index] = t ? String(t) : ''
-      return
-    }
-    if (prop === 'order_amount') {
-      const t = data.reduce((s, r) => s + Math.round(Number(r.order_amount) || 0), 0)
-      sums[index] = t ? formatCurrency(t) : ''
-      return
-    }
-    sums[index] = ''
-  })
-  return sums
 }
 
 // 日時フォーマット（日本時区）
@@ -4814,18 +4816,31 @@ ${groupBlocks}
 
 <style scoped>
 .material-order-container {
+  /* アプリヘッダー(48) + タブ(36)。ウィンドウ高さに追従しテーブルが残りを埋める */
+  --mo-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--mo-app-chrome));
+  height: calc(100dvh - var(--mo-app-chrome));
+  max-height: calc(100vh - var(--mo-app-chrome));
+  max-height: calc(100dvh - var(--mo-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 10px 12px;
   background: linear-gradient(135deg, #eef2f7 0%, #dce4f0 100%);
-  min-height: 100vh;
 }
 
 /* 页面头部样式 */
 .page-header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 10px 18px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 10px;
   color: white;
@@ -4928,7 +4943,8 @@ ${groupBlocks}
 
 /* 统计卡片样式 */
 .stats-container {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .stats-grid {
@@ -5052,7 +5068,8 @@ ${groupBlocks}
 
 /* ===== Filter Bar ===== */
 .search-section {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .search-container {
@@ -5237,8 +5254,12 @@ ${groupBlocks}
 
 
 
-/* 表格区域样式 */
+/* 表格区域：残り高さを flex で埋める */
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: white;
   border-radius: 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
@@ -5247,13 +5268,21 @@ ${groupBlocks}
 }
 
 .table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
 .table-header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 8px 12px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-bottom: 1px solid #dee2e6;
@@ -5509,16 +5538,27 @@ ${groupBlocks}
 }
 
 .unused-receiving-tab {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
+  overflow: hidden;
   background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 28%, #fff 100%);
 }
 
 .unused-receiving-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 12px 14px 14px;
   max-width: 100%;
+  overflow: hidden;
 }
 
 .unused-receiving-banner {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -5547,6 +5587,7 @@ ${groupBlocks}
 }
 
 .unused-receiving-stats-row {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -5594,15 +5635,31 @@ ${groupBlocks}
 }
 
 .unused-receiving-table-card {
-  border-radius: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
   background: #fff;
   box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
 }
 
 .unused-receiving-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   margin-top: 0;
+}
+
+.unused-receiving-table-card :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.unused-receiving-table-card :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 .unused-receiving-table :deep(.el-table__inner-wrapper::before) {
@@ -5637,15 +5694,38 @@ ${groupBlocks}
 }
 
 .table-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding: 0;
+  overflow: hidden;
 }
 
 .modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #e2e8f0;
   background: white;
+}
+
+.table-content :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-content :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+/* 行が多いとき表体だけ縦スクロール */
+.table-content :deep(.el-table__body-wrapper),
+.unused-receiving-table-card :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .order-history-table :deep(.el-table__footer-wrapper .el-table__cell) {
@@ -5699,16 +5779,145 @@ ${groupBlocks}
 }
 
 .pagination-wrapper {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-top: 1px solid #dee2e6;
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 5px 12px;
+  background: linear-gradient(180deg, #f8f9fd 0%, #f1f4fa 100%);
+  border-top: 1px solid #e6e9f4;
 }
 
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--stock {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.pagination-summary__item--stock .pagination-summary__label { color: #1d4ed8; }
+.pagination-summary__item--stock .pagination-summary__value { color: #1e40af; }
+
+.pagination-summary__item--usage {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.pagination-summary__item--usage .pagination-summary__label { color: #be123c; }
+.pagination-summary__item--usage .pagination-summary__value { color: #9f1239; }
+
+.pagination-summary__item--order {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.pagination-summary__item--order .pagination-summary__label { color: #92400e; }
+.pagination-summary__item--order .pagination-summary__value { color: #b45309; }
+
+.pagination-summary__item--bundle {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.pagination-summary__item--bundle .pagination-summary__label { color: #5b21b6; }
+.pagination-summary__item--bundle .pagination-summary__value { color: #6d28d9; }
+
 .modern-pagination {
-  --el-pagination-button-color: #6b7280;
-  --el-pagination-hover-color: #667eea;
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #4f46e5;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  min-height: 26px;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  margin: 0 1px;
+  font-weight: 600;
+}
+
+.modern-pagination :deep(.el-pager li.is-active) {
+  color: #ffffff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.3);
+}
+
+.modern-pagination :deep(.el-pagination__jump) {
+  margin-left: 4px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 /* データ生成ダイアログ - コンパクト */
@@ -7509,15 +7718,6 @@ ${groupBlocks}
   padding: 8px 12px;
 }
 
-/* 分页样式优化 */
-.pagination-wrapper {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-top: 1px solid #dee2e6;
-  display: flex;
-  justify-content: center;
-}
-
 :deep(.order-quantity-column) {
   background-color: #fef3c7 !important;
 }
@@ -8712,13 +8912,17 @@ ${groupBlocks}
   stroke: var(--mo-tab);
 }
 
-/* ページネーション */
+/* ページネーション：左合計 / 右小操作 */
 .mo-modern .pagination-wrapper {
   background: linear-gradient(180deg, #ffffff 0%, color-mix(in srgb, var(--mo-tab) 5%, #f8fafc) 100%);
 }
-.mo-modern .pagination-wrapper :deep(.el-pager li.is-active) {
+.mo-modern .modern-pagination {
+  --el-pagination-hover-color: var(--mo-tab);
+}
+.mo-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   border-radius: 7px;
+  border-color: transparent;
   background: linear-gradient(135deg, var(--mo-tab-2) 0%, var(--mo-tab) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.3),

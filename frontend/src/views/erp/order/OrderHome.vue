@@ -1,18 +1,38 @@
 <template>
-  <div class="order-home">
-    <div class="dynamic-background" aria-hidden="true">
-      <div class="gradient-orb orb-1" />
-      <div class="gradient-orb orb-2" />
-      <div class="gradient-orb orb-3" />
-    </div>
+  <div class="order-home oh-modern pb-std">
+    <div class="page-ambient" aria-hidden="true" />
 
-    <header class="page-head page-head--glass">
-      <div class="page-head-icon">
-        <el-icon :size="28"><Document /></el-icon>
+    <header class="page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
+      <div class="toolbar-left">
+        <div class="toolbar-brand">
+          <div class="toolbar-icon-wrap">
+            <el-icon class="toolbar-icon"><Document /></el-icon>
+          </div>
+          <div class="toolbar-text">
+            <h1 class="toolbar-title pb-hero-title">受注管理</h1>
+            <p class="toolbar-desc pb-hero-desc">月次・日次の受注、納入先履歴、予算管理を一元管理</p>
+          </div>
+        </div>
       </div>
-      <div class="page-head-text">
-        <h1 class="page-head-title">受注管理</h1>
-        <p class="page-head-sub">月次・日次の受注、納入先履歴、予算管理を一元管理</p>
+      <div class="toolbar-right toolbar-actions">
+        <router-link to="/erp/order/monthly" class="tb-btn tb-btn-indigo">
+          <el-icon><Calendar /></el-icon>
+          <span class="tb-label">月受注</span>
+        </router-link>
+        <router-link to="/erp/order/daily" class="tb-btn tb-btn-teal">
+          <el-icon><Clock /></el-icon>
+          <span class="tb-label">日受注</span>
+        </router-link>
+        <router-link to="/erp/order/destination-history" class="tb-btn tb-btn-amber">
+          <el-icon><DataAnalysis /></el-icon>
+          <span class="tb-label">納入先履歴</span>
+        </router-link>
+        <router-link to="/erp/order/budget" class="tb-btn tb-btn-green">
+          <el-icon><Coin /></el-icon>
+          <span class="tb-label">予算管理</span>
+        </router-link>
       </div>
     </header>
 
@@ -1080,58 +1100,27 @@ onUnmounted(() => {
   --oh-gap: 12px;
   --oh-gap-lg: 16px;
   --oh-radius: 14px;
-  --oh-max: min(100%, 1440px);
   --oh-chart-h: clamp(240px, 38vw, 340px);
   --oh-chart-daily-h: clamp(260px, 42vw, 360px);
   --oh-chart-rank-h: clamp(280px, 50vh, 400px);
 
   position: relative;
-  min-height: 100%;
   width: 100%;
-  max-width: var(--oh-max);
-  margin: 0 auto;
-  padding: clamp(12px, 2.5vw, 24px) clamp(14px, 3vw, 28px) clamp(20px, 4vw, 36px);
+  min-height: 100%;
+  padding: 12px;
   overflow-x: hidden;
   box-sizing: border-box;
 }
 
-.dynamic-background {
-  position: fixed;
+.page-ambient {
+  position: absolute;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
-}
-
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.18;
-}
-
-.orb-1 {
-  width: 380px;
-  height: 380px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  top: -120px;
-  right: -80px;
-}
-
-.orb-2 {
-  width: 280px;
-  height: 280px;
-  background: linear-gradient(135deg, #06b6d4, #22d3ee);
-  bottom: 25%;
-  left: -60px;
-}
-
-.orb-3 {
-  width: 220px;
-  height: 220px;
-  background: linear-gradient(135deg, #f59e0b, #fbbf24);
-  bottom: -40px;
-  right: 15%;
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(3, 105, 161, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 60%),
+    linear-gradient(160deg, #f0f9ff 0%, #f8fafc 45%, #ecfeff 100%);
 }
 
 .section-label {
@@ -1154,58 +1143,168 @@ onUnmounted(() => {
 
 .section-label-icon {
   font-size: 16px;
-  color: #6366f1;
+  color: #0284c8;
 }
 
-.page-head {
+/* ---------- タイトル条（深空青・他頁と分色） ---------- */
+.page-toolbar {
   position: relative;
   z-index: 1;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   margin-bottom: var(--oh-gap-lg);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #0c4a6e 0%, #0369a1 32%, #0ea5e9 68%, #38bdf8 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(3, 105, 161, 0.55),
+    0 4px 12px -6px rgba(14, 165, 233, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.page-head--glass {
-  padding: 14px 16px;
-  border-radius: var(--oh-radius);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
 }
 
-.page-head-text {
+.toolbar-left,
+.toolbar-right {
+  position: relative;
+  z-index: 1;
+}
+
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
-  flex: 1;
 }
 
-.page-head-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%);
+.toolbar-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(12, 74, 110, 0.3);
 }
 
-.page-head-title {
-  font-size: 22px;
-  font-weight: 800;
+.toolbar-icon {
+  font-size: 20px;
+}
+
+.toolbar-title {
   margin: 0;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
-.page-head-sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 500;
+.toolbar-desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tb-btn {
+  --k-rgb: 37 99 235;
+  --k-fg: #1e40af;
+  --k-bd: #93c5fd;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  color: var(--k-fg);
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%);
+  border: 1px solid var(--k-bd);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(12, 74, 110, 0.35);
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease,
+    background 0.2s ease;
+}
+.tb-btn .el-icon {
+  color: var(--k-ico);
+  font-size: 15px;
+}
+.tb-btn:hover {
+  color: rgb(var(--k-rgb));
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.14),
+    0 4px 8px -2px rgba(12, 74, 110, 0.3),
+    0 10px 22px -8px rgb(var(--k-rgb) / 0.55);
+}
+.tb-btn:active {
+  transform: translateY(1px);
+}
+.tb-btn-indigo {
+  --k-rgb: 99 102 241;
+  --k-fg: #4338ca;
+  --k-bd: #a5b4fc;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+}
+.tb-btn-teal {
+  --k-rgb: 13 148 136;
+  --k-fg: #0f766e;
+  --k-bd: #5eead4;
+  --k-tint: #ccfbf1;
+  --k-tint-h: #99f6e4;
+  --k-ico: #14b8a6;
+}
+.tb-btn-amber {
+  --k-rgb: 217 119 6;
+  --k-fg: #92400e;
+  --k-bd: #fcd34d;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+}
+.tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-bd: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
 }
 
 /* --- Summary Cards（OrderMonthlyList と同一） --- */
@@ -1213,34 +1312,10 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: var(--oh-gap);
   margin-bottom: var(--oh-gap-lg);
   min-height: 72px;
-}
-
-@media (min-width: 576px) {
-  .summary-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 900px) {
-  .summary-cards {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1200px) {
-  .summary-cards {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1400px) {
-  .summary-cards {
-    grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
-  }
 }
 
 .summary-cards.animate-in-delay-1 {
@@ -1259,20 +1334,39 @@ onUnmounted(() => {
 }
 
 .summary-card.modern-card {
+  --accent: #3b82f6;
+  position: relative;
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(226, 232, 240, 0.98);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
+.summary-card.modern-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent));
+  pointer-events: none;
+  z-index: 1;
+}
+.summary-card.info-card { --accent: #3b82f6; }
+.summary-card.success-card { --accent: #10b981; }
+.summary-card.diff-card { --accent: #8b5cf6; }
+.summary-card.plating-card { --accent: #f59e0b; }
+.summary-card.external-plating-card { --accent: #ec4899; }
+.summary-card.internal-welding-card { --accent: #06b6d4; }
+.summary-card.external-welding-card { --accent: #6366f1; }
+.summary-card.internal-inspection-card { --accent: #0ea5e9; }
+.summary-card.external-inspection-card { --accent: #a855f7; }
 
 .summary-card.modern-card:hover {
-  transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -16px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .summary-card :deep(.el-card__body) {
@@ -1399,8 +1493,7 @@ onUnmounted(() => {
 .analytics-card {
   border-radius: 14px !important;
   border: 1px solid rgba(226, 232, 240, 0.95) !important;
-  background: rgba(255, 255, 255, 0.88) !important;
-  backdrop-filter: blur(12px);
+  background: #ffffff !important;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06) !important;
   overflow: hidden;
 }
@@ -1446,9 +1539,15 @@ onUnmounted(() => {
 
 .analytics-card-head-icon {
   font-size: 20px;
-  color: #6366f1;
+  color: #0284c8;
   flex-shrink: 0;
   margin-top: 2px;
+}
+.chart-card--premium-daily .analytics-card-head-icon {
+  color: #0d9488;
+}
+.chart-card--premium-rank .analytics-card-head-icon {
+  color: #7c3aed;
 }
 
 .analytics-card-title {
@@ -1662,11 +1761,12 @@ onUnmounted(() => {
 
 @media (min-width: 960px) {
   .quick-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 .quick-nav-card {
+  --nav: #6366f1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1674,9 +1774,8 @@ onUnmounted(() => {
   text-decoration: none;
   color: inherit;
   border-radius: var(--oh-radius);
-  background: rgba(255, 255, 255, 0.72);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border: 1px solid rgba(226, 232, 240, 0.95);
-  backdrop-filter: blur(12px);
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
   transition:
     transform 0.22s ease,
@@ -1684,15 +1783,19 @@ onUnmounted(() => {
     border-color 0.22s ease;
   min-width: 0;
 }
+.quick-nav-card--violet { --nav: #7c3aed; }
+.quick-nav-card--cyan { --nav: #0891b2; }
+.quick-nav-card--amber { --nav: #d97706; }
+.quick-nav-card--emerald { --nav: #059669; }
 
 .quick-nav-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
-  border-color: rgba(99, 102, 241, 0.28);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--nav) 28%, transparent);
+  border-color: color-mix(in srgb, var(--nav) 35%, #e2e8f0);
 }
 
 .quick-nav-card:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--nav);
   outline-offset: 2px;
 }
 
@@ -1756,30 +1859,20 @@ onUnmounted(() => {
 }
 
 .quick-nav-card:hover .quick-nav-card__arrow {
-  color: #6366f1;
+  color: var(--nav);
   transform: translateX(3px);
 }
 
+@media (max-width: 768px) {
+  .page-toolbar {
+    min-height: auto;
+  }
+  .toolbar-actions {
+    width: 100%;
+  }
+}
+
 @media (max-width: 639px) {
-  .page-head {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .page-head-icon {
-    width: 46px;
-    height: 46px;
-    border-radius: 12px;
-  }
-
-  .page-head-title {
-    font-size: 18px;
-  }
-
-  .page-head-sub {
-    font-size: 12px;
-  }
-
   .summary-title {
     font-size: 10px;
     white-space: normal;
@@ -1828,10 +1921,12 @@ onUnmounted(() => {
   .order-home {
     --oh-gap: 8px;
     --oh-gap-lg: 12px;
+    padding: 8px;
   }
 
-  .page-head--glass {
-    padding: 12px 14px;
+  .toolbar-actions .tb-btn {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   .quick-nav-card {

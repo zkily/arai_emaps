@@ -33,9 +33,18 @@
     </div>
 
     <div class="table-section">
-      <el-table :data="tableData" border stripe v-loading="loading" class="modern-table"
+      <div class="table-card__body">
+      <el-table
+        :data="pagedList"
+        border
+        stripe
+        size="small"
+        height="100%"
+        v-loading="loading"
+        class="modern-table"
         :header-cell-style="{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', fontWeight: '600', fontSize: '12px', padding: '6px 10px' }"
-        :cell-style="{ padding: '5px 8px', fontSize: '12px' }">
+        :cell-style="{ padding: '5px 8px', fontSize: '12px' }"
+      >
         <el-table-column :label="t('master.process.code')" prop="process_cd" width="90" align="center">
           <template #default="{ row }"><span class="code-cell">{{ row.process_cd }}</span></template>
         </el-table-column>
@@ -75,10 +84,32 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+      </div>
 
-    <div class="footer-section">
-      <div class="result-info"><el-icon>📊</el-icon><span>{{ t('master.process.displayCountShort', { n: tableData.length }) }}</span></div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ tableData.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="tableData.length"
+          :page-sizes="[20, 30, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
 
     <ProcessEditDialog v-model:visible="dialogVisible" :mode="dialogMode" :initial-data="editTarget" @saved="fetchList" />
@@ -86,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Printer } from '@element-plus/icons-vue'
@@ -107,6 +138,33 @@ const editTarget = ref<ProcessItem | null>(null)
 
 const outsourceCount = computed(() => tableData.value.filter((p) => p.is_outsource).length)
 const inHouseCount = computed(() => tableData.value.length - outsourceCount.value)
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 30,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return tableData.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = tableData.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
@@ -225,9 +283,31 @@ onMounted(() => fetchList())
 </script>
 
 <style scoped>
-.process-master-container { padding: 12px 16px; background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%); min-height: 100vh; }
+.process-master-container {
+  --prc-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--prc-app-chrome));
+  height: calc(100dvh - var(--prc-app-chrome));
+  max-height: calc(100vh - var(--prc-app-chrome));
+  max-height: calc(100dvh - var(--prc-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px;
+  background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+}
 
-.page-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 12px 18px; margin-bottom: 12px; box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3); }
+.page-header {
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-bottom: 0;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+}
 .header-content { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .title-row { display: flex; align-items: center; gap: 10px; }
 .title-icon { font-size: 1.4rem; }
@@ -241,8 +321,114 @@ onMounted(() => fetchList())
 .add-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; font-weight: 600; color: #fff; }
 .add-btn:hover { background: rgba(255,255,255,0.25); }
 
-.table-section { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 12px; }
-.modern-table { width: 100%; }
+.table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+}
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+.modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #ecfeff 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label {
+  color: #0e7490;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #155e75;
+}
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #0891b2;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
 .code-cell { font-family: 'Consolas', monospace; font-weight: 600; color: #667eea; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 .name-cell { font-weight: 500; color: #1e293b; }
 .number-cell { font-family: 'Consolas', monospace; font-weight: 500; color: #374151; }
@@ -250,10 +436,6 @@ onMounted(() => fetchList())
 .empty-cell { color: #cbd5e1; }
 .action-buttons { display: flex; gap: 4px; justify-content: center; }
 .action-btn { padding: 3px 8px; font-size: 11px; border-radius: 6px; min-width: 32px; }
-
-.footer-section { background: #fff; border-radius: 10px; padding: 8px 16px; display: flex; align-items: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-.result-info { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 0.85rem; }
-.result-info strong { color: #667eea; font-weight: 700; }
 
 @media (max-width: 768px) {
   .process-master-container { padding: 8px; }
@@ -483,8 +665,7 @@ onMounted(() => fetchList())
 }
 
 /* ---------- テーブル ---------- */
-.prc-modern .table-section,
-.prc-modern .footer-section {
+.prc-modern .table-section {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
@@ -615,18 +796,16 @@ onMounted(() => fetchList())
   box-shadow: none;
 }
 
-/* ---------- フッター ---------- */
-.prc-modern .footer-section {
+/* ---------- ページネーション ---------- */
+.prc-modern .pagination-bar {
+  border-top-color: var(--hx-line);
   background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
 }
 
-.prc-modern .result-info {
-  padding: 2px 10px;
-  color: var(--hx-deep);
+.prc-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
   font-weight: 700;
-  border-radius: 999px;
-  background: var(--hx-soft2);
-  box-shadow: inset 0 0 0 1px var(--hx-line);
+  background: linear-gradient(135deg, #22d3ee 0%, #0891b2 55%, #0e7490 100%);
 }
 
 /* ---------- キーフレーム ---------- */

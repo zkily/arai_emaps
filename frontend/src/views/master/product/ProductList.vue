@@ -251,6 +251,7 @@
 
     <!-- 数据表格 -->
     <div class="table-section">
+      <div class="table-card__body">
       <el-table
         :data="productList"
         v-loading="loading"
@@ -260,7 +261,7 @@
         size="small"
         class="product-table"
         :style="{ width: '100%' }"
-        height="600"
+        height="100%"
         :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
         :cell-style="{ padding: '4px 8px' }"
         :default-sort="{ prop: 'product_name', order: 'ascending' }"
@@ -606,16 +607,29 @@
         </template>
       </el-table-column>
       </el-table>
+      </div>
 
-      <!-- 分页 -->
-      <div class="pagination-wrap">
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="pagination.page"
-          :page-size="pagination.pageSize"
+          v-model:page-size="pagination.pageSize"
           :total="pagination.total"
-          layout="total, prev, pager, next"
-          class="pagination"
-          background
+          :page-sizes="[30, 50, 100, 200]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handleSizeChange"
           @current-change="fetchList"
         />
       </div>
@@ -747,6 +761,19 @@ const pagination = reactive({
   pageSize: 50,
   total: 0,
 })
+
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handleSizeChange() {
+  pagination.page = 1
+  fetchList()
+}
 
 // 排序（サーバー側）
 const sortState = reactive<{ sort_by: 'product_cd' | 'product_name'; sort_order: 'asc' | 'desc' }>({
@@ -1970,17 +1997,29 @@ onMounted(async () => {
 
 <style scoped>
 .product-master-container {
+  --prm-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--prm-app-chrome));
+  height: calc(100dvh - var(--prm-app-chrome));
+  max-height: calc(100vh - var(--prm-app-chrome));
+  max-height: calc(100dvh - var(--prm-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
-  min-height: 100vh;
 }
 
 /* 页面头部 */
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
   padding: 10px 16px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
 }
 
@@ -2074,10 +2113,11 @@ onMounted(async () => {
 
 /* 操作区域 */
 .action-section {
+  flex-shrink: 0;
   background: white;
   border-radius: 10px;
   padding: 0;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
   overflow: hidden;
@@ -2087,7 +2127,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 6px 12px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
 }
@@ -2248,8 +2288,8 @@ onMounted(async () => {
   display: flex;
   flex-wrap: nowrap;
   align-items: stretch;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 6px;
+  padding: 6px 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
@@ -2257,10 +2297,10 @@ onMounted(async () => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 8px;
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -2391,25 +2431,110 @@ onMounted(async () => {
 }
 
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #fff;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  margin-bottom: 6px;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .product-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   --el-table-border-color: #e2e8f0;
   --el-table-row-hover-bg-color: #f1f5f9;
 }
 
-.pagination-wrap {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
-  padding: 8px 12px 10px;
-  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
   border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f0f9ff 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #2563eb;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 96px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .summary-text {
@@ -2480,24 +2605,6 @@ onMounted(async () => {
 
 .filter-inline-summary .summary-text {
   margin-bottom: 0;
-}
-
-.pagination {
-  margin-top: 0;
-  text-align: center;
-  justify-content: center;
-}
-
-.pagination :deep(.el-pager li) {
-  border-radius: 6px;
-  font-size: 12px;
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
-}
-
-.pagination :deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 /* 响应式设计 */
@@ -3069,11 +3176,14 @@ onMounted(async () => {
   opacity: 0.85;
 }
 
-.prm-modern .pagination-wrap {
+.prm-modern .pagination-bar {
+  border-top-color: #bae6fd;
   background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
 }
 
-.prm-modern .pagination :deep(.el-pager li.is-active) {
+.prm-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
   background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 55%, #4338ca 100%);
   transform: translateY(-1px);
   box-shadow:

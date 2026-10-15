@@ -278,12 +278,15 @@
         </div>
       </template>
 
-      <div class="table-wrapper">
+      <div class="table-card__body">
         <el-table
           ref="tableRef"
           :data="displayedList"
           border
+          stripe
+          size="small"
           highlight-current-row
+          height="100%"
           v-loading="loading"
           element-loading-text="データを読み込み中..."
           element-loading-background="rgba(255, 255, 255, 0.8)"
@@ -561,22 +564,40 @@
         </el-table>
       </div>
 
-      <!-- ページネーション -->
-      <div class="pagination-container" v-if="shippingList.length">
-        <div class="pagination-info">
-          <span class="info-text">
-            {{ (currentPage - 1) * pageSize + 1 }}-{{
-              Math.min(currentPage * pageSize, shippingList.length)
-            }}
-            / {{ shippingList.length }}件
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ shippingList.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--boxes">
+            <span class="pagination-summary__label">箱数</span>
+            <b class="pagination-summary__value">{{ pageBoxesTotal.toLocaleString('ja-JP') }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--qty">
+            <span class="pagination-summary__label">数量</span>
+            <b class="pagination-summary__value">{{ pageUnitsTotal.toLocaleString('ja-JP') }}</b>
+          </span>
+          <span
+            v-if="totalSelectedCount > 0"
+            class="pagination-summary__item pagination-summary__item--selected"
+          >
+            <span class="pagination-summary__label">選択</span>
+            <b class="pagination-summary__value">{{ totalSelectedCount.toLocaleString('ja-JP') }}</b>
           </span>
         </div>
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="sizes, prev, pager, next"
+          layout="sizes, prev, pager, next, jumper"
           :total="shippingList.length"
+          small
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
           class="modern-pagination"
@@ -1243,6 +1264,22 @@ const displayedList = computed(() => {
   const end = start + pageSize.value
   return shippingList.value.slice(start, end)
 })
+
+const pageRangeText = computed(() => {
+  const total = shippingList.value.length
+  if (!total) return '0'
+  const start = pageSize.value * (currentPage.value - 1) + 1
+  const end = Math.min(pageSize.value * currentPage.value, total)
+  return `${start}–${end}`
+})
+
+const pageBoxesTotal = computed(() =>
+  displayedList.value.reduce((sum, row) => sum + (Number(row.confirmed_boxes) || 0), 0),
+)
+
+const pageUnitsTotal = computed(() =>
+  displayedList.value.reduce((sum, row) => sum + (Number(row.confirmed_units) || 0), 0),
+)
 
 // 箱タイプのリスト
 const boxTypes = ref(['小箱', '大箱', 'TP箱', '特殊'])
@@ -2869,13 +2906,23 @@ async function loadDestinationGroups() {
 }
 
 .shipping-list-container {
-  padding: 2px;
+  --sl-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
   max-width: 100%;
   margin: 0 auto;
-  background: #f5f7fa;
-  min-height: 100vh;
-  position: relative;
+  height: calc(100vh - var(--sl-app-chrome));
+  height: calc(100dvh - var(--sl-app-chrome));
+  max-height: calc(100vh - var(--sl-app-chrome));
+  max-height: calc(100dvh - var(--sl-app-chrome));
+  min-height: 0;
   overflow: hidden;
+  padding: 6px;
+  background: #f5f7fa;
+  position: relative;
   font-family:
     '游ゴシック', 'Yu Gothic', 'YuGothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Kaku Gothic Pro',
     'Meiryo', sans-serif;
@@ -2909,7 +2956,8 @@ async function loadDestinationGroups() {
 }
 
 .page-header {
-  margin-bottom: 4px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
   border-radius: 12px;
   padding: 2px 16px;
@@ -3087,11 +3135,18 @@ async function loadDestinationGroups() {
 }
 
 .filter-card {
-  margin-bottom: 6px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   animation-delay: 0.2s;
 }
 
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 0;
   animation-delay: 0.3s;
 }
 
@@ -3113,7 +3168,7 @@ async function loadDestinationGroups() {
 }
 
 .filter-card {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .filter-card :deep(.el-card__body) {
@@ -3283,12 +3338,18 @@ async function loadDestinationGroups() {
   box-shadow: 0 2px 6px rgba(107, 114, 128, 0.3);
 }
 
-.table-card {
-  margin-bottom: 8px;
+.table-card :deep(.el-card__header) {
+  flex-shrink: 0;
+  padding: 4px 12px !important;
 }
 
-.table-card :deep(.el-card__header) {
-  padding: 4px 12px !important;
+.table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 !important;
 }
 
 .table-header {
@@ -3438,12 +3499,13 @@ async function loadDestinationGroups() {
 
 /* 操作按钮行（筛选区域下方单独一行，同行居中） */
 .action-buttons-row {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 0;
   padding: 2px 0;
 }
 
@@ -3578,41 +3640,137 @@ async function loadDestinationGroups() {
   box-shadow: 0 8px 20px rgba(245, 158, 11, 0.5);
 }
 
-.table-wrapper {
-  border-radius: 12px;
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: white;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   background: white;
 }
 
-.pagination-container {
-  margin-top: 12px;
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 8px 0 2px 0;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 12px;
   border-top: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
-
-.pagination-info {
-  color: #7f8c8d;
-  font-weight: 500;
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
-
-.info-text {
-  background: #f3f4f6;
-  padding: 4px 10px;
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 6px;
-  font-size: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.pagination-summary__item--boxes {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.pagination-summary__item--boxes .pagination-summary__label { color: #6d28d9; }
+.pagination-summary__item--boxes .pagination-summary__value { color: #5b21b6; }
+.pagination-summary__item--qty {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #1d4ed8; }
+.pagination-summary__item--qty .pagination-summary__value { color: #1e40af; }
+.pagination-summary__item--selected {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.pagination-summary__item--selected .pagination-summary__label { color: #c2410c; }
+.pagination-summary__item--selected .pagination-summary__value { color: #9a3412; }
 
 .modern-pagination {
-  display: flex;
-  justify-content: flex-end;
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #2563eb;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  padding: 0 4px;
+}
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
 }
 
 /* 表格单元格样式 */
@@ -6237,7 +6395,8 @@ async function loadDestinationGroups() {
 
 /* ---------- ヘッダー ---------- */
 .sl-modern .page-header {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   padding: 10px 16px;
   border-radius: 14px;
   background: linear-gradient(120deg, #1e3a8a 0%, #1d4ed8 38%, #2563eb 70%, #60a5fa 100%);
@@ -6613,6 +6772,20 @@ async function loadDestinationGroups() {
 }
 
 /* ---------- 操作ボタン（色分けグラデーション・立体はグローバル標準） ---------- */
+.sl-modern .filter-card,
+.sl-modern .action-buttons-row {
+  flex-shrink: 0;
+}
+
+.sl-modern .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
 .sl-modern .action-buttons-row {
   gap: 10px;
   margin: 2px 0 8px;
@@ -6712,13 +6885,31 @@ async function loadDestinationGroups() {
 
 /* ---------- 一覧テーブル ---------- */
 .sl-modern .table-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 8px 14px !important;
   border-bottom: 1px solid #eef2f7;
   background: linear-gradient(180deg, #fbfdff, #fff);
 }
 
 .sl-modern .table-card :deep(.el-card__body) {
-  padding: 10px 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.sl-modern .pagination-bar {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  border-top: 1px solid #e0e7ff;
+}
+
+.sl-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 800;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
 }
 
 .sl-modern .table-title {

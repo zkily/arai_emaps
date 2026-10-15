@@ -488,6 +488,7 @@
         </el-tab-pane>
       </el-tabs>
 
+      <div class="table-card__body">
       <el-table
             :data="tableData"
             v-loading="loading"
@@ -495,7 +496,7 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'product_name', order: 'ascending' }"
-            :height="'calc(72vh - 60px)'"
+            height="100%"
             @sort-change="handleSortChange"
             @cell-click="handleCellClick"
             @cell-dblclick="handleCellDoubleClick"
@@ -670,15 +671,30 @@
               </el-table-column>
             </template>
           </el-table>
+      </div>
 
-      <div class="pagination-wrapper">
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="total"
-          layout="total, prev, pager, next"
+          :page-sizes="[50, 100, 150, 200]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          @size-change="handleSizeChange"
           @current-change="handlePageChange"
-          class="pagination-compact"
+          class="modern-pagination"
         />
       </div>
     </el-card>
@@ -3043,13 +3059,6 @@ const groupedColumns = computed(() => {
   return groups
 })
 
-const numericFields = new Set(
-  columnKeys.filter((k) => {
-    const def = columnDefinitions[k]
-    return def && def.type !== 'date' && def.type !== 'text'
-  })
-)
-
 const formatDate = (dateValue: string | Date | null) => {
   if (!dateValue) return '-'
   if (typeof dateValue === 'string') return dateValue.split('T')[0]
@@ -3141,6 +3150,13 @@ function sumSafetyStockByLatestDatePerProduct(data: any[]): number {
   return Array.from(byProduct.values()).reduce((a, b) => a + b.safety_stock, 0)
 }
 
+const numericFields = new Set(
+  columnKeys.filter((k) => {
+    const def = columnDefinitions[k]
+    return def && def.type !== 'date' && def.type !== 'text'
+  }),
+)
+
 const getSummaries = (param: { columns: any[]; data: any[] }) => {
   const { columns, data } = param
   // 合計行は全ページ分（summaryAllData）。未取得時のみ当ページ data にフォールバック
@@ -3169,6 +3185,14 @@ const getSummaries = (param: { columns: any[]; data: any[] }) => {
   })
   return sums
 }
+
+const pageRangeText = computed(() => {
+  const t = total.value
+  if (!t) return '0'
+  const start = pageSize.value * (currentPage.value - 1) + 1
+  const end = Math.min(pageSize.value * currentPage.value, t)
+  return `${start}–${end}`
+})
 
 /** データ生成用：当月1日 ～ 当月起算4ヶ月後の月末（日本時区） */
 const getGenerateDateRange = (): { start: string; end: string } => {
@@ -5229,6 +5253,10 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
   fetchData()
 }
 const handlePageChange = () => fetchData()
+const handleSizeChange = () => {
+  currentPage.value = 1
+  fetchData()
+}
 const handleRefresh = () => fetchData()
 
 const handleFilterProductFromStagnation = (productCd: string) => {
@@ -7795,15 +7823,27 @@ onUnmounted(() => {
 
 <style scoped>
 .production-data-management {
-  padding: 0.65rem 0.75rem 1rem;
-  min-height: 100%;
+  --pd-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--pd-app-chrome));
+  height: calc(100dvh - var(--pd-app-chrome));
+  max-height: calc(100vh - var(--pd-app-chrome));
+  max-height: calc(100dvh - var(--pd-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.65rem 0.75rem;
   background: linear-gradient(160deg, #ecfdf5 0%, #f0fdf4 42%, #f8fafc 100%);
 }
 
 .page-header {
+  flex-shrink: 0;
   border-radius: 16px;
   padding: 16px 22px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   color: white;
   box-shadow: 0 10px 28px rgba(5, 150, 105, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.18) inset;
 }
@@ -7987,9 +8027,13 @@ onUnmounted(() => {
 }
 /* 内容区域：统一字体 0.75rem，组件高度 28px */
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 14px;
   border: 1px solid rgba(16, 185, 129, 0.16);
-  overflow: hidden;
   font-size: 0.75rem;
   background: rgba(255, 255, 255, 0.92);
   box-shadow:
@@ -7997,12 +8041,18 @@ onUnmounted(() => {
     0 0 0 1px rgba(255, 255, 255, 0.8) inset;
 }
 .table-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 0.45rem 0.65rem;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.65) 100%);
   border-bottom: 1px solid rgba(226, 232, 240, 0.85);
 }
 .table-card :deep(.el-card__body) {
-  padding: 0.45rem 0.65rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.45rem 0.65rem 0;
   background: linear-gradient(180deg, #fafbfc 0%, #fff 32%);
 }
 .filter-section {
@@ -8103,6 +8153,7 @@ onUnmounted(() => {
   width: 160px;
 }
 .summary-table-tabs {
+  flex-shrink: 0;
   margin-bottom: 0;
   padding: 0.15rem 0 0;
 }
@@ -8172,7 +8223,27 @@ onUnmounted(() => {
   color: inherit;
 }
 /* テーブル：字体与区域统一 0.75rem */
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
 .modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   font-size: 0.75rem;
 }
 .modern-table :deep(.el-table) {
@@ -8233,28 +8304,73 @@ onUnmounted(() => {
 .text-cell {
   color: #374151;
 }
-.pagination-wrapper {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 0.5rem 0 0;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 4px 8px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  margin-top: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(236, 253, 245, 0.95) 100%);
 }
-.pagination-compact {
-  font-size: 0.75rem;
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
-.pagination-compact :deep(.el-pagination__total),
-.pagination-compact :deep(.el-pagination__jump),
-.pagination-compact :deep(.el-pager li),
-.pagination-compact :deep(.btn-prev),
-.pagination-compact :deep(.btn-next) {
-  font-size: 0.75rem;
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
-.pagination-compact :deep(.el-pager li),
-.pagination-compact :deep(.btn-prev),
-.pagination-compact :deep(.btn-next) {
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #059669;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 100px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 .column-settings-content {
   max-height: 60vh;
@@ -9353,9 +9469,7 @@ onUnmounted(() => {
     padding: 2px 6px;
     font-size: 0.7rem;
   }
-  .pagination-wrapper {
-    padding: 0.35rem 0 0;
-    flex-wrap: wrap;
+  .pagination-bar {
     justify-content: center;
   }
   .column-group {
@@ -9420,9 +9534,9 @@ onUnmounted(() => {
     padding: 2px 4px;
     font-size: 0.65rem;
   }
-  .pagination-compact :deep(.el-pager li),
-  .pagination-compact :deep(.btn-prev),
-  .pagination-compact :deep(.btn-next) {
+  .modern-pagination :deep(.el-pager li),
+  .modern-pagination :deep(.btn-prev),
+  .modern-pagination :deep(.btn-next) {
     min-width: 24px;
     height: 24px;
     line-height: 24px;
@@ -9992,6 +10106,10 @@ onUnmounted(() => {
 .pd-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child) {
   box-shadow: inset 4px 0 0 #10b981;
 }
+.pd-modern .modern-table :deep(.el-table__body-wrapper .el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #34d399, #059669);
+  opacity: 0.7;
+}
 .pd-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell) {
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
   border-top: 2px solid #6ee7b7;
@@ -10002,21 +10120,14 @@ onUnmounted(() => {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-
 /* ---------- ページネーション ---------- */
-.pd-modern .pagination-compact :deep(.el-pagination__total) {
-  height: 24px;
-  line-height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #047857;
-  font-weight: 700;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+.pd-modern .pagination-bar {
+  border-top-color: #a7f3d0;
+  background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
 }
-.pd-modern .pagination-compact :deep(.el-pager li),
-.pd-modern .pagination-compact :deep(.btn-prev),
-.pd-modern .pagination-compact :deep(.btn-next) {
+.pd-modern .modern-pagination :deep(.el-pager li),
+.pd-modern .modern-pagination :deep(.btn-prev),
+.pd-modern .modern-pagination :deep(.btn-next) {
   margin: 0 2px;
   border-radius: 8px;
   transition:
@@ -10024,13 +10135,13 @@ onUnmounted(() => {
     box-shadow 0.15s ease,
     color 0.15s ease;
 }
-.pd-modern .pagination-compact :deep(.el-pager li:not(.is-active):hover),
-.pd-modern .pagination-compact :deep(.btn-prev:not(:disabled):hover),
-.pd-modern .pagination-compact :deep(.btn-next:not(:disabled):hover) {
+.pd-modern .modern-pagination :deep(.el-pager li:not(.is-active):hover),
+.pd-modern .modern-pagination :deep(.btn-prev:not(:disabled):hover),
+.pd-modern .modern-pagination :deep(.btn-next:not(:disabled):hover) {
   color: #059669;
   transform: translateY(-1px);
 }
-.pd-modern .pagination-compact :deep(.el-pager li.is-active) {
+.pd-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   font-weight: 700;
   background: linear-gradient(135deg, #34d399 0%, #059669 100%);

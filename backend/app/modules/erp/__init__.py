@@ -14,6 +14,7 @@ from .inventory_report_api import router as inventory_report_router
 from .inventory_value_api import router as inventory_value_router
 from .master_api import router as master_router
 from .production_actual_api import router as production_actual_router
+from .production_equipment_capacity_api import router as production_equipment_capacity_router
 from .production_review_api import router as production_review_router
 from .sales_api import router as sales_router
 from .standard_cost_api import router as standard_cost_router
@@ -39,6 +40,7 @@ router.include_router(standard_cost_router)
 router.include_router(bulk_disposal_retention_router)
 router.include_router(inventory_report_router)
 router.include_router(production_review_router)
+router.include_router(production_equipment_capacity_router)
 router.include_router(supply_part_router)
 
 __all__ = ["router"]

@@ -80,12 +80,13 @@
           </el-row>
           <el-row :gutter="10">
             <el-col :span="12">
-              <el-form-item :label="t('master.machine.efficiency')">
+              <el-form-item :label="t('master.machine.availabilityRate')">
                 <el-input-number
-                  v-model="form.efficiency"
+                  v-model="form.availability_rate"
                   :min="0"
-                  :max="300"
-                  :step="1"
+                  :max="100"
+                  :step="0.1"
+                  :precision="1"
                   class="full-width"
                 />
               </el-form-item>
@@ -181,7 +182,7 @@ const form = reactive({
   available_from: '' as string | undefined,
   available_to: '' as string | undefined,
   calendar_id: undefined as number | undefined,
-  efficiency: 100,
+  availability_rate: 100.0,
   available_qty: 0,
   use_in_cpsat: true,
   note: '',
@@ -214,7 +215,7 @@ function resetForm() {
     available_from: '',
     available_to: '',
     calendar_id: undefined,
-    efficiency: 100,
+    availability_rate: 100.0,
     available_qty: 0,
     use_in_cpsat: true,
     note: '',
@@ -234,7 +235,10 @@ watch(() => props.visible, (val) => {
         available_from: props.data.available_from ?? '',
         available_to: props.data.available_to ?? '',
         calendar_id: props.data.calendar_id,
-        efficiency: props.data.efficiency ?? 100,
+        availability_rate:
+          props.data.availability_rate != null
+            ? Math.round(Number(props.data.availability_rate) * 10) / 10
+            : 100.0,
         available_qty: props.data.available_qty ?? 0,
         use_in_cpsat: props.data.use_in_cpsat !== false,
         note: props.data.note ?? '',
@@ -259,7 +263,10 @@ async function submitForm() {
       available_from: form.available_from || undefined,
       available_to: form.available_to || undefined,
       calendar_id: form.calendar_id,
-      efficiency: form.efficiency,
+      availability_rate:
+        form.availability_rate != null
+          ? Math.round(Number(form.availability_rate) * 10) / 10
+          : 100.0,
       available_qty: form.available_qty,
       use_in_cpsat: form.use_in_cpsat,
       note: form.note || undefined,

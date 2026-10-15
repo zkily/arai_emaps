@@ -6,6 +6,7 @@
           <el-icon :size="18"><Goods /></el-icon>
         </span>
         <span class="pd-panel__title">製品情報</span>
+        <span class="pd-panel__cd">{{ product.product_cd }}</span>
       </div>
     </header>
     <div class="pd-panel__body">
@@ -63,22 +64,19 @@ watch(
 
 <style scoped>
 .pd-panel {
-  margin-bottom: 8px;
-  border-radius: 10px;
+  flex-shrink: 0;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 6px 16px -6px rgba(15, 23, 42, 0.08);
+  border: 1px solid #ddd6fe;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 8px 20px -10px rgba(76, 29, 149, 0.2);
 }
 
 .pd-panel__head {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 55%, #8b5cf6 100%);
+  padding: 8px 12px;
+  background: linear-gradient(125deg, #5b21b6 0%, #7c3aed 55%, #a78bfa 100%);
 }
 
 .pd-panel__head-main {
@@ -86,6 +84,7 @@ watch(
   align-items: center;
   gap: 8px;
   min-width: 0;
+  width: 100%;
 }
 
 .pd-panel__icon-wrap {
@@ -96,16 +95,28 @@ watch(
   height: 30px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   color: #fff;
   flex-shrink: 0;
 }
 
 .pd-panel__title {
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
   letter-spacing: 0.02em;
+}
+
+.pd-panel__cd {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .pd-panel__body {
@@ -127,9 +138,9 @@ watch(
 .pd-desc :deep(.el-descriptions__label) {
   width: var(--pd-label-w) !important;
   font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #64748b !important;
-  background: #f8fafc !important;
+  font-weight: 700 !important;
+  color: #6d28d9 !important;
+  background: #faf5ff !important;
   padding: 5px 8px !important;
 }
 
@@ -142,6 +153,7 @@ watch(
 
 .pd-desc :deep(.el-descriptions__cell) {
   padding-bottom: 0 !important;
+  border-color: #ede9fe !important;
 }
 
 .pd-val {
@@ -152,8 +164,8 @@ watch(
 .pd-val--mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  font-weight: 600;
-  color: #4f46e5;
+  font-weight: 700;
+  color: #6d28d9;
 }
 
 @media (max-width: 640px) {

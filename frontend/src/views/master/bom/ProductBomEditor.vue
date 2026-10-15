@@ -95,6 +95,13 @@
       </el-form>
     </el-card>
 
+    <div
+      class="pbe-workspace"
+      :class="{
+        'pbe-workspace--with-split': !!selectedProductCd,
+        'pbe-workspace--with-tree': !!selectedHeader,
+      }"
+    >
     <!-- 製品選択後：左=工程順 右=材料・部品（BOM版選択後） -->
     <div v-if="selectedProductCd" class="pbe-main-split">
       <el-card class="pbe-main-split__left pbe-panel pbe-route-panel" shadow="never">
@@ -118,6 +125,7 @@
             stripe
             class="pbe-table pbe-route-table"
             style="width: 100%"
+            height="100%"
           >
             <el-table-column prop="step_no" label="順" width="44" align="center">
               <template #default="{ row }">
@@ -160,6 +168,7 @@
               size="small"
               stripe
               style="width: 100%"
+              height="100%"
             >
               <el-table-column
                 prop="line_no"
@@ -240,6 +249,7 @@
               size="small"
               stripe
               style="width: 100%"
+              height="100%"
             >
               <el-table-column
                 prop="line_no"
@@ -411,6 +421,7 @@
             default-expand-all
             size="small"
             style="width: 100%"
+            height="100%"
           >
             <el-table-column prop="line_no" label="行番" width="70" />
             <el-table-column prop="component_type" label="子品目種別" width="110">
@@ -612,6 +623,7 @@
           <el-button size="small" class="pbe-btn-clear" @click="resetSearch">クリア</el-button>
         </el-form-item>
       </el-form>
+      <div class="pbe-search-card-body">
       <el-table
         :data="headers"
         v-loading="loadingHeaders"
@@ -621,6 +633,7 @@
         stripe
         @current-change="onGlobalHeaderSelect"
         style="width: 100%"
+        height="100%"
       >
         <el-table-column prop="parent_product_cd" label="親製品CD" width="140">
           <template #default="{ row }">
@@ -680,16 +693,29 @@
         </el-table-column>
       </el-table>
       <div class="pagination-wrap pbe-pagination">
+        <div class="pbe-pagination-summary">
+          <span class="pbe-pagination-pill">
+            <span class="pbe-pagination-pill__label">合計</span>
+            <b class="pbe-pagination-pill__value">{{ headerTotal.toLocaleString('ja-JP') }}</b>
+            <span class="pbe-pagination-pill__unit">件</span>
+          </span>
+          <span class="pbe-pagination-pill pbe-pagination-pill--range">
+            <span class="pbe-pagination-pill__label">表示</span>
+            <b class="pbe-pagination-pill__value">{{ headerPageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           size="small"
-          layout="total, prev, pager, next"
+          layout="prev, pager, next"
           :total="headerTotal"
           :page-size="pageSize"
           v-model:current-page="currentPage"
           @current-change="loadHeaders"
         />
       </div>
+      </div>
     </el-card>
+    </div>
 
     <!-- 新規/編集：工程順ガイド付き -->
     <el-dialog
@@ -1651,6 +1677,13 @@ const searchStatus = ref('')
 const currentPage = ref(1)
 const pageSize = 20
 const headerTotal = ref(0)
+const headerPageRangeText = computed(() => {
+  const total = headerTotal.value
+  if (!total) return '—'
+  const start = pageSize * (currentPage.value - 1) + 1
+  const end = Math.min(pageSize * currentPage.value, total)
+  return `${start.toLocaleString('ja-JP')}–${end.toLocaleString('ja-JP')}`
+})
 const headers = ref<BomHeader[]>([])
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
@@ -2156,11 +2189,31 @@ onMounted(() => {
 
 <style scoped>
 .bom-editor {
-  min-height: 100vh;
+  --pbe-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--pbe-app-chrome));
+  height: calc(100dvh - var(--pbe-app-chrome));
+  max-height: calc(100vh - var(--pbe-app-chrome));
+  max-height: calc(100dvh - var(--pbe-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 10px 12px 12px;
+  gap: 8px;
   background:
     radial-gradient(ellipse 95% 65% at 0% -12%, rgba(99, 102, 241, 0.1), transparent 46%),
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.pbe-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 8px;
 }
 
 /* 操作列：アイコンのみ */
@@ -2181,8 +2234,9 @@ onMounted(() => {
 /* ページヒーロー */
 .pbe-hero {
   position: relative;
+  flex-shrink: 0;
   border-radius: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   overflow: hidden;
   box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.22);
 }
@@ -2240,7 +2294,8 @@ onMounted(() => {
 
 /* フィルタツールバー */
 .pbe-toolbar-card.filter-card {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
@@ -2277,11 +2332,14 @@ onMounted(() => {
 }
 
 .pbe-main-split {
+  flex: 0 1 38%;
+  min-height: 100px;
+  max-height: 40%;
   display: flex;
   align-items: stretch;
   gap: 10px;
-  margin-bottom: 10px;
-  min-height: 0;
+  margin-bottom: 0;
+  overflow: hidden;
 }
 
 .pbe-main-split__left {
@@ -2302,16 +2360,44 @@ onMounted(() => {
 }
 
 .pbe-mats-parts-stack {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: hidden;
+}
+
+.pbe-mats-parts-stack .pbe-panel {
+  flex: 1 1 0;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pbe-mats-parts-stack .pbe-panel :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pbe-main-split__right > .pbe-panel--placeholder {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .pbe-route-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   display: flex;
   flex-direction: column;
-  min-height: 120px;
-  max-height: min(62vh, 520px);
+  overflow: hidden;
 }
 
 .pbe-route-panel :deep(.el-card__body) {
@@ -2325,11 +2411,15 @@ onMounted(() => {
 .pbe-route-panel__body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .pbe-route-table {
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100% !important;
 }
 
 .pbe-panel--placeholder :deep(.el-card__body) {
@@ -2351,12 +2441,13 @@ onMounted(() => {
 @media (max-width: 960px) {
   .pbe-main-split {
     flex-direction: column;
+    max-height: 45%;
   }
 
   .pbe-main-split__left {
     flex: none;
     width: 100%;
-    max-height: min(40vh, 320px);
+    max-height: 50%;
   }
 }
 
@@ -2451,10 +2542,14 @@ onMounted(() => {
 }
 
 .tree-card {
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .pbe-tree-card {
+  flex: 1 1 60%;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
@@ -2509,12 +2604,15 @@ onMounted(() => {
 }
 
 .pbe-tree-card-body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pbe-tree-filter-bar {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2541,9 +2639,17 @@ onMounted(() => {
 }
 
 .pbe-tree-content {
-  min-height: 120px;
-  max-height: 560px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.pbe-tree-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100% !important;
 }
 
 /* —— BOM ビジュアル：図のようなブロック＋所要量 —— */
@@ -2711,27 +2817,67 @@ onMounted(() => {
 }
 
 .pbe-tree-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
 }
 
 .search-card {
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .pbe-search-card {
+  flex: 1 1 auto;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
 }
 
+.pbe-workspace--with-tree .pbe-search-card {
+  flex: 0 1 34%;
+  max-height: 38%;
+  min-height: 140px;
+}
+
 .pbe-search-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 8px 12px;
   border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(180deg, #fafbfc, #f8fafc);
 }
 
 .pbe-search-card :deep(.el-card__body) {
-  padding: 8px 12px 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 12px 0;
+}
+
+.pbe-search-form {
+  flex-shrink: 0;
+}
+
+.pbe-search-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pbe-headers-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100% !important;
 }
 
 .pbe-search-form.search-form :deep(.el-form-item) {
@@ -2748,14 +2894,69 @@ onMounted(() => {
 
 .pagination-wrap {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 0;
+  flex-shrink: 0;
 }
 
 .pbe-pagination {
   padding: 6px 10px;
   border-top: 1px solid #f1f5f9;
   background: #fafbfc;
+}
+
+.pbe-pagination-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pbe-pagination-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.pbe-pagination-pill__label {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pbe-pagination-pill__value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.pbe-pagination-pill__unit {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.pbe-pagination-pill--range .pbe-pagination-pill__value {
+  font-size: 11px;
+}
+
+.pbe-pagination :deep(.el-pagination) {
+  margin-left: auto;
+}
+
+.pbe-workspace :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.pbe-workspace :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .empty-tree {

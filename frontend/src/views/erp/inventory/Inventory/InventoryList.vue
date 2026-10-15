@@ -123,15 +123,15 @@
     </div>
 
     <div class="table-wrap glass animate-in" style="--delay: 0.15s">
+      <div class="table-card__body">
       <el-table
-        :data="list"
+        :data="pagedList"
         v-loading="loading"
         stripe
+        border
         size="small"
         class="data-table"
-        show-summary
-        :summary-method="getSummaries"
-        :height="tableHeight"
+        height="100%"
       >
         <el-table-column prop="product_cd" label="製品CD" width="100" fixed />
         <el-table-column prop="product_name" label="製品名" width="130" show-overflow-tooltip />
@@ -203,6 +203,36 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ list.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--qty">
+            <span class="pagination-summary__label">工程合計</span>
+            <b class="pagination-summary__value">{{ formatNum(inventoryGrandTotal) }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[30, 50, 100, 200]"
+          :total="list.length"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
 
     <!-- 在庫更新確認ダイアログ -->
@@ -429,10 +459,12 @@ const isNextDay = computed(() => {
 })
 
 function onDateChange() {
+  pagination.page = 1
   doFetch()
 }
 
 function onFilterChange() {
+  pagination.page = 1
   doFetch()
 }
 
@@ -570,7 +602,40 @@ async function confirmAllUpdate() {
   }
 }
 
-const tableHeight = computed(() => 'calc(100vh - 220px)')
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return list.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = list.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+const inventoryGrandTotal = computed(() =>
+  INVENTORY_FIELDS.reduce(
+    (sum, { key }) =>
+      sum + list.value.reduce((acc, row) => acc + (Number(row[key]) || 0), 0),
+    0,
+  ),
+)
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 function formatNum(v: number | null | undefined): string {
   if (v == null) return '0'
@@ -591,36 +656,6 @@ function numClass(v: number | null | undefined): string {
   if (n < 0) return 'num-negative'
   if (n === 0) return 'num-zero'
   return 'num-positive'
-}
-
-function getSummaries(param: { columns: { property?: string }[]; data: ProductionSummaryInventoryRow[] }) {
-  const { columns, data } = param
-  const sums: string[] = []
-  const inventoryKeys = [
-    'cutting_inventory', 'chamfering_inventory', 'molding_inventory', 'plating_inventory',
-    'welding_inventory', 'inspection_inventory', 'warehouse_inventory', 'outsourced_warehouse_inventory',
-    'outsourced_plating_inventory', 'outsourced_welding_inventory',
-    'pre_welding_inspection_inventory', 'pre_inspection_inventory', 'pre_outsourcing_inventory'
-  ] as const
-
-  columns.forEach((col, index) => {
-    if (index === 0) {
-      sums.push('合計')
-      return
-    }
-    if (index === 1 || index === 2 || index === 3) {
-      sums.push('')
-      return
-    }
-    const prop = col.property
-    if (prop && inventoryKeys.includes(prop as typeof inventoryKeys[number])) {
-      const total = data.reduce((acc, row) => acc + (Number((row as unknown as Record<string, unknown>)[prop]) || 0), 0)
-      sums.push(total === 0 ? '' : total.toLocaleString())
-    } else {
-      sums.push('')
-    }
-  })
-  return sums
 }
 
 function doFetch() {
@@ -719,13 +754,20 @@ onMounted(() => {
 
 <style scoped>
 .inventory-list-page {
+  --il-app-chrome: 84px;
   position: relative;
-  padding: 14px 18px;
-  min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--il-app-chrome));
+  height: calc(100dvh - var(--il-app-chrome));
+  max-height: calc(100vh - var(--il-app-chrome));
+  max-height: calc(100dvh - var(--il-app-chrome));
+  min-height: 0;
   overflow: hidden;
+  padding: 14px 18px;
 }
 
 /* Background */
@@ -813,6 +855,7 @@ onMounted(() => {
 
 /* Header */
 .page-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -932,6 +975,7 @@ onMounted(() => {
 
 /* Stat cards */
 .stat-cards {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -994,6 +1038,7 @@ onMounted(() => {
 
 /* Toolbar */
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1081,9 +1126,12 @@ onMounted(() => {
 
 /* Table wrap */
 .table-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 12px 0;
   border-radius: 16px;
   transition: box-shadow 0.2s ease;
 }
@@ -1092,8 +1140,29 @@ onMounted(() => {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 /* 表格：浅色数据区，深色文字，保证可读 */
 .data-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   font-size: 12px;
   border-radius: 12px;
   overflow: hidden;
@@ -1146,21 +1215,109 @@ onMounted(() => {
   background: #f1f5f9 !important;
 }
 
-.data-table :deep(.el-table__footer-wrapper) {
-  background: #ffffff;
-}
-
-.data-table :deep(.el-table__footer td) {
-  background: #f1f5f9 !important;
-  font-weight: 600;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #1e293b !important;
-  border-color: #e2e8f0 !important;
-}
-
 .data-table :deep(.el-table__empty-block) {
   background: #ffffff !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 4px 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  margin-top: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 253, 250, 0.95) 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.pagination-summary__item--qty {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #0f766e; }
+.pagination-summary__item--qty .pagination-summary__value { color: #115e59; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #0f766e;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  padding: 0 4px;
+}
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
+}
+.modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 800;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2dd4bf 0%, #0f766e 100%);
 }
 
 .num-positive { color: #1e293b; }
@@ -1768,11 +1925,9 @@ onMounted(() => {
   color: var(--il-c1);
   font-variant-numeric: tabular-nums;
 }
-.il-modern .data-table :deep(.el-table__footer td) {
-  color: var(--il-edge) !important;
-  background: linear-gradient(180deg, #f0fdfa, #ccfbf1) !important;
-  border-top: 2px solid #5eead4 !important;
-  font-variant-numeric: tabular-nums;
+.il-modern .pagination-bar {
+  border-top-color: #ccfbf1;
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdfa 100%);
 }
 .il-modern .data-table :deep(.el-table__body-wrapper .el-scrollbar__thumb) {
   background: linear-gradient(180deg, #2dd4bf, #0891b2);

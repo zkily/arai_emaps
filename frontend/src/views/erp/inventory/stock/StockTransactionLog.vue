@@ -33,24 +33,20 @@
 
     <div class="page-body">
       <section class="filter-section glass">
-        <div class="filter-head">
-          <el-icon class="filter-head-icon"><Search /></el-icon>
-          <span class="filter-head-title">検索フィルタ</span>
-        </div>
-        <el-form :model="filters" class="filter-form" @submit.prevent label-position="top">
-          <div class="filter-block">
-            <el-form-item label="在庫種別" class="filter-item full">
-              <el-radio-group v-model="filters.stock_type" class="stock-type-radio" size="small">
-                <el-radio-button value="">全て</el-radio-button>
-                <el-radio-button value="製品">製品</el-radio-button>
-                <el-radio-button value="仕掛品">仕掛品</el-radio-button>
-                <el-radio-button value="部品">部品</el-radio-button>
-                <el-radio-button value="材料">材料</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
+        <div class="filter-toolbar">
+          <div class="filter-row">
+            <span class="toolbar-label">在庫種別</span>
+            <el-radio-group v-model="filters.stock_type" class="stock-type-radio" size="small">
+              <el-radio-button value="">全て</el-radio-button>
+              <el-radio-button value="製品">製品</el-radio-button>
+              <el-radio-button value="仕掛品">仕掛品</el-radio-button>
+              <el-radio-button value="部品">部品</el-radio-button>
+              <el-radio-button value="材料">材料</el-radio-button>
+            </el-radio-group>
           </div>
-          <div class="filter-grid">
-            <el-form-item label="製品" class="filter-item">
+          <div class="filter-row filter-row--fields">
+            <div class="filter-field">
+              <span class="toolbar-label">製品</span>
               <el-select
                 v-model="filters.target_cd"
                 placeholder="製品を選択"
@@ -66,26 +62,38 @@
                   :value="item.product_cd"
                 />
               </el-select>
-            </el-form-item>
-            <el-form-item label="キーワード" class="filter-item">
-              <el-input v-model="filters.keyword" placeholder="対象CD / 備考" clearable :prefix-icon="Search" size="small" class="input-glass" />
-            </el-form-item>
-            <el-form-item label="保管場所" class="filter-item">
-              <el-select v-model="filters.location_cd" placeholder="選択" clearable size="small" class="select-glass">
+            </div>
+            <div class="filter-field">
+              <span class="toolbar-label">キーワード</span>
+              <el-input
+                v-model="filters.keyword"
+                placeholder="対象CD / 備考"
+                clearable
+                :prefix-icon="Search"
+                size="small"
+                class="input-glass keyword-input"
+              />
+            </div>
+            <div class="filter-field">
+              <span class="toolbar-label">保管場所</span>
+              <el-select v-model="filters.location_cd" placeholder="選択" clearable size="small" class="select-glass field-select">
                 <el-option v-for="item in locationOptions" :key="item.cd" :label="item.name" :value="item.cd" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="操作種別" class="filter-item">
-              <el-select v-model="filters.transaction_type" placeholder="選択" clearable size="small" class="select-glass">
+            </div>
+            <div class="filter-field">
+              <span class="toolbar-label">操作種別</span>
+              <el-select v-model="filters.transaction_type" placeholder="選択" clearable size="small" class="select-glass field-select">
                 <el-option v-for="item in transactionTypeOptions" :key="item.cd" :label="item.name" :value="item.cd" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="工程" class="filter-item">
-              <el-select v-model="filters.process_cd" placeholder="選択" clearable size="small" class="select-glass">
+            </div>
+            <div class="filter-field">
+              <span class="toolbar-label">工程</span>
+              <el-select v-model="filters.process_cd" placeholder="選択" clearable size="small" class="select-glass field-select">
                 <el-option v-for="item in processOptions" :key="item.cd" :label="item.name" :value="item.cd" />
               </el-select>
-            </el-form-item>
-            <el-form-item label="操作日" class="filter-item date-item">
+            </div>
+            <div class="filter-field filter-field--date">
+              <span class="toolbar-label">操作日</span>
               <div class="date-row">
                 <el-date-picker
                   v-model="filters.date_range"
@@ -104,9 +112,9 @@
                   <el-button size="small" :icon="ArrowRight" circle title="翌日" class="btn-glass btn-ghost" @click="adjustDate(1)" />
                 </div>
               </div>
-            </el-form-item>
+            </div>
           </div>
-        </el-form>
+        </div>
       </section>
 
       <div class="stats-row" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
@@ -147,7 +155,6 @@
           <div class="table-head-left">
             <el-icon class="table-head-icon"><Document /></el-icon>
             <span>履歴データ一覧</span>
-            <span class="table-total">総件数: {{ pagination.total }}件</span>
           </div>
           <div class="table-head-right">
             <span v-if="selectedRows.length > 0" class="selected-badge">選択中: {{ selectedRows.length }}件</span>
@@ -164,71 +171,96 @@
             </el-button>
           </div>
         </div>
-        <el-table
-          :data="logList"
-          border
-          stripe
-          highlight-current-row
-          size="small"
-          class="data-table"
-          v-loading="loading"
-          @selection-change="handleSelectionChange"
-        >
-          <el-table-column type="selection" width="44" align="center" fixed="left" />
-          <el-table-column label="在庫種別" prop="stock_type" width="82" align="center">
-            <template #default="scope">
-              <el-tag :type="getStockTypeColor(scope.row.stock_type)" effect="light" size="small" class="cell-tag">
-                {{ scope.row.stock_type }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="対象CD" prop="target_cd" width="92" align="center" show-overflow-tooltip />
-          <el-table-column label="製品名" prop="product_name" min-width="120" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.product_name || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="保管場所" prop="location_cd" width="100" align="center" show-overflow-tooltip />
-          <el-table-column label="操作種別" prop="transaction_type" width="92" align="center">
-            <template #default="scope">
-              <el-tag :type="getTransactionTypeColor(scope.row.transaction_type)" effect="plain" size="small" class="cell-tag">
-                {{ scope.row.transaction_type }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="数量" prop="quantity" width="80" align="center">
-            <template #default="scope">
-              <span class="qty-cell" :class="{ negative: Number(scope.row.quantity) < 0 }">{{ scope.row.quantity }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="単位" prop="unit" width="56" align="center">
-            <template #default="scope">{{ scope.row.unit || '-' }}</template>
-          </el-table-column>
-          <!-- <el-table-column label="ロット" prop="lot_no" width="82" align="center" show-overflow-tooltip /> -->
-          <el-table-column label="操作日時" prop="transaction_time" width="158" align="center">
-            <template #default="scope">{{ formatDate(scope.row.transaction_time) }}</template>
-          </el-table-column>
-          <el-table-column label="工程" prop="process_name" width="100" align="center" show-overflow-tooltip>
-            <template #default="scope">{{ scope.row.process_name ?? scope.row.process_cd ?? '-' }}</template>
-          </el-table-column>
-          <el-table-column label="設備" prop="machine_cd" width="82" align="center" show-overflow-tooltip />
-          <el-table-column label="来源" prop="source_file" width="185" align="center" show-overflow-tooltip />
-          <el-table-column label="操作" fixed="right" width="160" align="center">
-            <template #default="scope">
-              <el-button size="small" type="primary" link @click="handleEdit(scope.row)" :icon="Edit" class="btn-inline btn-edit">編集</el-button>
-              <el-button size="small" type="danger" link @click="handleDelete(scope.row)" :icon="Delete" class="btn-inline btn-delete">削除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="pagination-wrap">
+        <div class="table-card__body">
+          <el-table
+            :data="logList"
+            border
+            stripe
+            highlight-current-row
+            size="small"
+            class="data-table"
+            height="100%"
+            v-loading="loading"
+            @selection-change="handleSelectionChange"
+          >
+            <el-table-column type="selection" width="44" align="center" fixed="left" />
+            <el-table-column label="在庫種別" prop="stock_type" width="82" align="center">
+              <template #default="scope">
+                <el-tag :type="getStockTypeColor(scope.row.stock_type)" effect="light" size="small" class="cell-tag">
+                  {{ scope.row.stock_type }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="対象CD" prop="target_cd" width="92" align="center" show-overflow-tooltip />
+            <el-table-column label="製品名" prop="product_name" min-width="120" show-overflow-tooltip>
+              <template #default="scope">{{ scope.row.product_name || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="保管場所" prop="location_cd" width="100" align="center" show-overflow-tooltip />
+            <el-table-column label="操作種別" prop="transaction_type" width="92" align="center">
+              <template #default="scope">
+                <el-tag :type="getTransactionTypeColor(scope.row.transaction_type)" effect="plain" size="small" class="cell-tag">
+                  {{ scope.row.transaction_type }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="数量" prop="quantity" width="80" align="center">
+              <template #default="scope">
+                <span class="qty-cell" :class="{ negative: Number(scope.row.quantity) < 0 }">{{ scope.row.quantity }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="単位" prop="unit" width="56" align="center">
+              <template #default="scope">{{ scope.row.unit || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="操作日時" prop="transaction_time" width="158" align="center">
+              <template #default="scope">{{ formatDate(scope.row.transaction_time) }}</template>
+            </el-table-column>
+            <el-table-column label="工程" prop="process_name" width="100" align="center" show-overflow-tooltip>
+              <template #default="scope">{{ scope.row.process_name ?? scope.row.process_cd ?? '-' }}</template>
+            </el-table-column>
+            <el-table-column label="設備" prop="machine_cd" width="82" align="center" show-overflow-tooltip />
+            <el-table-column label="来源" prop="source_file" width="185" align="center" show-overflow-tooltip />
+            <el-table-column label="操作" fixed="right" width="160" align="center">
+              <template #default="scope">
+                <el-button size="small" type="primary" link @click="handleEdit(scope.row)" :icon="Edit" class="btn-inline btn-edit">編集</el-button>
+                <el-button size="small" type="danger" link @click="handleDelete(scope.row)" :icon="Delete" class="btn-inline btn-delete">削除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--range">
+              <span class="pagination-summary__label">表示</span>
+              <b class="pagination-summary__value">{{ pageRangeText }}</b>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--qty">
+              <span class="pagination-summary__label">総数量</span>
+              <b class="pagination-summary__value">{{ statistics.totalQuantity.toLocaleString('ja-JP') }}</b>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--in">
+              <span class="pagination-summary__label">入庫系</span>
+              <b class="pagination-summary__value">{{ statistics.inboundQuantity.toLocaleString('ja-JP') }}</b>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--out">
+              <span class="pagination-summary__label">出庫系</span>
+              <b class="pagination-summary__value">{{ statistics.outboundQuantity.toLocaleString('ja-JP') }}</b>
+            </span>
+          </div>
           <el-pagination
-            layout="total, sizes, prev, pager, next"
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            layout="sizes, prev, pager, next, jumper"
             :total="pagination.total"
-            :page-size="pagination.pageSize"
-            :current-page="pagination.page"
             :page-sizes="[10, 20, 50, 100]"
             @size-change="handleSizeChange"
             @current-change="handlePageChange"
-            size="small"
-            class="pagination-glass"
+            small
+            class="modern-pagination"
           />
         </div>
       </section>
@@ -444,6 +476,14 @@ const activeFilterCount = computed(() => {
   return [f.target_cd, f.keyword, f.location_cd, f.transaction_type, f.process_cd, f.source_file].filter(
     (v) => !!v
   ).length
+})
+
+const pageRangeText = computed(() => {
+  const total = pagination.value.total
+  if (!total) return '0'
+  const start = pagination.value.pageSize * (pagination.value.page - 1) + 1
+  const end = Math.min(pagination.value.pageSize * pagination.value.page, total)
+  return `${start}–${end}`
 })
 
 const inboundShare = computed(() => {
@@ -722,17 +762,29 @@ onMounted(async () => {
 
 /* ----- 页面容器 ----- */
 .stock-log-page {
-  min-height: 100vh;
-  padding: 8px 10px 16px;
+  --stl-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--stl-app-chrome));
+  height: calc(100dvh - var(--stl-app-chrome));
+  max-height: calc(100vh - var(--stl-app-chrome));
+  max-height: calc(100dvh - var(--stl-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px;
   background: linear-gradient(160deg, #e8ecf1 0%, #dde2e8 50%, #e2e7ee 100%);
   font-size: 13px;
 }
 
 /* ----- 页头 ----- */
 .page-header {
+  flex-shrink: 0;
   border-radius: 10px;
   padding: 10px 14px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 .header-inner {
   display: flex;
@@ -755,36 +807,56 @@ onMounted(async () => {
 .page-subtitle { margin: 2px 0 0; font-size: 0.7rem; color: #64748b; }
 
 /* ----- 主体 ----- */
-.page-body { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
-
-/* ----- 筛选区 ----- */
-.filter-section {
-  border-radius: 10px;
-  padding: 8px 12px 10px;
+.page-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
 }
-.filter-head {
+
+/* ----- 筛选区（横並び・余白圧縮） ----- */
+.filter-section {
+  flex-shrink: 0;
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.filter-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-.filter-head-icon { color: #5b8def; font-size: 14px; }
-.filter-head-title { font-weight: 600; font-size: 0.8rem; color: #334155; }
-.filter-form :deep(.el-form-item) { margin-bottom: 6px; }
-.filter-form :deep(.el-form-item__label) { font-size: 0.7rem; color: #64748b; padding-bottom: 2px; }
-.filter-block { margin-bottom: 4px; }
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  flex-wrap: wrap;
   gap: 6px 10px;
-  align-items: start;
+  min-width: 0;
 }
-.filter-item.full { grid-column: 1 / -1; }
-.filter-item.date-item { grid-column: span 2; }
-.input-glass,
-.select-glass { width: 100%; }
+.filter-row--fields {
+  gap: 4px 12px;
+}
+.filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.filter-field--date {
+  flex: 1 1 280px;
+}
+.toolbar-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+.product-select { width: 200px; }
+.keyword-input { width: 160px; }
+.field-select { width: 120px; }
 .input-glass :deep(.el-input__wrapper),
 .select-glass :deep(.el-select__wrapper) {
   background: rgba(255, 255, 255, 0.7);
@@ -796,9 +868,10 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.date-picker-glass { flex: 1; min-width: 0; }
+.date-picker-glass { width: 240px; max-width: 100%; }
 .date-picker-glass :deep(.el-input__wrapper) {
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -835,15 +908,7 @@ onMounted(async () => {
   color: #64748b;
   border-color: rgba(0, 0, 0, 0.08);
 }
-.filter-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-.stock-type-radio { width: 100%; display: flex; flex-wrap: wrap; gap: 0 2px; }
+.stock-type-radio { display: flex; flex-wrap: wrap; gap: 0 2px; }
 .stock-type-radio :deep(.el-radio-button__inner) {
   padding: 4px 10px;
   font-size: 0.75rem;
@@ -861,13 +926,14 @@ onMounted(async () => {
 
 /* ----- 统计卡片 ----- */
 .stats-row {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 .stat-card {
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -893,18 +959,23 @@ onMounted(async () => {
 
 /* ----- 表格区 ----- */
 .table-section {
-  border-radius: 10px;
-  padding: 8px 10px 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border-radius: 10px;
+  padding: 6px 10px 0;
 }
 .table-head {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  margin-bottom: 6px;
-  padding-bottom: 6px;
+  gap: 4px 10px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .table-head-left {
@@ -916,7 +987,6 @@ onMounted(async () => {
   color: #334155;
 }
 .table-head-icon { color: #5b8def; font-size: 14px; }
-.table-total { font-size: 0.7rem; font-weight: 500; color: #64748b; margin-left: 8px; }
 .table-head-right { display: flex; align-items: center; gap: 8px; }
 .selected-badge {
   font-size: 0.7rem;
@@ -927,7 +997,31 @@ onMounted(async () => {
   border-radius: 6px;
   border: 1px solid rgba(91, 141, 239, 0.25);
 }
-.data-table { border-radius: 8px; overflow: hidden; font-size: 0.75rem; }
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+.data-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.75rem;
+}
 .data-table :deep(.el-table__header th) {
   background: rgba(248, 250, 252, 0.95);
   color: #475569;
@@ -942,11 +1036,92 @@ onMounted(async () => {
 .btn-inline { padding: 2px 6px; font-size: 0.7rem; }
 .btn-inline.btn-edit { color: #5b8def; }
 .btn-inline.btn-delete { color: #ef4444; }
-.pagination-wrap { margin-top: 6px; display: flex; justify-content: flex-end; padding: 4px 0; }
-.pagination-glass :deep(.el-pagination__total),
-.pagination-glass :deep(.btn-prev),
-.pagination-glass :deep(.btn-next),
-.pagination-glass :deep(.el-pager li) { font-size: 0.75rem; }
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 4px 8px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  margin-top: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(240, 249, 255, 0.95) 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.pagination-summary__item--qty {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #4338ca; }
+.pagination-summary__item--qty .pagination-summary__value { color: #3730a3; }
+.pagination-summary__item--in {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.pagination-summary__item--in .pagination-summary__label { color: #047857; }
+.pagination-summary__item--in .pagination-summary__value { color: #065f46; }
+.pagination-summary__item--out {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.pagination-summary__item--out .pagination-summary__label { color: #1d4ed8; }
+.pagination-summary__item--out .pagination-summary__value { color: #1e40af; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #0284c7;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 96px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
 
 /* ----- 编辑弹窗 ----- */
 .glass-dialog :deep(.el-dialog) {
@@ -966,18 +1141,20 @@ onMounted(async () => {
 /* ----- 响应式 ----- */
 @media (max-width: 992px) {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .filter-grid .filter-item.date-item { grid-column: span 1; }
 }
 @media (max-width: 768px) {
-  .stock-log-page { padding: 6px 8px 12px; }
+  .stock-log-page { padding: 6px 8px; }
   .page-header { padding: 8px 10px; }
   .header-icon-wrap { width: 30px; height: 30px; }
   .page-title { font-size: 0.95rem; }
-  .filter-section { padding: 6px 10px 8px; }
-  .filter-grid { grid-template-columns: 1fr; }
-  .filter-item.date-item { grid-column: span 1; }
-  .date-row { flex-wrap: wrap; }
-  .date-picker-glass { min-width: 100%; }
+  .filter-section { padding: 6px 8px; }
+  .product-select,
+  .keyword-input,
+  .field-select,
+  .date-picker-glass { width: 100%; max-width: none; }
+  .filter-field,
+  .filter-field--date { flex: 1 1 100%; }
+  .date-row { flex-wrap: wrap; width: 100%; }
   .stats-row { grid-template-columns: 1fr; gap: 4px; }
   .stat-card { padding: 6px 8px; }
   .table-head { flex-direction: column; align-items: flex-start; }
@@ -986,10 +1163,10 @@ onMounted(async () => {
   .data-table :deep(.el-table__body td) { padding: 4px 6px; font-size: 0.7rem; }
 }
 @media (max-width: 576px) {
-  .stock-log-page { padding: 4px 6px 10px; }
+  .stock-log-page { padding: 4px 6px; }
   .page-title { font-size: 0.9rem; }
   .stat-value { font-size: 0.9rem; }
-  .pagination-glass :deep(.el-pagination__sizes) { display: none; }
+  .modern-pagination :deep(.el-pagination__sizes) { display: none; }
 }
 
 /* 页面美化：現代UI・3D動効・色分け（在庫取引記録 / 在庫系 cyan→sky→indigo） */
@@ -1093,7 +1270,7 @@ onMounted(async () => {
 }
 
 .stl-modern .filter-section {
-  padding-top: 11px;
+  padding: 8px 10px 6px;
   background: linear-gradient(110deg, rgba(236, 254, 255, 0.95) 0%, rgba(255, 255, 255, 0.94) 60%);
 }
 
@@ -1113,39 +1290,28 @@ onMounted(async () => {
   background: linear-gradient(90deg, #4f46e5 0%, #0284c7 50%, #0891b2 100%);
 }
 
-.stl-modern .filter-head-icon,
 .stl-modern .table-head-icon {
   width: 24px;
   height: 24px;
   font-size: 13px;
   color: #fff;
   border-radius: 7px;
-  background: linear-gradient(145deg, #22d3ee 0%, #0369a1 100%);
-  box-shadow:
-    0 2px 0 #075985,
-    0 6px 10px -5px rgba(2, 132, 199, 0.6);
-}
-
-.stl-modern .table-head-icon {
   background: linear-gradient(145deg, #818cf8 0%, #4338ca 100%);
   box-shadow:
     0 2px 0 #312e81,
     0 6px 10px -5px rgba(79, 70, 229, 0.6);
 }
 
-.stl-modern .filter-head-title,
 .stl-modern .table-head-left {
   color: #0c4a6e;
   font-weight: 700;
 }
 
-.stl-modern .filter-head,
 .stl-modern .table-head {
   border-bottom: 1px dashed #bae6fd;
 }
 
-.stl-modern .filter-form :deep(.el-form-item__label) {
-  font-weight: 600;
+.stl-modern .toolbar-label {
   color: #0369a1;
 }
 
@@ -1291,7 +1457,7 @@ onMounted(async () => {
   position: relative;
   overflow: hidden;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 6px 10px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--tc) 24%, #e2e8f0);
   background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 10%, #fff) 0%, #fff 70%);
@@ -1417,14 +1583,6 @@ onMounted(async () => {
 }
 
 /* ---------- 一覧テーブル ---------- */
-.stl-modern .table-total {
-  padding: 1px 8px;
-  color: #3730a3;
-  border-radius: 999px;
-  background: rgba(79, 70, 229, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.2);
-}
-
 .stl-modern .selected-badge {
   color: #be123c;
   background: rgba(244, 63, 94, 0.08);
@@ -1476,7 +1634,11 @@ onMounted(async () => {
   background: rgba(239, 68, 68, 0.1);
 }
 
-.stl-modern .pagination-glass :deep(.el-pager li.is-active) {
+.stl-modern .pagination-bar {
+  border-top-color: #bae6fd;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+}
+.stl-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #0369a1;
   font-weight: 800;
 }

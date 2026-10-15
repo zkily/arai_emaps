@@ -1,34 +1,44 @@
 <template>
-  <el-card shadow="never" class="route-step-card" v-loading="loading">
-    <template #header>
-      <div class="route-head">
-        <div class="route-head__title">
-          <span class="route-head__icon-wrap">
-            <el-icon :size="17"><Setting /></el-icon>
-          </span>
+  <div class="route-step-card" v-loading="loading">
+    <div class="route-head">
+      <div class="route-head__title">
+        <span class="route-head__icon-wrap">
+          <el-icon :size="17"><Setting /></el-icon>
+        </span>
+        <div class="route-head__titles">
           <span class="route-head__text">製品別工程ステップ</span>
-        </div>
-        <div class="route-head__actions">
-          <el-button v-if="canCreate" type="success" size="small" :icon="Plus" :disabled="loading" @click="openAddStepDialog">
-            工程追加
-          </el-button>
-          <el-button type="info" size="small" :icon="RefreshRight" plain :disabled="loading" @click="resetData">
-            リセット
-          </el-button>
-          <el-button
-            v-if="canEdit"
-            type="primary"
-            size="small"
-            :icon="CircleCheck"
-            :disabled="loading || steps.length === 0"
-            @click="saveSteps"
-          >
-            保存
-          </el-button>
+          <span v-if="steps.length > 0" class="route-head__count">{{ steps.length }} 工程</span>
         </div>
       </div>
-    </template>
+      <div class="route-head__actions">
+        <el-button
+          v-if="canCreate"
+          class="tb-btn tb-btn-green"
+          size="small"
+          :disabled="loading"
+          @click="openAddStepDialog"
+        >
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">工程追加</span>
+        </el-button>
+        <el-button class="tb-btn tb-btn-amber" size="small" :disabled="loading" @click="resetData">
+          <el-icon><RefreshRight /></el-icon>
+          <span class="tb-label">リセット</span>
+        </el-button>
+        <el-button
+          v-if="canEdit"
+          class="tb-btn tb-btn-indigo"
+          size="small"
+          :disabled="loading || steps.length === 0"
+          @click="saveSteps"
+        >
+          <el-icon><CircleCheck /></el-icon>
+          <span class="tb-label">保存</span>
+        </el-button>
+      </div>
+    </div>
 
+    <div class="route-body">
     <template v-if="loading && !dataLoaded">
       <div class="state-msg state-msg--load">
         <el-icon class="is-loading state-msg__ico"><Loading /></el-icon>
@@ -40,7 +50,15 @@
       <div class="state-msg state-msg--empty">
         <el-icon :size="36" class="state-msg__ico"><DocumentRemove /></el-icon>
         <p class="state-msg__p">工程ルート未設定、またはステップがありません</p>
-        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" @click="openAddStepDialog">工程を追加</el-button>
+        <el-button
+          v-if="canCreate"
+          class="tb-btn tb-btn-green"
+          size="small"
+          @click="openAddStepDialog"
+        >
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">工程を追加</span>
+        </el-button>
       </div>
     </template>
 
@@ -74,7 +92,15 @@
                     <el-tag v-if="step.id" type="success" size="small" effect="plain">保存済み</el-tag>
                     <el-tag v-else type="warning" size="small" effect="plain">未保存</el-tag>
                   </div>
-                  <el-button v-if="canDelete" type="danger" size="small" :icon="Delete" plain @click="removeStep(stepIndex)" :disabled="loading">
+                  <el-button
+                    v-if="canDelete"
+                    class="act-del"
+                    size="small"
+                    :icon="Delete"
+                    plain
+                    :disabled="loading"
+                    @click="removeStep(stepIndex)"
+                  >
                     削除
                   </el-button>
                 </div>
@@ -118,15 +144,30 @@
                       {{ step.machines.length }}台
                     </el-tag>
                   </div>
-                  <el-button v-if="canEdit" type="primary" size="small" :icon="Plus" link @click="addMachine(step)" :disabled="loading">
-                    設備追加
+                  <el-button
+                    v-if="canEdit"
+                    class="tb-btn tb-btn-blue tb-btn--sm"
+                    size="small"
+                    :disabled="loading"
+                    @click="addMachine(step)"
+                  >
+                    <el-icon><Plus /></el-icon>
+                    <span class="tb-label">設備追加</span>
                   </el-button>
                 </div>
 
                 <div v-if="!step.machines || step.machines.length === 0" class="no-machines">
                   <el-icon :size="28"><Tools /></el-icon>
                   <p>設備が未設定です</p>
-                  <el-button v-if="canEdit" type="primary" size="small" :icon="Plus" @click="addMachine(step)">設備を追加</el-button>
+                  <el-button
+                    v-if="canEdit"
+                    class="tb-btn tb-btn-blue tb-btn--sm"
+                    size="small"
+                    @click="addMachine(step)"
+                  >
+                    <el-icon><Plus /></el-icon>
+                    <span class="tb-label">設備を追加</span>
+                  </el-button>
                 </div>
 
                 <div v-else class="machines-grid">
@@ -214,22 +255,22 @@
                       <div class="machine-form__actions">
                         <el-button
                           v-if="canEdit && machine.machine_cd"
-                          type="success"
+                          class="tb-btn tb-btn-green tb-btn--sm"
                           size="small"
-                          :icon="CircleCheck"
-                          @click="updateMachine(step, Number(idx))"
                           :disabled="loading"
+                          @click="updateMachine(step, Number(idx))"
                         >
-                          {{ machine.id ? '更新' : '保存' }}
+                          <el-icon><CircleCheck /></el-icon>
+                          <span class="tb-label">{{ machine.id ? '更新' : '保存' }}</span>
                         </el-button>
                         <el-button
                           v-if="canDelete"
-                          type="danger"
+                          class="act-del"
                           size="small"
                           :icon="Delete"
                           plain
-                          @click="removeMachine(step, Number(idx))"
                           :disabled="loading"
+                          @click="removeMachine(step, Number(idx))"
                         >
                           削除
                         </el-button>
@@ -243,9 +284,39 @@
         </template>
       </draggable>
     </div>
+    </div>
+
+    <!-- 工程追加後も常に見える固定フッター（スクロールで隠れない） -->
+    <div v-if="canCreate && dataLoaded" class="route-footer">
+      <div class="route-footer__hint">
+        <span v-if="steps.length > 0">工程をさらに追加できます</span>
+        <span v-else>最初の工程を追加してください</span>
+      </div>
+      <div class="route-footer__actions">
+        <el-button
+          class="tb-btn tb-btn-green"
+          size="small"
+          :disabled="loading"
+          @click="openAddStepDialog"
+        >
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">工程を追加</span>
+        </el-button>
+        <el-button
+          v-if="canEdit && steps.length > 0"
+          class="tb-btn tb-btn-indigo"
+          size="small"
+          :disabled="loading"
+          @click="saveSteps"
+        >
+          <el-icon><CircleCheck /></el-icon>
+          <span class="tb-label">保存</span>
+        </el-button>
+      </div>
+    </div>
 
     <ProcessSelectDialog v-model:visible="dialogVisible" @selected="addProcess" />
-  </el-card>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -593,38 +664,53 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 
 <style scoped>
 .route-step-card {
-  border-radius: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 8px 20px -8px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border-radius: 14px;
+  border: 1px solid #ddd6fe;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  position: relative;
 }
-
-.route-step-card :deep(.el-card__header) {
-  padding: 0;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
-}
-
-.route-step-card :deep(.el-card__body) {
-  padding: 10px 10px 12px;
+.route-step-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 5;
+  pointer-events: none;
+  background: linear-gradient(90deg, #4c1d95 0%, #8b5cf6 55%, #c4b5fd 100%);
 }
 
 .route-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 10px;
+  padding: 10px 12px;
+  background: linear-gradient(110deg, #f5f3ff 0%, #ffffff 60%);
+  border-bottom: 1px solid #ede9fe;
+  z-index: 2;
 }
 
 .route-head__title {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.route-head__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -635,17 +721,23 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  border: 1px solid rgba(99, 102, 241, 0.22);
-  color: #4f46e5;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border: 1px solid #c4b5fd;
+  color: #6d28d9;
   flex-shrink: 0;
 }
 
 .route-head__text {
   font-size: 0.88rem;
+  font-weight: 800;
+  color: #4c1d95;
+}
+
+.route-head__count {
+  font-size: 11px;
   font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.01em;
+  color: #7c3aed;
+  font-variant-numeric: tabular-nums;
 }
 
 .route-head__actions {
@@ -655,8 +747,114 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
   flex-wrap: wrap;
 }
 
-.route-head__actions :deep(.el-button) {
-  margin: 0;
+.route-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.route-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #ede9fe;
+  background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+  box-shadow: 0 -6px 16px -12px rgba(76, 29, 149, 0.35);
+  z-index: 3;
+}
+
+.route-footer__hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c3aed;
+}
+
+.route-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tb-btn {
+  --k-rgb: 109 40 217;
+  --k-fg: #5b21b6;
+  --k-bd: #c4b5fd;
+  --k-tint: #ede9fe;
+  --k-tint-h: #ddd6fe;
+  --k-ico: #8b5cf6;
+  height: 30px !important;
+  padding: 0 12px 0 10px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  color: var(--k-fg) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%) !important;
+  border: 1px solid var(--k-bd) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(76, 29, 149, 0.2) !important;
+}
+.tb-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+.tb-btn:hover:not(:disabled) {
+  color: rgb(var(--k-rgb)) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%) !important;
+  transform: translateY(-1px);
+}
+.tb-btn--sm {
+  height: 26px !important;
+  font-size: 12px !important;
+}
+.tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-bd: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+}
+.tb-btn-amber {
+  --k-rgb: 217 119 6;
+  --k-fg: #92400e;
+  --k-bd: #fcd34d;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+}
+.tb-btn-indigo {
+  --k-rgb: 99 102 241;
+  --k-fg: #4338ca;
+  --k-bd: #a5b4fc;
+  --k-tint: #e0e7ff;
+  --k-tint-h: #c7d2fe;
+  --k-ico: #6366f1;
+}
+.tb-btn-blue {
+  --k-rgb: 37 99 235;
+  --k-fg: #1d4ed8;
+  --k-bd: #93c5fd;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+}
+.act-del {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  color: #e11d48 !important;
+  border-color: #fecdd3 !important;
+  background: #fff1f2 !important;
+}
+.act-del:hover:not(:disabled) {
+  color: #fff !important;
+  background: linear-gradient(135deg, #f43f5e, #e11d48) !important;
+  border-color: transparent !important;
 }
 
 .state-msg {
@@ -694,15 +892,15 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 }
 
 .process-card {
-  border-radius: 8px !important;
-  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  border: 1px solid #ddd6fe !important;
   overflow: hidden;
 }
 
 .process-card :deep(.el-card__header) {
   padding: 6px 8px !important;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 100%);
+  border-bottom: 1px solid #ede9fe !important;
 }
 
 .process-card :deep(.el-card__body) {
@@ -725,6 +923,10 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.process-head > .act-del {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .drag-handle {
@@ -765,7 +967,7 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 .process-head__cd {
   font-weight: 700;
   font-size: 12px;
-  color: #2563eb;
+  color: #6d28d9;
   font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -797,7 +999,7 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 }
 
 .machines-block__title-ico {
-  color: #6366f1;
+  color: #7c3aed;
 }
 
 .no-machines {
@@ -876,15 +1078,26 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 
 .ghost-step {
   opacity: 0.55;
-  background: #eef2ff;
-  border: 2px dashed #6366f1;
+  background: #f5f3ff;
+  border: 2px dashed #8b5cf6;
   border-radius: 8px;
 }
 
 .chosen-step {
-  background: #eef2ff;
-  border: 1px solid #818cf8;
+  background: #f5f3ff;
+  border: 1px solid #a78bfa;
   border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .route-head__actions,
+  .route-footer__actions {
+    width: 100%;
+  }
+  .route-footer__actions .tb-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 520px) {
@@ -894,6 +1107,9 @@ const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
 
   .process-head__info {
     width: 100%;
+  }
+  .process-head > .act-del {
+    margin-left: 0;
   }
 }
 </style>

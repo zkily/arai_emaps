@@ -2,7 +2,8 @@
   <div class="customer-master-container cst-modern pb-std">
     <div class="page-shell">
       <!-- 紧凑页头：标题 + 统计 + 新增 -->
-      <header class="page-header pb-hero pb-hero--page">
+      <header class="page-header page-toolbar pb-hero pb-hero--page">
+        <div class="page-toolbar-glow" aria-hidden="true" />
         <div class="page-header-fx pb-bubbles" aria-hidden="true" />
         <div class="header-left">
           <div class="title-icon-wrap">
@@ -12,8 +13,8 @@
             <h1 class="main-title pb-hero-title">{{ t('master.customer.title') }}</h1>
             <p class="subtitle pb-hero-desc">顧客情報の登録・編集・管理</p>
           </div>
-          <div class="stat-pills" @mousemove="handleStatTilt" @mouseleave="resetStatTilt">
-            <span class="stat-pill">
+          <div class="stat-pills">
+            <span class="stat-pill stat-pill--total">
               <strong>{{ customerList.length }}</strong>
               <em>{{ t('master.common.items') }}</em>
             </span>
@@ -27,8 +28,9 @@
             </span>
           </div>
         </div>
-        <el-button v-if="canCreate" type="primary" :icon="Plus" class="add-btn" @click="openForm()">
-          {{ t('master.customer.addCustomer') }}
+        <el-button v-if="canCreate" class="tb-btn tb-btn-green add-btn" @click="openForm()">
+          <el-icon><Plus /></el-icon>
+          <span class="tb-label">{{ t('master.customer.addCustomer') }}</span>
         </el-button>
       </header>
 
@@ -105,17 +107,16 @@
         </div>
       </section>
 
-      <!-- 数据表格 -->
       <section class="table-section">
         <el-table
           :data="filteredList"
           stripe
+          border
+          size="small"
           highlight-current-row
           v-loading="loading"
           class="modern-table"
-          :height="tableHeight"
-          :header-cell-style="tableHeaderStyle"
-          :cell-style="tableCellStyle"
+          height="100%"
         >
           <el-table-column
             prop="customer_cd"
@@ -206,22 +207,20 @@
                 <el-tooltip v-if="canEdit" :content="t('master.supplier.edit')" placement="top">
                   <el-button
                     size="small"
-                    type="primary"
                     plain
                     circle
                     :icon="Edit"
-                    class="action-btn"
+                    class="action-btn action-btn--edit"
                     @click="openForm(row)"
                   />
                 </el-tooltip>
                 <el-tooltip v-if="canDelete" :content="t('master.supplier.delete')" placement="top">
                   <el-button
                     size="small"
-                    type="danger"
                     plain
                     circle
                     :icon="Delete"
-                    class="action-btn"
+                    class="action-btn action-btn--del"
                     @click="deleteCustomer(row.id)"
                   />
                 </el-tooltip>
@@ -229,20 +228,27 @@
             </template>
           </el-table-column>
         </el-table>
-      </section>
 
-      <!-- 底部统计 -->
-      <footer class="footer-bar">
-        <el-icon class="footer-icon"><DataAnalysis /></el-icon>
-        <span>
-          {{
-            t('master.common.displayCount', {
-              shown: filteredList.length,
-              total: customerList.length,
-            })
-          }}
-        </span>
-      </footer>
+        <footer class="footer-bar">
+          <div class="footer-pills">
+            <span class="footer-pill footer-pill--count">
+              {{
+                t('master.common.displayCount', {
+                  shown: filteredList.length,
+                  total: customerList.length,
+                })
+              }}
+            </span>
+            <span class="footer-pill footer-pill--active">
+              {{ t('master.common.active') }} {{ activeCount.toLocaleString() }}
+            </span>
+            <span class="footer-pill footer-pill--inactive">
+              {{ t('master.common.inactive') }}
+              {{ (customerList.length - activeCount).toLocaleString() }}
+            </span>
+          </div>
+        </footer>
+      </section>
     </div>
 
     <CustomerForm v-model:visible="formVisible" :data="editData" @refresh="fetchList" />
@@ -253,7 +259,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Search, Refresh, Plus, Edit, Delete, DataAnalysis } from '@element-plus/icons-vue'
+import { User, Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import CustomerForm from './CustomerForm.vue'
 import {
   getCustomerList,
@@ -273,16 +279,6 @@ const loading = ref(false)
 const customerList = ref<RowEx[]>([])
 const filters = ref({ keyword: '', status: '' as '' | number, customer_type: '' })
 
-const tableHeight = 'calc(100vh - 196px)'
-const tableHeaderStyle = {
-  background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
-  color: '#fff',
-  fontWeight: '600',
-  fontSize: '12px',
-  padding: '6px 4px',
-}
-const tableCellStyle = { padding: '4px 6px', fontSize: '12px' }
-
 const handleFilter = () => {}
 
 const hasActiveFilters = computed(
@@ -301,33 +297,6 @@ const clearFilters = () => {
 }
 
 const activeCount = computed(() => customerList.value.filter((row) => row.status === 1).length)
-
-// ヘッダー統計ピルの3Dチルト（マウス追従）
-function handleStatTilt(e: MouseEvent) {
-  const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-pill')
-  const host = e.currentTarget as HTMLElement
-  host.querySelectorAll<HTMLElement>('.stat-pill').forEach((el) => {
-    if (el !== item) {
-      el.style.removeProperty('--rx')
-      el.style.removeProperty('--ry')
-    }
-  })
-  if (!item) return
-  const rect = item.getBoundingClientRect()
-  const px = (e.clientX - rect.left) / rect.width
-  const py = (e.clientY - rect.top) / rect.height
-  item.style.setProperty('--rx', `${((0.5 - py) * 18).toFixed(2)}deg`)
-  item.style.setProperty('--ry', `${((px - 0.5) * 18).toFixed(2)}deg`)
-  item.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
-  item.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
-}
-
-function resetStatTilt(e: MouseEvent) {
-  ;(e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('.stat-pill').forEach((el) => {
-    el.style.removeProperty('--rx')
-    el.style.removeProperty('--ry')
-  })
-}
 
 function getCustomerTypeTagType(
   type: string | undefined,
@@ -421,29 +390,40 @@ onMounted(fetchList)
 
 <style scoped>
 .customer-master-container {
-  padding: 8px 10px;
-  background: linear-gradient(160deg, #f0f9ff 0%, #e8f4fc 50%, #f1f5f9 100%);
-  min-height: 100%;
+  --cst-app-chrome: 84px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  min-height: 0;
+  height: calc(100vh - var(--cst-app-chrome));
+  height: calc(100dvh - var(--cst-app-chrome));
+  max-height: calc(100vh - var(--cst-app-chrome));
+  max-height: calc(100dvh - var(--cst-app-chrome));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-shell {
-  max-width: 1320px;
-  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 /* ── 页头 ── */
 .page-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
-  border-radius: 10px;
-  padding: 8px 14px;
-  box-shadow: 0 3px 14px rgba(14, 165, 233, 0.28);
+  border-radius: 16px;
+  padding: 14px 18px;
 }
 
 .header-left {
@@ -523,28 +503,27 @@ onMounted(fetchList)
 
 .add-btn {
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.18) !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
-  color: #fff !important;
-  border-radius: 8px !important;
-  font-weight: 600;
-  font-size: 12px !important;
-  padding: 6px 14px !important;
-  height: 32px;
-  transition: background 0.15s;
-}
-
-.add-btn:hover {
-  background: rgba(255, 255, 255, 0.28) !important;
 }
 
 /* ── 筛选工具栏 ── */
 .toolbar-card {
+  flex-shrink: 0;
+  position: relative;
   background: #fff;
-  border-radius: 8px;
-  padding: 7px 10px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 10px 14px 10px 18px;
+  border: 1px solid #fbcfe8;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+.toolbar-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #f9a8d4, #db2777, #9d174d);
 }
 
 .toolbar-row {
@@ -575,7 +554,7 @@ onMounted(fetchList)
 }
 
 .clear-btn:hover {
-  color: #0ea5e9;
+  color: #be185d;
 }
 
 .active-filters {
@@ -589,11 +568,27 @@ onMounted(fetchList)
 
 /* ── 表格 ── */
 .table-section {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.05);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #fbcfe8;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  padding: 10px 12px;
+}
+
+.table-section :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-section :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-section :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .code-cell {
@@ -601,8 +596,8 @@ onMounted(fetchList)
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 11px;
   font-weight: 600;
-  color: #0284c7;
-  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  color: #9d174d;
+  background: linear-gradient(135deg, #fdf2f8, #fce7f3);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -668,20 +663,49 @@ onMounted(fetchList)
 
 /* ── 底部 ── */
 .footer-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: #fff;
-  border-radius: 8px;
-  padding: 5px 12px;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
-  font-size: 0.78rem;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #fce7f3;
 }
 
-.footer-icon {
-  color: #0ea5e9;
-  font-size: 14px;
+.footer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.footer-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.footer-pill--count {
+  background: #fce7f3;
+  color: #9d174d;
+  border-color: #fbcfe8;
+}
+.footer-pill--active {
+  background: #d1fae5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+.footer-pill--inactive {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 /* ── 响应式 ── */
@@ -728,52 +752,41 @@ onMounted(fetchList)
   }
 }
 
-.page-header,
-.toolbar-card,
-.table-section,
-.footer-bar {
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 /* ============================================================
- * 页面美化：現代UI・3D動効・色分け（顧客マスタ / sky）
+ * 页面美化：顧客マスタ（玫紅→粉・他頁と分色）
  * ============================================================ */
 .customer-master-container.cst-modern {
   background:
-    radial-gradient(1000px 360px at 0% 0%, rgba(14, 165, 233, 0.1), transparent 60%),
-    radial-gradient(900px 360px at 100% 0%, rgba(56, 189, 248, 0.08), transparent 60%),
-    #f1f5f9;
+    radial-gradient(1100px 380px at 0% 0%, rgba(190, 24, 93, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(244, 114, 182, 0.08), transparent 60%),
+    linear-gradient(160deg, #fdf2f8 0%, #f8fafc 45%, #fff1f2 100%);
 }
 
-/* ---------- ヒーローヘッダー ---------- */
 .cst-modern .page-header {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
-  padding: 12px 18px;
-  border-radius: 16px;
-  background: linear-gradient(125deg, #082f49 0%, #0369a1 36%, #0ea5e9 72%, #38bdf8 100%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #831843 0%, #9d174d 34%, #db2777 66%, #f472b6 100%);
   box-shadow:
-    0 18px 36px -18px rgba(3, 105, 161, 0.7),
-    0 4px 12px -6px rgba(14, 165, 233, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+    0 18px 36px -18px rgba(157, 23, 77, 0.55),
+    0 4px 12px -6px rgba(219, 39, 119, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.cst-modern .page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
 }
 
 .cst-modern .page-header-fx {
   position: absolute;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
 }
 
@@ -788,121 +801,108 @@ onMounted(fetchList)
   height: 40px;
   font-size: 20px;
   border-radius: 12px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
-    0 4px 0 rgba(8, 47, 73, 0.6),
-    0 10px 20px -8px rgba(2, 6, 23, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(6px);
-  animation: cstIconFloat 5s ease-in-out infinite;
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(131, 24, 67, 0.3);
 }
 
 .cst-modern .main-title {
-  font-size: 20px;
   font-weight: 800;
-  text-shadow: 0 2px 8px rgba(8, 47, 73, 0.4);
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
 .cst-modern .subtitle {
-  color: rgba(224, 242, 254, 0.9);
-}
-
-/* 統計ピル：3Dチルト＋グレア */
-.cst-modern .stat-pills {
-  perspective: 600px;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .cst-modern .stat-pill {
-  position: relative;
-  overflow: hidden;
   padding: 4px 12px;
   border-color: rgba(255, 255, 255, 0.3);
-  box-shadow:
-    0 3px 0 rgba(8, 47, 73, 0.45),
-    0 10px 18px -10px rgba(2, 6, 23, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition:
-    transform 0.18s ease-out,
-    box-shadow 0.25s ease;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
-
-.cst-modern .stat-pill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  background: radial-gradient(
-    circle at var(--mx, 50%) var(--my, 50%),
-    rgba(255, 255, 255, 0.35) 0%,
-    transparent 65%
-  );
+.cst-modern .stat-pill--total {
+  background: rgba(255, 255, 255, 0.18);
 }
-
-.cst-modern .stat-pill:hover::after {
-  opacity: 1;
+.cst-modern .stat-pill--active {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: rgba(167, 243, 208, 0.55);
 }
-
+.cst-modern .stat-pill--inactive {
+  background: rgba(131, 24, 67, 0.35);
+  border-color: rgba(251, 207, 232, 0.4);
+}
 .cst-modern .stat-pill strong {
   font-size: 1.05rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.cst-modern .stat-pill--inactive {
-  background: rgba(8, 47, 73, 0.3);
-  border-color: rgba(203, 213, 225, 0.4);
-}
-
-/* 追加ボタン：3Dキーキャップ */
-.cst-modern .add-btn {
-  font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%) !important;
+.cst-modern .tb-btn {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-bd: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+  height: 32px !important;
+  padding: 0 15px 0 12px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
+  color: var(--k-fg) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%) !important;
+  border: 1px solid var(--k-bd) !important;
   box-shadow:
-    0 3px 0 #064e3b,
-    0 10px 18px -8px rgba(16, 185, 129, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    filter 0.18s ease;
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(131, 24, 67, 0.35) !important;
+}
+.cst-modern .tb-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+.cst-modern .tb-btn:hover {
+  color: rgb(var(--k-rgb)) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%) !important;
+  transform: translateY(-1px);
 }
 
-.cst-modern .add-btn:hover {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%) !important;
-  filter: brightness(1.06);
-  transform: translateY(-2px);
+.cst-modern .toolbar-card {
+  background: linear-gradient(110deg, #fdf2f8 0%, #ffffff 60%);
+}
+
+.cst-modern .toolbar-row :deep(.el-input__wrapper),
+.cst-modern .toolbar-row :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.cst-modern .toolbar-row :deep(.el-input__wrapper:hover),
+.cst-modern .toolbar-row :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #f9a8d4 inset;
+}
+.cst-modern .toolbar-row :deep(.el-input__wrapper.is-focus),
+.cst-modern .toolbar-row :deep(.el-select__wrapper.is-focused) {
   box-shadow:
-    0 5px 0 #064e3b,
-    0 14px 22px -8px rgba(16, 185, 129, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 0 0 1px #db2777 inset,
+    0 0 0 3px rgba(219, 39, 119, 0.15);
 }
 
-.cst-modern .add-btn:active {
-  transform: translateY(2px);
-  box-shadow:
-    0 1px 0 #064e3b,
-    0 4px 8px -4px rgba(16, 185, 129, 0.5);
+.cst-modern .clear-btn {
+  font-weight: 600;
+  border-radius: 999px;
+  background: #fdf2f8;
+  box-shadow: inset 0 0 0 1px #fbcfe8;
 }
 
-/* ---------- ツールバー ---------- */
-.cst-modern .toolbar-card,
-.cst-modern .table-section,
-.cst-modern .footer-bar {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  border-color: #bae6fd;
-  box-shadow:
-    0 14px 28px -22px rgba(3, 105, 161, 0.5),
-    0 1px 3px rgba(15, 23, 42, 0.05);
+.cst-modern .clear-btn:hover {
+  color: #be185d;
+  background: #fce7f3;
 }
 
-.cst-modern .toolbar-card::before,
 .cst-modern .table-section::before {
   content: '';
   position: absolute;
@@ -912,126 +912,64 @@ onMounted(fetchList)
   height: 3px;
   z-index: 5;
   pointer-events: none;
-  background: linear-gradient(90deg, #0369a1 0%, #0ea5e9 55%, #38bdf8 100%);
+  background: linear-gradient(90deg, #9d174d 0%, #db2777 55%, #f472b6 100%);
+}
+.cst-modern .table-section {
+  position: relative;
 }
 
-.cst-modern .toolbar-card {
-  padding-top: 10px;
-  background: linear-gradient(110deg, #f0f9ff 0%, #ffffff 60%);
-}
-
-.cst-modern .toolbar-row :deep(.el-input__wrapper.is-focus),
-.cst-modern .toolbar-row :deep(.el-select__wrapper.is-focused) {
-  box-shadow:
-    0 0 0 1px #0ea5e9 inset,
-    0 0 0 3px rgba(14, 165, 233, 0.16);
-}
-
-.cst-modern .clear-btn {
-  font-weight: 600;
-  border-radius: 8px;
-  background: #f8fafc;
-  box-shadow: inset 0 0 0 1px #e2e8f0;
-}
-
-.cst-modern .clear-btn:hover {
-  color: #0284c7;
-  background: #f0f9ff;
-  box-shadow: inset 0 0 0 1px #bae6fd;
-}
-
-/* ---------- テーブル ---------- */
 .cst-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
-  color: #075985 !important;
+  color: #9d174d !important;
   font-weight: 700 !important;
-  background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%) !important;
-  border-bottom: 2px solid #7dd3fc !important;
+  background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%) !important;
+  border-bottom: 2px solid #f9a8d4 !important;
 }
 
 .cst-modern .modern-table :deep(.el-table__body tr:hover > td.el-table__cell:first-child),
 .cst-modern .modern-table :deep(.el-table__body tr.current-row > td.el-table__cell:first-child) {
-  box-shadow: inset 3px 0 0 #0ea5e9;
+  box-shadow: inset 3px 0 0 #db2777;
 }
 
 .cst-modern .code-cell {
   padding: 1px 8px;
-  font-size: 11.5px;
   font-weight: 700;
-  color: #075985;
+  color: #9d174d;
   border-radius: 6px;
-  background: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
-  box-shadow:
-    inset 0 0 0 1px #bae6fd,
-    0 2px 0 #bae6fd;
-  transition: transform 0.15s ease;
+  background: linear-gradient(180deg, #ffffff 0%, #fce7f3 100%);
+  box-shadow: inset 0 0 0 1px #fbcfe8;
 }
 
-.cst-modern .modern-table :deep(.el-table__body tr:hover) .code-cell {
-  transform: translateY(-1px);
+.cst-modern .action-btn--edit {
+  color: #2563eb !important;
+  border-color: #bfdbfe !important;
+}
+.cst-modern .action-btn--edit:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.cst-modern .action-btn--del {
+  color: #e11d48 !important;
+  border-color: #fecdd3 !important;
+}
+.cst-modern .action-btn--del:hover {
+  background: linear-gradient(135deg, #f43f5e, #e11d48) !important;
+  color: #fff !important;
+  border-color: transparent !important;
 }
 
-.cst-modern .action-btn {
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.cst-modern .action-btn.el-button--primary {
-  box-shadow: 0 2px 0 #bfdbfe;
-}
-
-.cst-modern .action-btn.el-button--danger {
-  box-shadow: 0 2px 0 #fecaca;
-}
-
-.cst-modern .action-btn:hover {
-  transform: translateY(-1px);
-}
-
-.cst-modern .action-btn.el-button--primary:hover {
-  box-shadow:
-    0 3px 0 #1e40af,
-    0 8px 14px -8px rgba(37, 99, 235, 0.6);
-}
-
-.cst-modern .action-btn.el-button--danger:hover {
-  box-shadow:
-    0 3px 0 #991b1b,
-    0 8px 14px -8px rgba(220, 38, 38, 0.6);
-}
-
-.cst-modern .action-btn:active {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-/* ---------- フッター ---------- */
-.cst-modern .footer-bar {
-  color: #075985;
-  font-weight: 600;
-  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
-}
-
-/* ---------- キーフレーム ---------- */
-
-@keyframes cstIconFloat {
-  0%,
-  100% {
-    transform: perspective(300px) rotateX(0deg) rotateY(0deg) translateY(0);
+@media (max-width: 768px) {
+  .customer-master-container {
+    padding: 8px;
   }
-  50% {
-    transform: perspective(300px) rotateX(10deg) rotateY(-14deg) translateY(-2px);
+  .add-btn {
+    width: 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cst-modern .title-icon-wrap {
-    animation: none;
-  }
-
-  .cst-modern .stat-pill {
+  .cst-modern .tb-btn:hover {
     transform: none;
-    transition: none;
   }
 }
 </style>

@@ -29,9 +29,11 @@
           draggable="true"
           @dragstart="handleDragStart($event, tab)"
           @dragend="handleDragEnd"
-          @dragover.prevent="handleDragOver(tab)"
+          @dragover.prevent="handleDragOver($event, tab)"
           @drop.prevent="handleDrop(tab)"
-          @click="handleTabClick(tab)"
+          @click="handleTabClick($event, tab)"
+          @auxclick="handleTabAuxClick($event, tab)"
+          @mousedown="handleTabMouseDown"
           @contextmenu.prevent="handleContextMenu($event, tab)"
         >
           <el-icon class="tab-icon" :size="12">
@@ -142,6 +144,8 @@ import { useI18n } from 'vue-i18n'
 import { useTabsStore, type TabItem } from '@/stores/tabs'
 import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
 import { useMenuLabel, isTrackableMenuPath } from '@/composables/useMenuLabel'
+import { toMenuAbsoluteHref } from '@/composables/useMenuHref'
+import { markMenuTabHandoff } from '@/modules/auth/sessionSync'
 import { Close, ArrowDown, Refresh, FolderRemove, DArrowLeft, DArrowRight, HomeFilled, Document, ArrowLeft, ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -183,7 +187,29 @@ const draggingPath = ref<string | null>(null)
 const dropTargetPath = ref<string | null>(null)
 const tabRefs = ref<Record<string, HTMLElement>>({})
 
-const handleTabClick = (tab: TabItem) => {
+const tabAbsoluteHref = (tab: TabItem) =>
+  toMenuAbsoluteHref(router, {
+    path: tab.path,
+    query: tab.query ?? {},
+  })
+
+const openTabInBrowser = (tab: TabItem) => {
+  markMenuTabHandoff()
+  window.open(tabAbsoluteHref(tab), '_blank')
+}
+
+const handleTabMouseDown = (event: MouseEvent) => {
+  if (event.button === 1 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    markMenuTabHandoff()
+  }
+}
+
+const handleTabClick = (event: MouseEvent, tab: TabItem) => {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    event.preventDefault()
+    openTabInBrowser(tab)
+    return
+  }
   if (tab.path !== tabsStore.activeTab) {
     tabsStore.setActiveTab(tab.path)
     router.push({
@@ -191,6 +217,12 @@ const handleTabClick = (tab: TabItem) => {
       query: tab.query ?? {},
     })
   }
+}
+
+const handleTabAuxClick = (event: MouseEvent, tab: TabItem) => {
+  if (event.button !== 1) return
+  event.preventDefault()
+  openTabInBrowser(tab)
 }
 
 const handleClose = (path: string) => {
@@ -272,18 +304,26 @@ const closeContextMenu = () => {
 const handleDragStart = (event: DragEvent, tab: TabItem) => {
   draggingPath.value = tab.path
   dropTargetPath.value = null
+  const href = tabAbsoluteHref(tab)
+  markMenuTabHandoff()
   if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.dropEffect = 'move'
+    // copyMove: タブ並べ替え(move) とブラウザ新タブ(copy/link) の両方を許可
+    event.dataTransfer.effectAllowed = 'copyMove'
+    event.dataTransfer.setData('text/uri-list', href)
+    event.dataTransfer.setData('text/plain', href)
+    event.dataTransfer.setData('application/x-smart-emap-tab-path', tab.path)
   }
 }
 
-const handleDragOver = (tab: TabItem) => {
+const handleDragOver = (event: DragEvent, tab: TabItem) => {
   if (!draggingPath.value || draggingPath.value === tab.path) {
     dropTargetPath.value = null
     return
   }
   dropTargetPath.value = tab.path
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
 }
 
 const handleDrop = (targetTab: TabItem) => {

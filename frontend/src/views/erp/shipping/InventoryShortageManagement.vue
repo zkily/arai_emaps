@@ -169,14 +169,13 @@
           :image-size="56"
           class="empty-state"
         />
-        <div v-else>
-          <div class="table-container">
+        <template v-else>
+          <div class="table-card__body">
             <el-table
               :data="paginatedData"
               stripe
-              style="width: 100%"
-              show-summary
-              :summary-method="getSummaries"
+              border
+              height="100%"
               size="small"
               class="modern-table"
               :row-class-name="shortageRowClass"
@@ -228,19 +227,37 @@
                 </span>
               </template>
             </el-table-column>
-          </el-table>
+            </el-table>
           </div>
-          <div class="pagination-wrap">
+          <div v-if="displayedData.length > 0" class="pagination-bar">
+            <div class="pagination-summary">
+              <span class="pagination-summary__item">
+                <span class="pagination-summary__label">合計</span>
+                <b class="pagination-summary__value">{{ displayedData.length.toLocaleString('ja-JP') }}</b>
+                <span class="pagination-summary__unit">件</span>
+              </span>
+              <span class="pagination-summary__item pagination-summary__item--range">
+                <span class="pagination-summary__label">表示</span>
+                <b class="pagination-summary__value">{{ pageRangeText }}</b>
+              </span>
+              <span v-if="negativeRowCount > 0" class="pagination-summary__item pagination-summary__item--shortage">
+                <span class="pagination-summary__label">不足件数</span>
+                <b class="pagination-summary__value">{{ negativeRowCount.toLocaleString('ja-JP') }}</b>
+              </span>
+            </div>
             <el-pagination
               v-model:current-page="pagination.page"
-              :page-size="pagination.pageSize"
+              v-model:page-size="pagination.pageSize"
               :total="displayedData.length"
-              layout="total, prev, pager, next"
+              :page-sizes="[20, 50, 100]"
+              layout="sizes, prev, pager, next, jumper"
               size="small"
               background
+              class="modern-pagination"
+              @size-change="handlePageSizeChange"
             />
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- 印刷用の隠しコンテナ（日付ごとに1ページ：不足一覧＋手書き表＋備考） -->
@@ -724,6 +741,19 @@ const paginatedData = computed(() => {
   return list.slice(start, start + pagination.pageSize)
 })
 
+const pageRangeText = computed(() => {
+  const total = displayedData.value.length
+  if (!total) return '0'
+  const start = (pagination.page - 1) * pagination.pageSize + 1
+  const end = Math.min(pagination.page * pagination.pageSize, total)
+  return `${start.toLocaleString('ja-JP')}–${end.toLocaleString('ja-JP')}`
+})
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
+
 watch(
   () => displayedData.value.length,
   (len) => {
@@ -954,40 +984,6 @@ function formatPrintInspectionInventory(val: number | null | undefined): string 
   if (val == null || (typeof val === 'number' && Number.isNaN(val))) return '—'
   if (Number(val) === 0) return '—'
   return formatNumber(val)
-}
-
-function getSummaries(param: { columns: Array<{ property?: string }>; data: SummaryRow[] }): string[] {
-  const { columns, data } = param
-  const sums: string[] = []
-  columns.forEach((col, i) => {
-    if (i === 0) {
-      sums[i] = '合計'
-      return
-    }
-    const prop = col.property
-    if (
-      prop === 'order_quantity' ||
-      prop === 'forecast_quantity' ||
-      prop === 'safety_stock' ||
-      prop === 'warehouse_inventory' ||
-      prop === 'outsourced_warehouse_inventory' ||
-      prop === 'inspection_inventory'
-    ) {
-      const v = data.reduce((s, row) => s + (Number((row as any)[prop]) || 0), 0)
-      sums[i] = formatNumber(v)
-    } else if (i === 10) {
-      // 現在在庫合計列（倉庫＋外注倉庫）
-      const v = data.reduce(
-        (s, row) =>
-          s + (Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0),
-        0
-      )
-      sums[i] = formatNumber(v)
-    } else {
-      sums[i] = ''
-    }
-  })
-  return sums
 }
 
 function formatLongStayPrintItem(row: InventoryShortageLongStayRow): string {
@@ -1539,9 +1535,27 @@ onMounted(() => {
 
 <style scoped>
 .inventory-shortage {
+  --ism-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--ism-app-chrome));
+  height: calc(100dvh - var(--ism-app-chrome));
+  max-height: calc(100vh - var(--ism-app-chrome));
+  max-height: calc(100dvh - var(--ism-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 6px;
-  min-height: 100vh;
   background: linear-gradient(160deg, #eef2f8 0%, #e4e9f2 48%, #e8ecf4 100%);
+}
+
+.overview-card.glass-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .glass-card {
@@ -1552,6 +1566,12 @@ onMounted(() => {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.card-header.glass-header,
+.filter-section,
+.stats-section {
+  flex-shrink: 0;
 }
 
 .glass-header {
@@ -1871,8 +1891,13 @@ onMounted(() => {
   color: #000;
 }
 
-.glass-table-wrap {
-  margin: 6px;
+.table-section.glass-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 4px 6px 6px;
   padding: 6px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.6);
@@ -1880,7 +1905,38 @@ onMounted(() => {
 }
 
 .empty-state {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
 }
 
 .empty-state :deep(.el-empty__description) {
@@ -1888,26 +1944,10 @@ onMounted(() => {
   color: #000;
 }
 
-.table-container {
-  overflow-x: auto;
-  border-radius: 6px;
-}
-
-.modern-table {
-  border-radius: 6px;
-  overflow: hidden;
-}
-
 .modern-table :deep(.el-table__header th),
 .modern-table :deep(.el-table__body td) {
   padding: 4px 8px;
   font-size: 12px;
-  color: #000;
-}
-.modern-table :deep(.el-table__footer-wrapper td) {
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 600;
   color: #000;
 }
 .modern-table :deep(.el-table .cell) {
@@ -1917,37 +1957,89 @@ onMounted(() => {
   --el-table-row-hover-bg-color: rgba(99, 102, 241, 0.04);
 }
 
-.pagination-wrap {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
-  padding: 10px 0 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 4px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, #fff 0%, #f0fdfa 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
-.pagination-wrap :deep(.el-pagination) {
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pagination-summary__value {
+  font-weight: 700;
+  color: #0f766e;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0891b2;
+}
+
+.pagination-summary__item--shortage {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.pagination-summary__item--shortage .pagination-summary__value {
+  color: #be123c;
+}
+
+.pagination-bar .modern-pagination {
+  margin-left: auto;
+}
+
+.pagination-bar :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
   font-weight: 500;
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.pagination-wrap :deep(.el-pagination__total) {
-  font-size: 11px;
-  color: #000;
-}
-
-.pagination-wrap :deep(.el-pagination .el-pager li) {
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
   min-width: 26px;
   height: 26px;
   line-height: 26px;
-  font-size: 11px;
-}
-
-.pagination-wrap :deep(.el-pagination .btn-prev),
-.pagination-wrap :deep(.el-pagination .btn-next) {
-  min-width: 26px;
-  height: 26px;
-  line-height: 26px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .cell-negative {
@@ -2624,15 +2716,14 @@ onMounted(() => {
     font-size: 16px;
   }
 
-  .glass-table-wrap {
-    margin: 5px;
+  .table-section.glass-table-wrap {
+    margin: 4px 5px 5px;
     padding: 5px;
   }
 
-  .table-container {
+  .table-card__body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin: 0 -2px;
   }
 
   .modern-table {
@@ -2645,8 +2736,8 @@ onMounted(() => {
     font-size: 11px;
   }
 
-  .pagination-wrap {
-    padding: 8px 0 4px;
+  .pagination-bar {
+    padding: 6px 2px 4px;
   }
 }
 
@@ -3093,6 +3184,11 @@ onMounted(() => {
   }
 
   .is-modern .overview-card.glass-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     border-radius: 16px;
     border: 1px solid rgba(153, 246, 228, 0.6);
     box-shadow:
@@ -3515,23 +3611,17 @@ onMounted(() => {
     box-shadow: inset 0 0 0 1px #fecdd3;
   }
 
-  .is-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell) {
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    background: linear-gradient(90deg, #134e4a 0%, #0f766e 50%, #0891b2 100%) !important;
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .is-modern .modern-table :deep(.el-table__footer-wrapper td.el-table__cell .cell) {
-    color: #fff;
-  }
-
   .is-modern .modern-table :deep(.el-table__body-wrapper) {
     scrollbar-width: thin;
     scrollbar-color: #5eead4 transparent;
   }
 
-  .is-modern .pagination-wrap :deep(.el-pagination.is-background .el-pager li.is-active) {
+  .is-modern .pagination-bar {
+    border-top-color: rgba(153, 246, 228, 0.85);
+    background: linear-gradient(180deg, #ffffff 0%, #f0fdfa 100%);
+  }
+
+  .is-modern .pagination-bar :deep(.el-pagination.is-background .el-pager li.is-active) {
     background: linear-gradient(145deg, #2dd4bf 0%, #0f766e 100%);
     box-shadow: 0 2px 0 #134e4a;
   }

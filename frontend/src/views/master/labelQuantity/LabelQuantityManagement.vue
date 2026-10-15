@@ -109,24 +109,10 @@
     </section>
 
     <section class="lqm-table-wrap">
-      <div class="lqm-result-bar">
-        <span class="lqm-result-text">
-          <strong>{{ list.length }}</strong> 件
-          <span class="lqm-result-sep">|</span>
-          {{ monthKeys.join(' / ') }}
-          <template v-if="dirtyCount"> · 未保存 {{ dirtyCount }}</template>
-        </span>
-        <div class="lqm-legend">
-          <span class="lqm-legend-item lqm-legend-item--stock">月初</span>
-          <span class="lqm-legend-item lqm-legend-item--demand">需要/必要</span>
-          <span class="lqm-legend-item lqm-legend-item--issue">発行済</span>
-          <span class="lqm-legend-item lqm-legend-item--close">月末理論</span>
-        </div>
-      </div>
-
+      <div class="lqm-table-body">
       <el-table
         v-loading="loading"
-        :data="list"
+        :data="pagedList"
         stripe
         size="small"
         border
@@ -255,6 +241,46 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ list.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span v-if="monthKeys.length" class="pagination-summary__item pagination-summary__item--months">
+            <span class="pagination-summary__label">期間</span>
+            <b class="pagination-summary__value">{{ monthKeys.join(' / ') }}</b>
+          </span>
+          <span v-if="dirtyCount" class="pagination-summary__item pagination-summary__item--dirty">
+            <span class="pagination-summary__label">未保存</span>
+            <b class="pagination-summary__value">{{ dirtyCount }}</b>
+          </span>
+          <div class="lqm-legend">
+            <span class="lqm-legend-item lqm-legend-item--stock">月初</span>
+            <span class="lqm-legend-item lqm-legend-item--demand">需要/必要</span>
+            <span class="lqm-legend-item lqm-legend-item--issue">発行済</span>
+            <span class="lqm-legend-item lqm-legend-item--close">月末理論</span>
+          </div>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="list.length"
+          :page-sizes="[20, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </section>
   </div>
 </template>
@@ -293,6 +319,33 @@ const monthKeys = ref<string[]>([])
 const safetyFactor = ref(1.1)
 const labelsPerSheet = ref(6)
 const dirtyKeys = ref<Set<string>>(new Set())
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return list.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = list.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 const kpi = reactive<LabelQuantityKpi>({
   total: 0,
@@ -487,6 +540,7 @@ function applyResponse(data: {
   if (data.labels_per_sheet != null) labelsPerSheet.value = data.labels_per_sheet
   if (data.months_count != null) monthsCount.value = data.months_count
   dirtyKeys.value = new Set()
+  pagination.page = 1
   recomputeLocalKpi()
 }
 
@@ -630,6 +684,7 @@ onMounted(() => loadList())
 
 <style scoped lang="scss">
 .lqm-page {
+  --lqm-app-chrome: 84px;
   --lqm-accent: #4338ca;
   --lqm-accent-light: #6366f1;
   --lqm-accent-soft: #eef2ff;
@@ -637,8 +692,13 @@ onMounted(() => loadList())
   display: flex;
   flex-direction: column;
   gap: 6px;
-  height: 100%;
+  width: 100%;
+  height: calc(100vh - var(--lqm-app-chrome));
+  height: calc(100dvh - var(--lqm-app-chrome));
+  max-height: calc(100vh - var(--lqm-app-chrome));
+  max-height: calc(100dvh - var(--lqm-app-chrome));
   min-height: 0;
+  overflow: hidden;
   padding: 6px;
   box-sizing: border-box;
   background: linear-gradient(165deg, #f1f5f9 0%, #eef2ff 36%, #f8fafc 100%);
@@ -826,8 +886,8 @@ onMounted(() => loadList())
   box-shadow: 0 3px 0 #312e81, 0 5px 14px rgba(67, 56, 202, 0.38) !important;
 }
 .lqm-table-wrap {
-  flex: 1;
-  min-height: 240px;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: 12px;
@@ -836,26 +896,103 @@ onMounted(() => loadList())
   box-shadow: 0 6px 20px rgba(67, 56, 202, 0.09);
   overflow: hidden;
 }
-.lqm-result-bar {
+.lqm-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 4px;
 }
-.lqm-result-text {
-  font-size: 11px;
-  font-weight: 600;
+.lqm-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.lqm-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.lqm-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
   color: #475569;
 }
-.lqm-result-text strong {
-  color: var(--lqm-accent);
-  font-size: 13px;
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
 }
-.lqm-result-sep {
-  margin: 0 6px;
-  color: #cbd5e1;
+.pagination-summary__value {
+  font-weight: 700;
+  color: var(--lqm-accent);
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0ea5e9;
+}
+.pagination-summary__item--months .pagination-summary__value {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+.pagination-summary__item--dirty {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+.pagination-summary__item--dirty .pagination-summary__value {
+  color: #d97706;
+}
+.pagination-bar .modern-pagination {
+  margin-left: auto;
+}
+.pagination-bar :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+  font-size: 12px;
+}
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+.pagination-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--lqm-accent-light) 0%, var(--lqm-accent) 100%);
 }
 .lqm-legend {
   display: flex;
@@ -890,9 +1027,10 @@ onMounted(() => loadList())
   border-color: #bae6fd;
 }
 .lqm-table {
-  flex: 1;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   min-height: 0;
-  padding: 0 4px 6px;
 }
 .lqm-table :deep(.el-table__cell) {
   padding: 3px 0;

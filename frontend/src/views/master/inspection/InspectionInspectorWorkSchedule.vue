@@ -204,12 +204,12 @@
         </div>
         <div class="iiws-table-shell">
           <el-table
-            :data="items"
+            :data="pagedList"
             size="small"
             stripe
             class="iiws-table"
             empty-text="登録なし（未設定時は 7.6h/日）"
-            :max-height="tableMaxHeight"
+            height="100%"
             :row-class-name="tableRowClass"
           >
             <el-table-column prop="inspector_name" label="検査員" min-width="100" show-overflow-tooltip>
@@ -249,6 +249,30 @@
             </el-table-column>
           </el-table>
         </div>
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ items.length.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--range">
+              <span class="pagination-summary__label">表示</span>
+              <b class="pagination-summary__value">{{ pageRangeText }}</b>
+            </span>
+          </div>
+          <el-pagination
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            :total="items.length"
+            :page-sizes="[30, 50, 100]"
+            layout="sizes, prev, pager, next, jumper"
+            small
+            class="modern-pagination"
+            @size-change="handlePageSizeChange"
+            @current-change="handlePageChange"
+          />
+        </div>
       </div>
     </section>
 
@@ -261,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowRight, Clock, Delete, Filter, InfoFilled, Link, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -308,7 +332,32 @@ const newDate = ref('')
 const newTimeRange = ref<[string, string]>(['08:00', '15:36'])
 const newNote = ref('')
 
-const tableMaxHeight = 520
+const pagination = reactive({
+  page: 1,
+  pageSize: 30,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return items.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = items.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 const previewHours = computed(() => hoursFromTimeRange(newTimeRange.value?.[0], newTimeRange.value?.[1]))
 
@@ -406,8 +455,10 @@ async function loadItems() {
       inspector_user_id: filterInspectorId.value,
     })
     items.value = res?.data?.items ?? []
+    pagination.page = 1
   } catch (e: unknown) {
     items.value = []
+    pagination.page = 1
     ElMessage.error(e instanceof Error ? e.message : '一覧の取得に失敗しました')
   } finally {
     loading.value = false
@@ -603,12 +654,20 @@ onMounted(async () => {
 
 <style scoped>
 .iiws {
+  --iiws-app-chrome: 84px;
   position: relative;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--iiws-app-chrome));
+  height: calc(100dvh - var(--iiws-app-chrome));
+  max-height: calc(100vh - var(--iiws-app-chrome));
+  max-height: calc(100dvh - var(--iiws-app-chrome));
   padding: 8px 10px 12px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .iiws__bg {
@@ -651,6 +710,7 @@ onMounted(async () => {
 }
 
 .iiws-hero {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -773,6 +833,7 @@ onMounted(async () => {
 }
 
 .iiws-priority {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -823,6 +884,10 @@ onMounted(async () => {
 }
 
 .iiws-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-radius: 14px;
   background: linear-gradient(165deg, #ffffff 0%, #f8fafc 48%, #f1f5f9 100%);
   border: 1px solid rgba(148, 163, 184, 0.35);
@@ -849,6 +914,7 @@ onMounted(async () => {
 }
 
 .iiws-form {
+  flex-shrink: 0;
   padding: 10px 12px 8px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.6) 100%),
@@ -1236,6 +1302,7 @@ onMounted(async () => {
 }
 
 .iiws-split {
+  flex-shrink: 0;
   position: relative;
   height: 1px;
   margin: 0 12px;
@@ -1266,10 +1333,16 @@ onMounted(async () => {
 }
 
 .iiws-table-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 8px 10px 10px;
 }
 
 .iiws-table-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1310,8 +1383,12 @@ onMounted(async () => {
 }
 
 .iiws-table-shell {
-  border-radius: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #fff;
   box-shadow:
@@ -1319,8 +1396,111 @@ onMounted(async () => {
     0 4px 16px rgba(15, 23, 42, 0.05);
 }
 
+.iiws-table-shell :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.iiws-table-shell :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.iiws-table-shell :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 .iiws-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   --el-table-border-color: #eef2f6;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  margin-top: 6px;
+  padding: 5px 4px 0;
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--range {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.pagination-summary__item--range .pagination-summary__label {
+  color: #6d28d9;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #4c1d95;
+}
+
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #6d28d9;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .iiws-table :deep(.el-table__inner-wrapper::before) {
@@ -1431,6 +1611,7 @@ onMounted(async () => {
 }
 
 .iiws-foot {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   padding: 0 2px;
@@ -1917,6 +2098,19 @@ onMounted(async () => {
   text-decoration: none;
   transform: translateY(-2px);
   box-shadow: 0 4px 0 #c4b5fd;
+}
+
+.iiws-modern .pagination-bar {
+  border-top: 1px solid var(--hx-line);
+  margin-top: 8px;
+  padding-top: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, var(--hx-soft) 100%);
+}
+
+.iiws-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--hx-3) 0%, var(--hx-2) 100%);
 }
 
 @keyframes iiwsIconTick {

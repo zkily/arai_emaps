@@ -87,9 +87,10 @@
 
     <!-- ===== メインテーブル ===== -->
     <div class="ea-table-wrap">
+      <div class="ea-table-body">
       <el-table
         ref="mainTableRef"
-        :data="rows"
+        :data="pagedList"
         v-loading="loading"
         stripe
         border
@@ -98,7 +99,7 @@
         :header-cell-style="headerCellStyle"
         :cell-style="cellStyle"
         :row-class-name="rowClassName"
-        height="calc(100vh - 250px)"
+        height="100%"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="roller_cd" label="CD" width="75" fixed show-overflow-tooltip sortable/>
@@ -212,9 +213,35 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
-      <div class="ea-result-bar">
-        <span>表示 <b>{{ rows.length }}</b> / <b>{{ total }}</b> 件</span>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ rows.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span v-if="total !== rows.length" class="pagination-summary__item pagination-summary__item--all">
+            <span class="pagination-summary__label">全件</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="rows.length"
+          :page-sizes="[20, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
       </div>
     </div>
 
@@ -541,7 +568,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -589,6 +616,33 @@ const printingList = ref(false)
 
 const rows = ref<RollerUsageStatusRow[]>([])
 const total = ref(0)
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return rows.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const len = rows.value.length
+  if (!len) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, len)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 const filters = ref({ keyword: '', machine_cd: '', exec_type: '' })
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
@@ -711,6 +765,7 @@ const loadData = async () => {
     const { list, total: tot } = extractListAndTotal(res)
     rows.value = list
     total.value = tot
+    pagination.page = 1
     await refreshManualPlanCounts()
   } catch (e) {
     console.error(e)
@@ -722,9 +777,15 @@ const loadData = async () => {
 
 const onKeywordInput = () => {
   if (keywordTimer) clearTimeout(keywordTimer)
-  keywordTimer = setTimeout(() => { loadData() }, 350)
+  keywordTimer = setTimeout(() => {
+    pagination.page = 1
+    loadData()
+  }, 350)
 }
-const onFilterChange = () => { loadData() }
+const onFilterChange = () => {
+  pagination.page = 1
+  loadData()
+}
 
 const handleSortChange = (data: { prop?: string; order: string | null }) => {
   const prop = data.prop
@@ -736,6 +797,7 @@ const handleSortChange = (data: { prop?: string; order: string | null }) => {
     tableSortBy.value = prop
     tableSortOrder.value = order === 'ascending' ? 'asc' : 'desc'
   }
+  pagination.page = 1
   loadData()
 }
 
@@ -744,6 +806,7 @@ const clearFilters = () => {
   tableSortBy.value = undefined
   tableSortOrder.value = undefined
   mainTableRef.value?.clearSort?.()
+  pagination.page = 1
   loadData()
 }
 
@@ -1587,8 +1650,16 @@ onMounted(async () => {
 
 <style scoped>
 .ea-page {
+  --ea-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(100vh - var(--ea-app-chrome));
+  height: calc(100dvh - var(--ea-app-chrome));
+  max-height: calc(100vh - var(--ea-app-chrome));
+  max-height: calc(100dvh - var(--ea-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1598,6 +1669,7 @@ onMounted(async () => {
 
 /* ── ヘッダー ── */
 .ea-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #1e3a5f 0%, #1565c0 55%, #0891b2 100%);
   border-radius: 12px;
   padding: 14px 18px;
@@ -1695,6 +1767,7 @@ onMounted(async () => {
 
 /* ── ツールバー ── */
 .ea-toolbar {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 12px;
   padding: 10px 12px;
@@ -1740,26 +1813,120 @@ onMounted(async () => {
 
 /* ── テーブル ── */
 .ea-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
   background: #fff;
   border-radius: 12px;
   border: 1px solid rgba(21, 101, 192, 0.1);
-  padding: 0 0 10px;
+  padding: 0;
   box-shadow: 0 2px 12px rgba(21, 101, 192, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  flex: 1;
 }
 
-.ea-result-bar {
+.ea-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ea-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.ea-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.ea-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 12px 0;
-  color: #64748b;
-  font-size: 12px;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e0f2fe;
+  background: linear-gradient(180deg, #fff 0%, #f0f9ff 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pagination-summary__value {
+  font-weight: 700;
+  color: #1565c0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0891b2;
+}
+
+.pagination-summary__item--all .pagination-summary__value {
+  color: #475569;
+}
+
+.pagination-bar .modern-pagination {
+  margin-left: auto;
+}
+
+.pagination-bar :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+  font-size: 12px;
+}
+
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+
+.pagination-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0891b2 0%, #1565c0 55%, #1e3a5f 100%);
 }
 
 .ea-dash {

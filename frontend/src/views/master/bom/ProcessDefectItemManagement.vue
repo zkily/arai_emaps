@@ -112,7 +112,7 @@
         :data="rows"
         stripe
         style="width: 100%"
-        max-height="calc(100vh - 300px)"
+        height="100%"
         size="small"
       >
         <el-table-column prop="detection_process_cd" label="収集工程CD" width="110">
@@ -182,14 +182,26 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pdi-pagination">
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
           :total="total"
           :page-sizes="[20, 50, 100]"
-          size="small"
-          layout="total, sizes, prev, pager, next"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
           @size-change="loadList"
           @current-change="loadList"
         />
@@ -345,6 +357,14 @@ const upstreamRowCount = computed(
 const detectionProcessCount = computed(
   () => new Set(rows.value.map((r) => r.detection_process_cd).filter(Boolean)).size,
 )
+
+const pageRangeText = computed(() => {
+  const t = total.value
+  if (!t) return '0'
+  const start = pageSize.value * (page.value - 1) + 1
+  const end = Math.min(pageSize.value * page.value, t)
+  return `${start}–${end}`
+})
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
@@ -531,14 +551,26 @@ onMounted(async () => {
 
 <style scoped>
 .pdi-page {
-  padding: 12px 16px 20px;
-  min-height: 100%;
+  --pdi-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--pdi-app-chrome));
+  height: calc(100dvh - var(--pdi-app-chrome));
+  max-height: calc(100vh - var(--pdi-app-chrome));
+  max-height: calc(100dvh - var(--pdi-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 16px;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2f7 100%);
 }
 
 .pdi-hero {
   position: relative;
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   border-radius: 10px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -584,11 +616,22 @@ onMounted(async () => {
   line-height: 1.45;
 }
 
-.pdi-toolbar-card,
-.pdi-data-card {
+.pdi-toolbar-card {
+  flex-shrink: 0;
   border-radius: 10px;
   border: 1px solid #e5e7eb;
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+
+.pdi-data-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 0;
 }
 
 .pdi-toolbar-card :deep(.el-card__body) {
@@ -596,12 +639,37 @@ onMounted(async () => {
 }
 
 .pdi-data-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 8px 14px;
   border-bottom: 1px solid #f3f4f6;
 }
 
 .pdi-data-card :deep(.el-card__body) {
-  padding: 8px 12px 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.pdi-data-card :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.pdi-data-card :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.pdi-data-card :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.pdi-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
 }
 
 .pdi-filter-form {
@@ -660,10 +728,103 @@ onMounted(async () => {
   color: #9ca3af;
 }
 
-.pdi-pagination {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pagination-summary__value {
+  font-weight: 700;
+  color: #881337;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.pagination-summary__item--range {
+  background: #fff1f2;
+  border-color: rgba(225, 29, 72, 0.22);
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #be123c;
+}
+
+.pagination-bar .modern-pagination {
+  margin-left: auto;
+}
+
+.pagination-bar :deep(.el-pagination) {
+  flex-wrap: wrap;
   justify-content: flex-end;
-  margin-top: 8px;
+  row-gap: 4px;
+  font-size: 12px;
+}
+
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+
+.modern-pagination {
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .pdi-field-hint {
@@ -1127,7 +1288,12 @@ onMounted(async () => {
   box-shadow: 0 2px 0 rgba(22, 163, 74, 0.28);
 }
 
-.pdm-modern .pdi-pagination :deep(.el-pager li.is-active) {
+.pdm-modern .pagination-bar {
+  border-top-color: rgba(225, 29, 72, 0.14);
+  background: linear-gradient(180deg, #fff 0%, #fff7f8 100%);
+}
+
+.pdm-modern .pagination-bar :deep(.el-pager li.is-active) {
   border-radius: 6px;
   color: #fff;
   background: linear-gradient(135deg, var(--hx-3), var(--hx-4));

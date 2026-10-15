@@ -49,7 +49,6 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PURCHASE_MATERIAL_FORECAST', name: '内示管理', icon: 'TrendCharts', path: '/erp/purchase/material/forecast', parentCode: 'ERP_PURCHASE_MATERIAL', sortOrder: 4 },
   { code: 'ERP_PURCHASE_PART', name: '部品管理', icon: 'Grid', parentCode: 'ERP_PURCHASE', sortOrder: 2 },
   { code: 'ERP_PURCHASE_PART_ORDER', name: '部品在庫管理', icon: 'Box', path: '/erp/purchase/part/order', parentCode: 'ERP_PURCHASE_PART', sortOrder: 1 },
-  { code: 'ERP_PURCHASE_PART_RECEIVING', name: '受入履歴', icon: 'Download', path: '/erp/purchase/part/receiving-history', parentCode: 'ERP_PURCHASE_PART', sortOrder: 2 },
   { code: 'ERP_PURCHASE_OUTSOURCING', name: '外注管理', path: '/erp/purchase/outsourcing', icon: 'OfficeBuilding', parentCode: 'ERP_PURCHASE', sortOrder: 3 },
   { code: 'ERP_OUTSOURCING_PLATING_ORDER', name: '外注メッキ', icon: 'Brush', path: '/erp/purchase/outsourcing/plating-order', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 2 },
   { code: 'ERP_OUTSOURCING_WELDING_ORDER', name: '外注溶接', icon: 'Connection', path: '/erp/purchase/outsourcing/welding-order', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 4 },
@@ -105,6 +104,11 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_ACTUAL', name: '生産実績管理', icon: 'DocumentChecked', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_CONSUME', name: '材料消費実績', icon: 'Goods', path: '/erp/production/consumption', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_PROCESS_ACTUAL', name: '工程別実績', icon: 'Operation', path: '/erp/production/process-actual', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 3 },
+  { code: 'ERP_PRODUCTION_EQUIPMENT_CAPACITY', name: '生産設備能力', icon: 'Odometer', parentCode: 'ERP_PRODUCTION', sortOrder: 9 },
+  { code: 'ERP_PRODUCTION_EQ_CAP_CUTTING', name: '切断設備', icon: 'Crop', path: '/erp/production/equipment-capacity/cutting', parentCode: 'ERP_PRODUCTION_EQUIPMENT_CAPACITY', sortOrder: 1 },
+  { code: 'ERP_PRODUCTION_EQ_CAP_CHAMFERING', name: '面取設備', icon: 'Operation', path: '/erp/production/equipment-capacity/chamfering', parentCode: 'ERP_PRODUCTION_EQUIPMENT_CAPACITY', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_EQ_CAP_FORMING', name: '成型設備', icon: 'Box', path: '/erp/production/equipment-capacity/forming', parentCode: 'ERP_PRODUCTION_EQUIPMENT_CAPACITY', sortOrder: 3 },
+  { code: 'ERP_PRODUCTION_EQ_CAP_WELDING', name: '溶接設備', icon: 'Connection', path: '/erp/production/equipment-capacity/welding', parentCode: 'ERP_PRODUCTION_EQUIPMENT_CAPACITY', sortOrder: 4 },
 
   // ===== 5. 出荷管理 (Shipping Management) =====
   { code: 'ERP_SHIPPING', name: '出荷管理', path: '/erp/shipping', icon: 'Van', parentCode: 'ERP', sortOrder: 8 },
@@ -119,7 +123,6 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_INVENTORY_SHORTAGE', name: '倉庫在庫管理', icon: 'Box', path: '/erp/shipping/inventory-shortage', parentCode: 'ERP_SHIPPING', sortOrder: 8 },
   { code: 'ERP_SHIPPING_ABC', name: 'ABC分析', icon: 'PieChart', path: '/erp/shipping/abc-analysis', parentCode: 'ERP_SHIPPING', sortOrder: 9 },
   { code: 'ERP_SHIPPING_INVENTORY_KPI', name: '在庫KPI・アラート', icon: 'Bell', path: '/erp/shipping/inventory-kpi', parentCode: 'ERP_SHIPPING', sortOrder: 10 },
-  { code: 'ERP_SHIPPING_WAREHOUSE_DAILY', name: '倉庫日次在庫', icon: 'Calendar', path: '/erp/shipping/warehouse-daily', parentCode: 'ERP_SHIPPING', sortOrder: 11 },
   { code: 'ERP_QUALITY', name: '品質管理', path: '/erp/quality', icon: 'CircleCheck', parentCode: 'ERP', sortOrder: 9 },
   { code: 'ERP_QUALITY_MATERIAL_RELATION', name: '材料関係', icon: 'Box', parentCode: 'ERP_QUALITY', sortOrder: 1 },
   { code: 'ERP_QUALITY_MATERIAL', name: '材料受入履歴', icon: 'Download', path: '/erp/quality/material-association/receiving-history', parentCode: 'ERP_QUALITY_MATERIAL_RELATION', sortOrder: 1 },

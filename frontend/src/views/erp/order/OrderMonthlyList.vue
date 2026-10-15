@@ -363,6 +363,7 @@
         stripe
         border
         size="small"
+        height="100%"
         class="data-table"
         :row-class-name="monthlyRowClassName"
       >
@@ -1797,10 +1798,21 @@ onMounted(() => {
    Modern UI — Compact & Responsive
    ====================================================== */
 
-/* --- Base --- */
+/* --- Base：ウィンドウ高さに追従しテーブルが残りを埋める --- */
 .order-monthly-list {
+  /* アプリヘッダー(48) + タブ(36) */
+  --om-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--om-app-chrome));
+  height: calc(100dvh - var(--om-app-chrome));
+  max-height: calc(100vh - var(--om-app-chrome));
+  max-height: calc(100dvh - var(--om-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
-  min-height: 100vh;
   background: linear-gradient(160deg, #f0f4ff 0%, #e8ecf8 40%, #f5f0ff 100%);
 }
 
@@ -1812,6 +1824,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  flex-shrink: 0;
   background: linear-gradient(125deg, #4f46e5 0%, #6d28d9 38%, #9333ea 72%, #a855f7 100%);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 16px;
@@ -2032,6 +2045,7 @@ onMounted(() => {
 
 /* --- Progress --- */
 .progress-section {
+  flex-shrink: 0;
   margin-bottom: 8px;
   padding: 8px 14px;
   background: #fff;
@@ -2042,6 +2056,7 @@ onMounted(() => {
 
 /* --- Filter Bar --- */
 .filter-bar {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.05);
@@ -2096,6 +2111,7 @@ onMounted(() => {
 
 /* --- Summary Cards --- */
 .summary-cards {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 8px;
@@ -2187,8 +2203,12 @@ onMounted(() => {
   pointer-events: none;
 }
 
-/* --- Table Section --- */
+/* --- Table Section：残り高さを flex で埋める --- */
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
@@ -2198,10 +2218,21 @@ onMounted(() => {
 }
 
 /* --- Modern Premium Table Styling --- */
-.data-table { 
+.data-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
   border-radius: 10px;
   overflow: hidden;
+}
+
+.table-section :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-section :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 /* Header Styling */
@@ -2299,8 +2330,11 @@ onMounted(() => {
   background-color: rgba(0,0,0,0.06);
 }
 .pagination-container {
-  display: flex; justify-content: flex-end;
-  margin-top: 8px; padding: 4px 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding: 4px 0;
   font-size: 60%; /* 缩小 40% */
 }
 .pagination-container :deep(.el-pagination) {

@@ -146,7 +146,8 @@ const routes: RouteRecordRaw[] = [
         redirect: { name: 'PartOrder' },
         children: [
           { path: 'master', redirect: '/master/part' },
-          { path: 'receiving-history', name: 'PartReceivingHistory', component: () => import('@/views/erp/purchase/part/partReceiving/PartReceivingHistory.vue'), meta: { title: '受入履歴', group: '受入管理', requiresAuth: true } },
+          // 部品受入履歴は部品在庫管理(発注・使用)へ統合済み
+          { path: 'receiving-history', redirect: '/erp/purchase/part/order' },
           { path: 'order', name: 'PartOrder', component: () => import('@/views/erp/purchase/part/partOrder/PartOrderPage.vue'), meta: { title: '部品在庫管理', group: '発注管理', requiresAuth: true } },
         ],
       },
@@ -218,6 +219,10 @@ const routes: RouteRecordRaw[] = [
       },
       // ========== ERP - 生産管理 (Production Control / PP) ==========
       { path: 'erp/production', name: 'Production', redirect: '/erp/production/data-management', meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
+      { path: 'erp/production/equipment-capacity/cutting', name: 'ProductionEquipmentCapacityCutting', component: () => import('@/views/erp/production/equipmentCapacity/EquipmentCapacityPage.vue'), meta: { title: '切断設備能力', group: '生産管理 > 生産設備能力', requiresAuth: true, process: 'cutting' } },
+      { path: 'erp/production/equipment-capacity/chamfering', name: 'ProductionEquipmentCapacityChamfering', component: () => import('@/views/erp/production/equipmentCapacity/EquipmentCapacityPage.vue'), meta: { title: '面取設備能力', group: '生産管理 > 生産設備能力', requiresAuth: true, process: 'chamfering' } },
+      { path: 'erp/production/equipment-capacity/forming', name: 'ProductionEquipmentCapacityForming', component: () => import('@/views/erp/production/equipmentCapacity/EquipmentCapacityPage.vue'), meta: { title: '成型設備能力', group: '生産管理 > 生産設備能力', requiresAuth: true, process: 'forming' } },
+      { path: 'erp/production/equipment-capacity/welding', name: 'ProductionEquipmentCapacityWelding', component: () => import('@/views/erp/production/equipmentCapacity/EquipmentCapacityPage.vue'), meta: { title: '溶接設備能力', group: '生産管理 > 生産設備能力', requiresAuth: true, process: 'welding' } },
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-schedules', name: 'ProductProcessGantt', component: () => import('@/views/erp/production/planning/ProductProcessGantt.vue'), meta: { title: '製品工程ガント', group: '生産管理 > 生産計画', requiresAuth: true } },
@@ -249,7 +254,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/shipping/inventory-shortage', name: 'InventoryShortageManagement', component: () => import('@/views/erp/shipping/InventoryShortageManagement.vue'), meta: { title: '倉庫在庫管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/abc-analysis', name: 'ShippingAbcAnalysis', component: () => import('@/views/erp/shipping/ShippingAbcAnalysis.vue'), meta: { title: 'ABC分析', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/inventory-kpi', name: 'InventoryKpi', component: () => import('@/views/erp/shipping/InventoryKpi.vue'), meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true } },
-      { path: 'erp/shipping/warehouse-daily', name: 'ShippingWarehouseDaily', component: () => import('@/views/erp/shipping/ShippingWarehouseDaily.vue'), meta: { title: '倉庫日次在庫', group: '出荷管理 > 倉庫日次在庫', requiresAuth: true } },
       { path: 'erp/quality', name: 'ErpQuality', redirect: '/erp/quality/material-association/receiving-history' },
       { path: 'erp/quality/material-association/receiving-history', name: 'QualityMaterialReceivingHistory', component: () => import('@/views/erp/quality/material-association/MaterialReceivingHistory.vue'), meta: { title: '材料受入履歴', group: '品質管理 > 材料関係', requiresAuth: true } },
       { path: 'erp/quality/material-association/tolerance-management', name: 'QualityMaterialToleranceManagement', component: () => import('@/views/erp/quality/material-association/MaterialToleranceManagement.vue'), meta: { title: '材料公差管理', group: '品質管理 > 材料関係', requiresAuth: true } },
@@ -388,6 +392,9 @@ router.beforeEach(async (to, from, next) => {
   // 認証チェック
   if (to.meta.requiresAuth) {
     if (!userStore.isAuthenticated) {
+      await userStore.ensureCrossTabSession()
+    }
+    if (!userStore.isAuthenticated) {
       // 未認証の場合はログインページにリダイレクト
       next({
         path: '/login',
@@ -412,12 +419,11 @@ router.beforeEach(async (to, from, next) => {
                                      isForceLogout
 
           if (isOtherDeviceLogin) {
-            const { ElMessage } = await import('element-plus')
-            ElMessage.error({
-              message: 'このアカウントは他のデバイスでログインされています。再度ログインしてください。',
-              duration: 5000,
-              showClose: true,
-            })
+            userStore.forceLogoutOtherDevice(
+              typeof errorDetail === 'string' ? errorDetail : undefined,
+            )
+            next(false)
+            return
           }
           userStore.clearLocalSession()
           next('/login')
@@ -428,6 +434,9 @@ router.beforeEach(async (to, from, next) => {
       }
     }
   } else {
+    if (!userStore.isAuthenticated && (to.path === '/login' || to.path === '/')) {
+      await userStore.ensureCrossTabSession()
+    }
     // ログインページにアクセスした場合、既にログインしている場合はダッシュボードにリダイレクト
     if ((to.path === '/login' || to.path === '/') && userStore.isAuthenticated) {
       // リダイレクト先がある場合はそこに、なければダッシュボードに

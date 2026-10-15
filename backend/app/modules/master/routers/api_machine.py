@@ -43,9 +43,9 @@ def _parse_time(s: Optional[str]) -> Optional[dt_time]:
 
 
 def _machine_to_dict(row: Machine) -> dict:
-    eff = row.efficiency
-    if eff is not None and hasattr(eff, "__float__"):
-        eff = float(eff)
+    avail = getattr(row, "availability_rate", None)
+    if avail is not None and hasattr(avail, "__float__"):
+        avail = round(float(avail), 1)
     dwh = getattr(row, "default_work_hours", None)
     if dwh is not None and hasattr(dwh, "__float__"):
         dwh = float(dwh)
@@ -60,7 +60,7 @@ def _machine_to_dict(row: Machine) -> dict:
         "available_from": _time_to_str(row.available_from),
         "available_to": _time_to_str(row.available_to),
         "calendar_id": row.calendar_id,
-        "efficiency": eff,
+        "availability_rate": avail if avail is not None else 100.0,
         "available_qty": int(getattr(row, "available_qty", 0) or 0),
         "use_in_cpsat": bool(getattr(row, "use_in_cpsat", True)),
         "note": row.note,
@@ -156,7 +156,11 @@ async def create_machine(
         available_from=_parse_time(body.available_from),
         available_to=_parse_time(body.available_to),
         calendar_id=body.calendar_id,
-        efficiency=body.efficiency,
+        availability_rate=(
+            round(float(body.availability_rate), 1)
+            if body.availability_rate is not None
+            else 100.0
+        ),
         available_qty=body.available_qty,
         use_in_cpsat=body.use_in_cpsat,
         note=body.note,
@@ -194,8 +198,8 @@ async def update_machine(
         row.available_to = _parse_time(body.available_to)
     if body.calendar_id is not None:
         row.calendar_id = body.calendar_id
-    if body.efficiency is not None:
-        row.efficiency = body.efficiency
+    if body.availability_rate is not None:
+        row.availability_rate = round(float(body.availability_rate), 1)
     if body.available_qty is not None:
         row.available_qty = body.available_qty
     if body.use_in_cpsat is not None:

@@ -1,70 +1,72 @@
 <template>
   <div
-    class="unified-stock-page"
+    class="unified-stock-page use-modern pb-std"
     v-loading="pageLoading"
     element-loading-text="システム初期化中..."
     element-loading-background="rgba(248, 250, 252, 0.8)"
   >
-    <!-- 现代渐变背景 -->
-    <div class="bg-gradient"></div>
-    <div class="bg-pattern"></div>
+    <div class="page-ambient" aria-hidden="true" />
 
-    <!-- 现代页面头部 -->
-    <div class="page-header">
+    <header class="page-header page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
       <div class="header-content">
         <div class="header-main">
           <div class="header-icon">
-            <el-icon size="28">
+            <el-icon size="22">
               <Box />
             </el-icon>
           </div>
           <div class="header-text">
-            <h1 class="main-title">在庫取引登録</h1>
-            <p class="subtitle">製品・材料・部品・仕掛品の入出庫一元管理</p>
+            <h1 class="main-title pb-hero-title">在庫取引登録</h1>
+            <p class="subtitle pb-hero-desc">製品・材料・部品・仕掛品の入出庫一元管理</p>
           </div>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- 主要内容区域 -->
     <div class="content-container">
-      <!-- 紧凑型库存类型选择器 -->
-      <transition name="fade-scale" appear>
-        <div class="stock-type-selector hover-lift">
-          <div class="selector-header">
-            <h3 class="selector-title">在庫種別</h3>
-          </div>
-          <div class="stock-types">
-            <div
-              v-for="type in stockTypes"
-              :key="type.value"
-              :class="['stock-type-chip', { active: form.stock_type === type.value }]"
-              @click="selectStockType(type.value)"
-            >
-              <div class="chip-icon" :style="{ color: type.color }">
-                <el-icon size="18">
-                  <component :is="type.icon" />
-                </el-icon>
-              </div>
-              <div class="chip-content">
-                <span class="chip-title">{{ type.label }}</span>
-              </div>
-              <div v-if="form.stock_type === type.value" class="chip-indicator">
-                <el-icon size="14">
-                  <Check />
-                </el-icon>
-              </div>
+      <div class="stock-type-selector">
+        <div class="selector-header">
+          <h3 class="selector-title">在庫種別</h3>
+        </div>
+        <div class="stock-types">
+          <div
+            v-for="type in stockTypes"
+            :key="type.value"
+            :class="[
+              'stock-type-chip',
+              `stock-type-chip--${type.tone}`,
+              { active: form.stock_type === type.value },
+            ]"
+            @click="selectStockType(type.value)"
+          >
+            <div class="chip-icon">
+              <el-icon size="18">
+                <component :is="type.icon" />
+              </el-icon>
+            </div>
+            <div class="chip-content">
+              <span class="chip-title">{{ type.label }}</span>
+            </div>
+            <div v-if="form.stock_type === type.value" class="chip-indicator">
+              <el-icon size="14">
+                <Check />
+              </el-icon>
             </div>
           </div>
         </div>
-      </transition>
+      </div>
 
-      <!-- 现代表单卡片 -->
-      <transition name="slide-in" mode="out-in">
-        <div v-if="form.stock_type" class="form-card hover-lift" :key="form.stock_type">
+      <div
+        v-if="form.stock_type"
+        class="form-card"
+        :class="`form-card--${getCurrentStockType()?.tone || 'blue'}`"
+        :key="form.stock_type"
+      >
           <div class="form-header">
             <div class="form-title">
-              <el-icon class="title-icon" :style="{ color: getCurrentStockType()?.color }">
+              <el-icon class="title-icon">
                 <component :is="getCurrentStockType()?.icon" />
               </el-icon>
               <span>{{ getCurrentStockType()?.label }}登録</span>
@@ -246,24 +248,20 @@
               </el-collapse-item>
             </el-collapse>
 
-            <!-- 操作按钮 -->
             <div class="action-bar">
-              <el-button @click="resetForm" class="reset-btn">
+              <el-button class="tb-btn tb-btn-amber" @click="resetForm">
                 <el-icon><Refresh /></el-icon>
-                リセット
+                <span class="tb-label">リセット</span>
               </el-button>
-              <el-button type="primary" @click="submit" class="submit-btn" :loading="submitLoading">
+              <el-button class="tb-btn tb-btn-green" :loading="submitLoading" @click="submit">
                 <el-icon><Check /></el-icon>
-                {{ submitButtonText }}
+                <span class="tb-label">{{ submitButtonText }}</span>
               </el-button>
             </div>
           </el-form>
-        </div>
-      </transition>
+      </div>
 
-      <!-- 紧凑历史记录 -->
-      <transition name="slide-up" appear>
-        <div v-if="todayLoggedTransactions.length" class="history-card hover-lift">
+      <div v-if="todayLoggedTransactions.length" class="history-card">
           <div class="history-header">
             <div class="history-title">
               <el-icon><Document /></el-icon>
@@ -271,16 +269,19 @@
               <el-badge :value="filteredTransactions.length" class="history-badge" />
             </div>
             <div class="history-filters">
-              <el-button-group size="small">
-                <el-button
-                  v-for="type in stockTypes"
-                  :key="type.value"
-                  :type="historyFilter === type.value ? 'primary' : 'default'"
-                  @click="historyFilter = historyFilter === type.value ? '' : type.value"
-                >
-                  {{ type.label }}
-                </el-button>
-              </el-button-group>
+              <button
+                v-for="type in stockTypes"
+                :key="type.value"
+                type="button"
+                :class="[
+                  'hist-chip',
+                  `hist-chip--${type.tone}`,
+                  { active: historyFilter === type.value },
+                ]"
+                @click="historyFilter = historyFilter === type.value ? '' : type.value"
+              >
+                {{ type.label }}
+              </button>
             </div>
           </div>
 
@@ -338,8 +339,7 @@
               </el-table-column>
             </el-table>
           </div>
-        </div>
-      </transition>
+      </div>
     </div>
   </div>
 </template>
@@ -478,32 +478,32 @@ const stockTypes = [
     label: '製品',
     description: '完成品の在庫管理',
     icon: Box,
-    color: '#409eff',
-    symbol: '🏺',
+    color: '#3b82f6',
+    tone: 'blue',
   },
   {
     value: '材料',
     label: '材料',
     description: '原材料の在庫管理',
     icon: Setting,
-    color: '#67c23a',
-    symbol: '🧪',
+    color: '#10b981',
+    tone: 'green',
   },
   {
     value: '部品',
     label: '部品',
     description: '部品・パーツの在庫管理',
     icon: Grid,
-    color: '#e6a23c',
-    symbol: '🧩',
+    color: '#f59e0b',
+    tone: 'amber',
   },
   {
     value: '仕掛品',
     label: '仕掛品',
     description: '工程間の仕掛品管理',
     icon: Tools,
-    color: '#f56c6c',
-    symbol: '⚙️',
+    color: '#f43f5e',
+    tone: 'rose',
   },
 ]
 
@@ -840,117 +840,101 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 现代页面布局 */
 .unified-stock-page {
-  min-height: 100vh;
-  background: #f8fafc;
   position: relative;
-  padding: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 12px;
+  overflow-x: hidden;
 }
 
-.bg-gradient {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 300px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+.page-ambient {
+  position: absolute;
+  inset: 0;
   z-index: 0;
-  opacity: 0.08;
-}
-
-.bg-pattern {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 300px;
+  pointer-events: none;
   background:
-    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
-  z-index: 1;
+    radial-gradient(1100px 380px at 0% 0%, rgba(14, 116, 144, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(34, 211, 238, 0.08), transparent 60%),
+    linear-gradient(160deg, #ecfeff 0%, #f8fafc 45%, #f0fdfa 100%);
 }
 
-/* 现代页面头部 */
+/* タイトル条（深青→シアン・他頁と分色） */
 .page-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 24px 28px;
-  margin-bottom: 24px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.06);
   position: relative;
   z-index: 2;
-  max-width: 1200px;
-  margin: 0 auto 24px auto;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #155e75 0%, #0e7490 34%, #0891b2 66%, #22d3ee 100%);
+  box-shadow:
+    0 18px 36px -18px rgba(14, 116, 144, 0.55),
+    0 4px 12px -6px rgba(8, 145, 178, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
 }
 
 .header-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  width: 100%;
 }
 
 .header-main {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .header-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
-  border-radius: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
-  position: relative;
-  overflow: hidden;
-}
-
-.header-icon::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
-}
-
-.header-icon:hover::before {
-  left: 100%;
+  color: #fff;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(21, 94, 117, 0.3);
 }
 
 .header-text {
   flex: 1;
+  min-width: 0;
 }
 
 .main-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  background: linear-gradient(135deg, #1e293b, #6366f1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 6px 0;
-  letter-spacing: -0.025em;
+  margin: 0;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
 
 .subtitle {
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0 0 8px 0;
-  font-weight: 400;
-  line-height: 1.4;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .status-indicator {
@@ -1062,27 +1046,22 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-/* 主要内容区域 */
 .content-container {
-  max-width: 1200px;
-  margin: 0 auto;
   position: relative;
   z-index: 1;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-/* 紧凑型库存类型选择器 */
 .stock-type-selector {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  border: 1px solid #cffafe;
   position: relative;
   z-index: 2;
 }
@@ -1105,7 +1084,7 @@ onMounted(async () => {
   content: '';
   width: 4px;
   height: 20px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(180deg, #22d3ee, #0891b2);
   border-radius: 2px;
 }
 
@@ -1116,49 +1095,41 @@ onMounted(async () => {
 }
 
 .stock-type-chip {
+  --chip: #3b82f6;
+  --chip-rgb: 59, 130, 246;
+  --chip-ink: #1d4ed8;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  background: rgba(248, 250, 252, 0.8);
-  border: 2px solid rgba(226, 232, 240, 0.8);
-  border-radius: 16px;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 140px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  min-width: 120px;
+  flex: 1 1 140px;
   position: relative;
   overflow: hidden;
 }
-
-.stock-type-chip::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transition: left 0.6s;
-}
+.stock-type-chip--blue { --chip: #3b82f6; --chip-rgb: 59, 130, 246; --chip-ink: #1d4ed8; }
+.stock-type-chip--green { --chip: #10b981; --chip-rgb: 16, 185, 129; --chip-ink: #047857; }
+.stock-type-chip--amber { --chip: #f59e0b; --chip-rgb: 245, 158, 11; --chip-ink: #b45309; }
+.stock-type-chip--rose { --chip: #f43f5e; --chip-rgb: 244, 63, 94; --chip-ink: #be123c; }
 
 .stock-type-chip:hover {
-  background: rgba(241, 245, 249, 0.9);
-  border-color: rgba(203, 213, 225, 0.8);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.stock-type-chip:hover::before {
-  left: 100%;
+  border-color: rgba(var(--chip-rgb), 0.45);
+  box-shadow: 0 8px 20px -12px rgba(var(--chip-rgb), 0.55);
 }
 
 .stock-type-chip.active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.1));
-  border-color: #8b5cf6;
+  background: linear-gradient(180deg, rgba(var(--chip-rgb), 0.12) 0%, #fff 72%);
+  border-color: var(--chip);
   box-shadow:
-    0 8px 25px rgba(139, 92, 246, 0.25),
-    0 0 0 1px rgba(139, 92, 246, 0.1);
-  transform: translateY(-2px);
+    0 3px 0 rgba(var(--chip-rgb), 0.35),
+    0 10px 18px -12px rgba(var(--chip-rgb), 0.55);
+  transform: translateY(-1px);
 }
 
 .chip-icon {
@@ -1168,10 +1139,10 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  background: linear-gradient(135deg, var(--chip), color-mix(in srgb, var(--chip) 70%, #0f172a));
+  box-shadow: 0 4px 10px -4px rgba(var(--chip-rgb), 0.55);
+  border: none;
 }
 
 .chip-content {
@@ -1194,23 +1165,24 @@ onMounted(async () => {
 }
 
 .chip-indicator {
-  color: #8b5cf6;
+  color: var(--chip-ink);
 }
 
-/* 现代表单卡片 */
 .form-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 28px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  --accent: #0891b2;
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
   position: relative;
   z-index: 2;
   overflow: hidden;
 }
+.form-card--blue { --accent: #3b82f6; }
+.form-card--green { --accent: #10b981; }
+.form-card--amber { --accent: #f59e0b; }
+.form-card--rose { --accent: #f43f5e; }
 
 .form-card::before {
   content: '';
@@ -1218,8 +1190,8 @@ onMounted(async () => {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899, #f59e0b);
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #fff));
   z-index: 1;
 }
 
@@ -1899,6 +1871,151 @@ onMounted(async () => {
   .compact-table :deep(.el-table__body td) {
     padding: 6px;
     font-size: 0.8rem;
+  }
+}
+
+/* ============================================================
+ * 页面美化：在庫取引登録（深青→シアン）
+ * ============================================================ */
+.use-modern .form-title .title-icon {
+  color: var(--accent, #0891b2);
+}
+
+.use-modern .action-bar {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.use-modern .tb-btn {
+  --k-rgb: 37 99 235;
+  --k-fg: #1e40af;
+  --k-bd: #93c5fd;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+  height: 32px !important;
+  padding: 0 15px 0 12px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
+  color: var(--k-fg) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%) !important;
+  border: 1px solid var(--k-bd) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.12) !important;
+}
+.use-modern .tb-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+.use-modern .tb-btn:hover {
+  color: rgb(var(--k-rgb)) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%) !important;
+  transform: translateY(-1px);
+}
+.use-modern .tb-btn-amber {
+  --k-rgb: 217 119 6;
+  --k-fg: #92400e;
+  --k-bd: #fcd34d;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+}
+.use-modern .tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-bd: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
+}
+
+.use-modern .history-card {
+  background: #fff;
+  border: 1px solid #cffafe;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.use-modern .history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.use-modern .hist-chip {
+  --h: #64748b;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.use-modern .hist-chip--blue { --h: #3b82f6; }
+.use-modern .hist-chip--green { --h: #10b981; }
+.use-modern .hist-chip--amber { --h: #f59e0b; }
+.use-modern .hist-chip--rose { --h: #f43f5e; }
+.use-modern .hist-chip:hover {
+  border-color: color-mix(in srgb, var(--h) 45%, #e2e8f0);
+  color: var(--h);
+}
+.use-modern .hist-chip.active {
+  background: color-mix(in srgb, var(--h) 14%, #fff);
+  border-color: var(--h);
+  color: var(--h);
+}
+
+.use-modern .compact-table :deep(.el-table__header th) {
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%) !important;
+  color: #155e75 !important;
+  font-weight: 700;
+  border-bottom: 2px solid #67e8f9 !important;
+}
+.use-modern .compact-table :deep(.el-table__body tr:hover > td) {
+  background: #ecfeff !important;
+}
+.use-modern .copy-btn {
+  color: #0891b2 !important;
+}
+
+.use-modern .modern-select :deep(.el-select__wrapper),
+.use-modern .modern-number :deep(.el-input__wrapper),
+.use-modern .modern-date :deep(.el-input__wrapper),
+.use-modern .doc-type :deep(.el-input__wrapper),
+.use-modern .doc-no :deep(.el-input__wrapper) {
+  border-radius: 9px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.use-modern .modern-select :deep(.el-select__wrapper:hover),
+.use-modern .modern-number :deep(.el-input__wrapper:hover),
+.use-modern .modern-date :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #67e8f9 inset;
+}
+.use-modern .modern-select :deep(.el-select__wrapper.is-focused),
+.use-modern .modern-number :deep(.el-input__wrapper.is-focus),
+.use-modern .modern-date :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px #0891b2 inset,
+    0 0 0 3px rgba(8, 145, 178, 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .use-modern .stock-type-chip:hover,
+  .use-modern .tb-btn:hover {
+    transform: none;
   }
 }
 </style>

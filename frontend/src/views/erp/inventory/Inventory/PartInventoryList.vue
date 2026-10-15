@@ -110,84 +110,122 @@
     </div>
 
     <div class="table-wrap glass animate-in" style="--delay: 0.15s">
-      <el-table
-        :data="list"
-        v-loading="loading"
-        stripe
-        size="small"
-        class="data-table"
-        show-summary
-        :summary-method="getSummaries"
-        :height="tableHeight"
-      >
-        <el-table-column prop="part_cd" label="部品CD" width="100" fixed />
-        <el-table-column prop="part_name" label="部品名" width="140" show-overflow-tooltip />
-        <el-table-column prop="date" label="日付" width="105" align="center" />
-        <el-table-column label="曜日" width="56" align="center">
-          <template #default="{ row }">
-            {{ weekdayJa(row.date) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="supplier_name" label="仕入先" width="120" show-overflow-tooltip />
-        <el-table-column prop="standard_spec" label="規格" width="100" show-overflow-tooltip />
-        <el-table-column prop="initial_stock" label="初期在庫" width="88" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.initial_stock)">{{ formatNum(row.initial_stock) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="current_stock" label="現在在庫" width="92" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.current_stock)">{{ formatNum(row.current_stock) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="planned_usage" label="使用数" width="80" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.planned_usage)">{{ formatNum(row.planned_usage) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="manual_usage" label="使用数調整" width="92" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.manual_usage)">{{ formatNum(row.manual_usage) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="usage_plan_qty" label="計画使用" width="88" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.usage_plan_qty)">{{ formatNum(row.usage_plan_qty) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="stock_trend" label="推移" width="72" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.stock_trend)">{{ formatNum(row.stock_trend) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="adjustment_quantity" label="調整数" width="80" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.adjustment_quantity)">{{ formatNum(row.adjustment_quantity) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="receiving_qty" label="受入数" width="80" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.receiving_qty)">{{ formatNum(row.receiving_qty) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="order_quantity" label="注文数" width="80" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.order_quantity)">{{ formatNum(row.order_quantity) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="order_bundle_quantity" label="注文本数" width="88" align="right">
-          <template #default="{ row }">
-            <span :class="numClass(row.order_bundle_quantity)">{{ formatNum(row.order_bundle_quantity) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="unit" label="単位" width="64" align="center" />
-        <el-table-column prop="unit_price" label="単価" width="88" align="right">
-          <template #default="{ row }">
-            {{ formatPrice(row.unit_price) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
-      </el-table>
+      <div class="table-card__body">
+        <el-table
+          :data="pagedList"
+          v-loading="loading"
+          stripe
+          border
+          size="small"
+          class="data-table"
+          height="100%"
+        >
+          <el-table-column prop="part_cd" label="部品CD" width="100" fixed />
+          <el-table-column prop="part_name" label="部品名" width="140" show-overflow-tooltip />
+          <el-table-column prop="date" label="日付" width="105" align="center" />
+          <el-table-column label="曜日" width="56" align="center">
+            <template #default="{ row }">
+              {{ weekdayJa(row.date) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="supplier_name" label="仕入先" width="120" show-overflow-tooltip />
+          <el-table-column prop="standard_spec" label="規格" width="100" show-overflow-tooltip />
+          <el-table-column prop="initial_stock" label="初期在庫" width="88" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.initial_stock)">{{ formatNum(row.initial_stock) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="current_stock" label="現在在庫" width="92" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.current_stock)">{{ formatNum(row.current_stock) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="planned_usage" label="使用数" width="80" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.planned_usage)">{{ formatNum(row.planned_usage) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="manual_usage" label="使用数調整" width="92" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.manual_usage)">{{ formatNum(row.manual_usage) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="usage_plan_qty" label="計画使用" width="88" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.usage_plan_qty)">{{ formatNum(row.usage_plan_qty) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="stock_trend" label="推移" width="72" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.stock_trend)">{{ formatNum(row.stock_trend) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="adjustment_quantity" label="調整数" width="80" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.adjustment_quantity)">{{ formatNum(row.adjustment_quantity) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="receiving_qty" label="受入数" width="80" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.receiving_qty)">{{ formatNum(row.receiving_qty) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="order_quantity" label="注文数" width="80" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.order_quantity)">{{ formatNum(row.order_quantity) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="order_bundle_quantity" label="注文本数" width="88" align="right">
+            <template #default="{ row }">
+              <span :class="numClass(row.order_bundle_quantity)">{{ formatNum(row.order_bundle_quantity) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="unit" label="単位" width="64" align="center" />
+          <el-table-column prop="unit_price" label="単価" width="88" align="right">
+            <template #default="{ row }">
+              {{ formatPrice(row.unit_price) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
+        </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ list.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--stock">
+            <span class="pagination-summary__label">現在在庫</span>
+            <b class="pagination-summary__value">{{ formatNum(sumCurrentStock) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--recv">
+            <span class="pagination-summary__label">受入数</span>
+            <b class="pagination-summary__value">{{ formatNum(sumReceivingQty) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--order">
+            <span class="pagination-summary__label">注文数</span>
+            <b class="pagination-summary__value">{{ formatNum(sumOrderQty) }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[30, 50, 100, 200]"
+          :total="list.length"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -256,19 +294,6 @@ const statCards = computed(() => {
   })
 })
 
-const SUMMARY_NUM_KEYS = new Set([
-  'initial_stock',
-  'current_stock',
-  'planned_usage',
-  'manual_usage',
-  'usage_plan_qty',
-  'stock_trend',
-  'adjustment_quantity',
-  'receiving_qty',
-  'order_quantity',
-  'order_bundle_quantity'
-])
-
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -294,6 +319,7 @@ function setQuickDate(which: 'prev' | 'today' | 'next') {
   else if (which === 'next') d.setDate(d.getDate() + 1)
   const s = d.toISOString().slice(0, 10)
   dateRange.value = [s, s]
+  pagination.page = 1
   doFetch()
 }
 
@@ -318,14 +344,51 @@ const isNextDay = computed(() => {
 })
 
 function onDateChange() {
+  pagination.page = 1
   doFetch()
 }
 
 function onFilterChange() {
+  pagination.page = 1
   doFetch()
 }
 
-const tableHeight = computed(() => 'calc(100vh - 260px)')
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return list.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = list.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+const sumCurrentStock = computed(() =>
+  list.value.reduce((acc, row) => acc + (Number(row.current_stock) || 0), 0),
+)
+const sumReceivingQty = computed(() =>
+  list.value.reduce((acc, row) => acc + (Number(row.receiving_qty) || 0), 0),
+)
+const sumOrderQty = computed(() =>
+  list.value.reduce((acc, row) => acc + (Number(row.order_quantity) || 0), 0),
+)
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 function formatNum(v: number | null | undefined): string {
   if (v == null) return '0'
@@ -345,28 +408,6 @@ function numClass(v: number | null | undefined): string {
   if (n < 0) return 'num-negative'
   if (n === 0) return 'num-zero'
   return 'num-positive'
-}
-
-function getSummaries(param: { columns: { property?: string }[]; data: PartStockInquiryRow[] }) {
-  const { columns, data } = param
-  const sums: string[] = []
-  columns.forEach((col, index) => {
-    if (index === 0) {
-      sums.push('合計')
-      return
-    }
-    const prop = col.property
-    if (prop && SUMMARY_NUM_KEYS.has(prop)) {
-      const total = data.reduce(
-        (acc, row) => acc + (Number((row as unknown as Record<string, unknown>)[prop]) || 0),
-        0
-      )
-      sums.push(total.toLocaleString())
-    } else {
-      sums.push('')
-    }
-  })
-  return sums
 }
 
 function doFetch() {
@@ -509,13 +550,20 @@ onMounted(() => {
 
 <style scoped>
 .inventory-list-page {
+  --piq-app-chrome: 84px;
   position: relative;
-  padding: 14px 18px;
-  min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--piq-app-chrome));
+  height: calc(100dvh - var(--piq-app-chrome));
+  max-height: calc(100vh - var(--piq-app-chrome));
+  max-height: calc(100dvh - var(--piq-app-chrome));
+  min-height: 0;
   overflow: hidden;
+  padding: 14px 18px;
 }
 
 .glass {
@@ -546,6 +594,7 @@ onMounted(() => {
 }
 
 .page-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -641,6 +690,7 @@ onMounted(() => {
 }
 
 .stat-cards {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -702,6 +752,7 @@ onMounted(() => {
 }
 
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -793,9 +844,12 @@ onMounted(() => {
 }
 
 .table-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 12px 0;
   border-radius: 16px;
   transition: box-shadow 0.2s ease;
 }
@@ -804,7 +858,28 @@ onMounted(() => {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 .data-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   font-size: 12px;
   border-radius: 12px;
   overflow: hidden;
@@ -857,21 +932,99 @@ onMounted(() => {
   background: #f1f5f9 !important;
 }
 
-.data-table :deep(.el-table__footer-wrapper) {
-  background: #ffffff;
-}
-
-.data-table :deep(.el-table__footer td) {
-  background: #f1f5f9 !important;
-  font-weight: 600;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #1e293b !important;
-  border-color: #e2e8f0 !important;
-}
-
 .data-table :deep(.el-table__empty-block) {
   background: #ffffff !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 4px 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  margin-top: 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 247, 237, 0.95) 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #c2410c; }
+.pagination-summary__item--range .pagination-summary__value { color: #9a3412; }
+.pagination-summary__item--stock {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+.pagination-summary__item--stock .pagination-summary__label { color: #ea580c; }
+.pagination-summary__item--stock .pagination-summary__value { color: #c2410c; }
+.pagination-summary__item--recv {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.pagination-summary__item--recv .pagination-summary__label { color: #047857; }
+.pagination-summary__item--recv .pagination-summary__value { color: #065f46; }
+.pagination-summary__item--order {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.pagination-summary__item--order .pagination-summary__label { color: #1d4ed8; }
+.pagination-summary__item--order .pagination-summary__value { color: #1e40af; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #ea580c;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .num-positive { color: #1e293b; }
@@ -1165,7 +1318,7 @@ onMounted(() => {
 
 /* ---------- テーブル ---------- */
 .piq-modern .table-wrap {
-  padding: 10px 12px;
+  padding: 10px 12px 0;
 }
 .piq-modern .table-wrap:hover {
   box-shadow: var(--card-shadow);
@@ -1189,12 +1342,13 @@ onMounted(() => {
 .piq-modern .data-table :deep(.el-table__body td .cell) {
   font-variant-numeric: tabular-nums;
 }
-.piq-modern .data-table :deep(.el-table__footer td) {
-  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%) !important;
-  color: #7c2d12 !important;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  border-top: 2px solid #fdba74 !important;
+.piq-modern .pagination-bar {
+  border-top-color: #fed7aa;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+}
+.piq-modern .data-table :deep(.el-table__body-wrapper .el-scrollbar__thumb) {
+  background: linear-gradient(180deg, #fb923c, #ea580c);
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {

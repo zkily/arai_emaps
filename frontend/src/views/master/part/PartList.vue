@@ -134,13 +134,16 @@
     </div>
 
     <div class="table-card">
+      <div class="table-card__body">
       <el-table
         v-loading="loading"
         :data="rows"
+        stripe
         border
+        size="small"
         highlight-current-row
         :style="{ width: '100%' }"
-        height="calc(100vh - 290px)"
+        height="100%"
         class="part-table"
         :scrollbar-always-on="true"
         :default-sort="{ prop: 'part_name', order: 'ascending' }"
@@ -242,15 +245,29 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
-      <div class="table-footer">
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="page"
-          :page-size="pageSize"
+          v-model:page-size="pageSize"
           :total="total"
-          layout="total, prev, pager, next"
-          class="pagination"
-          size="small"
+          :page-sizes="[20, 30, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
           @current-change="fetchList"
         />
       </div>
@@ -560,7 +577,20 @@ const qrPrinting = ref(false)
 const rows = ref<PartMasterRow[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 30
+const pageSize = ref(30)
+
+const pageRangeText = computed(() => {
+  const tot = total.value
+  if (!tot) return '0'
+  const start = pageSize.value * (page.value - 1) + 1
+  const end = Math.min(pageSize.value * page.value, tot)
+  return `${start}–${end}`
+})
+
+function handlePageSizeChange() {
+  page.value = 1
+  fetchList()
+}
 
 const filters = ref<{ keyword: string; status?: number }>({ keyword: '' })
 
@@ -737,7 +767,7 @@ async function fetchList() {
       keyword: filters.value.keyword || undefined,
       status: st === 0 || st === 1 ? st : undefined,
       page: page.value,
-      pageSize: pageSize,
+      pageSize: pageSize.value,
     })
     rows.value = res?.data?.list ?? []
     total.value = res?.data?.total ?? 0
@@ -1192,6 +1222,7 @@ onMounted(fetchList)
 <style scoped>
 /* 部品在庫管理ページと同系統のパレット（indigo / violet 基調） */
 .part-master-container {
+  --pm-app-chrome: 84px;
   --pm-indigo: #4f46e5;
   --pm-violet: #7c3aed;
   --pm-sky: #0284c7;
@@ -1201,12 +1232,22 @@ onMounted(fetchList)
   --pm-ink: #0f172a;
   --pm-muted: #64748b;
   --pm-line: #e2e8f0;
-  padding: 10px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--pm-app-chrome));
+  height: calc(100dvh - var(--pm-app-chrome));
+  max-height: calc(100vh - var(--pm-app-chrome));
+  max-height: calc(100dvh - var(--pm-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px;
   background:
     radial-gradient(1200px 380px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
     radial-gradient(900px 320px at 100% 0%, rgba(139, 92, 246, 0.09), transparent 60%),
     linear-gradient(180deg, #f5f7fc 0%, #eef1f8 100%);
-  min-height: 100vh;
   animation: pmFadeIn 0.45s ease-out;
 }
 
@@ -1232,10 +1273,11 @@ onMounted(fetchList)
 
 /* ページヘッダー */
 .page-header {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   padding: 10px 18px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 58%, #8b5cf6 100%);
   border-radius: 14px;
   color: #fff;
@@ -1396,7 +1438,8 @@ onMounted(fetchList)
 
 /* 検索・フィルター */
 .action-section {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   overflow: hidden;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.82);
@@ -1413,7 +1456,7 @@ onMounted(fetchList)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 14px;
+  padding: 6px 12px;
   border-bottom: 1px solid #eef2f7;
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 0.6));
 }
@@ -1571,7 +1614,7 @@ onMounted(fetchList)
 }
 
 .filters-grid {
-  padding: 10px 14px 2px;
+  padding: 6px 12px 2px;
 }
 
 .filters-grid :deep(.el-form-item) {
@@ -1607,6 +1650,10 @@ onMounted(fetchList)
 
 /* テーブル（シンプル・行高め） */
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 14px;
   background: #fff;
@@ -1615,7 +1662,28 @@ onMounted(fetchList)
   animation: pmRise 0.45s ease-out 0.1s both;
 }
 
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 .part-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   --el-table-border-color: transparent;
   --el-table-header-bg-color: #f8fafc;
   --el-table-row-hover-bg-color: #f8fafc;
@@ -1871,35 +1939,72 @@ onMounted(fetchList)
   background: var(--pm-rose) !important;
 }
 
-.table-footer {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
-  padding: 8px 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
   border-top: 1px solid #f1f5f9;
   background: linear-gradient(180deg, #fff, #fafbff);
 }
-
-.pagination :deep(.el-pager li),
-.pagination :deep(.btn-prev),
-.pagination :deep(.btn-next) {
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
   font-size: 12px;
-  border-radius: 8px;
-  background: transparent;
-  transition: background 0.15s ease, color 0.15s ease;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
 }
-
-.pagination :deep(.el-pager li:hover) {
-  color: var(--pm-indigo);
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
   background: #eef2ff;
+  border-color: #c7d2fe;
 }
-
-.pagination :deep(.el-pager li.is-active) {
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  box-shadow: 0 3px 8px rgba(99, 102, 241, 0.3);
+.pagination-summary__item--range .pagination-summary__label { color: #4338ca; }
+.pagination-summary__item--range .pagination-summary__value { color: #3730a3; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #6366f1;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 96px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .part-input-full {
@@ -2213,10 +2318,11 @@ onMounted(fetchList)
 }
 
 /* ページネーション */
-.pm-modern .table-footer {
+.pm-modern .pagination-bar {
+  border-top-color: #c7d2fe;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7ff 100%);
 }
-.pm-modern .pagination :deep(.el-pager li.is-active) {
+.pm-modern .modern-pagination :deep(.el-pager li.is-active) {
   transform: translateY(-1px);
   box-shadow:
     0 2px 0 #3730a3,

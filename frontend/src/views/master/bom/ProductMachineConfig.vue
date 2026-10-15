@@ -88,7 +88,7 @@
     <div class="table-section">
       <el-card class="table-card" shadow="never">
         <el-table
-          :data="filteredList"
+          :data="pagedList"
           v-loading="loading"
           stripe
           border
@@ -98,7 +98,7 @@
           :default-sort="{ prop: 'product_cd', order: 'ascending' }"
           :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
           :cell-style="{ padding: '4px 8px' }"
-          height="calc(100vh - 268px)"
+          height="100%"
         >
           <el-table-column
             prop="product_cd"
@@ -200,6 +200,35 @@
           </el-table-column>
         </el-table>
       </el-card>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ filteredList.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--all">
+            <span class="pagination-summary__label">全件</span>
+            <b class="pagination-summary__value">{{ (configList?.length || 0).toLocaleString('ja-JP') }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="filteredList.length"
+          :page-sizes="[20, 30, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
 
     <!-- 编辑对话框 -->
@@ -427,7 +456,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Setting,
@@ -525,6 +554,33 @@ const filteredList = computed(() => {
 
   return result
 })
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 30,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return filteredList.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = filteredList.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 const weldingConfiguredCount = computed(
   () => (configList.value || []).filter((item) => !!item.welding_machine).length,
@@ -738,7 +794,7 @@ const handleSync = async () => {
 
 // 筛选处理
 const handleFilter = () => {
-  // 筛选逻辑已通过computed属性实现
+  pagination.page = 1
 }
 
 // 清除筛选
@@ -746,6 +802,7 @@ const clearFilters = () => {
   filters.value = {
     keyword: '',
   }
+  pagination.page = 1
 }
 
 // 初始化
@@ -756,16 +813,27 @@ onMounted(async () => {
 
 <style scoped>
 .product-machine-config-container {
-  min-height: 100%;
+  --pmc-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--pmc-app-chrome));
+  height: calc(100dvh - var(--pmc-app-chrome));
+  max-height: calc(100vh - var(--pmc-app-chrome));
+  max-height: calc(100dvh - var(--pmc-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
   padding: 6px 8px 10px;
-  box-sizing: border-box;
 }
 
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 10px 14px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   color: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.28);
@@ -843,11 +911,12 @@ onMounted(async () => {
 }
 
 .action-section {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   padding: 8px 12px 10px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
@@ -935,11 +1004,20 @@ onMounted(async () => {
 }
 
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
   margin-bottom: 0;
 }
 
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
@@ -948,7 +1026,118 @@ onMounted(async () => {
 }
 
 .table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+}
+
+.table-card :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-card :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.table-card :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid rgba(13, 148, 136, 0.18);
+  background: linear-gradient(180deg, #fff 0%, #f0fdfa 100%);
+  border-radius: 0 0 10px 10px;
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.pagination-summary__value {
+  font-weight: 700;
+  color: #0d9488;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0891b2;
+}
+
+.pagination-summary__item--all {
+  background: #f0fdfa;
+  border-color: rgba(13, 148, 136, 0.25);
+}
+
+.pagination-summary__item--all .pagination-summary__label {
+  color: #115e59;
+}
+
+.pagination-summary__item--all .pagination-summary__value {
+  color: #134e4a;
+}
+
+.modern-pagination {
+  margin-left: auto;
+}
+
+.pagination-bar :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+  font-size: 12px;
+}
+
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+}
+
+.pagination-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #115e59 0%, #0d9488 55%, #2dd4bf 100%);
 }
 
 .action-buttons-table {
@@ -1351,6 +1540,15 @@ onMounted(async () => {
   text-shadow: 0 2px 6px rgba(4, 47, 46, 0.35);
 }
 
+.pmc-modern .table-section {
+  border-radius: 14px;
+  border: 1px solid var(--hx-line);
+  box-shadow:
+    0 10px 24px -16px rgba(17, 94, 89, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.04);
+  background: #fff;
+}
+
 .pmc-modern .action-section,
 .pmc-modern .table-card {
   position: relative;
@@ -1360,6 +1558,12 @@ onMounted(async () => {
   box-shadow:
     0 10px 24px -16px rgba(17, 94, 89, 0.35),
     0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.pmc-modern .table-section .table-card {
+  border-radius: 14px 14px 0 0;
+  border-bottom: none;
+  box-shadow: none;
 }
 
 .pmc-modern .action-section::before,

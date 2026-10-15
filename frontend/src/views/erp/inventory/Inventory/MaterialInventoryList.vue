@@ -1,34 +1,33 @@
 <template>
-  <div class="inventory-list-page">
-    <div class="page-bg">
-      <div class="bg-gradient"></div>
-      <div class="bg-orb bg-orb-1"></div>
-      <div class="bg-orb bg-orb-2"></div>
-      <div class="bg-orb bg-orb-3"></div>
-    </div>
-
-    <div class="page-header glass animate-in">
+  <div class="inventory-list-page miq-modern pb-std">
+    <header class="page-header glass page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="page-header-fx pb-bubbles" aria-hidden="true" />
       <div class="header-left">
         <div class="header-icon header-icon--material">
           <el-icon size="24"><Grid /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="header-title">材料在庫照会</h1>
-          <span class="header-meta">{{ totalCount }} 件</span>
+          <div class="header-title-row">
+            <h1 class="header-title pb-hero-title">材料在庫照会</h1>
+            <span class="header-meta">{{ totalCount }} 件</span>
+          </div>
+          <p class="header-desc pb-hero-desc">期間・材料・仕入先で在庫推移を照会</p>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button size="small" class="btn-glass" @click="exportCsv">
-          <el-icon><Download /></el-icon>CSV
+      <div class="header-actions toolbar-actions">
+        <el-button class="tb-btn tb-btn-teal" @click="exportCsv">
+          <el-icon><Download /></el-icon>
+          <span class="tb-label">CSV</span>
         </el-button>
       </div>
-    </div>
+    </header>
 
-    <div class="stat-cards glass animate-in" style="--delay: 0.05s">
+    <div class="stat-cards glass">
       <div
         v-for="(item, i) in statCards"
         :key="item.key"
-        class="stat-card"
+        :class="['stat-card', `stat-card--${item.key}`]"
         :style="{ '--i': i }"
       >
         <span class="stat-label">{{ item.label }}</span>
@@ -36,7 +35,7 @@
       </div>
     </div>
 
-    <div class="toolbar glass animate-in" style="--delay: 0.1s">
+    <div class="filter-bar glass">
       <div class="toolbar-group">
         <span class="toolbar-label">期間</span>
         <el-date-picker
@@ -115,16 +114,15 @@
       </div>
     </div>
 
-    <div class="table-wrap glass animate-in" style="--delay: 0.15s">
+    <div class="table-section glass">
       <el-table
         :data="list"
         v-loading="loading"
         stripe
+        border
         size="small"
         class="data-table"
-        show-summary
-        :summary-method="getSummaries"
-        :height="tableHeight"
+        height="100%"
       >
         <el-table-column prop="material_cd" label="材料CD" width="100" fixed />
         <el-table-column prop="material_name" label="材料名" width="140" show-overflow-tooltip />
@@ -174,6 +172,19 @@
         </el-table-column>
         <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
       </el-table>
+
+      <div class="table-footer">
+        <div class="footer-pills">
+          <span class="footer-pill footer-pill--count">件数 {{ totalCount.toLocaleString() }}</span>
+          <span
+            v-for="item in statCards"
+            :key="`ft-${item.key}`"
+            :class="['footer-pill', `footer-pill--${item.key}`]"
+          >
+            {{ item.label }} {{ formatNum(item.sum) }}
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -189,7 +200,6 @@ import { useInventoryOperationPermission } from '@/composables/useInventoryOpera
 import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
-
 
 export interface MaterialStockInquiryRow {
   id?: number
@@ -217,7 +227,7 @@ const dateRange = ref<[string, string] | null>(null)
 
 const filters = reactive({
   materialCd: '',
-  suppliers: [] as string[]
+  suppliers: [] as string[],
 })
 
 const totalCount = ref(0)
@@ -226,7 +236,7 @@ const STAT_FIELDS: { key: keyof MaterialStockInquiryRow; label: string }[] = [
   { key: 'current_stock', label: '現在在庫' },
   { key: 'safety_stock', label: '安全在庫' },
   { key: 'planned_usage', label: '使用数' },
-  { key: 'order_quantity', label: '注文数' }
+  { key: 'order_quantity', label: '注文数' },
 ]
 
 const statCards = computed(() => {
@@ -236,15 +246,6 @@ const statCards = computed(() => {
     return { key: String(key), label, sum }
   })
 })
-
-const SUMMARY_NUM_KEYS = new Set([
-  'current_stock',
-  'safety_stock',
-  'max_stock',
-  'planned_usage',
-  'adjustment_quantity',
-  'order_quantity'
-])
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -302,8 +303,6 @@ function onFilterChange() {
   doFetch()
 }
 
-const tableHeight = computed(() => 'calc(100vh - 260px)')
-
 function formatNum(v: number | null | undefined): string {
   if (v == null) return '0'
   return Number(v).toLocaleString()
@@ -324,28 +323,6 @@ function numClass(v: number | null | undefined): string {
   return 'num-positive'
 }
 
-function getSummaries(param: { columns: { property?: string }[]; data: MaterialStockInquiryRow[] }) {
-  const { columns, data } = param
-  const sums: string[] = []
-  columns.forEach((col, index) => {
-    if (index === 0) {
-      sums.push('合計')
-      return
-    }
-    const prop = col.property
-    if (prop && SUMMARY_NUM_KEYS.has(prop)) {
-      const total = data.reduce(
-        (acc, row) => acc + (Number((row as unknown as Record<string, unknown>)[prop]) || 0),
-        0
-      )
-      sums.push(total.toLocaleString())
-    } else {
-      sums.push('')
-    }
-  })
-  return sums
-}
-
 function doFetch() {
   const t = todayStr()
   const start = dateRange.value?.[0] ?? t
@@ -357,7 +334,7 @@ function doFetch() {
     page: 1,
     pageSize: 10000,
     start_date: start,
-    end_date: end
+    end_date: end,
   }
   if (filters.materialCd) params.material_cd = filters.materialCd
   if (filters.suppliers.length > 0) params.suppliers = filters.suppliers.join(',')
@@ -385,7 +362,7 @@ async function fetchMaterials() {
     const raw = res?.data?.list ?? (res as { list?: Material[] })?.list ?? []
     materialOptions.value = (raw as Material[]).map((m) => ({
       material_cd: m.material_cd,
-      material_name: m.material_name
+      material_name: m.material_name,
     }))
   } catch (e) {
     console.error(e)
@@ -421,7 +398,7 @@ function exportCsv() {
     '注文数',
     '単位',
     '単価',
-    '備考'
+    '備考',
   ]
   const rows = list.value
   if (!rows.length) {
@@ -451,7 +428,7 @@ function exportCsv() {
         row.order_quantity ?? '',
         row.unit ?? '',
         row.unit_price ?? '',
-        row.remarks ?? ''
+        row.remarks ?? '',
       ]
         .map(escape)
         .join(',')
@@ -478,425 +455,495 @@ onMounted(() => {
 
 <style scoped>
 .inventory-list-page {
+  --miq-app-chrome: 84px;
+  --miq-gap: 10px;
   position: relative;
-  padding: 14px 18px;
-  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--miq-gap);
+  padding: 12px;
+  height: calc(100vh - var(--miq-app-chrome));
+  height: calc(100dvh - var(--miq-app-chrome));
+  max-height: calc(100vh - var(--miq-app-chrome));
+  max-height: calc(100dvh - var(--miq-app-chrome));
+  min-height: 0;
   overflow: hidden;
 }
 
-.page-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.bg-gradient {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #334155 100%);
-}
-
-.bg-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.35;
-  animation: orbFloat 18s ease-in-out infinite;
-}
-
-.bg-orb-1 {
-  width: 420px;
-  height: 420px;
-  background: linear-gradient(135deg, #14b8a6, #06b6d4);
-  top: -120px;
-  right: -80px;
-}
-
-.bg-orb-2 {
-  width: 320px;
-  height: 320px;
-  background: linear-gradient(135deg, #06b6d4, #3b82f6);
-  bottom: 10%;
-  left: -100px;
-  animation-delay: -6s;
-}
-
-.bg-orb-3 {
-  width: 240px;
-  height: 240px;
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  bottom: -60px;
-  right: 20%;
-  animation-delay: -12s;
-}
-
-@keyframes orbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(20px, -30px) scale(1.05); }
-  66% { transform: translate(-15px, 20px) scale(0.98); }
+.miq-modern {
+  --hero-shadow:
+    0 18px 36px -18px rgba(91, 33, 182, 0.55),
+    0 4px 12px -6px rgba(168, 85, 247, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.06);
+  background:
+    radial-gradient(1100px 380px at 0% 0%, rgba(124, 58, 237, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(217, 70, 239, 0.08), transparent 60%),
+    linear-gradient(160deg, #faf5ff 0%, #f8fafc 45%, #fdf4ff 100%);
 }
 
 .glass {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: #fff;
+  border: 1px solid #e9d5ff;
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
 }
 
-.animate-in {
-  animation: fadeInUp 0.5s ease-out forwards;
-  opacity: 0;
-  animation-delay: var(--delay, 0s);
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
+/* ---------- タイトル条（紫→マゼンタ・他頁と分色） ---------- */
 .page-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-radius: 16px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #5b21b6 0%, #7c3aed 34%, #a855f7 66%, #d946ef 100%);
+  box-shadow: var(--hero-shadow);
 }
 
-.page-header:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
+}
+
+.page-header-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.header-left,
+.header-actions {
+  position: relative;
+  z-index: 1;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .header-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(91, 33, 182, 0.3);
 }
 
-.header-icon--material {
-  background: linear-gradient(145deg, #0d9488 0%, #06b6d4 48%, #0891b2 100%);
-  box-shadow:
-    0 4px 16px rgba(6, 182, 212, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+.header-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
 }
 
-.header-icon--material:hover {
-  transform: scale(1.05);
-  box-shadow:
-    0 8px 24px rgba(6, 182, 212, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+.header-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 
 .header-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.95);
   margin: 0;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.header-desc {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .header-meta {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-left: 10px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-glass {
-  border-radius: 10px !important;
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(6, 182, 212, 0.12) 100%
-  ) !important;
-  border: 1px solid rgba(103, 232, 249, 0.35) !important;
-  color: #ecfeff !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.02em;
-  box-shadow:
-    0 2px 12px rgba(6, 182, 212, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease !important;
-}
-
-.btn-glass:hover {
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.2) 0%,
-    rgba(34, 211, 238, 0.22) 100%
-  ) !important;
-  border-color: rgba(165, 243, 252, 0.55) !important;
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 20px rgba(6, 182, 212, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
-}
-
-.stat-cards {
+.toolbar-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 16px;
+  gap: 8px;
+}
+
+.tb-btn {
+  --k-rgb: 13 148 136;
+  --k-fg: #0f766e;
+  --k-bd: #5eead4;
+  --k-tint: #ccfbf1;
+  --k-tint-h: #99f6e4;
+  --k-ico: #14b8a6;
+  height: 32px !important;
+  padding: 0 15px 0 12px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
+  color: var(--k-fg) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%) !important;
+  border: 1px solid var(--k-bd) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(91, 33, 182, 0.35) !important;
+}
+.tb-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+.tb-btn:hover {
+  color: rgb(var(--k-rgb)) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- 合計カード ---------- */
+.stat-cards {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+  padding: 10px 12px;
 }
 
 .stat-card {
+  --sc: #7c3aed;
+  --sc-rgb: 124, 58, 237;
+  --sc-ink: #6d28d9;
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 74px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.06);
+  align-items: flex-start;
+  padding: 11px 14px 9px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.25s ease;
-  animation: cardIn 0.4s ease-out backwards;
-  animation-delay: calc(var(--delay, 0s) + 0.02s * var(--i, 0));
+  background: linear-gradient(180deg, rgba(var(--sc-rgb), 0.09) 0%, #fff 72%);
+  border: 1px solid rgba(var(--sc-rgb), 0.25);
+  box-shadow: 0 3px 0 rgba(var(--sc-rgb), 0.28), 0 10px 18px -12px rgba(var(--sc-rgb), 0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--sc) 0%, rgba(var(--sc-rgb), 0.3) 100%);
+}
 .stat-card:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.18);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 rgba(var(--sc-rgb), 0.35), 0 14px 22px -12px rgba(var(--sc-rgb), 0.55);
 }
-
-@keyframes cardIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.stat-card--current_stock {
+  --sc: #7c3aed;
+  --sc-rgb: 124, 58, 237;
+  --sc-ink: #6d28d9;
+}
+.stat-card--safety_stock {
+  --sc: #0284c7;
+  --sc-rgb: 2, 132, 199;
+  --sc-ink: #0369a1;
+}
+.stat-card--planned_usage {
+  --sc: #e11d48;
+  --sc-rgb: 225, 29, 72;
+  --sc-ink: #be123c;
+}
+.stat-card--order_quantity {
+  --sc: #059669;
+  --sc-rgb: 5, 150, 105;
+  --sc-ink: #047857;
 }
 
 .stat-label {
+  margin-bottom: 3px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 4px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.stat-value {
-  font-size: 15px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.95);
-  transition: color 0.2s ease;
+  color: var(--sc-ink);
 }
-
+.stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
 .stat-card .stat-value.num-negative {
-  color: #f87171;
-  text-shadow: 0 0 20px rgba(248, 113, 113, 0.3);
+  color: #dc2626;
 }
 
-.toolbar {
+/* ---------- 筛选条 ---------- */
+.filter-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 18px;
-  padding: 12px 16px;
-  border-radius: 16px;
+  gap: 12px 18px;
+  padding: 10px 14px 10px 18px;
+}
+.filter-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #a78bfa, #a855f7, #d946ef);
 }
 
 .toolbar-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 
 .toolbar-label {
+  padding: 3px 10px;
+  border-radius: 999px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.65);
-  white-space: nowrap;
-  font-weight: 500;
+  font-weight: 700;
+  color: #6b21a8;
+  background: #f3e8ff;
+  box-shadow: inset 0 0 0 1px #e9d5ff;
 }
 
-.toolbar :deep(.el-date-editor),
-.toolbar :deep(.el-select) {
-  --el-fill-color-blank: rgba(255, 255, 255, 0.08);
-  --el-border-color: rgba(255, 255, 255, 0.15);
-  --el-text-color-regular: rgba(255, 255, 255, 0.9);
+.filter-bar :deep(.el-date-editor),
+.filter-bar :deep(.el-select) {
+  --el-fill-color-blank: #f8fafc;
+  --el-border-color: #e2e8f0;
+  --el-text-color-regular: #1e293b;
 }
-
-.toolbar :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: none;
-  transition: all 0.2s ease;
+.filter-bar :deep(.el-input__wrapper),
+.filter-bar :deep(.el-select__wrapper) {
+  border: none;
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
 }
-
-.toolbar :deep(.el-input__wrapper:hover),
-.toolbar :deep(.el-input__wrapper.is-focus) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
+.filter-bar :deep(.el-input__wrapper:hover),
+.filter-bar :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+.filter-bar :deep(.el-input__wrapper.is-focus),
+.filter-bar :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #7c3aed inset,
+    0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
 .date-range-picker {
   width: 240px;
 }
-
-.date-quick {
-  display: flex;
-  gap: 8px;
-}
-
-.date-quick-btn {
-  min-width: 58px !important;
-  border-radius: 999px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.02em;
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.72) !important;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
-}
-
-.date-quick-btn:hover {
-  background: rgba(255, 255, 255, 0.11) !important;
-  border-color: rgba(255, 255, 255, 0.22) !important;
-  color: #fff !important;
-  transform: translateY(-1px);
-}
-
-.date-quick-btn--active {
-  background: linear-gradient(145deg, rgba(20, 184, 166, 0.55), rgba(6, 182, 212, 0.45)) !important;
-  border-color: rgba(255, 255, 255, 0.32) !important;
-  color: #fff !important;
-  box-shadow:
-    0 4px 16px rgba(6, 182, 212, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
-}
-
-.date-quick-btn--active:hover {
-  background: linear-gradient(145deg, rgba(20, 184, 166, 0.68), rgba(6, 182, 212, 0.52)) !important;
-}
-
 .product-select {
   width: 200px;
 }
-
 .supplier-select {
   min-width: 200px;
   max-width: 280px;
 }
 
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  padding: 14px 16px;
-  border-radius: 16px;
-  transition: box-shadow 0.2s ease;
+.date-quick {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: #faf5ff;
+  box-shadow: inset 0 0 0 1px #e9d5ff;
+}
+.date-quick-btn {
+  min-width: 52px !important;
+  height: 24px;
+  border-radius: 7px !important;
+  color: #6b21a8 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+}
+.date-quick-btn + .date-quick-btn {
+  margin-left: 0;
+}
+.date-quick-btn:hover {
+  color: #5b21b6 !important;
+  background: #f3e8ff !important;
+}
+.date-quick-btn--active,
+.date-quick-btn--active:hover {
+  color: #fff !important;
+  background: linear-gradient(180deg, #a855f7 0%, #7c3aed 100%) !important;
+  box-shadow: 0 2px 0 #5b21b6, 0 6px 12px -6px rgba(124, 58, 237, 0.7) !important;
 }
 
-.table-wrap:hover {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+/* ---------- テーブル（flex 填满） ---------- */
+.table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 12px;
+}
+
+.table-section :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-section :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-section :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .data-table {
   font-size: 12px;
   border-radius: 12px;
   overflow: hidden;
-  background: #ffffff !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: #fff !important;
 }
-
-.data-table :deep(.el-table__inner-wrapper) {
-  background: #ffffff;
-}
-
-.data-table :deep(.el-table__header-wrapper) {
-  background: #ffffff;
-}
-
 .data-table :deep(.el-table__header th) {
-  background: #f1f5f9 !important;
-  color: #334155 !important;
-  font-weight: 600;
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%) !important;
+  color: #6b21a8 !important;
+  font-weight: 700;
   font-size: 12px;
-  padding: 8px 10px;
-  border-color: #e2e8f0 !important;
+  border-bottom: 2px solid #d8b4fe !important;
 }
-
-.data-table :deep(.el-table__body-wrapper) {
-  background: #ffffff;
-}
-
-.data-table :deep(.el-table__body tr) {
-  transition: background 0.15s ease;
-}
-
-.data-table :deep(.el-table__body tr:hover > td) {
-  background: #f8fafc !important;
-}
-
 .data-table :deep(.el-table__body td) {
   padding: 6px 10px;
-  border-color: #e2e8f0 !important;
-  background: #ffffff !important;
   color: #1e293b !important;
+  font-variant-numeric: tabular-nums;
+}
+.data-table :deep(.el-table__body tr:hover > td) {
+  background: #faf5ff !important;
+}
+.data-table :deep(.el-table__body tr:hover > td:first-child) {
+  box-shadow: inset 3px 0 0 #7c3aed;
 }
 
-.data-table :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background: #fafbfc !important;
-  color: #1e293b !important;
+.table-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f3e8ff;
 }
 
-.data-table :deep(.el-table--striped .el-table__body tr.el-table__row--striped:hover > td) {
-  background: #f1f5f9 !important;
+.footer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.data-table :deep(.el-table__footer-wrapper) {
-  background: #ffffff;
+.footer-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.footer-pill--count {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border-color: #e9d5ff;
+}
+.footer-pill--current_stock {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+.footer-pill--safety_stock {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+.footer-pill--planned_usage {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+.footer-pill--order_quantity {
+  background: #d1fae5;
+  color: #047857;
+  border-color: #a7f3d0;
 }
 
-.data-table :deep(.el-table__footer td) {
-  background: #f1f5f9 !important;
+.num-positive {
+  color: #1e293b;
+}
+.num-zero {
+  color: #64748b;
+}
+.num-negative {
+  color: #dc2626;
   font-weight: 600;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #1e293b !important;
-  border-color: #e2e8f0 !important;
 }
 
-.data-table :deep(.el-table__empty-block) {
-  background: #ffffff !important;
+@media (max-width: 768px) {
+  .inventory-list-page {
+    padding: 8px;
+    --miq-gap: 8px;
+  }
+  .header-actions {
+    width: 100%;
+  }
+  .date-range-picker,
+  .product-select,
+  .supplier-select {
+    width: 100%;
+    max-width: none;
+  }
 }
 
-.num-positive { color: #1e293b; }
-.num-zero { color: #64748b; }
-.num-negative { color: #dc2626; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .stat-card:hover,
+  .tb-btn:hover {
+    transform: none;
+  }
+}
 </style>

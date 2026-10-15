@@ -362,7 +362,7 @@ class MachineBase(BaseModel):
     available_from: Optional[str] = None  # "HH:mm:ss"
     available_to: Optional[str] = None
     calendar_id: Optional[int] = None
-    efficiency: float = 100.0
+    availability_rate: float = 100.0  # 可動率（%）小数第1位
     available_qty: int = 0
     use_in_cpsat: bool = True
     note: Optional[str] = None
@@ -380,7 +380,7 @@ class MachineUpdate(BaseModel):
     available_from: Optional[str] = None
     available_to: Optional[str] = None
     calendar_id: Optional[int] = None
-    efficiency: Optional[float] = None
+    availability_rate: Optional[float] = None
     available_qty: Optional[int] = None
     use_in_cpsat: Optional[bool] = None
     note: Optional[str] = None

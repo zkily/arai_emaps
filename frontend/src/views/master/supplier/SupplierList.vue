@@ -69,7 +69,18 @@
     </div>
 
     <el-card class="table-card">
-      <el-table :data="dataList" stripe highlight-current-row class="modern-table">
+      <div class="table-card__body">
+      <el-table
+        :data="dataList"
+        v-loading="loading"
+        stripe
+        border
+        size="small"
+        highlight-current-row
+        class="modern-table"
+        height="100%"
+        :style="{ width: '100%' }"
+      >
         <el-table-column
           :label="t('master.supplier.supplierCD')"
           prop="supplier_cd"
@@ -131,19 +142,33 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+      </div>
 
-    <div class="pagination-section">
-      <el-pagination
-        v-model:current-page="pagination.currentPage"
-        v-model:page-size="pagination.pageSize"
-        :total="pagination.total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        @update:page-size="handlePageSizeChange"
-        @update:current-page="fetchList"
-      />
-    </div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.currentPage"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 30, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @update:page-size="handlePageSizeChange"
+          @update:current-page="fetchList"
+        />
+      </div>
+    </el-card>
 
     <SupplierEditDialog
       :visible="dialogVisible"
@@ -177,7 +202,16 @@ const { t } = useI18n()
 const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 const filters = reactive({ keyword: '' })
 const dataList = ref<Supplier[]>([])
-const pagination = reactive({ currentPage: 1, pageSize: 20, total: 0 })
+const loading = ref(false)
+const pagination = reactive({ currentPage: 1, pageSize: 30, total: 0 })
+
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.currentPage - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.currentPage, total)
+  return `${start}–${end}`
+})
 
 const dialogVisible = ref(false)
 const editData = ref<Supplier | null>(null)
@@ -216,13 +250,18 @@ function resetStatTilt(e: MouseEvent) {
 }
 
 const fetchList = async () => {
-  const res = await getSupplierList({
-    keyword: filters.keyword,
-    page: pagination.currentPage,
-    pageSize: pagination.pageSize,
-  })
-  dataList.value = res?.data?.list ?? res?.list ?? []
-  pagination.total = res?.data?.total ?? res?.total ?? 0
+  loading.value = true
+  try {
+    const res = await getSupplierList({
+      keyword: filters.keyword,
+      page: pagination.currentPage,
+      pageSize: pagination.pageSize,
+    })
+    dataList.value = res?.data?.list ?? res?.list ?? []
+    pagination.total = res?.data?.total ?? res?.total ?? 0
+  } finally {
+    loading.value = false
+  }
 }
 
 const clearFilter = () => {
@@ -268,12 +307,24 @@ onMounted(() => {
 
 <style scoped>
 .supplier-master-container {
+  --sup-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--sup-app-chrome));
+  height: calc(100dvh - var(--sup-app-chrome));
+  max-height: calc(100vh - var(--sup-app-chrome));
+  max-height: calc(100dvh - var(--sup-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
-  min-height: 100vh;
 }
 
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
   padding: 10px 16px;
@@ -349,9 +400,10 @@ onMounted(() => {
 }
 
 .action-section {
+  flex-shrink: 0;
   background: white;
   border-radius: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
   overflow: hidden;
@@ -361,7 +413,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 6px 12px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
 }
@@ -416,8 +468,8 @@ onMounted(() => {
 .filters-grid {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 6px 12px;
   align-items: end;
 }
 
@@ -453,14 +505,116 @@ onMounted(() => {
 }
 
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 .table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #fff1f2 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #be123c; }
+.pagination-summary__item--range .pagination-summary__value { color: #9f1239; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #e11d48;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 96px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .supplier-code-cell {
@@ -482,15 +636,6 @@ onMounted(() => {
   display: flex;
   gap: 4px;
   justify-content: center;
-}
-
-.pagination-section {
-  background: white;
-  border-radius: 8px;
-  padding: 8px 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e2e8f0;
-  text-align: center;
 }
 
 :deep(.el-table) {
@@ -515,22 +660,6 @@ onMounted(() => {
   padding: 4px 8px;
   font-size: 11px;
   border-radius: 5px;
-}
-
-:deep(.el-pagination) {
-  justify-content: center;
-}
-
-:deep(.el-pager li) {
-  border-radius: 6px;
-  font-size: 12px;
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
-}
-
-:deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 /* 响应式 */
@@ -584,8 +713,7 @@ onMounted(() => {
 /* 动画效果 */
 .page-header,
 .action-section,
-.table-card,
-.pagination-section {
+.table-card {
   animation: fadeIn 0.4s ease-out;
 }
 
@@ -759,8 +887,7 @@ onMounted(() => {
 
 /* ---------- 検索パネル ---------- */
 .sup-modern .action-section,
-.sup-modern .table-card,
-.sup-modern .pagination-section {
+.sup-modern .table-card {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
@@ -951,11 +1078,12 @@ onMounted(() => {
 }
 
 /* ---------- ページネーション ---------- */
-.sup-modern .pagination-section {
+.sup-modern .pagination-bar {
+  border-top-color: var(--hx-line);
   background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
 }
 
-.sup-modern .pagination-section :deep(.el-pager li.is-active) {
+.sup-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   background: linear-gradient(135deg, var(--hx-4) 0%, var(--hx-3) 55%, var(--hx-2) 100%);
   transform: translateY(-1px);
@@ -964,7 +1092,7 @@ onMounted(() => {
     0 6px 12px -6px color-mix(in srgb, var(--hx-3) 70%, transparent);
 }
 
-.sup-modern .pagination-section :deep(.el-pager li:not(.is-active):hover) {
+.sup-modern .modern-pagination :deep(.el-pager li:not(.is-active):hover) {
   color: var(--hx-accent);
 }
 

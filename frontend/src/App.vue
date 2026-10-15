@@ -44,6 +44,9 @@ onMounted(async () => {
     return
   }
 
+  // 別タブからドラッグで開いたとき、sessionStorage のセッションを引き継ぐ
+  await userStore.ensureCrossTabSession()
+
   // ログインしている場合
   if (userStore.isAuthenticated) {
     // WebSocket接続を確立（リアルタイム通知用）
@@ -68,15 +71,9 @@ onMounted(async () => {
                                    isForceLogout
 
         if (isOtherDeviceLogin) {
-          ElMessage.error({
-            message: 'このアカウントは他のデバイスでログインされています。再度ログインしてください。',
-            duration: 3000,
-            showClose: true,
-          })
-          setTimeout(() => {
-            userStore.clearLocalSession()
-            window.location.href = '/login'
-          }, 1500)
+          userStore.forceLogoutOtherDevice(
+            typeof errorDetail === 'string' ? errorDetail : undefined,
+          )
         } else {
           ElMessage.error('トークンの有効期限が切れました。再度ログインしてください。')
           userStore.clearLocalSession()
@@ -111,25 +108,15 @@ onMounted(async () => {
                                        errorDetail.includes('他のデバイスでログイン') ||
                                        isForceLogout
             
+            if (checkInterval) {
+              clearInterval(checkInterval)
+              checkInterval = null
+            }
             if (isOtherDeviceLogin) {
-              if (checkInterval) {
-                clearInterval(checkInterval)
-                checkInterval = null
-              }
-              ElMessage.error({
-                message: 'このアカウントは他のデバイスでログインされています。再度ログインしてください。',
-                duration: 3000,
-                showClose: true,
-              })
-              setTimeout(() => {
-                userStore.clearLocalSession()
-                window.location.href = '/login'
-              }, 1500)
+              userStore.forceLogoutOtherDevice(
+                typeof errorDetail === 'string' ? errorDetail : undefined,
+              )
             } else {
-              if (checkInterval) {
-                clearInterval(checkInterval)
-                checkInterval = null
-              }
               ElMessage.error('トークンの有効期限が切れました。再度ログインしてください。')
               userStore.clearLocalSession()
               window.location.href = '/login'

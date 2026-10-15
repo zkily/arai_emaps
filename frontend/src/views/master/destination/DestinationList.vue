@@ -87,9 +87,13 @@
     </div>
 
     <div class="table-section">
+      <div class="table-card__body">
       <el-table
-        :data="filteredList"
+        :data="pagedList"
         stripe
+        border
+        size="small"
+        height="100%"
         highlight-current-row
         v-loading="loading"
         class="modern-table"
@@ -215,19 +219,35 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
+      </div>
 
-    <div class="footer-section">
-      <div class="result-info">
-        <el-icon>📊</el-icon>
-        <span>
-          {{
-            t('master.common.displayCount', {
-              shown: filteredList.length,
-              total: destinationList.length,
-            })
-          }}
-        </span>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ filteredList.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--all">
+            <span class="pagination-summary__label">全件</span>
+            <b class="pagination-summary__value">{{ destinationList.length.toLocaleString('ja-JP') }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="filteredList.length"
+          :page-sizes="[20, 30, 50, 100]"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
       </div>
     </div>
 
@@ -236,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DestinationForm from './DestinationForm.vue'
@@ -258,9 +278,12 @@ const loading = ref(false)
 const destinationList = ref<RowEx[]>([])
 const filters = ref({ keyword: '', status: '' as '' | number, issue_type: '', carrier_cd: '' })
 
-const handleFilter = () => {}
+const handleFilter = () => {
+  pagination.page = 1
+}
 const clearFilters = () => {
   filters.value = { keyword: '', status: '', issue_type: '', carrier_cd: '' }
+  pagination.page = 1
   fetchList()
 }
 
@@ -314,6 +337,33 @@ const filteredList = computed(() => {
     )
   return result
 })
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 30,
+})
+
+const pagedList = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return filteredList.value.slice(start, start + pagination.pageSize)
+})
+
+const pageRangeText = computed(() => {
+  const total = filteredList.value.length
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 
 const formVisible = ref(false)
 const editData = ref<RowEx | null>(null)
@@ -380,16 +430,28 @@ onMounted(fetchList)
 
 <style scoped>
 .destination-master-container {
-  padding: 12px 16px;
+  --dst-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--dst-app-chrome));
+  height: calc(100dvh - var(--dst-app-chrome));
+  max-height: calc(100vh - var(--dst-app-chrome));
+  max-height: calc(100dvh - var(--dst-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 12px;
   background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
-  min-height: 100vh;
 }
 
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
   padding: 12px 18px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
 }
 .header-content {
@@ -451,10 +513,11 @@ onMounted(fetchList)
 }
 
 .search-section {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 10px;
   padding: 10px 14px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 .search-row {
@@ -487,14 +550,122 @@ onMounted(fetchList)
 }
 
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+}
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  margin-bottom: 12px;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 .modern-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #fce7f3;
+  background: linear-gradient(180deg, #fff 0%, #fdf2f8 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #fdf2f8;
+  border-color: #fbcfe8;
+}
+.pagination-summary__item--range .pagination-summary__label {
+  color: #9d174d;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #831843;
+}
+.pagination-summary__item--all {
+  background: #fce7f3;
+  border-color: #f9a8d4;
+}
+.pagination-summary__item--all .pagination-summary__label {
+  color: #be185d;
+}
+.pagination-summary__item--all .pagination-summary__value {
+  color: #831843;
+}
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #db2777;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 .code-cell {
   font-family: 'Consolas', monospace;
@@ -524,26 +695,6 @@ onMounted(fetchList)
   font-size: 11px;
   border-radius: 6px;
   min-width: 32px;
-}
-
-.footer-section {
-  background: #fff;
-  border-radius: 10px;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-}
-.result-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #64748b;
-  font-size: 0.85rem;
-}
-.result-info strong {
-  color: #667eea;
-  font-weight: 700;
 }
 
 @media (max-width: 768px) {
@@ -768,8 +919,7 @@ onMounted(fetchList)
 }
 
 .dst-modern .search-section,
-.dst-modern .table-section,
-.dst-modern .footer-section {
+.dst-modern .table-section {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
@@ -780,8 +930,7 @@ onMounted(fetchList)
 }
 
 .dst-modern .search-section::before,
-.dst-modern .table-section::before,
-.dst-modern .footer-section::before {
+.dst-modern .table-section::before {
   content: '';
   position: absolute;
   left: 0;
@@ -920,13 +1069,15 @@ onMounted(fetchList)
   box-shadow: none;
 }
 
-.dst-modern .footer-section {
-  padding-top: 10px;
+.dst-modern .pagination-bar {
+  border-top-color: rgba(219, 39, 119, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #fdf2f8 100%);
 }
 
-.dst-modern .result-info {
-  color: var(--hx-deep);
-  font-weight: 600;
+.dst-modern .modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f472b6 0%, #db2777 55%, #9d174d 100%);
 }
 
 @keyframes dstIconDrive {

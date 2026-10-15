@@ -112,15 +112,9 @@ service.interceptors.response.use(
             isForceLogout
 
           if (isOtherDeviceLogin) {
-            ElMessage.error({
-              message: 'このアカウントは他のデバイスでログインされています。再度ログインしてください。',
-              duration: 3000,
-              showClose: true,
-            })
-            setTimeout(() => {
-              userStore.clearLocalSession()
-              window.location.href = '/login'
-            }, 1500)
+            userStore.forceLogoutOtherDevice(
+              typeof errorDetail === 'string' ? errorDetail : undefined,
+            )
           } else {
             // トークン期限切れまたは認証エラー → 自動でログアウトしてログインへ
             ElMessage.error('トークンの有効期限が切れました。再度ログインしてください。')

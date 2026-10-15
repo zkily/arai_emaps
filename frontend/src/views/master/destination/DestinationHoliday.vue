@@ -136,7 +136,7 @@
             empty-text="休日なし"
             class="dh-table"
             v-loading="loading"
-            max-height="420"
+            height="100%"
           >
             <el-table-column v-if="selectedCds.length > 1" label="納入先" min-width="140">
               <template #default="{ row }">
@@ -219,7 +219,7 @@
             empty-text="臨時出勤日なし"
             class="dh-table"
             v-loading="workdayLoading"
-            max-height="420"
+            height="100%"
           >
             <el-table-column v-if="selectedCds.length > 1" label="納入先" min-width="140">
               <template #default="{ row }">
@@ -509,6 +509,7 @@ onMounted(async () => {
 
 <style scoped>
 .dh {
+  --dh-app-chrome: 84px;
   --ink: #0f172a;
   --muted: #64748b;
   --line: rgba(148, 163, 184, 0.28);
@@ -519,8 +520,16 @@ onMounted(async () => {
   --dest: #4f46e5;
   position: relative;
   isolation: isolate;
-  min-height: calc(100vh - 88px);
-  padding: 18px 20px 32px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--dh-app-chrome));
+  height: calc(100dvh - var(--dh-app-chrome));
+  max-height: calc(100vh - var(--dh-app-chrome));
+  max-height: calc(100dvh - var(--dh-app-chrome));
+  min-height: 0;
+  padding: 18px 20px 16px;
   overflow: hidden;
   color: var(--ink);
   background:
@@ -579,6 +588,7 @@ onMounted(async () => {
 }
 
 .dh-hero {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -686,6 +696,7 @@ onMounted(async () => {
 }
 
 .dh-picker {
+  flex-shrink: 0;
   margin-bottom: 16px;
   padding: 14px 16px 16px;
   border-radius: 20px;
@@ -771,13 +782,21 @@ onMounted(async () => {
 }
 
 .dh-grid {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  overflow: hidden;
+  align-items: stretch;
   perspective: 1200px;
 }
 
 .dh-card {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   border-radius: 22px;
   overflow: hidden;
   background: #fff;
@@ -823,6 +842,7 @@ onMounted(async () => {
   pointer-events: none;
 }
 .dh-card__head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -866,10 +886,16 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.2);
 }
 .dh-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 14px;
 }
 
 .dh-add {
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -931,8 +957,20 @@ onMounted(async () => {
 }
 
 .dh-table {
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.dh-card__body :deep(.dh-table.el-table) {
+  height: 100% !important;
+}
+.dh-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.dh-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 :deep(.dh-card--holiday .el-button--danger:not(.is-plain)) {
@@ -954,11 +992,12 @@ onMounted(async () => {
 }
 
 @media (max-width: 980px) {
-  .dh-grid,
-  .dh-hero {
-    display: block;
+  .dh-grid {
+    display: flex;
+    flex-direction: column;
   }
   .dh-hero {
+    display: block;
     transform: none;
   }
   .dh-hero__stats {

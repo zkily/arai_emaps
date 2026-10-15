@@ -3,7 +3,6 @@
  * 用于实时通信，包括单设备登录检测、MES 検査実績状態推送
  */
 import { useUserStore } from '@/modules/auth/stores/user'
-import { ElMessage } from 'element-plus'
 
 let ws: WebSocket | null = null
 let reconnectTimer: number | null = null
@@ -120,21 +119,11 @@ function handleWebSocketMessage(data: Record<string, unknown>) {
       break
       
     case 'force_logout':
-      // 他のデバイスでログインされた場合
+      // 他のデバイスでログインされた場合（提示 + 全タブ下線）
       console.warn('[WebSocket] Force logout:', data.message)
-      
-      // エラーメッセージを表示（長めの表示時間でユーザーに確認してもらう）
-      ElMessage.error({
-        message: data.message || 'このアカウントは他のデバイスでログインされています。再度ログインしてください。',
-        duration: 3000,
-        showClose: true,
-      })
-      
-      setTimeout(() => {
-        const userStore = useUserStore()
-        userStore.clearLocalSession()
-        window.location.href = '/login'
-      }, 1500)
+      useUserStore().forceLogoutOtherDevice(
+        typeof data.message === 'string' ? data.message : undefined,
+      )
       break
       
     case 'pong':

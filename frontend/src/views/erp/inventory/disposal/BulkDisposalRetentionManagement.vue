@@ -51,58 +51,36 @@
 
       <section class="kpi-grid">
         <article class="kpi-card kpi-card--total">
-          <header class="kpi-card__head">
-            <div class="kpi-icon"><el-icon :size="18"><Document /></el-icon></div>
+          <div class="kpi-icon"><el-icon :size="16"><Document /></el-icon></div>
+          <div class="kpi-body">
             <span class="kpi-card__name">総件数</span>
-          </header>
-          <div class="kpi-card__value">{{ pagination.total.toLocaleString() }}</div>
-          <p class="kpi-card__hint">現在の検索条件を含む一覧</p>
+            <span class="kpi-card__value">{{ pagination.total.toLocaleString() }}</span>
+          </div>
         </article>
         <article class="kpi-card kpi-card--pending">
-          <header class="kpi-card__head">
-            <div class="kpi-icon"><el-icon :size="18"><WarningFilled /></el-icon></div>
+          <div class="kpi-icon"><el-icon :size="16"><WarningFilled /></el-icon></div>
+          <div class="kpi-body">
             <span class="kpi-card__name">未処理</span>
-          </header>
-          <div class="kpi-card__value">{{ pendingTotal.toLocaleString() }}</div>
-          <p class="kpi-card__hint">全体の未処理件数</p>
+            <span class="kpi-card__value">{{ pendingTotal.toLocaleString() }}</span>
+          </div>
         </article>
         <article class="kpi-card kpi-card--overdue" :class="{ 'is-alert': overdueTotal > 0 }">
-          <header class="kpi-card__head">
-            <div class="kpi-icon"><el-icon :size="18"><Timer /></el-icon></div>
+          <div class="kpi-icon"><el-icon :size="16"><Timer /></el-icon></div>
+          <div class="kpi-body">
             <span class="kpi-card__name">期限超過</span>
-          </header>
-          <div class="kpi-card__value">{{ overdueTotal.toLocaleString() }}</div>
-          <p class="kpi-card__hint">保留品の処理期限超過</p>
+            <span class="kpi-card__value">{{ overdueTotal.toLocaleString() }}</span>
+          </div>
         </article>
         <article class="kpi-card kpi-card--done">
-          <header class="kpi-card__head">
-            <div class="kpi-icon"><el-icon :size="18"><CircleCheckFilled /></el-icon></div>
+          <div class="kpi-icon"><el-icon :size="16"><CircleCheckFilled /></el-icon></div>
+          <div class="kpi-body">
             <span class="kpi-card__name">処理済</span>
-          </header>
-          <div class="kpi-card__value">{{ processedTotal.toLocaleString() }}</div>
-          <p class="kpi-card__hint">一覧上の処理済概算</p>
+            <span class="kpi-card__value">{{ processedTotal.toLocaleString() }}</span>
+          </div>
         </article>
       </section>
 
-      <section class="panel panel-elevated filter-panel">
-        <div class="panel-head">
-          <div class="panel-head-left">
-            <span class="panel-accent panel-accent--amber" />
-            <div>
-              <h3 class="panel-title">検索・絞り込み</h3>
-              <p class="panel-sub">区分チップと詳細条件で一覧を絞り込みます</p>
-            </div>
-          </div>
-          <button
-            v-if="hasActiveFilters"
-            type="button"
-            class="link-clear"
-            @click="clearFilters"
-          >
-            条件クリア
-          </button>
-        </div>
-
+      <section class="filter-panel">
         <div class="chip-row">
           <button
             v-for="chip in categoryChips"
@@ -139,73 +117,66 @@
           >
             期限超過
           </button>
+          <button
+            v-if="hasActiveFilters"
+            type="button"
+            class="link-clear"
+            @click="clearFilters"
+          >
+            条件クリア
+          </button>
         </div>
 
-        <el-form :model="filters" class="filter-form" label-position="top" @submit.prevent>
-          <div class="filter-grid">
-            <el-form-item label="発生日" class="filter-item span-2">
-              <el-date-picker
-                v-model="filters.date_range"
-                type="daterange"
-                range-separator="～"
-                start-placeholder="開始"
-                end-placeholder="終了"
-                value-format="YYYY-MM-DD"
-                unlink-panels
-                size="default"
-                class="ctrl-full"
-              />
-            </el-form-item>
-            <el-form-item label="報告区分" class="filter-item">
-              <el-select v-model="filters.report_category" clearable placeholder="全て" class="ctrl-full">
-                <el-option v-for="item in reportCategoryOptions" :key="item" :label="item" :value="item" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="発生工程" class="filter-item">
-              <el-select v-model="filters.process_name" clearable placeholder="全て" class="ctrl-full">
-                <el-option v-for="item in processNameOptions" :key="item" :label="item" :value="item" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="製品" class="filter-item">
-              <el-select
-                v-model="filters.product_cd"
-                placeholder="製品"
-                clearable
-                filterable
-                class="ctrl-full"
-              >
-                <el-option
-                  v-for="item in productOptions"
-                  :key="item.product_cd"
-                  :label="`${item.product_cd} - ${item.product_name || ''}`"
-                  :value="item.product_cd"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="キーワード" class="filter-item">
-              <el-input
-                v-model="filters.keyword"
-                placeholder="製品名 / 管理No / 備考"
-                clearable
-                :prefix-icon="Search"
-                class="ctrl-full"
-              />
-            </el-form-item>
-          </div>
-        </el-form>
+        <div class="filter-inline">
+          <el-date-picker
+            v-model="filters.date_range"
+            type="daterange"
+            range-separator="～"
+            start-placeholder="発生日 開始"
+            end-placeholder="終了"
+            value-format="YYYY-MM-DD"
+            unlink-panels
+            clearable
+            class="fi-date"
+          />
+          <el-select v-model="filters.process_name" clearable placeholder="発生工程" class="fi-process">
+            <el-option v-for="item in processNameOptions" :key="item" :label="item" :value="item" />
+          </el-select>
+          <el-select
+            v-model="filters.product_cd"
+            placeholder="製品"
+            clearable
+            filterable
+            class="fi-product"
+          >
+            <el-option
+              v-for="item in productOptions"
+              :key="item.product_cd"
+              :label="`${item.product_cd} - ${item.product_name || ''}`"
+              :value="item.product_cd"
+            />
+          </el-select>
+          <el-input
+            v-model="filters.keyword"
+            placeholder="製品名 / 管理No / 備考"
+            clearable
+            :prefix-icon="Search"
+            class="fi-keyword"
+          />
+        </div>
       </section>
 
-      <section class="panel panel-elevated table-panel">
+      <section class="table-panel">
         <div class="panel-head">
           <div class="panel-head-left">
             <span class="panel-accent panel-accent--blue" />
-            <div>
-              <h3 class="panel-title">記録一覧</h3>
-              <p class="panel-sub">
-                {{ pagination.total.toLocaleString() }} 件
+            <h3 class="panel-title">
+              記録一覧
+              <span class="panel-count">
+                {{ pagination.total.toLocaleString() }}件
                 <template v-if="selectedRows.length"> · 選択 {{ selectedRows.length }}</template>
-              </p>
-            </div>
+              </span>
+            </h3>
           </div>
           <div class="panel-head-actions">
             <button type="button" class="action-btn action-btn--ghost action-btn--sm" :disabled="printing" @click="handlePrint">
@@ -222,6 +193,7 @@
             size="small"
             stripe
             border
+            height="100%"
             class="bdr-table"
             :row-class-name="tableRowClassName"
             highlight-current-row
@@ -1299,6 +1271,8 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .bdr-page {
+  /* アプリヘッダー(48) + タブ(36) */
+  --bdr-app-chrome: 84px;
   --bdr-rose: #e11d48;
   --bdr-amber: #d97706;
   --bdr-blue: #2563eb;
@@ -1311,11 +1285,17 @@ onMounted(async () => {
   --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.95) inset, 0 10px 28px rgba(15, 23, 42, 0.08),
     0 2px 8px rgba(15, 23, 42, 0.04);
   position: relative;
-  width: 100%;
-  min-height: 100vh;
-  padding: 12px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--bdr-app-chrome));
+  height: calc(100dvh - var(--bdr-app-chrome));
+  max-height: calc(100vh - var(--bdr-app-chrome));
+  max-height: calc(100dvh - var(--bdr-app-chrome));
+  min-height: 0;
   overflow: hidden;
+  padding: 10px 12px;
   color: #0f172a;
   font-size: 0.875rem;
   line-height: 1.45;
@@ -1335,15 +1315,19 @@ onMounted(async () => {
 .bdr-inner {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
   width: 100%;
+  min-height: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  overflow: hidden;
 }
 
 /* Toolbar */
 .toolbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1477,38 +1461,44 @@ onMounted(async () => {
   }
 }
 
-/* KPI */
+/* KPI：コンパクト（アイコン＋ラベル＋数値のみ） */
 .kpi-grid {
+  flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .kpi-card {
+  --kpi: #2563eb;
   position: relative;
   overflow: hidden;
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.98);
-  box-shadow: var(--shadow-soft);
-}
-
-.kpi-card__head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 18px -14px rgba(15, 23, 42, 0.2);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--kpi) 28%, #e2e8f0);
+  box-shadow: 0 4px 14px -8px color-mix(in srgb, var(--kpi) 45%, transparent);
 }
 
 .kpi-icon {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
+  flex-shrink: 0;
 }
 
 .kpi-card--total .kpi-icon {
@@ -1524,58 +1514,72 @@ onMounted(async () => {
   background: linear-gradient(135deg, #34d399, #059669);
 }
 
+.kpi-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .kpi-card__name {
-  font-size: 0.75rem;
-  font-weight: 750;
+  font-size: 10.5px;
+  font-weight: 700;
   color: #64748b;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .kpi-card__value {
-  font-size: 1.65rem;
-  font-weight: 850;
-  letter-spacing: -0.03em;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: #0f172a;
-  line-height: 1.1;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
-.kpi-card__hint {
-  margin: 6px 0 0;
-  font-size: 0.7rem;
-  color: #94a3b8;
+/* Filter */
+.filter-panel {
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 8px 12px 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #fffaf8 100%);
+  border: 1px solid #ffedd5;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 24px -20px rgba(225, 29, 72, 0.35);
 }
 
-/* Panels */
-.panel {
-  border-radius: var(--radius-lg);
-  padding: 12px 14px 14px;
-}
-
-.panel-elevated {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  box-shadow: var(--shadow-soft);
+.filter-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #f97316, #e11d48, #be123c);
 }
 
 .panel-head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .panel-head-left {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-width: 0;
 }
 
 .panel-accent {
   width: 4px;
-  height: 28px;
+  height: 22px;
   border-radius: 99px;
-  margin-top: 2px;
   flex-shrink: 0;
 }
 .panel-accent--amber {
@@ -1587,14 +1591,20 @@ onMounted(async () => {
 
 .panel-title {
   margin: 0;
-  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
   font-weight: 800;
   color: #0f172a;
 }
-.panel-sub {
-  margin: 2px 0 0;
-  font-size: 0.72rem;
-  color: #64748b;
+
+.panel-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a3412;
+  font-variant-numeric: tabular-nums;
 }
 
 .panel-head-actions {
@@ -1603,24 +1613,29 @@ onMounted(async () => {
 }
 
 .link-clear {
+  margin-left: auto;
   border: none;
   background: transparent;
-  color: #2563eb;
-  font-size: 0.75rem;
+  color: #ea580c;
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   padding: 4px 6px;
+  border-radius: 6px;
 }
 .link-clear:hover {
-  text-decoration: underline;
+  background: #fff7ed;
+  text-decoration: none;
 }
 
 /* Chips */
 .chip-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  padding-left: 6px;
 }
 
 .chip {
@@ -1677,35 +1692,95 @@ onMounted(async () => {
   align-self: center;
 }
 
-.filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-.filter-form :deep(.el-form-item__label) {
-  font-size: 0.7rem;
-  color: #64748b;
-  font-weight: 700;
-  padding-bottom: 2px;
-  line-height: 1.2;
+.filter-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 6px;
 }
 
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px 10px;
+.fi-date {
+  width: 260px;
 }
-.filter-item.span-2 {
-  grid-column: span 2;
+.fi-process {
+  width: 140px;
 }
+.fi-product {
+  width: 220px;
+  min-width: 160px;
+}
+.fi-keyword {
+  width: 220px;
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.filter-panel :deep(.el-input__wrapper),
+.filter-panel :deep(.el-select__wrapper) {
+  border-radius: 9px;
+  background-color: #f8fafc;
+  box-shadow: 0 0 0 1px #e2e8f0 inset, 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.filter-panel :deep(.el-input__wrapper:hover),
+.filter-panel :deep(.el-select__wrapper:hover) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #fdba74 inset, 0 4px 10px -4px rgba(249, 115, 22, 0.28);
+}
+.filter-panel :deep(.el-input__wrapper.is-focus),
+.filter-panel :deep(.el-select__wrapper.is-focused) {
+  background-color: #fff;
+  box-shadow: 0 0 0 1px #f97316 inset, 0 0 0 3px rgba(249, 115, 22, 0.14);
+}
+
 .ctrl-full {
   width: 100%;
 }
 
-/* Table */
+/* Table panel：残り高さを flex で埋める */
+.table-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 10px 12px 8px;
+  background: #fff;
+  border: 1px solid #ffedd5;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 32px -18px rgba(225, 29, 72, 0.28);
+  position: relative;
+}
+
+.table-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f97316, #e11d48, #be123c);
+  pointer-events: none;
+}
+
 .table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 10px;
   border: 1px solid rgba(226, 232, 240, 0.98);
   background: #fff;
+}
+
+.table-wrap :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-wrap :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 .bdr-table {
@@ -1853,9 +1928,11 @@ onMounted(async () => {
 }
 
 .pagination-bar {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 8px;
+  padding-top: 2px;
 }
 
 /* Edit form blocks (dialog content) */
@@ -2103,11 +2180,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 1100px) {
-  .filter-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .filter-item.span-2 {
-    grid-column: span 3;
+  .fi-date {
+    width: 240px;
   }
 }
 
@@ -2130,11 +2207,12 @@ onMounted(async () => {
   .toolbar-title {
     font-size: 1rem;
   }
-  .filter-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .filter-item.span-2 {
-    grid-column: span 2;
+  .fi-date,
+  .fi-process,
+  .fi-product,
+  .fi-keyword {
+    width: 100%;
+    min-width: 0;
   }
   .block-body--3col,
   .block-body--status {
@@ -2143,11 +2221,15 @@ onMounted(async () => {
 }
 
 @media (max-width: 480px) {
-  .filter-grid {
-    grid-template-columns: 1fr;
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
   }
-  .filter-item.span-2 {
-    grid-column: span 1;
+  .kpi-card {
+    padding: 7px 10px;
+  }
+  .kpi-card__value {
+    font-size: 16px;
   }
   .toolbar-actions .action-btn {
     flex: 1 1 auto;
@@ -2400,7 +2482,7 @@ onMounted(async () => {
   content: none;
 }
 
-/* ---------- KPIカード：色分け（動きなし） ---------- */
+/* ---------- KPIカード：色分け・コンパクト ---------- */
 .bdr-modern .kpi-card {
   --kpi: #2563eb;
 }
@@ -2430,7 +2512,7 @@ onMounted(async () => {
     0 4px 10px -4px color-mix(in srgb, var(--kpi) 60%, transparent);
 }
 .bdr-modern .kpi-card__value {
-  color: color-mix(in srgb, var(--kpi) 45%, #0f172a);
+  color: color-mix(in srgb, var(--kpi) 40%, #0f172a);
 }
 .bdr-modern .kpi-card--overdue.is-alert {
   border-color: rgba(244, 63, 94, 0.45);
@@ -2446,6 +2528,9 @@ onMounted(async () => {
 }
 .bdr-modern .panel-accent--blue {
   box-shadow: 0 0 8px rgba(37, 99, 235, 0.3);
+}
+.bdr-modern .table-panel .panel-title {
+  color: #7c2d12;
 }
 
 /* 区分チップ：淡い立体（区分別カラー）。hover は 1px 浮上のみ */
@@ -2510,6 +2595,10 @@ onMounted(async () => {
 /* ---------- 記録一覧テーブル ---------- */
 .bdr-modern .table-wrap {
   box-shadow: 0 12px 26px -22px rgba(190, 18, 60, 0.45);
+}
+.bdr-modern .bdr-table {
+  width: 100%;
+  height: 100% !important;
 }
 .bdr-modern .bdr-table :deep(th.el-table__cell) {
   color: #9a3412;

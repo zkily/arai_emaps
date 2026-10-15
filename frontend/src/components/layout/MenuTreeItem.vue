@@ -40,10 +40,14 @@
   </el-sub-menu>
 
   <el-menu-item v-else-if="node.path" :index="node.path" class="menu-tree-leaf">
-    <el-icon><component :is="node.icon || 'Menu'" /></el-icon>
+    <MenuOpenLink :path="node.path" class="menu-open-link--icon">
+      <el-icon><component :is="node.icon || 'Menu'" /></el-icon>
+    </MenuOpenLink>
     <template #title>
       <span class="menu-tree-leaf__row">
-        <span class="menu-tree-leaf__label" :title="label">{{ label }}</span>
+        <MenuOpenLink :path="node.path" class="menu-open-link--label">
+          <span class="menu-tree-leaf__label" :title="label">{{ label }}</span>
+        </MenuOpenLink>
         <button
           type="button"
           class="menu-tree-leaf__pin"
@@ -62,6 +66,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MenuTreeNode } from '@/composables/useMenuTree'
+import MenuOpenLink from '@/components/layout/MenuOpenLink.vue'
 import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
 

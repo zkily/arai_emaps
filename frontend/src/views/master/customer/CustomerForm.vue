@@ -1,8 +1,19 @@
 <template>
-  <el-dialog v-model="visible" width="560px" :before-close="handleClose" destroy-on-close :close-on-click-modal="false" class="customer-dialog">
+  <el-dialog
+    v-model="visible"
+    width="560px"
+    :before-close="handleClose"
+    destroy-on-close
+    align-center
+    :show-close="false"
+    :close-on-click-modal="false"
+    class="customer-dialog pb-std"
+  >
     <template #header>
-      <div class="dialog-header">
-        <div class="header-icon">👤</div>
+      <div class="dialog-header" :class="isEdit ? 'dialog-header--edit' : 'dialog-header--new'">
+        <div class="header-icon">
+          <el-icon :size="20"><User /></el-icon>
+        </div>
         <div class="header-text">
           <h3 class="header-title">{{ t('master.customer.dialogTitle', { mode: isEdit ? t('master.common.formEdit') : t('master.common.formRegister') }) }}</h3>
           <p class="header-subtitle">{{ t('master.customer.dialogSubtitle') }}</p>
@@ -53,8 +64,12 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose" :disabled="loading">{{ t('master.common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitForm" :loading="loading" class="submit-btn">💾 {{ t('master.common.save') }}</el-button>
+        <el-button class="dlg-btn dlg-btn--cancel" @click="handleClose" :disabled="loading">
+          {{ t('master.common.cancel') }}
+        </el-button>
+        <el-button class="dlg-btn dlg-btn--save" :loading="loading" @click="submitForm">
+          {{ t('master.common.save') }}
+        </el-button>
       </div>
     </template>
   </el-dialog>
@@ -160,30 +175,131 @@ function handleClose() {
 </script>
 
 <style scoped>
-.customer-dialog :deep(.el-dialog) { border-radius: 14px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,0.12); }
-.customer-dialog :deep(.el-dialog__header) { padding: 0; margin: 0; }
-.customer-dialog :deep(.el-dialog__body) { padding: 0; }
-.customer-dialog :deep(.el-dialog__footer) { padding: 0; }
+.customer-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+}
+.customer-dialog :deep(.el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+.customer-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+.customer-dialog :deep(.el-dialog__footer) {
+  padding: 0;
+}
 
-.dialog-header { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
-.header-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
-.header-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #fff; }
-.header-subtitle { margin: 2px 0 0; font-size: 0.75rem; color: rgba(255,255,255,0.8); }
+.dialog-header {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(125deg, #831843 0%, #9d174d 40%, #db2777 100%);
+}
+.dialog-header--edit {
+  background: linear-gradient(125deg, #9d174d 0%, #be185d 45%, #db2777 100%);
+}
+.dialog-header--new {
+  background: linear-gradient(125deg, #047857 0%, #059669 45%, #10b981 100%);
+}
+.header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1));
+}
+.header-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+.header-subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.86);
+}
 
-.form-container { padding: 14px 16px; background: #fafbfc; max-height: 65vh; overflow-y: auto; }
-.compact-form :deep(.el-form-item) { margin-bottom: 10px; }
-.compact-form :deep(.el-form-item__label) { font-size: 11px; font-weight: 600; color: #374151; padding-bottom: 2px; }
-.full-width { width: 100%; }
+.form-container {
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #fdf2f8 0%, #f8fafc 100%);
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+.compact-form :deep(.el-form-item__label) {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  padding-bottom: 2px;
+}
+.full-width {
+  width: 100%;
+}
 
-.form-section { background: #fff; border-radius: 10px; padding: 12px 14px; border: 1px solid #e5e7eb; margin-bottom: 10px; }
-.section-header { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #0ea5e9; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+.form-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid #fbcfe8;
+  margin-bottom: 10px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #be185d;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #fce7f3;
+}
 
-.dialog-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 10px 16px; background: #fff; border-top: 1px solid #f0f0f0; }
-.submit-btn { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); border: none; border-radius: 8px; font-weight: 600; }
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border-top: 1px solid #fce7f3;
+}
+.dlg-btn {
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 7px 16px;
+  height: auto;
+}
+.dlg-btn--cancel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+.dlg-btn--save {
+  background: linear-gradient(135deg, #db2777, #9d174d);
+  border: none;
+  color: #fff;
+}
 
 @media (max-width: 620px) {
-  .customer-dialog :deep(.el-dialog) { width: 95vw !important; }
-  .dialog-header { padding: 10px 14px; }
-  .form-container { padding: 12px; }
+  .customer-dialog :deep(.el-dialog) {
+    width: 95vw !important;
+  }
+  .dialog-header {
+    padding: 10px 14px;
+  }
+  .form-container {
+    padding: 12px;
+  }
 }
 </style>

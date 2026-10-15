@@ -122,8 +122,8 @@
         stripe
         border
         size="small"
+        height="100%"
         class="data-table"
-        :max-height="tableMaxHeight"
         :default-sort="{ prop: 'date', order: 'ascending' }"
         :row-class-name="dailyRowClassName"
       >
@@ -401,7 +401,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -643,14 +643,6 @@ function exportCsv() {
   a.click()
   URL.revokeObjectURL(url)
   ElMessage.success('CSVをダウンロードしました')
-}
-
-const tableMaxHeight = ref(480)
-function updateTableMaxHeight() {
-  if (!guardSalesOperation(canEdit)) return
-
-  /* ヘッダー・KPI・余白を差し引き、一覧を縦に最大化 */
-  tableMaxHeight.value = Math.max(240, window.innerHeight - 296)
 }
 
 // ========== ページング ==========
@@ -1091,15 +1083,9 @@ async function handleDelete(row: OrderDailyItem) {
 
 // ========== マウント ==========
 onMounted(() => {
-  updateTableMaxHeight()
-  window.addEventListener('resize', updateTableMaxHeight)
   applyRouteQuery()
   loadOptions()
   loadList()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateTableMaxHeight)
 })
 </script>
 
@@ -1108,11 +1094,21 @@ onUnmounted(() => {
    Modern Glassmorphism UI — Daily Order List
    ====================================================== */
 
-/* --- Base --- */
+/* --- Base：ウィンドウ高さに追従しテーブルが残りを埋める --- */
 .order-daily-list {
-  padding: 8px 10px 10px;
-  min-height: calc(100vh - 20px);
+  /* アプリヘッダー(48) + タブ(36) */
+  --od-app-chrome: 84px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: calc(100vh - var(--od-app-chrome));
+  height: calc(100dvh - var(--od-app-chrome));
+  max-height: calc(100vh - var(--od-app-chrome));
+  max-height: calc(100dvh - var(--od-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px 10px;
   background-color: #f1f4fb;
   background-image:
     radial-gradient(ellipse 120% 80% at 0% -20%, rgba(99, 102, 241, 0.14), transparent 55%),
@@ -1122,6 +1118,7 @@ onUnmounted(() => {
 
 /* --- Hero: タイトル + 操作 + フィルタ一体 --- */
 .page-hero {
+  flex-shrink: 0;
   background: linear-gradient(145deg, #4f46e5 0%, #6366f1 38%, #7c3aed 72%, #6d28d9 100%);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -1203,11 +1200,13 @@ onUnmounted(() => {
 }
 
 .filter-inline {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 0;
+  margin-bottom: 8px;
   padding: 6px 8px;
   background: rgba(255, 255, 255, 0.92);
   border-radius: 12px;
@@ -1287,6 +1286,7 @@ onUnmounted(() => {
 
 /* --- KPI --- */
 .kpi-strip {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
@@ -1402,8 +1402,12 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* --- Table --- */
+/* --- Table：残り高さを flex で埋める --- */
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px) saturate(160%);
   -webkit-backdrop-filter: blur(12px) saturate(160%);
@@ -1413,9 +1417,11 @@ onUnmounted(() => {
     0 4px 24px rgba(15, 23, 42, 0.06),
     0 1px 3px rgba(15, 23, 42, 0.04);
   padding: 0 8px 8px;
+  overflow: hidden;
 }
 
 .table-section-head {
+  flex-shrink: 0;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1440,9 +1446,21 @@ onUnmounted(() => {
 }
 
 .data-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
+  overflow: hidden;
   --el-table-border-color: #e8ecf1;
   --el-table-header-bg-color: #f8fafc;
+}
+
+.table-section :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.table-section :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 .data-table :deep(.el-table__header-wrapper th) {
@@ -1497,6 +1515,7 @@ onUnmounted(() => {
 }
 
 .pagination-container {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;

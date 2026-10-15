@@ -75,10 +75,14 @@
     </div>
 
     <el-card class="table-card" shadow="never">
+      <div class="table-card__body">
       <el-table
         v-loading="loading"
         :data="tableData"
         stripe
+        border
+        size="small"
+        height="100%"
         highlight-current-row
         class="modern-table"
         :header-cell-style="{ background: '#f8fafc', fontWeight: '600', color: '#334155' }"
@@ -127,19 +131,33 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+      </div>
 
-    <div class="pagination-section">
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSearch"
-        @current-change="fetchList"
-      />
-    </div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[20, 30, 50, 100]"
+          :total="pagination.total"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handleSearch"
+          @current-change="fetchList"
+        />
+      </div>
+    </el-card>
 
     <el-dialog
       v-model="dialogVisible"
@@ -309,6 +327,14 @@ const formRules: FormRules = {
 
 const discontinuedCount = computed(() => tableData.value.filter((r) => r.is_discontinued).length)
 
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
+
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
   const item = (e.target as HTMLElement | null)?.closest<HTMLElement>('.stat-card')
@@ -477,15 +503,27 @@ onMounted(async () => {
 
 <style scoped>
 .supply-item-master {
+  --sui-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--sui-app-chrome));
+  height: calc(100dvh - var(--sui-app-chrome));
+  max-height: calc(100vh - var(--sui-app-chrome));
+  max-height: calc(100dvh - var(--sui-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
-  min-height: 100vh;
 }
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #64748b 0%, #475569 100%);
   border-radius: 14px;
   padding: 12px 18px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   box-shadow: 0 6px 24px rgba(71, 85, 105, 0.28);
 }
 .header-content {
@@ -535,6 +573,7 @@ onMounted(async () => {
   margin-top: 3px;
 }
 .toolbar-section {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -542,7 +581,7 @@ onMounted(async () => {
   background: #fff;
   border-radius: 12px;
   padding: 10px 16px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   border: 1px solid #e2e8f0;
 }
 .toolbar-filters {
@@ -565,13 +604,119 @@ onMounted(async () => {
   border: none !important;
 }
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
-  margin-bottom: 8px;
-  overflow: hidden;
+  margin-bottom: 0;
 }
 .table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+}
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+.modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+}
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f0fdfa 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label {
+  color: #0e7490;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #155e75;
+}
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #16a34a;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 .code-cell {
   font-family: Consolas, Monaco, monospace;
@@ -585,12 +730,6 @@ onMounted(async () => {
 .muted {
   color: #94a3b8;
 }
-.pagination-section {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 2px 12px;
-}
-
 .item-form-dialog :deep(.el-dialog) {
   border-radius: 20px;
   overflow: hidden;
@@ -1116,19 +1255,16 @@ onMounted(async () => {
 }
 
 /* ---------- ページネーション ---------- */
-.sui-modern .pagination-section {
-  padding: 8px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--hx-line);
+.sui-modern .pagination-bar {
+  border-top-color: var(--hx-line);
   background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
-  box-shadow: 0 14px 28px -24px color-mix(in srgb, var(--hx-2) 55%, transparent);
 }
 
-.sui-modern .pagination-section :deep(.el-pager li) {
+.sui-modern .modern-pagination :deep(.el-pager li) {
   border-radius: 7px;
 }
 
-.sui-modern .pagination-section :deep(.el-pager li.is-active) {
+.sui-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   background: linear-gradient(135deg, var(--hx-4) 0%, var(--hx-3) 55%, var(--hx-2) 100%);
   transform: translateY(-1px);
@@ -1137,7 +1273,7 @@ onMounted(async () => {
     0 6px 12px -6px color-mix(in srgb, var(--hx-2) 70%, transparent);
 }
 
-.sui-modern .pagination-section :deep(.el-pager li:not(.is-active):hover) {
+.sui-modern .modern-pagination :deep(.el-pager li:not(.is-active):hover) {
   color: var(--hx-accent);
 }
 

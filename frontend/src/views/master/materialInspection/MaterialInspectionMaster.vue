@@ -48,12 +48,16 @@
 
     <!-- 数据表格 -->
     <el-card class="table-card" shadow="never">
+      <div class="table-card__body">
       <el-table
         :data="tableData || []"
         v-loading="loading"
         stripe
+        border
+        size="small"
         highlight-current-row
         class="modern-table"
+        height="100%"
         :style="{ width: '100%' }"
         :header-cell-style="{ background: '#f8fafc', fontWeight: '600', color: '#334155' }"
         @row-click="showDetail"
@@ -99,19 +103,33 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+      </div>
 
-    <div class="pagination-section">
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="totalCount || 0"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handlePageSizeChange"
-        @current-change="handlePageChange"
-      />
-    </div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ (totalCount || 0).toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[20, 30, 50, 100]"
+          :total="totalCount || 0"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
+    </el-card>
 
     <el-dialog
       v-model="dialogVisible"
@@ -234,6 +252,14 @@ const filteredCount = computed(() => tableData.value?.length || 0)
 const totalPages = computed(() =>
   Math.max(1, Math.ceil((totalCount.value || 0) / (pagination.value.pageSize || 1))),
 )
+
+const pageRangeText = computed(() => {
+  const total = totalCount.value || 0
+  if (!total) return '0'
+  const start = pagination.value.pageSize * (pagination.value.page - 1) + 1
+  const end = Math.min(pagination.value.pageSize * pagination.value.page, total)
+  return `${start}–${end}`
+})
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
@@ -385,12 +411,24 @@ onMounted(() => {
 
 <style scoped>
 .inspection-master-container {
+  --imm-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: calc(100vh - var(--imm-app-chrome));
+  height: calc(100dvh - var(--imm-app-chrome));
+  max-height: calc(100vh - var(--imm-app-chrome));
+  max-height: calc(100dvh - var(--imm-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
-  min-height: 100vh;
 }
 
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #64748b 0%, #475569 100%);
   border-radius: 14px;
   padding: 12px 18px;
@@ -467,13 +505,14 @@ onMounted(() => {
 }
 
 .toolbar-section {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: white;
   border-radius: 12px;
-  padding: 10px 16px;
-  margin-bottom: 8px;
+  padding: 8px 14px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
   border: 1px solid #e2e8f0;
 }
@@ -524,15 +563,116 @@ onMounted(() => {
 }
 
 .table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 12px;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
-  margin-bottom: 8px;
-  overflow: hidden;
+  margin-bottom: 0;
 }
 
 .table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #fff7ed 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--range .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--range .pagination-summary__value { color: #155e75; }
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #ea580c;
+}
+.modern-pagination :deep(.el-pagination__sizes) { margin-right: 4px; }
+.modern-pagination :deep(.el-select) { width: 96px; }
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .code-cell {
@@ -601,31 +741,6 @@ onMounted(() => {
   padding: 4px 8px;
   font-size: 11px;
   border-radius: 6px;
-}
-
-.pagination-section {
-  background: white;
-  border-radius: 12px;
-  padding: 10px 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
-  text-align: center;
-}
-
-:deep(.el-pagination) {
-  justify-content: center;
-}
-
-:deep(.el-pager li) {
-  border-radius: 8px;
-  font-size: 12px;
-  min-width: 30px;
-  height: 30px;
-  line-height: 30px;
-}
-
-:deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
 }
 
 .detail-content {
@@ -736,8 +851,7 @@ onMounted(() => {
 
 .page-header,
 .toolbar-section,
-.table-card,
-.pagination-section {
+.table-card {
   animation: fadeIn 0.4s ease-out;
 }
 
@@ -899,8 +1013,7 @@ onMounted(() => {
 
 /* ---------- ツールバー ---------- */
 .imm-modern .toolbar-section,
-.imm-modern .table-card,
-.imm-modern .pagination-section {
+.imm-modern .table-card {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
@@ -1056,11 +1169,12 @@ onMounted(() => {
 }
 
 /* ---------- ページネーション ---------- */
-.imm-modern .pagination-section {
+.imm-modern .pagination-bar {
+  border-top-color: #fed7aa;
   background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
 }
 
-.imm-modern .pagination-section :deep(.el-pager li.is-active) {
+.imm-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   background: linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #c2410c 100%);
   transform: translateY(-1px);
@@ -1069,7 +1183,7 @@ onMounted(() => {
     0 6px 12px -6px rgba(234, 88, 12, 0.7);
 }
 
-.imm-modern .pagination-section :deep(.el-pager li:not(.is-active):hover) {
+.imm-modern .modern-pagination :deep(.el-pager li:not(.is-active):hover) {
   color: #ea580c;
 }
 

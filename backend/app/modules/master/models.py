@@ -275,7 +275,7 @@ class Machine(Base):
     available_from = Column(Time, default=None)
     available_to = Column(Time, default=None)
     calendar_id = Column(Integer)
-    efficiency = Column(Numeric(5, 2), default=100.00)
+    availability_rate = Column(Numeric(4, 1), default=100.0)  # 可動率（%）
     available_qty = Column(Integer, default=0)
     note = Column(Text)
     created_at = Column(DateTime, default=func.now())

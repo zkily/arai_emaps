@@ -156,8 +156,7 @@
               :data="summaryList"
               class="modern-table summary-table"
               stripe
-              :height="isFillLayout ? '100%' : undefined"
-              :max-height="isFillLayout ? undefined : SUMMARY_TABLE_MAX_HEIGHT"
+              height="100%"
             >
               <el-table-column label="年月" prop="ym" width="96" align="center">
                 <template #header>
@@ -240,7 +239,7 @@
               :data="filteredOrderList"
               class="modern-table details-table"
               stripe
-              :height="isFillLayout ? '100%' : DETAILS_TABLE_HEIGHT"
+              height="100%"
             >
               <el-table-column label="出荷日" prop="date" width="108" align="center">
                 <template #header>
@@ -361,7 +360,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Calendar,
@@ -408,19 +407,6 @@ const destinationOptions = ref<DestinationOption[]>([])
 const orderList = ref<DestinationOrderHistoryItem[]>([])
 
 const isFetching = ref(false)
-
-/** 縦積みレイアウト時のテーブル高さ（表頭固定・表体は縦スクロール） */
-const DETAILS_TABLE_HEIGHT = 480
-const SUMMARY_TABLE_MAX_HEIGHT = 320
-
-/** CSS の全画面レイアウト用メディアクエリと同じ条件にすること */
-const FILL_LAYOUT_QUERY = '(min-width: 1280px) and (min-height: 640px)'
-const isFillLayout = ref(false)
-let fillLayoutMql: MediaQueryList | null = null
-
-function syncFillLayout() {
-  isFillLayout.value = !!fillLayoutMql?.matches
-}
 
 const filteredOrderList = computed(() => {
   // 界面与打印逻辑保持一致：只显示“数量 > 0”的记录
@@ -820,19 +806,11 @@ async function handlePrint() {
 }
 
 onMounted(async () => {
-  fillLayoutMql = window.matchMedia(FILL_LAYOUT_QUERY)
-  syncFillLayout()
-  fillLayoutMql.addEventListener('change', syncFillLayout)
   try {
     await loadOptions()
   } catch {
     destinationOptions.value = []
   }
-})
-
-onBeforeUnmount(() => {
-  fillLayoutMql?.removeEventListener('change', syncFillLayout)
-  fillLayoutMql = null
 })
 </script>
 
@@ -1363,12 +1341,20 @@ onBeforeUnmount(() => {
  * 页面美化：現代UI・色分け・レスポンシブ全画面（納入先別受注履歴 / 受注 = indigo→violet）
  * ============================================================ */
 
-/* ---------- ページ骨格：コンテンツ領域いっぱいに広げる ---------- */
+/* ---------- ページ骨格：ウィンドウ高さに追従しテーブルが残りを埋める ---------- */
 .order-destination-history.odh-modern {
+  /* アプリヘッダー(48) + タブ(36) */
+  --odh-app-chrome: 84px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  width: 100%;
+  height: calc(100vh - var(--odh-app-chrome));
+  height: calc(100dvh - var(--odh-app-chrome));
+  max-height: calc(100vh - var(--odh-app-chrome));
+  max-height: calc(100dvh - var(--odh-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   padding: 8px;
   background:
     radial-gradient(1000px 360px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
@@ -1383,6 +1369,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   margin: 0;
   gap: 8px;
+  overflow: hidden;
 }
 
 /* ---------- ヒーロー ---------- */
@@ -1832,19 +1819,35 @@ onBeforeUnmount(() => {
   color: #047857;
 }
 
-/* ---------- テーブル ---------- */
+/* ---------- テーブル：残り高さを flex で埋める ---------- */
 .odh-modern .modern-table-container {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 10px;
   border: 1px solid #eef2f7;
   background: #fff;
 }
 
 .odh-modern .modern-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+  overflow: hidden;
   --el-table-border-color: #eef2f7;
   --el-table-row-hover-bg-color: #f5f7ff;
   color: #1e293b;
+}
+
+.odh-modern .modern-table-container :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.odh-modern .modern-table-container :deep(.el-table__inner-wrapper) {
+  height: 100%;
 }
 
 .odh-modern .modern-table :deep(.el-table__header-wrapper th.el-table__cell) {
@@ -1988,24 +1991,11 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 0 0 1px #e2e8f0;
 }
 
-/* ---------- 全画面レイアウト：高さもコンテンツ領域にそろえ、表の中だけスクロール ----------
- * 条件はスクリプト側 FILL_LAYOUT_QUERY と同じにすること */
-@media (min-width: 1280px) and (min-height: 640px) {
-  .order-destination-history.odh-modern {
-    height: 100%;
-    overflow: hidden;
-  }
-}
-
-/* ---------- 縦積みレイアウト（幅または高さが足りない場合はページ全体をスクロール） ---------- */
-@media (max-width: 1279.98px), (max-height: 639.98px) {
+/* ---------- 縦積み：残り高さを月別集計と明細で分け合う ---------- */
+@media (max-width: 1279.98px) {
   .odh-modern .content-grid {
     grid-template-columns: minmax(0, 1fr);
-    flex: 0 0 auto;
-  }
-
-  .odh-modern .modern-table-container {
-    flex: 0 0 auto;
+    grid-template-rows: minmax(140px, 32%) minmax(0, 1fr);
   }
 }
 

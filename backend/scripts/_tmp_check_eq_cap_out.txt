@@ -1,0 +1,23 @@
+MENUS
+  ERP_PRODUCTION_EQUIPMENT_CAPACITY 生産設備能力
+  ERP_PRODUCTION_EQ_CAP_CUTTING 切断設備
+  ERP_PRODUCTION_EQ_CAP_CHAMFERING 面取設備
+  ERP_PRODUCTION_EQ_CAP_FORMING 成型設備
+  ERP_PRODUCTION_EQ_CAP_WELDING 溶接設備
+MACHINES {'cutting': 6, 'chamfering': 10, 'forming': 26, 'welding': 10}
+cutting
+  CUT-001 / 切断01 / 切断
+  CUT-002 / 切断02 / 切断
+  CUT-003 / 切断03 / 切断
+chamfering
+  CH-001 / 面取01 / 面取
+  CH-002 / 面取02 / 面取
+  CH-003 / 面取03 / 面取
+forming
+  FM-001 / 成型01 / 成型
+  FM-002 / 成型02 / 成型
+  FM-003 / 成型03 / 成型
+welding
+  WL-001 / 溶接01 / 溶接
+  WL-002 / 溶接02 / 溶接
+  WL-003 / 溶接03 / 溶接

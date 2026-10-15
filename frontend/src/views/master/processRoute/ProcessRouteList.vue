@@ -55,10 +55,13 @@
 
       <!-- Data Table -->
       <div class="table-section">
+        <div class="table-card__body">
         <el-table 
           :data="routeList" 
           border 
           stripe 
+          size="small"
+          height="100%"
           highlight-current-row 
           v-loading="loading" 
           class="modern-table"
@@ -105,26 +108,32 @@
             </template>
           </el-table-column>
         </el-table>
-      </div>
-
-      <!-- Footer Info -->
-      <div class="footer-section">
-        <div class="result-info">
-          <el-icon>📊</el-icon>
-          <span>{{ t('master.processRoute.displayCountShort', { n: routeList.length }) }}</span>
         </div>
-        <el-pagination 
-          v-if="pagination.total > pagination.pageSize"
-          v-model:current-page="pagination.currentPage" 
-          v-model:page-size="pagination.pageSize"
-          :page-sizes="[20, 50, 100, 200]" 
-          :total="pagination.total" 
-          layout="sizes, prev, pager, next"
-          @size-change="fetchList" 
-          @current-change="fetchList"
-          class="compact-pagination"
-          size="small"
-        />
+
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--range">
+              <span class="pagination-summary__label">表示</span>
+              <b class="pagination-summary__value">{{ pageRangeText }}</b>
+            </span>
+          </div>
+          <el-pagination
+            v-model:current-page="pagination.currentPage"
+            v-model:page-size="pagination.pageSize"
+            :page-sizes="[20, 30, 50, 100]"
+            :total="pagination.total"
+            layout="sizes, prev, pager, next, jumper"
+            small
+            class="modern-pagination"
+            @size-change="handlePageSizeChange"
+            @current-change="fetchList"
+          />
+        </div>
       </div>
 
       <RouteEditDialog v-model:visible="showDialog" :mode="dialogMode" :initial-data="editData" @saved="fetchList" />
@@ -170,6 +179,19 @@ const editData = ref<RouteItem | null>(null)
 
 const activeRouteCount = computed(() => routeList.value.filter((r) => r.is_active !== false).length)
 const defaultRouteCount = computed(() => routeList.value.filter((r) => r.is_default).length)
+
+const pageRangeText = computed(() => {
+  const total = pagination.value.total
+  if (!total) return '0'
+  const start = pagination.value.pageSize * (pagination.value.currentPage - 1) + 1
+  const end = Math.min(pagination.value.pageSize * pagination.value.currentPage, total)
+  return `${start}–${end}`
+})
+
+function handlePageSizeChange() {
+  pagination.value.currentPage = 1
+  fetchList()
+}
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
@@ -247,17 +269,29 @@ onMounted(fetchList)
 
 <style scoped>
 .route-master-container {
-  padding: 12px 16px;
+  --rtm-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--rtm-app-chrome));
+  height: calc(100dvh - var(--rtm-app-chrome));
+  max-height: calc(100vh - var(--rtm-app-chrome));
+  max-height: calc(100dvh - var(--rtm-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
-  min-height: 100vh;
 }
 
 /* Header */
 .page-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
   padding: 14px 20px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
 }
 
@@ -340,10 +374,11 @@ onMounted(fetchList)
 
 /* Search Section */
 .search-section {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 10px;
   padding: 10px 16px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
@@ -389,15 +424,115 @@ onMounted(fetchList)
 
 /* Table Section */
 .table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  margin-bottom: 12px;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .modern-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #faf5ff;
+  border-color: #e9d5ff;
+}
+.pagination-summary__item--range .pagination-summary__label {
+  color: #7e22ce;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #6b21a8;
+}
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #9333ea;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .code-cell {
@@ -443,34 +578,6 @@ onMounted(fetchList)
   border-radius: 6px;
 }
 
-/* Footer */
-.footer-section {
-  background: #fff;
-  border-radius: 10px;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-}
-
-.result-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #64748b;
-  font-size: 0.85rem;
-}
-
-.result-info strong {
-  color: #667eea;
-  font-weight: 700;
-}
-
-.compact-pagination {
-  --el-pagination-button-height: 28px;
-}
-
 /* Responsive */
 @media (max-width: 1024px) {
   .header-content {
@@ -509,9 +616,13 @@ onMounted(fetchList)
   .search-btn {
     width: 100%;
   }
-  .footer-section {
+  .pagination-bar {
     flex-direction: column;
-    gap: 8px;
+    align-items: stretch;
+  }
+  .modern-pagination {
+    margin-left: 0;
+    justify-content: flex-end;
   }
   .action-buttons {
     flex-direction: column;
@@ -772,8 +883,7 @@ onMounted(fetchList)
 
 /* ---------- 検索バー ---------- */
 .rtm-modern .search-section,
-.rtm-modern .table-section,
-.rtm-modern .footer-section {
+.rtm-modern .table-section {
   position: relative;
   overflow: hidden;
   border-radius: 14px;
@@ -933,21 +1043,13 @@ onMounted(fetchList)
   box-shadow: none;
 }
 
-/* ---------- フッター ---------- */
-.rtm-modern .footer-section {
+/* ---------- ページネーション ---------- */
+.rtm-modern .pagination-bar {
+  border-top-color: var(--hx-line);
   background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
 }
 
-.rtm-modern .result-info {
-  padding: 2px 10px;
-  color: var(--hx-deep);
-  font-weight: 700;
-  border-radius: 999px;
-  background: var(--hx-soft2);
-  box-shadow: inset 0 0 0 1px var(--hx-line);
-}
-
-.rtm-modern .compact-pagination :deep(.el-pager li.is-active) {
+.rtm-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   border-radius: 7px;
   background: linear-gradient(135deg, #c084fc 0%, #9333ea 55%, #7e22ce 100%);

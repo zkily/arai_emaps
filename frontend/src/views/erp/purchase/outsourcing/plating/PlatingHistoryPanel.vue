@@ -1,134 +1,133 @@
 <template>
   <div class="history-panel">
-    <el-table
-      v-if="view === 'list'"
-      :key="`list-${kind}`"
-      v-loading="loading"
-      :data="rows"
-      border
-      stripe
-      show-summary
-      :summary-method="listSummary"
-      height="calc(100vh - 300px)"
-      size="small"
-    >
-      <el-table-column
-        prop="order_date"
-        :label="kind === 'order' ? '注文日' : '受入日'"
-        width="136"
-        align="center"
-        fixed="left"
+    <div class="table-card__body">
+      <el-table
+        v-if="view === 'list'"
+        :key="`list-${kind}`"
+        v-loading="loading"
+        :data="rows"
+        border
+        stripe
+        height="100%"
+        size="small"
       >
-        <template #default="{ row }">
-          <span class="date-cell" :class="dayClass(row.order_date)">
-            {{ row.order_date }}<small>({{ weekdayLabel(row.order_date) }})</small>
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="supplier_name" label="外注先" width="160" show-overflow-tooltip />
-      <el-table-column prop="product_cd" label="製品CD" width="86" align="center" class-name="col-code" />
-      <el-table-column prop="product_name" label="製品名" min-width="180" show-overflow-tooltip />
-      <template v-if="kind === 'order'">
-        <el-table-column prop="order_qty" label="注文数" width="100" align="right" class-name="col-order">
-          <template #default="{ row }"><span class="qty qty--order">{{ formatNum(row.order_qty) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="unit_price" label="単価" width="80" align="right" class-name="col-order">
-          <template #default="{ row }"><span class="num-muted">{{ formatNum(row.unit_price) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="order_amount" label="金額" width="116" align="right" class-name="col-order">
-          <template #default="{ row }"><span class="num-strong">{{ formatNum(row.order_amount) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="delivery_date" label="納期" width="104" align="center" class-name="col-order" />
-        <el-table-column label="注文番号" width="176" align="center" class-name="col-order">
+        <el-table-column
+          prop="order_date"
+          :label="kind === 'order' ? '注文日' : '受入日'"
+          width="136"
+          align="center"
+          fixed="left"
+        >
           <template #default="{ row }">
-            <span v-if="row.order_no" class="no-chip no-chip--order">{{ row.order_no }}</span>
-          </template>
-        </el-table-column>
-      </template>
-      <template v-else>
-        <el-table-column prop="receiving_qty" label="受入数" width="100" align="right" class-name="col-recv">
-          <template #default="{ row }"><span class="qty qty--recv">{{ blankIfZero(row.receiving_qty) }}</span></template>
-        </el-table-column>
-        <el-table-column label="受入番号" width="186" align="center" class-name="col-recv">
-          <template #default="{ row }">
-            <span v-if="row.receiving_no" class="no-chip no-chip--recv">{{ row.receiving_no }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="defect_qty" label="不良数" width="100" align="right" class-name="col-defect">
-          <template #default="{ row }"><span class="qty qty--defect">{{ blankIfZero(row.defect_qty) }}</span></template>
-        </el-table-column>
-        <el-table-column label="不良番号" width="186" align="center" class-name="col-defect">
-          <template #default="{ row }">
-            <span v-if="row.disposal_no" class="no-chip no-chip--defect">{{ row.disposal_no }}</span>
-          </template>
-        </el-table-column>
-      </template>
-      <template #empty>
-        <span>{{ emptyText }}</span>
-      </template>
-    </el-table>
-
-    <el-table
-      v-else
-      :key="`pivot-${kind}-${dates.length}`"
-      v-loading="loading"
-      :data="pivotRows"
-      border
-      show-summary
-      :summary-method="pivotSummary"
-      height="calc(100vh - 324px)"
-      size="small"
-      class="pivot-table"
-      :class="`pivot-table--${kind}`"
-      :header-cell-class-name="pivotHeaderClass"
-      :cell-class-name="pivotCellClass"
-      :cell-style="pivotCellStyle"
-    >
-      <el-table-column prop="supplier_name" label="外注先" width="160" fixed="left" show-overflow-tooltip />
-      <el-table-column prop="product_cd" label="製品CD" width="86" fixed="left" align="center" class-name="col-code" />
-      <el-table-column prop="product_name" label="製品名" width="160" fixed="left" show-overflow-tooltip />
-      <el-table-column
-        v-for="d in dates"
-        :key="d"
-        :prop="d"
-        :column-key="d"
-        :width="kind === 'order' ? 72 : 100"
-        align="right"
-      >
-        <template #header>
-          <div class="day-head">
-            <span>{{ dayLabel(d) }}</span>
-            <span class="day-head__wd">{{ weekdayLabel(d) }}</span>
-          </div>
-        </template>
-        <template #default="{ row }">
-          <template v-if="row.cells[d]">
-            <span v-if="row.cells[d].qty">{{ formatNum(row.cells[d].qty) }}</span>
-            <span v-if="row.cells[d].defect" class="defect-num defect-num--sub">
-              ({{ formatNum(row.cells[d].defect) }})
+            <span class="date-cell" :class="dayClass(row.order_date)">
+              {{ row.order_date }}<small>({{ weekdayLabel(row.order_date) }})</small>
             </span>
           </template>
+        </el-table-column>
+        <el-table-column prop="supplier_name" label="外注先" width="160" show-overflow-tooltip />
+        <el-table-column prop="product_cd" label="製品CD" width="86" align="center" class-name="col-code" />
+        <el-table-column prop="product_name" label="製品名" min-width="180" show-overflow-tooltip />
+        <template v-if="kind === 'order'">
+          <el-table-column prop="order_qty" label="注文数" width="100" align="right" class-name="col-order">
+            <template #default="{ row }"><span class="qty qty--order">{{ formatNum(row.order_qty) }}</span></template>
+          </el-table-column>
+          <el-table-column prop="unit_price" label="単価" width="80" align="right" class-name="col-order">
+            <template #default="{ row }"><span class="num-muted">{{ formatNum(row.unit_price) }}</span></template>
+          </el-table-column>
+          <el-table-column prop="order_amount" label="金額" width="116" align="right" class-name="col-order">
+            <template #default="{ row }"><span class="num-strong">{{ formatNum(row.order_amount) }}</span></template>
+          </el-table-column>
+          <el-table-column prop="delivery_date" label="納期" width="104" align="center" class-name="col-order" />
+          <el-table-column label="注文番号" width="176" align="center" class-name="col-order">
+            <template #default="{ row }">
+              <span v-if="row.order_no" class="no-chip no-chip--order">{{ row.order_no }}</span>
+            </template>
+          </el-table-column>
         </template>
-      </el-table-column>
-      <el-table-column
-        label="合計"
-        :width="kind === 'order' ? 100 : 128"
-        align="right"
-        fixed="right"
-        column-key="__total"
-        :class-name="kind === 'order' ? 'col-order' : 'col-recv'"
+        <template v-else>
+          <el-table-column prop="receiving_qty" label="受入数" width="100" align="right" class-name="col-recv">
+            <template #default="{ row }"><span class="qty qty--recv">{{ blankIfZero(row.receiving_qty) }}</span></template>
+          </el-table-column>
+          <el-table-column label="受入番号" width="186" align="center" class-name="col-recv">
+            <template #default="{ row }">
+              <span v-if="row.receiving_no" class="no-chip no-chip--recv">{{ row.receiving_no }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="defect_qty" label="不良数" width="100" align="right" class-name="col-defect">
+            <template #default="{ row }"><span class="qty qty--defect">{{ blankIfZero(row.defect_qty) }}</span></template>
+          </el-table-column>
+          <el-table-column label="不良番号" width="186" align="center" class-name="col-defect">
+            <template #default="{ row }">
+              <span v-if="row.disposal_no" class="no-chip no-chip--defect">{{ row.disposal_no }}</span>
+            </template>
+          </el-table-column>
+        </template>
+        <template #empty>
+          <span>{{ emptyText }}</span>
+        </template>
+      </el-table>
+
+      <el-table
+        v-else
+        :key="`pivot-${kind}-${dates.length}`"
+        v-loading="loading"
+        :data="pivotRows"
+        border
+        height="100%"
+        size="small"
+        class="pivot-table"
+        :class="`pivot-table--${kind}`"
+        :header-cell-class-name="pivotHeaderClass"
+        :cell-class-name="pivotCellClass"
+        :cell-style="pivotCellStyle"
       >
-        <template #default="{ row }">
-          <span class="total-num">{{ formatNum(row.total) }}</span>
-          <span v-if="row.defectTotal" class="defect-num defect-num--sub">
-            ({{ formatNum(row.defectTotal) }})
-          </span>
+        <el-table-column prop="supplier_name" label="外注先" width="160" fixed="left" show-overflow-tooltip />
+        <el-table-column prop="product_cd" label="製品CD" width="86" fixed="left" align="center" class-name="col-code" />
+        <el-table-column prop="product_name" label="製品名" width="160" fixed="left" show-overflow-tooltip />
+        <el-table-column
+          v-for="d in dates"
+          :key="d"
+          :prop="d"
+          :column-key="d"
+          :width="kind === 'order' ? 72 : 100"
+          align="right"
+        >
+          <template #header>
+            <div class="day-head">
+              <span>{{ dayLabel(d) }}</span>
+              <span class="day-head__wd">{{ weekdayLabel(d) }}</span>
+            </div>
+          </template>
+          <template #default="{ row }">
+            <template v-if="row.cells[d]">
+              <span v-if="row.cells[d].qty">{{ formatNum(row.cells[d].qty) }}</span>
+              <span v-if="row.cells[d].defect" class="defect-num defect-num--sub">
+                ({{ formatNum(row.cells[d].defect) }})
+              </span>
+            </template>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="合計"
+          :width="kind === 'order' ? 100 : 128"
+          align="right"
+          fixed="right"
+          column-key="__total"
+          :class-name="kind === 'order' ? 'col-order' : 'col-recv'"
+        >
+          <template #default="{ row }">
+            <span class="total-num">{{ formatNum(row.total) }}</span>
+            <span v-if="row.defectTotal" class="defect-num defect-num--sub">
+              ({{ formatNum(row.defectTotal) }})
+            </span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <span>{{ emptyText }}</span>
         </template>
-      </el-table-column>
-      <template #empty>
-        <span>{{ emptyText }}</span>
-      </template>
-    </el-table>
+      </el-table>
+    </div>
+
     <div v-if="view === 'pivot'" class="pivot-note">
       <span class="pivot-note__legend" :class="`pivot-note__legend--${kind}`">
         <i /><i /><i /><i />
@@ -137,6 +136,36 @@
       <span v-if="kind === 'receiving'" class="pivot-note__sep">
         セルは受入数、<em class="defect-num">( )</em> 内は不良数
       </span>
+    </div>
+
+    <div class="pagination-bar pagination-bar--compact">
+      <div class="pagination-summary">
+        <span class="pagination-summary__item">
+          <span class="pagination-summary__label">合計</span>
+          <b class="pagination-summary__value">{{ summaryCount.toLocaleString('ja-JP') }}</b>
+          <span class="pagination-summary__unit">件</span>
+        </span>
+        <template v-if="kind === 'order'">
+          <span class="pagination-summary__item pagination-summary__item--order">
+            <span class="pagination-summary__label">注文数</span>
+            <b class="pagination-summary__value">{{ formatNum(summaryOrderQty) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--amount">
+            <span class="pagination-summary__label">金額</span>
+            <b class="pagination-summary__value">{{ formatNum(summaryOrderAmount) }}</b>
+          </span>
+        </template>
+        <template v-else>
+          <span class="pagination-summary__item pagination-summary__item--recv">
+            <span class="pagination-summary__label">受入数</span>
+            <b class="pagination-summary__value">{{ formatNum(summaryRecvQty) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--defect">
+            <span class="pagination-summary__label">不良数</span>
+            <b class="pagination-summary__value">{{ formatNum(summaryDefectQty) }}</b>
+          </span>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -184,6 +213,22 @@ let loadSeq = 0
 
 const emptyText = computed(() =>
   props.kind === 'order' ? '指定期間の注文はありません' : '指定期間の受入・不良はありません',
+)
+
+const summaryCount = computed(() =>
+  props.view === 'list' ? rows.value.length : pivotRows.value.length,
+)
+const summaryOrderQty = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.order_qty) || 0), 0),
+)
+const summaryOrderAmount = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.order_amount) || 0), 0),
+)
+const summaryRecvQty = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.receiving_qty) || 0), 0),
+)
+const summaryDefectQty = computed(() =>
+  rows.value.reduce((sum, row) => sum + (Number(row.defect_qty) || 0), 0),
 )
 
 function formatNum(value: number | null | undefined): string {
@@ -268,41 +313,6 @@ const pivotRows = computed<PivotRow[]>(() => {
       a.product_cd.localeCompare(b.product_cd),
   )
 })
-
-function withDefect(qty: number, defect: number): string {
-  if (!qty && !defect) return ''
-  return defect ? `${formatNum(qty)} (${formatNum(defect)})` : formatNum(qty)
-}
-
-function listSummary({ columns }: { columns: TableColumnCtx<PlatingLedgerRow>[] }): string[] {
-  const sumKeys = ['order_qty', 'order_amount', 'receiving_qty', 'defect_qty']
-  return columns.map((col, i) => {
-    if (i === 0) return '合計'
-    if (!sumKeys.includes(col.property)) return ''
-    const key = col.property as keyof PlatingLedgerRow
-    return formatNum(rows.value.reduce((s, r) => s + (Number(r[key]) || 0), 0))
-  })
-}
-
-function pivotSummary({ columns }: { columns: TableColumnCtx<PivotRow>[] }): string[] {
-  return columns.map((col, i) => {
-    if (i === 0) return '合計'
-    if (col.columnKey === '__total') {
-      const qty = pivotRows.value.reduce((s, r) => s + r.total, 0)
-      const defect = pivotRows.value.reduce((s, r) => s + r.defectTotal, 0)
-      return withDefect(qty, defect)
-    }
-    const d = col.columnKey
-    if (!d || !dates.value.includes(d)) return ''
-    let qty = 0
-    let defect = 0
-    for (const r of pivotRows.value) {
-      qty += r.cells[d]?.qty || 0
-      defect += r.cells[d]?.defect || 0
-    }
-    return withDefect(qty, defect)
-  })
-}
 
 function dayClass(ymd: string | undefined): string {
   if (!ymd) return ''
@@ -390,6 +400,29 @@ defineExpose({ reload: load })
 <style scoped>
 .history-panel {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .day-head {
@@ -537,6 +570,7 @@ defineExpose({ reload: load })
 }
 
 .pivot-note {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -569,4 +603,72 @@ defineExpose({ reload: load })
   padding-left: 8px;
   border-left: 1px solid #e2e8f0;
 }
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 5px 0 0;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 6px;
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--order {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.pagination-summary__item--order .pagination-summary__label { color: #4338ca; }
+.pagination-summary__item--order .pagination-summary__value { color: #3730a3; }
+.pagination-summary__item--amount {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.pagination-summary__item--amount .pagination-summary__label { color: #6d28d9; }
+.pagination-summary__item--amount .pagination-summary__value { color: #5b21b6; }
+.pagination-summary__item--recv {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.pagination-summary__item--recv .pagination-summary__label { color: #047857; }
+.pagination-summary__item--recv .pagination-summary__value { color: #065f46; }
+.pagination-summary__item--defect {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.pagination-summary__item--defect .pagination-summary__label { color: #be123c; }
+.pagination-summary__item--defect .pagination-summary__value { color: #9f1239; }
 </style>

@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { disconnectWebSocket } from '@/modules/websocket/utils'
 import * as authApi from '@/modules/auth/api'
+import {
+  broadcastClearSession,
+  broadcastForceLogout,
+  clearMenuTabHandoff,
+  ensureCrossTabSession,
+  startSessionSync,
+} from '@/modules/auth/sessionSync'
 import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
 
 export interface OperationPermission {
@@ -35,17 +43,15 @@ const TOKEN_KEY = 'smart_emap_token'
 const USER_KEY = 'smart_emap_user'
 const REMEMBER_ME_KEY = 'smart_emap_remember_me'
 
-// ストレージの取得（rememberMeに基づいてlocalStorageまたはsessionStorageを使用）
-const getStorage = () => {
-  const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true'
-  return rememberMe ? localStorage : sessionStorage
-}
+const OTHER_DEVICE_LOGOUT_MESSAGE =
+  'このアカウントは他のデバイスでログインされています。再度ログインしてください。'
 
 export const useUserStore = defineStore(
   'user',
   () => {
     const user = ref<User | null>(null)
     const token = ref<string>('')
+    let authExitInProgress = false
 
     // 認証状態を計算プロパティとして定義
     const isAuthenticated = computed(() => {
@@ -58,18 +64,18 @@ export const useUserStore = defineStore(
       let storage = localStorage
       let savedToken = storage.getItem(TOKEN_KEY)
       let savedUser = storage.getItem(USER_KEY)
-      
+
       // localStorage にない場合、sessionStorage をチェック
       if (!savedToken || !savedUser) {
         storage = sessionStorage
         savedToken = savedToken || storage.getItem(TOKEN_KEY)
         savedUser = savedUser || storage.getItem(USER_KEY)
       }
-      
+
       if (savedToken) {
         token.value = savedToken
       }
-      
+
       if (savedUser) {
         try {
           user.value = JSON.parse(savedUser)
@@ -87,10 +93,10 @@ export const useUserStore = defineStore(
     const setUser = (userData: User, rememberMe: boolean = false) => {
       user.value = userData
       const storage = rememberMe ? localStorage : sessionStorage
-      
+
       // ユーザー情報を保存
       storage.setItem(USER_KEY, JSON.stringify(userData))
-      
+
       // rememberMeフラグを保存
       if (rememberMe) {
         localStorage.setItem(REMEMBER_ME_KEY, 'true')
@@ -111,8 +117,8 @@ export const useUserStore = defineStore(
       storage.setItem(TOKEN_KEY, tokenValue)
     }
 
-    /** ローカルのみクリア（API を呼ばない）。401 / トークン期限切れ時に使用 */
-    const clearLocalSession = () => {
+    /** ストレージ・メモリのみクリア（Broadcast しない） */
+    const wipeLocalAuth = () => {
       user.value = null
       token.value = ''
       useSidebarShortcutsStore().reset()
@@ -125,6 +131,39 @@ export const useUserStore = defineStore(
       localStorage.removeItem(USER_KEY)
       sessionStorage.removeItem(TOKEN_KEY)
       sessionStorage.removeItem(USER_KEY)
+      clearMenuTabHandoff()
+    }
+
+    /** ローカルのみクリア（API を呼ばない）。401 / トークン期限切れ時に使用 */
+    const clearLocalSession = () => {
+      wipeLocalAuth()
+      broadcastClearSession()
+    }
+
+    const goLoginSoon = (delayMs = 1500) => {
+      window.setTimeout(() => {
+        window.location.href = '/login'
+      }, delayMs)
+    }
+
+    /**
+     * 他デバイスでログインされたとき：提示 → 全タブへ通知 → セッション破棄 → ログインへ
+     */
+    const forceLogoutOtherDevice = (message?: string) => {
+      if (authExitInProgress) return
+      authExitInProgress = true
+      const msg =
+        typeof message === 'string' && message.trim()
+          ? message.trim()
+          : OTHER_DEVICE_LOGOUT_MESSAGE
+      ElMessage.error({
+        message: msg,
+        duration: 5000,
+        showClose: true,
+      })
+      broadcastForceLogout(msg)
+      wipeLocalAuth()
+      goLoginSoon(1500)
     }
 
     const logout = async () => {
@@ -152,6 +191,37 @@ export const useUserStore = defineStore(
 
     // 初期化
     initFromStorage()
+    startSessionSync({
+      getSession: () => {
+        if (!token.value || !user.value) return null
+        return {
+          token: token.value,
+          user: JSON.parse(JSON.stringify(user.value)) as User,
+          rememberMe: localStorage.getItem(REMEMBER_ME_KEY) === 'true',
+        }
+      },
+      applySession: ({ token: tokenValue, user: userData, rememberMe }) => {
+        setToken(tokenValue, rememberMe)
+        setUser(userData as User, rememberMe)
+      },
+      clearSession: () => {
+        if (authExitInProgress) return
+        authExitInProgress = true
+        wipeLocalAuth()
+        window.location.href = '/login'
+      },
+      forceLogout: (message) => {
+        if (authExitInProgress) return
+        authExitInProgress = true
+        ElMessage.error({
+          message: message || OTHER_DEVICE_LOGOUT_MESSAGE,
+          duration: 5000,
+          showClose: true,
+        })
+        wipeLocalAuth()
+        goLoginSoon(1500)
+      },
+    })
 
     return {
       user,
@@ -161,10 +231,11 @@ export const useUserStore = defineStore(
       setToken,
       logout,
       clearLocalSession,
+      forceLogoutOtherDevice,
       hasPermission,
       refreshUser,
       initFromStorage,
+      ensureCrossTabSession,
     }
   }
 )
-

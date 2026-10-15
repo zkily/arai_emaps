@@ -88,13 +88,16 @@
           <span class="ppf-data-cap__meta">{{ total }} 件</span>
         </div>
       </template>
+      <div class="table-card__body">
       <el-table
         v-loading="loading"
-        class="ppf-table"
+        class="ppf-table modern-table"
         :data="rows"
         stripe
+        border
+        size="small"
+        height="100%"
         style="width: 100%"
-        max-height="calc(100vh - 280px)"
       >
         <el-table-column prop="process_cd" label="工程CD" width="120">
           <template #default="{ row }">
@@ -135,13 +138,28 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="ppf-pagination">
+      </div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="page"
-          :page-size="pageSize"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 30, 50, 100]"
           :total="total"
-          size="small"
-          layout="total, prev, pager, next"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
           @current-change="loadList"
         />
       </div>
@@ -337,7 +355,7 @@ const processLoading = ref(false)
 const rows = ref<ProcessProcessingFeeRow[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 30
+const pageSize = ref(30)
 
 const filterProcessCd = ref('')
 const filterKeyword = ref('')
@@ -381,6 +399,19 @@ const avgPrice = computed(() => {
 const maxPrice = computed(() =>
   rows.value.reduce((m, r) => Math.max(m, Number(r.unit_price) || 0), 0),
 )
+
+const pageRangeText = computed(() => {
+  const t = total.value
+  if (!t) return '0'
+  const start = pageSize.value * (page.value - 1) + 1
+  const end = Math.min(pageSize.value * page.value, t)
+  return `${start}–${end}`
+})
+
+function handlePageSizeChange() {
+  page.value = 1
+  loadList()
+}
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
 function handleStatTilt(e: MouseEvent) {
@@ -430,7 +461,7 @@ async function loadProcesses() {
 async function loadList() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { page: page.value, limit: pageSize }
+    const params: Record<string, unknown> = { page: page.value, limit: pageSize.value }
     if (filterProcessCd.value) params.process_cd = filterProcessCd.value
     if (filterKeyword.value) params.keyword = filterKeyword.value
     if (filterStatus.value) params.status = filterStatus.value
@@ -540,8 +571,19 @@ onMounted(() => {
 
 <style scoped>
 .ppf-page {
-  min-height: 100vh;
-  padding: 10px 12px 12px;
+  --ppf-app-chrome: 84px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--ppf-app-chrome));
+  height: calc(100dvh - var(--ppf-app-chrome));
+  max-height: calc(100vh - var(--ppf-app-chrome));
+  max-height: calc(100dvh - var(--ppf-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 6px;
   background:
     radial-gradient(ellipse 90% 60% at 0% -10%, rgba(99, 102, 241, 0.1), transparent 45%),
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
@@ -549,9 +591,10 @@ onMounted(() => {
 
 /* ページヘッダー */
 .ppf-hero {
+  flex-shrink: 0;
   position: relative;
   border-radius: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   overflow: hidden;
   box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.2);
 }
@@ -606,7 +649,8 @@ onMounted(() => {
 
 /* フィルタ */
 .ppf-toolbar-card {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
@@ -663,10 +707,14 @@ onMounted(() => {
 
 /* 一覧カード */
 .ppf-data-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
-  overflow: hidden;
 }
 
 .ppf-data-card :deep(.el-card__header) {
@@ -701,11 +749,113 @@ onMounted(() => {
 }
 
 .ppf-data-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
 }
 
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
 .ppf-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
   font-size: 12px;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #eef2ff 100%);
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--range {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+.pagination-summary__item--range .pagination-summary__label {
+  color: #4338ca;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #3730a3;
+}
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #6366f1;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .ppf-table :deep(.el-table th.el-table__cell) {
@@ -722,14 +872,6 @@ onMounted(() => {
 
 .ppf-table :deep(.el-table__row:hover > td.el-table__cell) {
   background-color: rgba(99, 102, 241, 0.04) !important;
-}
-
-.ppf-pagination {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 10px;
-  border-top: 1px solid #f1f5f9;
-  background: #fafbfc;
 }
 
 /* —— 新規／編集ダイアログ（コンパクト） —— */
@@ -1340,11 +1482,12 @@ onMounted(() => {
   background: #fef2f2;
 }
 
-.ppf-modern .ppf-pagination {
+.ppf-modern .pagination-bar {
   background: linear-gradient(180deg, #ffffff 0%, #fefce8 100%);
+  border-top-color: #fde68a;
 }
 
-.ppf-modern .ppf-pagination :deep(.el-pager li.is-active) {
+.ppf-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   border-radius: 7px;
   background: linear-gradient(135deg, #facc15 0%, #eab308 50%, #a16207 100%);

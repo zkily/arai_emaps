@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `machines` (
   `available_from` time DEFAULT '08:00:00' COMMENT '可用开始时间',
   `available_to` time DEFAULT '17:00:00' COMMENT '可用结束时间',
   `calendar_id` int DEFAULT NULL COMMENT '所属カレンダーID（处理休假）',
-  `efficiency` decimal(5,2) DEFAULT '100.00' COMMENT '效率（基准为100）',
+  `availability_rate` decimal(4,1) DEFAULT '100.0' COMMENT '可動率（%）',
   `available_qty` int DEFAULT '0' COMMENT '可用数量',
   `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_bin COMMENT '备注',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,

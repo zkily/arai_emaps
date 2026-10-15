@@ -1,17 +1,16 @@
 <template>
-  <div class="product-process-bom-container">
-    <!-- 顶部英雄区 -->
-    <header class="ppb-hero">
-      <div class="ppb-hero__accent" aria-hidden="true" />
-      <div class="ppb-hero__grid" />
+  <div class="product-process-bom-container ppb-modern pb-std">
+    <header class="ppb-hero page-toolbar pb-hero pb-hero--page">
+      <div class="page-toolbar-glow" aria-hidden="true" />
+      <div class="pb-bubbles" aria-hidden="true" />
       <div class="ppb-hero__inner">
         <div class="ppb-hero__brand">
           <div class="ppb-hero__icon-wrap">
             <el-icon :size="20"><Tools /></el-icon>
           </div>
           <div class="ppb-hero__titles">
-            <h1 class="ppb-hero__title">製品工程BOM管理</h1>
-            <p class="ppb-hero__subtitle">工程フラグ・LT を一覧編集（セル変更は自動保存）</p>
+            <h1 class="ppb-hero__title pb-hero-title">製品工程BOM管理</h1>
+            <p class="ppb-hero__subtitle pb-hero-desc">工程フラグ・LT を一覧編集（セル変更は自動保存）</p>
           </div>
         </div>
         <div class="ppb-hero__stats">
@@ -60,20 +59,23 @@
             </el-input>
           </div>
           <div class="ppb-toolbar__actions">
-            <el-button size="small" @click="clearFilters" :icon="Refresh">クリア</el-button>
-            <el-button type="primary" size="small" @click="handleFilter" :icon="Search">
-              検索
+            <el-button class="tb-btn tb-btn-amber" size="small" @click="clearFilters">
+              <el-icon><Refresh /></el-icon>
+              <span class="tb-label">クリア</span>
+            </el-button>
+            <el-button class="tb-btn tb-btn-blue" size="small" @click="handleFilter">
+              <el-icon><Search /></el-icon>
+              <span class="tb-label">検索</span>
             </el-button>
             <el-button
               v-if="canEdit"
-              type="success"
+              class="tb-btn tb-btn-green"
               size="small"
-              plain
-              @click="handleSync"
-              :icon="Refresh"
               :loading="syncing"
+              @click="handleSync"
             >
-              同期
+              <el-icon><Refresh /></el-icon>
+              <span class="tb-label">同期</span>
             </el-button>
           </div>
         </div>
@@ -96,9 +98,11 @@
             :data="bomList"
             v-loading="loading"
             stripe
+            border
+            size="small"
             style="width: 100%"
             :empty-text="'データがありません'"
-            height="calc(100vh - 228px)"
+            height="100%"
             :row-style="{ height: '34px' }"
             :header-cell-class-name="ppbHeaderCellClass"
             :cell-class-name="ppbBodyCellClass"
@@ -477,21 +481,32 @@
             </el-table-column>
           </el-table>
         </el-card>
-      </section>
 
-      <!-- ページネーション -->
-      <div class="ppb-pagination-wrap">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.limit"
-          :page-sizes="[10, 20, 50, 100]"
-          :total="pagination.total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handlePageChange"
-          class="ppb-pagination"
-        />
-      </div>
+        <div class="pagination-bar">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">合計</span>
+              <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--range">
+              <span class="pagination-summary__label">表示</span>
+              <b class="pagination-summary__value">{{ pageRangeText }}</b>
+            </span>
+          </div>
+          <el-pagination
+            v-model:current-page="pagination.page"
+            v-model:page-size="pagination.limit"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="pagination.total"
+            layout="sizes, prev, pager, next, jumper"
+            small
+            @size-change="handleSizeChange"
+            @current-change="handlePageChange"
+            class="ppb-pagination modern-pagination"
+          />
+        </div>
+      </section>
     </div>
 
     <!-- 編集ダイアログ -->
@@ -761,7 +776,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TableColumnCtx } from 'element-plus'
 import {
@@ -805,6 +820,14 @@ const pagination = ref({
   page: 1,
   limit: 20,
   total: 0,
+})
+
+const pageRangeText = computed(() => {
+  const total = pagination.value.total
+  if (!total) return '0'
+  const start = pagination.value.limit * (pagination.value.page - 1) + 1
+  const end = Math.min(pagination.value.limit * pagination.value.page, total)
+  return `${start}–${end}`
 })
 
 // 统计信息
@@ -1203,52 +1226,62 @@ onMounted(async () => {
 
 <style scoped>
 .product-process-bom-container {
-  min-height: 100vh;
-  padding: 8px 10px 10px;
+  --ppb-app-chrome: 84px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--ppb-app-chrome));
+  height: calc(100dvh - var(--ppb-app-chrome));
+  max-height: calc(100vh - var(--ppb-app-chrome));
+  max-height: calc(100dvh - var(--ppb-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
   background:
-    radial-gradient(ellipse 90% 55% at 0% -8%, rgba(99, 102, 241, 0.12), transparent 45%),
-    radial-gradient(ellipse 70% 45% at 100% 5%, rgba(14, 165, 233, 0.1), transparent 40%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(139, 92, 246, 0.06), transparent 50%),
-    linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #eef2f7 100%);
+    radial-gradient(1100px 380px at 0% 0%, rgba(63, 98, 18, 0.1), transparent 60%),
+    radial-gradient(900px 380px at 100% 0%, rgba(163, 230, 53, 0.08), transparent 60%),
+    linear-gradient(160deg, #f7fee7 0%, #f8fafc 45%, #ecfccb 100%);
 }
 
 /* メイン作業面：ツールバー＋表＋ページを一枚に */
 .ppb-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: #fff;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 12px 32px -16px rgba(15, 23, 42, 0.12);
-  overflow: hidden;
 }
 
-/* —— ヒーロー（コンパクト） —— */
+/* —— ヒーロー（オリーブ系・他頁と分色） —— */
 .ppb-hero {
   position: relative;
-  border-radius: 12px;
-  margin-bottom: 8px;
+  isolation: isolate;
+  flex-shrink: 0;
+  border-radius: 16px;
+  margin-bottom: 0;
   overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #3f6212 0%, #4d7c0f 34%, #65a30d 66%, #a3e635 100%);
   box-shadow:
-    0 10px 24px -14px rgba(15, 23, 42, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+    0 18px 36px -18px rgba(63, 98, 18, 0.55),
+    0 4px 12px -6px rgba(101, 163, 13, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.ppb-hero__accent {
-  height: 3px;
-  width: 100%;
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 40%, #0ea5e9 100%);
-}
-
-.ppb-hero__grid {
+.page-toolbar-glow {
   position: absolute;
-  inset: 0;
-  opacity: 0.05;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
-  background-size: 20px 20px;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  z-index: 0;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
   pointer-events: none;
 }
 
@@ -1260,10 +1293,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   gap: 10px 14px;
-  padding: 10px 14px;
-  background:
-    linear-gradient(125deg, rgba(255, 255, 255, 0.06) 0%, transparent 42%),
-    linear-gradient(135deg, #1e1b4b 0%, #312e81 32%, #4338ca 68%, #5b21b6 100%);
+  width: 100%;
 }
 
 .ppb-hero__brand {
@@ -1276,34 +1306,31 @@ onMounted(async () => {
 
 .ppb-hero__icon-wrap {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(63, 98, 18, 0.3);
 }
 
 .ppb-hero__title {
-  margin: 0 0 1px;
-  font-size: 1.05rem;
+  margin: 0;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.02em;
   color: #fff;
-  line-height: 1.2;
 }
 
 .ppb-hero__subtitle {
   margin: 0;
   max-width: 520px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: rgba(226, 232, 240, 0.82);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .ppb-hero__stats {
@@ -1318,31 +1345,25 @@ onMounted(async () => {
   gap: 6px;
   padding: 5px 10px 5px 8px;
   min-width: 0;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-left-width: 3px;
-  border-left-color: rgba(255, 255, 255, 0.35);
-  backdrop-filter: blur(8px);
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.ppb-stat:hover {
-  background: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(255, 255, 255, 0.45);
 }
 
 .ppb-stat--total {
-  border-left-color: #7dd3fc;
+  border-left-color: #d9f99d;
 }
 
 .ppb-stat--active {
-  border-left-color: #4ade80;
+  border-left-color: #86efac;
+  background: rgba(16, 185, 129, 0.28);
 }
 
 .ppb-stat--halt {
-  border-left-color: #fb923c;
+  border-left-color: #fda4af;
+  background: rgba(190, 18, 60, 0.28);
 }
 
 .ppb-stat__ico {
@@ -1381,13 +1402,78 @@ onMounted(async () => {
 
 /* —— ツールバー 1行 —— */
 .ppb-toolbar {
-  background: linear-gradient(180deg, #fafbff 0%, #ffffff 100%);
+  flex-shrink: 0;
+  position: relative;
+  background: linear-gradient(110deg, #f7fee7 0%, #ffffff 60%);
   border-radius: 0;
-  padding: 6px 10px;
+  padding: 8px 12px 8px 16px;
   margin-bottom: 0;
   border: none;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  border-bottom: 1px solid #d9f99d;
   box-shadow: none;
+}
+.ppb-toolbar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #a3e635, #65a30d, #3f6212);
+}
+
+.ppb-toolbar__actions .tb-btn {
+  --k-rgb: 101 163 13;
+  --k-fg: #3f6212;
+  --k-bd: #bef264;
+  --k-tint: #ecfccb;
+  --k-tint-h: #d9f99d;
+  --k-ico: #65a30d;
+  height: 30px !important;
+  padding: 0 12px 0 10px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  color: var(--k-fg) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 40%, var(--k-tint) 100%) !important;
+  border: 1px solid var(--k-bd) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 0 rgb(var(--k-rgb) / 0.12),
+    0 2px 6px -1px rgba(63, 98, 18, 0.2) !important;
+}
+.ppb-toolbar__actions .tb-btn :deep(.el-icon) {
+  color: var(--k-ico);
+}
+.ppb-toolbar__actions .tb-btn:hover:not(:disabled) {
+  color: rgb(var(--k-rgb)) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 30%, var(--k-tint-h) 100%) !important;
+  transform: translateY(-1px);
+}
+.ppb-toolbar__actions .tb-btn-blue {
+  --k-rgb: 37 99 235;
+  --k-fg: #1d4ed8;
+  --k-bd: #93c5fd;
+  --k-tint: #dbeafe;
+  --k-tint-h: #bfdbfe;
+  --k-ico: #3b82f6;
+}
+.ppb-toolbar__actions .tb-btn-amber {
+  --k-rgb: 217 119 6;
+  --k-fg: #92400e;
+  --k-bd: #fcd34d;
+  --k-tint: #fef3c7;
+  --k-tint-h: #fde68a;
+  --k-ico: #d97706;
+}
+.ppb-toolbar__actions .tb-btn-green {
+  --k-rgb: 5 150 105;
+  --k-fg: #047857;
+  --k-bd: #6ee7b7;
+  --k-tint: #d1fae5;
+  --k-tint-h: #a7f3d0;
+  --k-ico: #10b981;
 }
 
 .ppb-toolbar__compact {
@@ -1414,9 +1500,9 @@ onMounted(async () => {
   letter-spacing: 0.05em;
   padding: 3px 8px;
   border-radius: 6px;
-  color: #4f46e5;
-  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-  border: 1px solid rgba(99, 102, 241, 0.22);
+  color: #3f6212;
+  background: linear-gradient(180deg, #ecfccb 0%, #d9f99d 100%);
+  border: 1px solid #bef264;
 }
 
 .ppb-toolbar__actions {
@@ -1461,15 +1547,20 @@ onMounted(async () => {
 }
 
 .ppb-search-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4) inset;
+  box-shadow: 0 0 0 1px #a3e635 inset;
 }
 
 .ppb-search-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.28) inset;
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.35) inset;
 }
 
 /* —— テーブル —— */
 .ppb-table-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   margin-bottom: 0;
 }
 
@@ -1490,8 +1581,8 @@ onMounted(async () => {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #0ea5e9);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  background: linear-gradient(135deg, #65a30d, #a3e635);
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.22);
 }
 
 .ppb-table-cap__title {
@@ -1503,14 +1594,18 @@ onMounted(async () => {
 
 .ppb-table-cap__hint {
   font-size: 10px;
-  color: #64748b;
+  color: #4d7c0f;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.12);
+  background: #ecfccb;
+  border: 1px solid #bef264;
 }
 
 .ppb-table-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-radius: 0;
   border: none;
   box-shadow: none;
@@ -1518,40 +1613,63 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(.el-card__header) {
+  flex-shrink: 0;
   padding: 6px 10px;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #d9f99d;
+  background:
+    linear-gradient(90deg, #65a30d, #a3e635, #bef264) 0 0 / 100% 3px no-repeat,
+    linear-gradient(180deg, #f7fee7 0%, #ecfccb 100%);
 }
 
 .ppb-table-card :deep(.el-card__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
 }
 
 .ppb-table-card :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
   font-size: 11px;
-  --el-table-border-color: transparent;
-  --el-table-header-bg-color: #f1f5f9;
+  --el-table-border-color: #e2e8f0;
+  --el-table-header-bg-color: #f7fee7;
+  --el-table-row-hover-bg-color: #ecfccb;
+  --el-table-bg-color: #ffffff;
+  --el-bg-color: #ffffff;
+}
+
+.ppb-table-card :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.ppb-table-card :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .ppb-table-card :deep(.el-table th.el-table__cell) {
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
-  color: #334155;
+  background: linear-gradient(180deg, #f7fee7 0%, #ecfccb 100%) !important;
+  color: #365314;
   font-weight: 700;
   font-size: 10px;
   padding: 5px 2px;
-  border-bottom: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #d9f99d !important;
 }
 
 .ppb-table-card :deep(.el-table td.el-table__cell) {
   padding: 2px 1px;
   border-bottom: 1px solid #f1f5f9 !important;
+  background-color: #ffffff !important;
 }
 
+/* ホバーも不透明（固定列透け防止） */
 .ppb-table-card :deep(.el-table__row:hover > td.el-table__cell) {
-  background-color: rgba(99, 102, 241, 0.06) !important;
+  background-color: #ecfccb !important;
 }
 
-/* 列グループ色（工程ブロックを識別しやすく） */
+/* 列グループ色：必ず不透明 Hex（左右固定列の下に中身が見えるのを防止） */
 .ppb-table-card :deep(th.el-table__cell.ppb-col-meta) {
   background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%) !important;
   color: #312e81 !important;
@@ -1559,7 +1677,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-meta) {
-  background-color: rgba(99, 102, 241, 0.06) !important;
+  background-color: #eef2ff !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-stock) {
@@ -1569,7 +1687,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-stock) {
-  background-color: rgba(245, 158, 11, 0.08) !important;
+  background-color: #fffbeb !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-g0) {
@@ -1579,7 +1697,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-g0) {
-  background-color: rgba(45, 212, 191, 0.07) !important;
+  background-color: #f0fdfa !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-g1) {
@@ -1589,7 +1707,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-g1) {
-  background-color: rgba(139, 92, 246, 0.07) !important;
+  background-color: #f5f3ff !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-g2) {
@@ -1599,7 +1717,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-g2) {
-  background-color: rgba(14, 165, 233, 0.07) !important;
+  background-color: #f0f9ff !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-g3) {
@@ -1609,7 +1727,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-g3) {
-  background-color: rgba(249, 115, 22, 0.07) !important;
+  background-color: #fff7ed !important;
 }
 
 .ppb-table-card :deep(th.el-table__cell.ppb-col-act) {
@@ -1619,63 +1737,122 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(td.el-table__cell.ppb-col-act) {
-  background-color: rgba(148, 163, 184, 0.08) !important;
+  background-color: #f8fafc !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-meta) {
-  background-color: rgba(99, 102, 241, 0.09) !important;
+  background-color: #e0e7ff !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-stock) {
-  background-color: rgba(245, 158, 11, 0.11) !important;
+  background-color: #fef3c7 !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g0) {
-  background-color: rgba(45, 212, 191, 0.1) !important;
+  background-color: #ccfbf1 !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g1) {
-  background-color: rgba(139, 92, 246, 0.1) !important;
+  background-color: #ede9fe !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g2) {
-  background-color: rgba(14, 165, 233, 0.1) !important;
+  background-color: #e0f2fe !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g3) {
-  background-color: rgba(249, 115, 22, 0.1) !important;
+  background-color: #ffedd5 !important;
 }
 
 .ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-act) {
-  background-color: rgba(148, 163, 184, 0.12) !important;
+  background-color: #f1f5f9 !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-meta) {
-  background-color: rgba(99, 102, 241, 0.14) !important;
+  background-color: #c7d2fe !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-stock) {
-  background-color: rgba(245, 158, 11, 0.16) !important;
+  background-color: #fde68a !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g0) {
-  background-color: rgba(45, 212, 191, 0.14) !important;
+  background-color: #99f6e4 !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g1) {
-  background-color: rgba(139, 92, 246, 0.14) !important;
+  background-color: #ddd6fe !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g2) {
-  background-color: rgba(14, 165, 233, 0.14) !important;
+  background-color: #bae6fd !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g3) {
-  background-color: rgba(249, 115, 22, 0.14) !important;
+  background-color: #fed7aa !important;
 }
 
 .ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-act) {
-  background-color: rgba(148, 163, 184, 0.18) !important;
+  background-color: #e2e8f0 !important;
+}
+
+/* EP2 sticky 固定列：不透明＋影で下層スクロール内容を完全に隠す */
+.ppb-table-card :deep(th.el-table-fixed-column--left),
+.ppb-table-card :deep(td.el-table-fixed-column--left) {
+  background-clip: padding-box !important;
+  z-index: 3 !important;
+}
+
+.ppb-table-card :deep(th.el-table-fixed-column--left.ppb-col-meta),
+.ppb-table-card :deep(td.el-table-fixed-column--left.ppb-col-meta) {
+  background-color: #eef2ff !important;
+}
+
+.ppb-table-card :deep(th.el-table-fixed-column--left.ppb-col-meta) {
+  background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table-fixed-column--left.ppb-col-meta) {
+  background-color: #e0e7ff !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table-fixed-column--left.ppb-col-meta) {
+  background-color: #c7d2fe !important;
+}
+
+.ppb-table-card :deep(th.el-table-fixed-column--right),
+.ppb-table-card :deep(td.el-table-fixed-column--right) {
+  background-clip: padding-box !important;
+  z-index: 3 !important;
+}
+
+.ppb-table-card :deep(th.el-table-fixed-column--right.ppb-col-act),
+.ppb-table-card :deep(td.el-table-fixed-column--right.ppb-col-act) {
+  background-color: #f8fafc !important;
+}
+
+.ppb-table-card :deep(th.el-table-fixed-column--right.ppb-col-act) {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table-fixed-column--right.ppb-col-act) {
+  background-color: #f1f5f9 !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table-fixed-column--right.ppb-col-act) {
+  background-color: #e2e8f0 !important;
+}
+
+.ppb-table-card :deep(.el-table__header th.el-table-fixed-column--left.is-last-column),
+.ppb-table-card :deep(.el-table__body td.el-table-fixed-column--left.is-last-column) {
+  border-right: 1px solid #a5b4fc !important;
+  box-shadow: 6px 0 10px -6px rgba(49, 46, 129, 0.28);
+}
+
+.ppb-table-card :deep(.el-table__header th.el-table-fixed-column--right.is-first-column),
+.ppb-table-card :deep(.el-table__body td.el-table-fixed-column--right.is-first-column) {
+  border-left: 1px solid #cbd5e1 !important;
+  box-shadow: -6px 0 10px -6px rgba(15, 23, 42, 0.22);
 }
 
 .ppb-table-card :deep(.el-table__body-wrapper) {
@@ -1739,7 +1916,7 @@ onMounted(async () => {
   height: 8px;
   border: none;
   border-radius: 50%;
-  background: #6366f1;
+  background: #65a30d;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%) scale(0);
@@ -1747,14 +1924,14 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked .el-checkbox__inner) {
-  border-color: #6366f1;
+  border-color: #65a30d;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.18);
 }
 
 .ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked .el-checkbox__inner::after) {
   transform: translate(-50%, -50%) scale(1);
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #65a30d, #a3e635);
 }
 
 .ppb-table-card :deep(.el-checkbox.ppb-dot.ppb-dot--rose.is-checked .el-checkbox__inner) {
@@ -1771,7 +1948,7 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked:hover .el-checkbox__inner) {
-  border-color: #4f46e5;
+  border-color: #4d7c0f;
 }
 
 .ppb-table-card :deep(.el-checkbox.ppb-dot.ppb-dot--rose.is-checked:hover .el-checkbox__inner) {
@@ -1779,31 +1956,73 @@ onMounted(async () => {
 }
 
 /* ページネーション */
-.ppb-pagination-wrap {
+.pagination-bar {
+  flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 4px 10px 6px;
-  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
-  border-radius: 0;
-  border: none;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
   border-top: 1px solid #e2e8f0;
-  box-shadow: none;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
 }
-
-.ppb-pagination-wrap :deep(.el-pagination) {
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #475569;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.pagination-summary__value {
+  font-weight: 700;
+  color: #4d7c0f;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 11px;
+  color: #64748b;
+}
+.pagination-summary__item--range .pagination-summary__value {
+  color: #0ea5e9;
+}
+.pagination-bar .modern-pagination {
+  margin-left: auto;
+}
+.pagination-bar :deep(.el-pagination) {
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 4px;
+  font-size: 12px;
 }
-
-.ppb-pagination-wrap :deep(.el-pagination .el-select .el-input__wrapper) {
-  min-height: 28px;
+.pagination-bar :deep(.el-pagination .el-pager li),
+.pagination-bar :deep(.el-pagination button) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
 }
-
-.ppb-pagination :deep(.el-pagination__total) {
-  font-weight: 600;
-  color: #64748b;
+.pagination-bar :deep(.el-pager li.is-active) {
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4d7c0f 0%, #65a30d 55%, #a3e635 100%);
 }
 
 /* 行アクション（アイコンのみ） */
@@ -1824,8 +2043,8 @@ onMounted(async () => {
   height: 28px !important;
   padding: 0 !important;
   border: none !important;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-  box-shadow: 0 1px 6px rgba(79, 70, 229, 0.3);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
+  box-shadow: 0 1px 6px rgba(37, 99, 235, 0.3);
 }
 
 .action-btn-edit:hover {
@@ -1891,7 +2110,7 @@ onMounted(async () => {
 
 .ppb-dlg-header__accent {
   height: 3px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6, #0ea5e9);
+  background: linear-gradient(90deg, #3f6212, #65a30d, #a3e635);
 }
 
 .ppb-dlg-header__main {
@@ -1910,8 +2129,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: linear-gradient(145deg, #7c3aed 0%, #6366f1 100%);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.35);
+  background: linear-gradient(145deg, #4d7c0f 0%, #65a30d 100%);
+  box-shadow: 0 8px 20px rgba(63, 98, 18, 0.35);
 }
 
 .ppb-dlg-header__title {
@@ -1946,8 +2165,8 @@ onMounted(async () => {
 
 .ppb-dlg-footer :deep(.el-button--primary) {
   border: none;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+  background: linear-gradient(135deg, #4d7c0f 0%, #65a30d 100%);
+  box-shadow: 0 4px 16px rgba(63, 98, 18, 0.35);
 }
 
 .ppb-dlg-footer :deep(.el-button--primary:hover) {
@@ -1992,12 +2211,12 @@ onMounted(async () => {
 }
 
 .edit-tabs :deep(.el-tabs__item:hover) {
-  color: #4f46e5;
-  background: rgba(99, 102, 241, 0.08);
+  color: #4d7c0f;
+  background: #ecfccb;
 }
 
 .edit-tabs :deep(.el-tabs__item.is-active) {
-  color: #4f46e5;
+  color: #3f6212;
   background: #fff;
   border-color: #e2e8f0;
   border-bottom-color: #fff;
@@ -2047,13 +2266,13 @@ onMounted(async () => {
 
 .edit-tabs :deep(.el-input__inner:hover),
 .edit-tabs :deep(.el-input-number .el-input__inner:hover) {
-  border-color: #818cf8;
+  border-color: #a3e635;
 }
 
 .edit-tabs :deep(.el-input__inner:focus),
 .edit-tabs :deep(.el-input-number .el-input__inner:focus) {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: #65a30d;
+  box-shadow: 0 0 0 3px rgba(101, 163, 13, 0.2);
 }
 
 .edit-tabs :deep(.el-input.is-disabled .el-input__inner) {
@@ -2078,7 +2297,7 @@ onMounted(async () => {
 }
 
 .edit-tabs :deep(.el-switch.is-checked .el-switch__core) {
-  background-color: #6366f1;
+  background-color: #65a30d;
 }
 
 /* 滚动条美化 */

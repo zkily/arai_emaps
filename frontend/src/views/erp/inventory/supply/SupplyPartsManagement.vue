@@ -182,14 +182,15 @@
     </div>
 
     <div v-if="activeTab === 'stock'" class="table-card">
+      <div class="table-card__body">
       <el-table
         v-loading="loading"
-        :data="rows"
+        :data="pagedRows"
         border
         stripe
         size="small"
         class="data-table"
-        :height="stockTableHeight"
+        height="100%"
         :row-class-name="rowClass"
         @row-click="openDetail"
       >
@@ -296,11 +297,45 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ rows.length.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--qty">
+            <span class="pagination-summary__label">現在庫</span>
+            <b class="pagination-summary__value">{{ formatNum(summary.on_hand_total) }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--warn">
+            <span class="pagination-summary__label">品質異常</span>
+            <b class="pagination-summary__value">{{ summary.quality_issue_count.toLocaleString('ja-JP') }}</b>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--amber">
+            <span class="pagination-summary__label">長期滞留</span>
+            <b class="pagination-summary__value">{{ summary.stagnant_count.toLocaleString('ja-JP') }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[30, 50, 100, 200]"
+          :total="rows.length"
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
+          @size-change="handlePageSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
 
-    <template v-else>
+    <div v-else class="shipments-panels">
       <div class="table-card ship-block">
         <h2 class="ship-block__title">当月出荷予定</h2>
+        <div class="table-card__body">
         <el-table
           v-loading="shipmentsLoading"
           :data="shipmentPlanned"
@@ -308,6 +343,7 @@
           stripe
           size="small"
           class="data-table"
+          height="100%"
           empty-text="この月の出荷予定・実績はありません"
           @row-click="openShipmentRow"
         >
@@ -384,6 +420,24 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+        <div class="pagination-bar pagination-bar--compact">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">予定</span>
+              <b class="pagination-summary__value">{{ shipmentPlanned.length.toLocaleString('ja-JP') }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--qty">
+              <span class="pagination-summary__label">予定合計</span>
+              <b class="pagination-summary__value">{{ formatNum(shipmentSummary.planned_total) }}</b>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--warn">
+              <span class="pagination-summary__label">未出荷</span>
+              <b class="pagination-summary__value">{{ shipmentSummary.not_shipped_count.toLocaleString('ja-JP') }}</b>
+            </span>
+          </div>
+        </div>
       </div>
 
       <div class="table-card ship-block">
@@ -410,6 +464,7 @@
         <p class="ship-actual-hint">
           既定は全期間の実出荷です。上部のキーワード・納入先、および発生日で絞り込めます（対象月は出荷予定側のみ）。
         </p>
+        <div class="table-card__body">
         <el-table
           v-loading="shipmentsLoading"
           :data="shipmentActual"
@@ -417,6 +472,7 @@
           stripe
           size="small"
           class="data-table"
+          height="100%"
           empty-text="条件に一致する実出荷はありません"
           @row-click="openShipmentRow"
         >
@@ -444,8 +500,24 @@
           </el-table-column>
           <el-table-column prop="note" label="備考" min-width="180" show-overflow-tooltip />
         </el-table>
+        </div>
+        <div class="pagination-bar pagination-bar--compact">
+          <div class="pagination-summary">
+            <span class="pagination-summary__item">
+              <span class="pagination-summary__label">実績</span>
+              <b class="pagination-summary__value">{{
+                (shipmentSummary.actual_list_count || shipmentActual.length).toLocaleString('ja-JP')
+              }}</b>
+              <span class="pagination-summary__unit">件</span>
+            </span>
+            <span class="pagination-summary__item pagination-summary__item--qty">
+              <span class="pagination-summary__label">数量合計</span>
+              <b class="pagination-summary__value">{{ formatNum(shipmentSummary.actual_list_total ?? 0) }}</b>
+            </span>
+          </div>
+        </div>
       </div>
-    </template>
+    </div>
 
     <el-dialog
       v-model="transferVisible"
@@ -1186,17 +1258,33 @@ const locSaving = ref(false)
 const locForm = reactive({ id: 0, name: '', sort_order: 0, is_active: true, note: '' })
 const swapForm = reactive({ idA: null as number | null, idB: null as number | null })
 const swapSaving = ref(false)
-/** 表头 + 15 行（small 行高約 39px） */
+/** 表头 + 行（small 行高約 39px）— 保管場所ダイアログ用 */
 const LOCATION_LIST_ROWS = 8
 const locationTableHeight = 40 + LOCATION_LIST_ROWS * 39
 /** 一覧ヘッダ分を足した左側の最大高さ */
 const locationSideMaxHeight = `${locationTableHeight + 48}px`
-/** 在庫一覧：表头 + 15 行分の高さ（超過分はスクロール） */
-const STOCK_LIST_ROWS = 11
-const stockTableHeight = 40 + STOCK_LIST_ROWS * 39
 
 const activeTab = ref<'stock' | 'shipments'>('stock')
 const loading = ref(false)
+
+const pagination = reactive({
+  page: 1,
+  pageSize: 50,
+})
+
+const pagedRows = computed(() => {
+  const start = (pagination.page - 1) * pagination.pageSize
+  return rows.value.slice(start, start + pagination.pageSize)
+})
+
+function handlePageChange(page: number) {
+  pagination.page = page
+}
+
+function handlePageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+}
 const shipmentsLoading = ref(false)
 const shipmentPlanned = ref<SupplyPartShipmentPlanned[]>([])
 const shipmentActual = ref<SupplyPartShipmentActual[]>([])
@@ -1534,6 +1622,7 @@ async function loadList() {
     stagnantDays.value = res.stagnant_days || stagnantDays.value
     demandMonths.value = res.demand_months || demandMonths.value
     if (res.quality_statuses?.length) qualityStatuses.value = res.quality_statuses
+    pagination.page = 1
   } catch (error) {
     showServerError(error, '一覧の取得に失敗しました')
   } finally {
@@ -2503,16 +2592,26 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .supply-page {
+  /* アプリヘッダー(48) + タブ(36) */
+  --spm-app-chrome: 84px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 100%;
-  padding: 16px 20px 28px;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - var(--spm-app-chrome));
+  height: calc(100dvh - var(--spm-app-chrome));
+  max-height: calc(100vh - var(--spm-app-chrome));
+  max-height: calc(100dvh - var(--spm-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 16px 12px;
   background: linear-gradient(180deg, #e6f7f5 0%, #f8fafc 240px, #f8fafc 100%);
 }
 
 /* ---------- タイトル領域 ---------- */
 .page-header {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -2623,6 +2722,7 @@ onBeforeUnmount(() => {
 
 /* ---------- 統計カード ---------- */
 .stat-row {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
@@ -2708,7 +2808,8 @@ onBeforeUnmount(() => {
 }
 
 .page-tabs {
-  margin: 2px 0 10px;
+  flex-shrink: 0;
+  margin: 0;
 }
 .page-tabs :deep(.el-tabs__header) {
   margin: 0;
@@ -2722,18 +2823,37 @@ onBeforeUnmount(() => {
 .page-tabs :deep(.el-tabs__active-bar) {
   background-color: #0f766e;
 }
+
+.shipments-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
 .ship-block {
-  padding-bottom: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
 }
 .ship-block + .ship-block {
-  margin-top: 12px;
+  margin-top: 0;
 }
 .ship-block__head {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  margin: 8px 14px 4px;
+}
+.ship-block > .ship-block__title {
+  flex-shrink: 0;
   margin: 8px 14px 4px;
 }
 .ship-block__title {
@@ -2757,6 +2877,7 @@ onBeforeUnmount(() => {
   color: #475569;
 }
 .ship-actual-hint {
+  flex-shrink: 0;
   margin: 0 14px 8px;
   font-size: 11px;
   color: #64748b;
@@ -2783,13 +2904,14 @@ onBeforeUnmount(() => {
 
 /* ---------- 検索バー ---------- */
 .toolbar {
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 13px 16px 10px;
+  padding: 10px 14px 8px;
   border-radius: 12px;
   background: #fff;
   border: 1px solid #ccebe6;
@@ -2878,9 +3000,13 @@ onBeforeUnmount(() => {
     0 0 0 3px rgba(13, 148, 136, 0.15);
 }
 
-/* ---------- 一覧 ---------- */
+/* ---------- 一覧：残り高さを flex で埋める ---------- */
 .table-card {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   padding: 3px 0 0;
   border-radius: 12px;
@@ -2895,13 +3021,155 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   height: 3px;
+  z-index: 2;
   background: linear-gradient(90deg, #0d9488, #0891b2);
 }
+.table-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .data-table {
+  flex: 1 1 auto;
   width: 100%;
+  height: 100% !important;
   cursor: pointer;
   --el-table-border-color: #e6eef0;
   --el-table-row-hover-bg-color: #f0fdfa;
+}
+.table-card__body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+.table-card__body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.table-card__body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 5px 12px;
+  background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 100%);
+  border-top: 1px solid #ccebe6;
+}
+.pagination-bar--compact {
+  justify-content: flex-start;
+}
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+.pagination-summary__item--qty {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+}
+.pagination-summary__item--qty .pagination-summary__label { color: #0e7490; }
+.pagination-summary__item--qty .pagination-summary__value { color: #155e75; }
+.pagination-summary__item--warn {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.pagination-summary__item--warn .pagination-summary__label { color: #be123c; }
+.pagination-summary__item--warn .pagination-summary__value { color: #9f1239; }
+.pagination-summary__item--amber {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.pagination-summary__item--amber .pagination-summary__label { color: #92400e; }
+.pagination-summary__item--amber .pagination-summary__value { color: #b45309; }
+
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #0f766e;
+}
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor.el-input) {
+  width: 40px;
+  height: 26px;
+}
+.modern-pagination :deep(.el-pagination__editor .el-input__wrapper) {
+  height: 26px;
+  min-height: 26px;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.modern-pagination :deep(.el-pager li),
+.modern-pagination :deep(.btn-prev),
+.modern-pagination :deep(.btn-next) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  margin: 0 1px;
+  font-weight: 600;
+}
+.modern-pagination :deep(.el-pager li.is-active) {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+  box-shadow: 0 3px 8px rgba(15, 118, 110, 0.35);
+}
+.modern-pagination :deep(.el-pagination__jump) {
+  margin-left: 4px;
+  color: #64748b;
+  font-size: 12px;
 }
 .data-table :deep(th.el-table__cell) {
   font-weight: 700;

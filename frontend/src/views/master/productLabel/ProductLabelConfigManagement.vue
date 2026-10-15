@@ -102,22 +102,8 @@
       </div>
     </section>
 
-    <section ref="tableWrapRef" class="plc-table-wrap">
-      <div class="plc-result-bar">
-        <span class="plc-result-text">{{ pagination.total }} 件中 {{ list.length }} 件を表示</span>
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          :page-sizes="[20, 50, 100]"
-          :layout="paginationLayout"
-          size="small"
-          background
-          @current-change="loadList"
-          @size-change="loadList"
-        />
-      </div>
-
+    <section class="plc-table-wrap">
+      <div class="plc-table-body">
       <el-table
         v-loading="loading"
         :data="list"
@@ -127,7 +113,7 @@
         class="plc-table"
         :header-cell-style="headerCellStyle"
         :default-sort="{ prop: 'master_product_name', order: 'ascending' }"
-        :height="tableHeight"
+        height="100%"
         @sort-change="handleSortChange"
       >
         <el-table-column prop="product_cd" label="製品CD" :width="TABLE_COL.productCd" :fixed="tableFixed" show-overflow-tooltip>
@@ -318,6 +304,33 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ pagination.total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          :layout="paginationLayout"
+          size="small"
+          background
+          class="modern-pagination"
+          @current-change="loadList"
+          @size-change="loadList"
+        />
+      </div>
     </section>
 
     <!-- 編集ダイアログ -->
@@ -836,14 +849,12 @@ const outsourceEmailPreview = ref<OutsourceOrderEmailPreview | null>(null)
 const outsourceUserIds = ref<number[]>([])
 const outsourceUsers = ref<UserListItem[]>([])
 
-const tableWrapRef = ref<HTMLElement | null>(null)
-const tableHeight = ref(480)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
 
 const tableFixed = computed<'left' | false>(() => (viewportWidth.value >= 900 ? 'left' : false))
 const tableFixedRight = computed<'right' | false>(() => (viewportWidth.value >= 900 ? 'right' : false))
 const paginationLayout = computed(() =>
-  viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next'
+  viewportWidth.value < 768 ? 'prev, pager, next' : 'sizes, prev, pager, next, jumper'
 )
 const editDialogWidth = computed(() => (viewportWidth.value < 768 ? 'min(720px, 96vw)' : '720px'))
 const printDialogWidth = computed(() => (viewportWidth.value < 480 ? 'min(400px, 96vw)' : '400px'))
@@ -866,6 +877,14 @@ const canSendOutsourceEmail = computed(
 
 const filters = reactive({ keyword: '' })
 const pagination = reactive({ page: 1, pageSize: 50, total: 0 })
+
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (!total) return '0'
+  const start = pagination.pageSize * (pagination.page - 1) + 1
+  const end = Math.min(pagination.pageSize * pagination.page, total)
+  return `${start}–${end}`
+})
 
 const outsourceRowCount = computed(
   () => list.value.filter((r) => normalizeSupplyType(r.supply_type) === '外注').length,
@@ -1097,7 +1116,6 @@ async function loadList() {
     ElMessage.error('一覧の取得に失敗しました')
   } finally {
     loading.value = false
-    requestAnimationFrame(updateLayoutMetrics)
   }
 }
 
@@ -1178,9 +1196,6 @@ function openDialog(row?: ProductLabelConfig) {
 
 function updateLayoutMetrics() {
   viewportWidth.value = window.innerWidth
-  const wrapTop = tableWrapRef.value?.getBoundingClientRect().top ?? 0
-  const bottomGap = viewportWidth.value < 768 ? 12 : 16
-  tableHeight.value = Math.max(260, Math.floor(window.innerHeight - wrapTop - bottomGap))
 }
 
 async function fetchAllListForPrint(): Promise<ProductLabelConfig[]> {
@@ -1616,8 +1631,16 @@ onUnmounted(() => {
 
 <style scoped>
 .plc-page {
+  --plc-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
   padding: 12px 16px 16px;
-  min-height: 100%;
+  height: calc(100vh - var(--plc-app-chrome));
+  height: calc(100dvh - var(--plc-app-chrome));
+  max-height: calc(100vh - var(--plc-app-chrome));
+  max-height: calc(100dvh - var(--plc-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1629,6 +1652,7 @@ onUnmounted(() => {
 
 /* ── ヒーローヘッダー ── */
 .plc-hero {
+  flex-shrink: 0;
   border-radius: 14px;
   padding: 14px 18px;
   background: linear-gradient(135deg, #0f766e 0%, #0d9488 42%, #0891b2 78%, #0284c7 100%);
@@ -1724,6 +1748,7 @@ onUnmounted(() => {
 
 /* ── ツールバーカード ── */
 .plc-toolbar-card {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 12px;
   border: 1px solid rgba(13, 148, 136, 0.1);
@@ -1917,7 +1942,7 @@ onUnmounted(() => {
 }
 
 .plc-table-wrap {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1931,32 +1956,119 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.plc-result-bar {
+.plc-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 14px;
-  font-size: 11px;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
-  flex-wrap: wrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.plc-result-text {
-  white-space: nowrap;
-  font-weight: 600;
-  color: #475569;
+.plc-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.plc-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.plc-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 
 .plc-table {
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
 }
 
-.plc-table :deep(.el-table__inner-wrapper) {
-  border-radius: 0 0 12px 12px;
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--range {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.pagination-summary__item--range .pagination-summary__label {
+  color: #9a3412;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #7c2d12;
+}
+
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #ea580c;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .plc-table :deep(.el-table__row:hover > td) {
@@ -2563,12 +2675,13 @@ onUnmounted(() => {
     font-size: 10px;
   }
 
-  .plc-result-bar {
+  .pagination-bar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .plc-result-bar :deep(.el-pagination) {
+  .pagination-bar :deep(.modern-pagination) {
+    margin-left: 0;
     justify-content: center;
     flex-wrap: wrap;
   }
@@ -2797,10 +2910,9 @@ onUnmounted(() => {
   padding-top: 15px;
 }
 
-.plm-modern .plc-result-bar {
-  padding-top: 11px;
-  background: linear-gradient(180deg, #fff7ed 0%, #fffbf7 100%);
-  border-bottom-color: var(--hx-line);
+.plm-modern .pagination-bar {
+  border-top-color: var(--hx-line);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
 }
 
 .plm-modern .plc-search-label {
@@ -2914,10 +3026,10 @@ onUnmounted(() => {
   color: #be123c;
 }
 
-.plm-modern .plc-result-bar :deep(.el-pager li.is-active) {
+.plm-modern .modern-pagination :deep(.el-pager li.is-active) {
   color: #fff;
   border-radius: 6px;
-  background: linear-gradient(135deg, var(--hx-2), var(--hx-3));
+  background: linear-gradient(135deg, var(--hx-2), var(--hx-3)) !important;
   box-shadow: 0 2px 0 var(--hx-deep);
 }
 

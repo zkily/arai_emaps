@@ -80,6 +80,7 @@
     </div>
 
     <div class="rb-table-wrap">
+      <div class="rb-table-body">
       <el-table
         ref="tableRef"
         :data="rows"
@@ -91,7 +92,7 @@
         :empty-text="'データがありません'"
         :header-cell-style="headerCellStyle"
         :cell-style="cellStyle"
-        height="calc(100vh - 210px)"
+        height="100%"
         @selection-change="onSelectionChange"
       >
         <el-table-column type="selection" width="42" align="center" fixed />
@@ -138,17 +139,28 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
-      <div class="rb-result-bar">
-        <span>表示 <b>{{ rows.length }}</b> / <b>{{ total }}</b> 件</span>
+      <div class="pagination-bar">
+        <div class="pagination-summary">
+          <span class="pagination-summary__item">
+            <span class="pagination-summary__label">合計</span>
+            <b class="pagination-summary__value">{{ total.toLocaleString('ja-JP') }}</b>
+            <span class="pagination-summary__unit">件</span>
+          </span>
+          <span class="pagination-summary__item pagination-summary__item--range">
+            <span class="pagination-summary__label">表示</span>
+            <b class="pagination-summary__value">{{ pageRangeText }}</b>
+          </span>
+        </div>
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :total="total"
           :page-sizes="[30, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          size="small"
-          background
+          layout="sizes, prev, pager, next, jumper"
+          small
+          class="modern-pagination"
           @current-change="loadData"
           @size-change="handlePageSizeChange"
         />
@@ -313,6 +325,14 @@ const statItems = computed(() => [
   { n: machineDistinct.value, l: '設備数' },
   { n: productDistinct.value, l: '製品数' },
 ])
+
+const pageRangeText = computed(() => {
+  const t = total.value
+  if (!t) return '0'
+  const start = pageSize.value * (currentPage.value - 1) + 1
+  const end = Math.min(pageSize.value * currentPage.value, t)
+  return `${start}–${end}`
+})
 
 const headerCellStyle = () => ({
   background: '#eef8f7',
@@ -645,8 +665,16 @@ onMounted(async () => {
 
 <style scoped>
 .rb-page {
+  --rb-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
   padding: 10px 12px 12px;
-  min-height: 100vh;
+  height: calc(100vh - var(--rb-app-chrome));
+  height: calc(100dvh - var(--rb-app-chrome));
+  max-height: calc(100vh - var(--rb-app-chrome));
+  max-height: calc(100dvh - var(--rb-app-chrome));
+  min-height: 0;
+  overflow: hidden;
   background: linear-gradient(165deg, #f0fdfa 0%, #ecfeff 35%, #f8fafc 100%);
   font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
   display: flex;
@@ -655,6 +683,7 @@ onMounted(async () => {
 }
 
 .rb-header {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #0d9488 0%, #0891b2 55%, #0284c7 100%);
   border-radius: 10px;
   padding: 12px 16px;
@@ -726,6 +755,7 @@ onMounted(async () => {
 }
 
 .rb-toolbar {
+  flex-shrink: 0;
   background: #fff;
   border-radius: 10px;
   padding: 8px 12px;
@@ -789,25 +819,131 @@ onMounted(async () => {
 }
 
 .rb-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
   background: #fff;
   border-radius: 10px;
   border: 1px solid rgba(13, 148, 136, 0.1);
-  padding: 0 0 8px;
+  padding: 0;
   box-shadow: 0 2px 12px rgba(15, 118, 110, 0.06);
-  flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.rb-result-bar {
+.rb-table-body {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rb-table-body :deep(.el-table) {
+  flex: 1 1 auto;
+  height: 100% !important;
+}
+
+.rb-table-body :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+
+.rb-table-body :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
+}
+
+.rb-table {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100% !important;
+}
+
+.pagination-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 8px 10px;
+  padding: 5px 10px 8px;
+  border-top: 1px solid rgba(13, 148, 136, 0.12);
+  background: linear-gradient(180deg, #fff 0%, #fff7ed 100%);
+}
+
+.pagination-summary {
+  display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 6px 12px 0;
-  font-size: 12px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pagination-summary__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.pagination-summary__label {
+  font-size: 11px;
+  font-weight: 600;
   color: #64748b;
+}
+
+.pagination-summary__value {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination-summary__unit {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.pagination-summary__item--range {
+  background: #ffedd5;
+  border-color: #fed7aa;
+}
+
+.pagination-summary__item--range .pagination-summary__label {
+  color: #9a3412;
+}
+
+.pagination-summary__item--range .pagination-summary__value {
+  color: #7c2d12;
+}
+
+.modern-pagination {
+  margin-left: auto;
+  --el-pagination-font-size: 12px;
+  --el-pagination-button-width: 26px;
+  --el-pagination-button-height: 26px;
+  --el-pagination-button-color: #64748b;
+  --el-pagination-hover-color: #ea580c;
+}
+
+.modern-pagination :deep(.el-pagination__sizes) {
+  margin-right: 4px;
+}
+
+.modern-pagination :deep(.el-select) {
+  width: 96px;
+}
+
+.modern-pagination :deep(.el-select .el-select__wrapper),
+.modern-pagination :deep(.el-pagination__jump) {
+  font-size: 12px;
+  height: 26px;
+  min-height: 26px;
 }
 
 .rb-dialog :deep(.el-dialog__header) {
@@ -1147,11 +1283,16 @@ onMounted(async () => {
   box-shadow: 0 1px 2px rgba(124, 45, 18, 0.4);
 }
 
-.rbm-modern .rb-result-bar b {
+.rbm-modern .pagination-bar {
+  border-top-color: var(--hx-line);
+  background: linear-gradient(180deg, #ffffff 0%, var(--hx-soft) 100%);
+}
+
+.rbm-modern .pagination-summary__item--range .pagination-summary__value {
   color: var(--hx-4);
 }
 
-.rbm-modern .rb-result-bar :deep(.el-pager li.is-active) {
+.rbm-modern .modern-pagination :deep(.el-pager li.is-active) {
   background: linear-gradient(135deg, var(--hx-3), var(--hx-4)) !important;
   color: #fff;
   box-shadow: 0 2px 0 var(--hx-deep);
