@@ -21,7 +21,14 @@ from app.modules.erp.production_equipment_capacity_models import (
     ProductionEquipmentCapacity,
     ProductionEquipmentCapacityItem,
 )
-from app.modules.master.models import EquipmentEfficiency, Machine
+from app.modules.master.models import (
+    EquipmentEfficiency,
+    Machine,
+    Material,
+    Product,
+    ProductBomHeader,
+    ProductBomLine,
+)
 
 router = APIRouter(prefix="/production-equipment-capacity", tags=["生産設備能力"])
 
@@ -126,6 +133,38 @@ def _normalize_product_cd(cd: str) -> str:
     return text[:-1] + "1"
 
 
+# 設備能力の対象外（設備能率一覧と同じ）
+_EXCLUDED_PRODUCT_TYPES = ("試作品", "補給品")
+
+
+def _product_keys(*cds: str) -> set[str]:
+    """照合用：原CD と末尾1正規化の両方を入れる。"""
+    keys: set[str] = set()
+    for raw in cds:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        keys.add(text)
+        keys.add(_normalize_product_cd(text))
+    return keys
+
+
+async def _excluded_product_cds(db: AsyncSession, product_cds: list[str]) -> set[str]:
+    """試作品・補給品の製品CD集合（照合用キー込み）。"""
+    cds = sorted(_product_keys(*product_cds))
+    if not cds:
+        return set()
+    rows = (
+        await db.execute(
+            select(Product.product_cd).where(
+                Product.product_cd.in_(cds),
+                Product.product_type.in_(_EXCLUDED_PRODUCT_TYPES),
+            )
+        )
+    ).scalars().all()
+    return _product_keys(*rows)
+
+
 class ItemIn(BaseModel):
     part_no: str = ""
     part_name: str = ""
@@ -173,6 +212,16 @@ class ImportMachine(BaseModel):
 class ImportBody(BaseModel):
     machines: list[ImportMachine] = Field(default_factory=list)
     with_products: bool = True
+
+
+class TransferItemBody(BaseModel):
+    """明細1行を同一工程の別設備へ移す。"""
+
+    target_capacity_id: int
+    item: ItemIn
+    # 画面の未保存状態を含めて移す場合、移転後の元設備明細（移転行を除いた一覧）
+    source_items: Optional[list[ItemIn]] = None
+    source_header: Optional[HeaderIn] = None
 
 
 def _header_dict(row: ProductionEquipmentCapacity) -> dict[str, Any]:
@@ -316,11 +365,98 @@ def _computed_items(
     return enriched, calc_totals(line_calcs, header_nums)
 
 
-def _detail_payload(
+async def _product_materials_map(db: AsyncSession, product_cds: list[str]) -> dict[str, tuple[str, str]]:
+    """製品CD → (材料名, 材料CD)。製品マスタ優先、無ければ BOM。キーは原CDと末尾1正規化の両方。"""
+    cds = sorted({(cd or "").strip() for cd in product_cds if (cd or "").strip()})
+    if not cds:
+        return {}
+    query_cds = sorted(_product_keys(*cds))
+    material_cds_by_product: dict[str, list[str]] = {}
+
+    for p_cd, m_cd in (
+        await db.execute(
+            select(Product.product_cd, Product.material_cd).where(Product.product_cd.in_(query_cds))
+        )
+    ).all():
+        m = (m_cd or "").strip()
+        if p_cd and m:
+            material_cds_by_product[p_cd] = [m]
+
+    missing = [cd for cd in query_cds if cd not in material_cds_by_product]
+    if missing:
+        for p_cd, m_cd in (
+            await db.execute(
+                select(ProductBomHeader.parent_product_cd, ProductBomLine.component_material_cd)
+                .join(ProductBomLine, ProductBomLine.header_id == ProductBomHeader.id)
+                .where(
+                    ProductBomHeader.parent_product_cd.in_(missing),
+                    ProductBomHeader.status == "active",
+                    ProductBomLine.component_material_cd.isnot(None),
+                    ProductBomLine.component_material_cd != "",
+                )
+                .order_by(ProductBomHeader.parent_product_cd, ProductBomLine.line_no)
+            )
+        ).all():
+            lst = material_cds_by_product.setdefault(p_cd, [])
+            if m_cd and m_cd not in lst:
+                lst.append(m_cd)
+
+    all_mats = sorted({m for lst in material_cds_by_product.values() for m in lst})
+    name_map: dict[str, str] = {}
+    if all_mats:
+        name_map = {
+            cd: (name or "")
+            for cd, name in (
+                await db.execute(
+                    select(Material.material_cd, Material.material_name).where(
+                        Material.material_cd.in_(all_mats)
+                    )
+                )
+            ).all()
+        }
+
+    # 表示は材料名のみ（CD は material_cd に別途載せる）
+    out: dict[str, tuple[str, str]] = {}
+    for p_cd, mats in material_cds_by_product.items():
+        names: list[str] = []
+        for m in mats:
+            nm = (name_map.get(m) or "").strip()
+            names.append(nm if nm else m)
+        name_label = " / ".join(names)
+        cd_label = " / ".join(mats)
+        for key in _product_keys(p_cd):
+            out[key] = (name_label, cd_label)
+    return out
+
+
+async def _attach_materials(db: AsyncSession, items: list[dict[str, Any]]) -> None:
+    mat_map = await _product_materials_map(db, [str(it.get("part_no") or "") for it in items])
+    for it in items:
+        keys = _product_keys(str(it.get("part_no") or ""))
+        name_label = ""
+        cd_label = ""
+        for key in keys:
+            if key in mat_map:
+                name_label, cd_label = mat_map[key]
+                break
+        it["material"] = name_label
+        it["material_cd"] = cd_label
+
+
+def _sort_items_by_part_name(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        items,
+        key=lambda row: ((row.get("part_name") or "").casefold(), row.get("part_no") or ""),
+    )
+
+
+async def _detail_payload(
+    db: AsyncSession,
     header: ProductionEquipmentCapacity,
     items: list[ProductionEquipmentCapacityItem],
     *,
     machine_availability_pct: Optional[float] = None,
+    with_materials: bool = True,
 ) -> dict[str, Any]:
     head = _header_dict(header)
     nums = calc_header(
@@ -328,6 +464,9 @@ def _detail_payload(
     )
     inputs = [_item_input(it) for it in items]
     enriched, summary = _computed_items(inputs, nums)
+    if with_materials:
+        await _attach_materials(db, enriched)
+        enriched = _sort_items_by_part_name(enriched)
     payload = {**head, **nums, "items": enriched, "summary": summary}
     if machine_availability_pct is not None:
         payload["machine_availability_pct"] = round(float(machine_availability_pct), 1)
@@ -485,20 +624,90 @@ def _rate_to_item(
 async def _efficiency_rows(
     db: AsyncSession, machine_cd: str, machine_name: str
 ) -> list[EquipmentEfficiency]:
-    conds = []
-    if machine_cd:
-        conds.append(EquipmentEfficiency.machine_cd == machine_cd)
-    if machine_name:
-        conds.append(EquipmentEfficiency.machines_name == machine_name)
-    if not conds:
-        return []
-    result = await db.execute(
-        select(EquipmentEfficiency).where(
-            or_(*conds),
-            or_(EquipmentEfficiency.status.is_(None), EquipmentEfficiency.status != 0),
+    """当該設備の設備能率のみ返す。
+
+    machine_cd があれば CD 完全一致のみ（名前との OR は他設備品目が混ざるため禁止）。
+    CD が空、または CD ヒットが無いときだけ設備名で照合する。
+    試作品・補給品は除外する。
+    """
+    cd = (machine_cd or "").strip()
+    name = (machine_name or "").strip()
+    status_ok = or_(EquipmentEfficiency.status.is_(None), EquipmentEfficiency.status != 0)
+
+    rows: list[EquipmentEfficiency] = []
+    if cd:
+        result = await db.execute(
+            select(EquipmentEfficiency).where(
+                EquipmentEfficiency.machine_cd == cd,
+                status_ok,
+            )
         )
+        rows = list(result.scalars().all())
+    if not rows and name:
+        result = await db.execute(
+            select(EquipmentEfficiency).where(
+                EquipmentEfficiency.machines_name == name,
+                status_ok,
+            )
+        )
+        rows = list(result.scalars().all())
+        # 名前ヒットでも、別設備CDが付いている行は除外（当該CDが分かる場合）
+        if cd:
+            rows = [
+                r
+                for r in rows
+                if not (r.machine_cd or "").strip() or (r.machine_cd or "").strip() == cd
+            ]
+    if not rows:
+        return []
+
+    excluded = await _excluded_product_cds(
+        db, [r.product_cd or "" for r in rows]
     )
-    return list(result.scalars().all())
+    if not excluded:
+        return rows
+    return [
+        r
+        for r in rows
+        if not _product_keys(r.product_cd or "") & excluded
+    ]
+
+
+async def _allowed_part_keys(db: AsyncSession, machine_cd: str, machine_name: str) -> set[str]:
+    """当該設備で生産する製品CDキー（能率マスタ・除外タイプ適用後）。"""
+    keys: set[str] = set()
+    for eff in await _efficiency_rows(db, machine_cd, machine_name):
+        keys |= _product_keys(eff.product_cd or "")
+    return keys
+
+
+def _item_part_key(part_no: str) -> set[str]:
+    return _product_keys(part_no or "")
+
+
+async def _filter_capacity_items(
+    db: AsyncSession,
+    machine_cd: str,
+    machine_name: str,
+    items: list[ProductionEquipmentCapacityItem],
+) -> list[ProductionEquipmentCapacityItem]:
+    """表示・集計用：当該設備の製品のみ。試作品・補給品と他設備品目を落とす。"""
+    if not items:
+        return []
+    allowed = await _allowed_part_keys(db, machine_cd, machine_name)
+    excluded = await _excluded_product_cds(
+        db, [item.part_no or "" for item in items]
+    )
+    # 能率マスタに当該設備の行が無い場合は、タイプ除外だけ行う（手入力行を残す）
+    out: list[ProductionEquipmentCapacityItem] = []
+    for item in items:
+        keys = _item_part_key(item.part_no or "")
+        if keys & excluded:
+            continue
+        if allowed and keys and not (keys & allowed):
+            continue
+        out.append(item)
+    return out
 
 
 async def _suggestions(db: AsyncSession, process: str, existing: set[str]) -> list[dict[str, Any]]:
@@ -596,8 +805,16 @@ async def list_equipment(
             grouped[item.capacity_id].append(item)
 
     payload = []
+    # 同一工程で複数設備に載っている製品CD → 設備一覧（表示ヒント用）
+    part_hits: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    part_seen: dict[str, set[int]] = defaultdict(set)
+    part_display: dict[str, str] = {}
+
     for header in headers:
-        detail = _detail_payload(header, grouped.get(header.id, []))
+        items = await _filter_capacity_items(
+            db, header.machine_cd or "", header.machine_name or "", grouped.get(header.id, [])
+        )
+        detail = await _detail_payload(db, header, items, with_materials=False)
         payload.append(
             {
                 "id": detail["id"],
@@ -610,6 +827,33 @@ async def list_equipment(
                 "summary": detail["summary"],
             }
         )
+        for item in items:
+            raw_cd = (item.part_no or "").strip()
+            if not raw_cd:
+                continue
+            nk = raw_cd.casefold()
+            if header.id in part_seen[nk]:
+                continue
+            part_seen[nk].add(header.id)
+            part_display.setdefault(nk, raw_cd)
+            part_hits[nk].append(
+                {
+                    "id": header.id,
+                    "machine_cd": header.machine_cd or "",
+                    "machine_name": header.machine_name or "",
+                    "monthly_qty": _num(item.monthly_qty),
+                }
+            )
+
+    shared_products = [
+        {
+            "part_no": part_display[nk],
+            "machines": machines,
+        }
+        for nk, machines in sorted(part_hits.items(), key=lambda x: part_display[x[0]])
+        if len(machines) >= 2
+    ]
+
     existing = {row.machine_cd for row in headers}
     return {
         "success": True,
@@ -618,6 +862,7 @@ async def list_equipment(
             "process_name": PROCESSES[code],
             "equipments": payload,
             "suggestions": await _suggestions(db, code, existing),
+            "shared_products": shared_products,
         },
     }
 
@@ -665,8 +910,16 @@ async def forecast_monthly(
             bucket["product_name"] = _s(product_name, 100)
         elif not bucket["product_name"] and product_name:
             bucket["product_name"] = _s(product_name, 100)
+    excluded = await _excluded_product_cds(
+        db, [b["product_cd"] for b in buckets.values()]
+    )
     items = sorted(
-        (b for b in buckets.values() if int(b["monthly_qty"]) > 0),
+        (
+            b
+            for b in buckets.values()
+            if int(b["monthly_qty"]) > 0
+            and not (_product_keys(b["product_cd"]) & excluded)
+        ),
         key=lambda row: row["product_cd"],
     )
     return {
@@ -690,11 +943,16 @@ async def get_equipment(
 ):
     code = _process(process)
     header = await _load_header(db, code, capacity_id)
-    items = await _items_of(db, header.id)
+    items = await _filter_capacity_items(
+        db,
+        header.machine_cd or "",
+        header.machine_name or "",
+        await _items_of(db, header.id),
+    )
     avail = await _machine_availability_pct(db, header.machine_cd)
     return {
         "success": True,
-        "data": _detail_payload(header, items, machine_availability_pct=avail),
+        "data": await _detail_payload(db, header, items, machine_availability_pct=avail),
     }
 
 
@@ -722,7 +980,7 @@ async def create_equipment(
         raise HTTPException(
             status_code=400, detail="同じ設備コードがこの工程に既にあります"
         ) from exc
-    return {"success": True, "data": _detail_payload(row, [])}
+    return {"success": True, "data": await _detail_payload(db, row, [])}
 
 
 @router.put("/{process}/{capacity_id}")
@@ -743,7 +1001,88 @@ async def save_equipment(
             status_code=400, detail="同じ設備コードがこの工程に既にあります"
         ) from exc
     items = await _replace_items(db, header.id, body.items)
-    return {"success": True, "data": _detail_payload(header, items)}
+    return {"success": True, "data": await _detail_payload(db, header, items)}
+
+
+def _part_match_key(part_no: str) -> str:
+    return (part_no or "").strip().casefold()
+
+
+@router.post("/{process}/{capacity_id}/transfer-item")
+async def transfer_item(
+    process: str,
+    capacity_id: int,
+    body: TransferItemBody,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(verify_token_and_get_user),
+):
+    """品目行を同一工程の別設備へ移転する（同一品番があれば数量合算）。"""
+    code = _process(process)
+    if body.target_capacity_id == capacity_id:
+        raise HTTPException(status_code=400, detail="同じ設備には移せません")
+    source = await _load_header(db, code, capacity_id)
+    target = await _load_header(db, code, body.target_capacity_id)
+
+    moved = body.item
+    moved_key = _part_match_key(moved.part_no)
+    if not moved_key and not (moved.part_name or "").strip():
+        raise HTTPException(status_code=400, detail="移転する品目が空です")
+
+    if body.source_header is not None:
+        _apply_header(source, body.source_header, code)
+
+    if body.source_items is not None:
+        source_items_in = list(body.source_items)
+    else:
+        source_items_in = []
+        removed = False
+        for row in await _items_of(db, source.id):
+            src = ItemIn(**{k: v for k, v in _item_input(row).items() if k not in {"id", "line_no"}})
+            if not removed and moved_key and _part_match_key(src.part_no) == moved_key:
+                removed = True
+                continue
+            if (
+                not removed
+                and not moved_key
+                and (src.part_name or "").strip() == (moved.part_name or "").strip()
+            ):
+                removed = True
+                continue
+            source_items_in.append(src)
+        if not removed:
+            raise HTTPException(status_code=400, detail="元設備に該当品目が見つかりません")
+
+    target_items_in: list[ItemIn] = []
+    merged = False
+    for row in await _items_of(db, target.id):
+        ti = ItemIn(**{k: v for k, v in _item_input(row).items() if k not in {"id", "line_no"}})
+        if (
+            not merged
+            and moved_key
+            and _part_match_key(ti.part_no) == moved_key
+        ):
+            ti.monthly_qty = max(_num(ti.monthly_qty), 0) + max(_num(moved.monthly_qty), 0)
+            merged = True
+        target_items_in.append(ti)
+    if not merged:
+        target_items_in.append(moved)
+
+    await _replace_items(db, source.id, source_items_in)
+    await _replace_items(db, target.id, target_items_in)
+    await db.flush()
+
+    source_items = await _items_of(db, source.id)
+    target_items = await _items_of(db, target.id)
+    return {
+        "success": True,
+        "data": {
+            "source": await _detail_payload(db, source, source_items),
+            "target": await _detail_payload(db, target, target_items),
+            "merged": merged,
+            "target_capacity_id": target.id,
+            "target_machine_name": target.machine_name,
+        },
+    }
 
 
 @router.delete("/{process}/{capacity_id}")
@@ -853,9 +1192,15 @@ async def import_rates(
         by_part[key] = src
         order.append(key)
 
+    # 当該設備の能率品目のみ取り込む（他設備・試作品・補給品は対象外）
+    allowed_eff = await _efficiency_rows(db, header.machine_cd or "", header.machine_name or "")
+    allowed_keys = set()
+    for eff in allowed_eff:
+        allowed_keys |= _product_keys(eff.product_cd or "")
+
     added = 0
     updated = 0
-    for eff in await _efficiency_rows(db, header.machine_cd, header.machine_name):
+    for eff in allowed_eff:
         incoming = _rate_to_item(eff, days, availability_pct=avail)
         if incoming is None:
             continue
@@ -875,12 +1220,23 @@ async def import_rates(
             added += 1
     if added == 0 and updated == 0:
         raise HTTPException(status_code=404, detail="この設備の設備能率が見つかりません")
-    merged = [by_part[key] for key in order if key in by_part][:300]
+    # 既存行のうち、当該設備以外・試作品・補給品は保存対象から外す
+    merged: list[ItemIn] = []
+    for key in order:
+        src = by_part.get(key)
+        if src is None:
+            continue
+        keys = _item_part_key(src.part_no)
+        if allowed_keys and keys and not (keys & allowed_keys):
+            continue
+        merged.append(src)
+        if len(merged) >= 300:
+            break
     merged = await _enrich_items_metrics(db, code, header.machine_cd, merged)
     items = await _replace_items(db, header.id, merged)
     return {
         "success": True,
-        "data": _detail_payload(header, items, machine_availability_pct=avail),
+        "data": await _detail_payload(db, header, items, machine_availability_pct=avail),
         "meta": {"added": added, "updated": updated},
     }
 
@@ -929,7 +1285,7 @@ async def refresh_metrics(
     saved = await _replace_items(db, header.id, items_in)
     return {
         "success": True,
-        "data": _detail_payload(header, saved, machine_availability_pct=avail),
+        "data": await _detail_payload(db, header, saved, machine_availability_pct=avail),
         "meta": {
             "availability_pct": avail,
             "period": {

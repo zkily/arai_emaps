@@ -1,4 +1,4 @@
-/** 生産設備能力計算。可動率・合格率は画面上 0〜100%。 */
+/** 生産設備能力計算。作業率・合格率は画面上 0〜100%。 */
 
 export type Judgment = 'ok' | 'ng' | null
 
@@ -47,7 +47,8 @@ export interface TotalCalc {
   remain_hours: number
   daily_judgment: Judgment
   month_judgment: Judgment
-  peak_hourly: number
+  /** 品目の能率/H の単純平均（能率>0 の行のみ） */
+  avg_hourly: number
 }
 
 function n(value: unknown, fallback = 0): number {
@@ -75,9 +76,13 @@ export function calcLine(input: LineInput, header: HeaderCalc): LineCalc {
   const dailyQty = daysB > 0 ? monthly / daysB : 0
   const denom = rate * avail * pass
   const productionHours = dailyQty > 0 && denom > 0 ? dailyQty / denom : 0
-  const operatingHours = productionHours > 0 ? productionHours + setup : 0
-  const weightedHours = operatingHours > 0 && actual > 0 ? (daysB / actual) * productionHours + setup : 0
-  const occupiedHours = actual > 0 ? weightedHours * actual : 0
+  // 段取H は月1回。日次には按分、所要時間には一度だけ加算（×実日数しない）
+  const setupDaily = productionHours > 0 && actual > 0 ? setup / actual : 0
+  const operatingHours = productionHours > 0 ? productionHours + setupDaily : 0
+  const weightedHours =
+    productionHours > 0 && actual > 0 ? (daysB / actual) * productionHours + setupDaily : 0
+  const occupiedHours =
+    productionHours > 0 && actual > 0 ? daysB * productionHours + setup : 0
   const occupancyPct = header.total_hours > 0 ? (occupiedHours / header.total_hours) * 100 : null
   let dailyJudgment: Judgment = null
   if (productionHours > 0 && header.daily_available > 0) {
@@ -99,14 +104,18 @@ export function calcTotals(lines: LineCalc[], header: HeaderCalc): TotalCalc {
   let production = 0
   let operating = 0
   let occupied = 0
-  let peak = 0
+  let rateSum = 0
+  let rateN = 0
   let active = 0
   for (const line of lines) {
     if (line.production_hours > 0) active += 1
     production += line.production_hours
     operating += line.operating_hours
     occupied += line.occupied_hours
-    peak = Math.max(peak, line.rate_per_hour)
+    if (line.rate_per_hour > 0) {
+      rateSum += line.rate_per_hour
+      rateN += 1
+    }
   }
   const total = header.total_hours
   return {
@@ -121,16 +130,43 @@ export function calcTotals(lines: LineCalc[], header: HeaderCalc): TotalCalc {
     remain_hours: total - occupied,
     daily_judgment: active <= 0 ? null : operating > header.daily_available ? 'ng' : 'ok',
     month_judgment: active <= 0 ? null : total <= 0 || occupied > total ? 'ng' : 'ok',
-    peak_hourly: peak,
+    avg_hourly: rateN > 0 ? rateSum / rateN : 0,
   }
 }
 
-export function fmtNum(value: number | null | undefined, digits = 2): string {
+/** 表示用：千分符＋小数（既定 1 桁） */
+export function fmtNum(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return '－'
   return value.toLocaleString('ja-JP', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })
+}
+
+/** el-input-number：千分符＋小数 1 桁（EP formatter/parser は string→string） */
+export function eqcNumFormatter(value: string) {
+  if (value === '' || value == null) return ''
+  const n = Number(String(value).replace(/,/g, '').replace(/，/g, ''))
+  if (!Number.isFinite(n)) return String(value)
+  return n.toLocaleString('ja-JP', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
+}
+
+/** el-input-number：千分符・整数（小数なし） */
+export function eqcIntFormatter(value: string) {
+  if (value === '' || value == null) return ''
+  const n = Number(String(value).replace(/,/g, '').replace(/，/g, ''))
+  if (!Number.isFinite(n)) return String(value)
+  return n.toLocaleString('ja-JP', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })
+}
+
+export function eqcNumParser(value: string) {
+  return String(value ?? '').replace(/,/g, '').replace(/，/g, '')
 }
 
 export function judgmentLabel(value: Judgment): string {

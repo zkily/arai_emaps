@@ -13,7 +13,7 @@ export interface CapacitySummary {
   remain_hours: number
   daily_judgment: Judgment
   month_judgment: Judgment
-  peak_hourly: number
+  avg_hourly: number
 }
 
 export interface EquipmentListItem {
@@ -39,6 +39,10 @@ export interface CapacityItem {
   line_no?: number
   part_no: string
   part_name: string
+  /** 材料名のみ（製品マスタ／BOM から付与、読取専用） */
+  material?: string
+  /** 材料CD（表示は material、保存・参照用） */
+  material_cd?: string
   monthly_qty: number
   qty_days: number
   rate_per_hour: number
@@ -79,11 +83,23 @@ export interface EquipmentDetail {
   summary: CapacitySummary
 }
 
+/** 同一工程で複数設備に登録されている製品 */
+export interface SharedProductInfo {
+  part_no: string
+  machines: {
+    id: number
+    machine_cd: string
+    machine_name: string
+    monthly_qty: number
+  }[]
+}
+
 export interface CapacityListData {
   process_cd: string
   process_name: string
   equipments: EquipmentListItem[]
   suggestions: EquipmentSuggestion[]
+  shared_products?: SharedProductInfo[]
 }
 
 const base = '/api/erp/production-equipment-capacity'
@@ -102,6 +118,36 @@ export function createEquipmentCapacity(process: string, body: Record<string, un
 
 export function saveEquipmentCapacity(process: string, id: number, body: Record<string, unknown>) {
   return request.put(`${base}/${process}/${id}`, body) as Promise<{ success: boolean; data: EquipmentDetail }>
+}
+
+export function transferEquipmentCapacityItem(
+  process: string,
+  capacityId: number,
+  body: {
+    target_capacity_id: number
+    item: Omit<CapacityItem, 'id' | 'line_no' | 'material' | 'material_cd'>
+    source_items?: Omit<CapacityItem, 'id' | 'line_no' | 'material' | 'material_cd'>[]
+    source_header?: {
+      machine_cd: string
+      machine_name: string
+      regular_hours: number
+      shift_count: number
+      overtime_hours: number
+      working_days: number
+      note: string
+    }
+  },
+) {
+  return request.post(`${base}/${process}/${capacityId}/transfer-item`, body) as Promise<{
+    success: boolean
+    data: {
+      source: EquipmentDetail
+      target: EquipmentDetail
+      merged: boolean
+      target_capacity_id: number
+      target_machine_name: string
+    }
+  }>
 }
 
 export function deleteEquipmentCapacity(process: string, id: number) {

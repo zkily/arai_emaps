@@ -1,12 +1,13 @@
 """生産設備能力の計算。
 
 総時間 = (定時間 + 残業) × 直 × 稼働日数
-日当数 = 設定数 ÷ 稼働日数
+日当数 = 内示/月 ÷ 稼働日数
 生産時間 = 日当数 ÷ (能率/H × 可動率 × 合格率)
-稼働時間 = 生産時間 + 段取り（生産時間が 0 のときは 0）
-加重平均 = 設定稼働日数 ÷ 実生産日数 × 生産時間 + 段取り
-占有時間 = 加重平均 × 実生産日数
-占有率 = 占有時間 ÷ 総時間
+段取りは月1回（実日数で按分して日次に載せ、占有時間には1回だけ加算）
+稼働時間 = 生産時間 + 段取り÷実生産日数（生産時間が 0 のときは 0）
+加重平均 = 設定稼働日数 ÷ 実生産日数 × 生産時間 + 段取り÷実生産日数
+占有時間 = 設定稼働日数 × 生産時間 + 段取り
+負荷率 = 占有時間 ÷ 総時間
 日当判定 = 加重平均 > (定時間+残業)×直 なら ×
 月当判定 = 占有時間合計 > 総時間 なら ×
 """
@@ -74,12 +75,16 @@ def calc_line(
         production_hours = daily_qty / denom
     else:
         production_hours = 0.0
-    operating_hours = (production_hours + setup) if production_hours > 0 else 0.0
-    if operating_hours > 0 and actual > 0:
-        weighted_hours = days_b / actual * production_hours + setup
+    # 段取は月1回。日次は按分、占有は +setup のみ（×実日数しない）
+    if production_hours > 0 and actual > 0:
+        setup_daily = setup / actual
+        operating_hours = production_hours + setup_daily
+        weighted_hours = days_b / actual * production_hours + setup_daily
+        occupied_hours = days_b * production_hours + setup
     else:
+        operating_hours = 0.0
         weighted_hours = 0.0
-    occupied_hours = weighted_hours * actual if actual > 0 else 0.0
+        occupied_hours = 0.0
     occupancy_pct = (occupied_hours / total_hours * 100.0) if total_hours > 0 else None
     if production_hours <= 0 or daily_available <= 0:
         daily_judgment: Optional[str] = None
@@ -103,7 +108,8 @@ def calc_totals(lines: list[dict[str, Any]], header: dict[str, float]) -> dict[s
     sum_production = 0.0
     sum_operating = 0.0
     sum_occupied = 0.0
-    peak_rate = 0.0
+    rate_sum = 0.0
+    rate_n = 0
     active = 0
     for line in lines:
         prod = _f(line.get("production_hours"))
@@ -112,7 +118,10 @@ def calc_totals(lines: list[dict[str, Any]], header: dict[str, float]) -> dict[s
         sum_production += prod
         sum_operating += _f(line.get("operating_hours"))
         sum_occupied += _f(line.get("occupied_hours"))
-        peak_rate = max(peak_rate, _f(line.get("rate_per_hour")))
+        rate = _f(line.get("rate_per_hour"))
+        if rate > 0:
+            rate_sum += rate
+            rate_n += 1
     occupancy_pct = (sum_occupied / total_hours * 100.0) if total_hours > 0 else None
     if active <= 0:
         daily_judgment = None
@@ -132,5 +141,5 @@ def calc_totals(lines: list[dict[str, Any]], header: dict[str, float]) -> dict[s
         "remain_hours": total_hours - sum_occupied,
         "daily_judgment": daily_judgment,
         "month_judgment": month_judgment,
-        "peak_hourly": peak_rate,
+        "avg_hourly": (rate_sum / rate_n) if rate_n > 0 else 0.0,
     }
