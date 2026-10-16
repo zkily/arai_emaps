@@ -2700,6 +2700,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 <style scoped>
 .forming-plan-list-page {
+  --flp-app-chrome: 84px;
   --font-sans: inherit;
   --font-mono: inherit;
   --fs-xs: 10.5px;
@@ -2723,16 +2724,22 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   --gl-plan: 56px;
   --gl-act: var(--gl-plan);
 
-  padding: 10px 12px 12px;
-  background:
-    radial-gradient(circle at 10% -20%, rgba(59, 130, 246, 0.1), transparent 35%),
-    radial-gradient(circle at 110% -30%, rgba(16, 185, 129, 0.08), transparent 30%),
-    #f3f6fb;
-  min-height: 100%;
+  width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 10px 12px 12px;
+  height: calc(100vh - var(--flp-app-chrome));
+  height: calc(100dvh - var(--flp-app-chrome));
+  max-height: calc(100vh - var(--flp-app-chrome));
+  max-height: calc(100dvh - var(--flp-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 10% -20%, rgba(59, 130, 246, 0.1), transparent 35%),
+    radial-gradient(circle at 110% -30%, rgba(16, 185, 129, 0.08), transparent 30%),
+    #f3f6fb;
   font-family: inherit;
   font-size: var(--fs-base);
   color: var(--c-text-m);
@@ -2740,6 +2747,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 .plan-hd {
+  flex-shrink: 0;
   margin-bottom: 0;
   padding: 4px 2px 2px;
 }
@@ -2835,6 +2843,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 .filter-card {
+  flex-shrink: 0;
   padding: 7px 10px;
   border-color: rgba(191, 219, 254, 0.75);
   background:
@@ -2892,14 +2901,56 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 .result-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 10px 10px 12px;
 }
 
+.result-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.result-tabs :deep(.el-tabs__header) {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
 .result-tabs :deep(.el-tabs__content) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding-top: 8px;
 }
-.result-tabs :deep(.el-tabs__header) {
-  margin-bottom: 0;
+.result-tabs :deep(.el-tab-pane) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.result-tabs :deep(.el-tab-pane) > .gantt-legend-bar,
+.result-tabs :deep(.el-tab-pane) > .plan-sec-hd,
+.result-tabs :deep(.el-tab-pane) > .table-range-note,
+.result-tabs :deep(.el-tab-pane) > .table-filter-toolbar-card,
+.result-tabs :deep(.el-tab-pane) > .util-note,
+.result-tabs :deep(.el-tab-pane) > .schedule-empty,
+.result-tabs :deep(.el-tab-pane) > .el-empty {
+  flex-shrink: 0;
+}
+.result-tabs :deep(.el-tab-pane) > .list-gantt-scroll,
+.result-tabs :deep(.el-tab-pane) > .schedule-table-group-list,
+.result-tabs :deep(.el-tab-pane) > .util-table-wrap,
+.result-tabs :deep(.el-tab-pane) > .util-diff-daily-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .result-tabs :deep(.el-tabs__item) {
   font-weight: 800;
@@ -2913,6 +2964,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 }
 
 .gantt-legend-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -3437,6 +3489,9 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 /* 設備操業度（日）：和紙・墨調の簡素な表 */
 .util-diff-daily-wrap {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   --ud-ink: #3a3835;
   --ud-ink-muted: #6e6a63;
   --ud-line: #e5e1da;
@@ -3452,11 +3507,11 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   border: 1px solid var(--ud-line);
   background: var(--ud-bg);
   box-shadow: 0 1px 2px rgba(58, 56, 53, 0.04);
-  overflow: hidden;
 }
 .util-diff-daily-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  max-height: min(78vh, 920px);
 }
 .util-diff-daily-table {
   --util-diff-daily-line-w: 108px;
@@ -3625,7 +3680,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 16px 40px -20px rgba(30, 64, 175, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  overflow: hidden;
+  overflow: auto;
 }
 .util-table-wrap::before {
   content: '';
@@ -3715,6 +3770,8 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 .schedule-table-group-list {
   display: grid;
   gap: 10px;
+  overflow-y: auto;
+  align-content: start;
 }
 .schedule-table-group {
   padding-top: 0;
@@ -3814,7 +3871,8 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 /* ── Gantt（日別）：对齐 Scheduling.vue 表格风格 ── */
 .list-gantt-scroll {
-  max-height: 620px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   border: 1px solid #e2e8f0;
   border-radius: 10px;

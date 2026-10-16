@@ -1818,16 +1818,28 @@ watch(
 
 <style scoped>
 .scheduling-page {
+  --sp-app-chrome: 84px;
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(100vh - var(--sp-app-chrome));
+  height: calc(100dvh - var(--sp-app-chrome));
+  max-height: calc(100vh - var(--sp-app-chrome));
+  max-height: calc(100dvh - var(--sp-app-chrome));
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px 12px;
   background:
     radial-gradient(circle at 10% -20%, rgba(59, 130, 246, 0.1), transparent 35%),
     radial-gradient(circle at 110% -30%, rgba(16, 185, 129, 0.08), transparent 30%),
     #f3f6fb;
-  min-height: 100%;
 }
 
 .plan-hd {
-  margin-bottom: 8px;
+  flex-shrink: 0;
+  margin-bottom: 0;
   padding: 4px 2px 2px;
 }
 
@@ -1889,13 +1901,14 @@ watch(
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(3px);
   padding: 10px 12px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
 .filter-card {
+  flex-shrink: 0;
   padding: 7px 10px;
   border-color: rgba(191, 219, 254, 0.75);
   background:
@@ -1958,10 +1971,11 @@ watch(
 }
 
 .stat-grid {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: nowrap;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .stat-card {
@@ -2123,6 +2137,7 @@ watch(
 }
 
 .result-head {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2428,7 +2443,9 @@ watch(
 }
 
 .matrix-table-wrapper {
-  height: 620px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   overflow: auto;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -2987,6 +3004,11 @@ watch(
 /* ---------- マトリクスカード ---------- */
 .sp-modern .result-card {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 14px;
   border-color: rgba(199, 210, 254, 0.8);
   box-shadow:

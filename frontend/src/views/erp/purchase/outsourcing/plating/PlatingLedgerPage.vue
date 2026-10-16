@@ -229,11 +229,26 @@
           </el-radio-button>
         </el-radio-group>
       </div>
-      <div v-else-if="activeTab === 'order'" class="initial-bar">
+      <div v-else-if="activeTab === 'order'" class="tab-tools">
         <PlatingOrderSheetIssuer
           v-model:range="dateRange"
           :default-supplier-cd="supplierCd"
           @issued="applyAffected"
+        />
+        <span class="tab-tools__sep" aria-hidden="true" />
+        <LedgerSupplierMatrixPrint
+          v-model:range="dateRange"
+          kind="order"
+          :default-supplier-cd="supplierCd"
+          :supplier-options="supplierOptions"
+        />
+      </div>
+      <div v-else-if="activeTab === 'receiving'" class="tab-tools">
+        <LedgerSupplierMatrixPrint
+          v-model:range="dateRange"
+          kind="receiving"
+          :default-supplier-cd="supplierCd"
+          :supplier-options="supplierOptions"
         />
       </div>
       </div>
@@ -656,6 +671,7 @@ import {
   weldingLedgerContext,
 } from './ledgerContext'
 import { notifyLedgerError } from './ledgerError'
+import LedgerSupplierMatrixPrint from './LedgerSupplierMatrixPrint.vue'
 import PlatingHistoryPanel from './PlatingHistoryPanel.vue'
 import PlatingOrderSheetIssuer from './PlatingOrderSheetIssuer.vue'
 import PlatingStockPanel from './PlatingStockPanel.vue'
@@ -2141,6 +2157,21 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   height: 36px;
+}
+
+.tab-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 2px 0 8px;
+}
+
+.tab-tools__sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 18px;
+  background: #cbd5e1;
 }
 
 .view-switch {

@@ -20,6 +20,7 @@ from .sales_api import router as sales_router
 from .standard_cost_api import router as standard_cost_router
 from .stock_transaction_log_api import router as stock_transaction_log_router
 from .supply_part_api import router as supply_part_router
+from .welding_inventory_trend_api import router as welding_inventory_trend_router
 
 # メインルーター（すべてのERPサブルーターを統合）
 router = APIRouter()
@@ -42,5 +43,6 @@ router.include_router(inventory_report_router)
 router.include_router(production_review_router)
 router.include_router(production_equipment_capacity_router)
 router.include_router(supply_part_router)
+router.include_router(welding_inventory_trend_router)
 
 __all__ = ["router"]
