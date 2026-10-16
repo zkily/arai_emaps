@@ -501,12 +501,13 @@
             description="集計対象データがありません"
             class="schedule-empty"
           />
-          <div v-else v-loading="loadingUtilizationMonth" class="schedule-table-wrap util-table-wrap">
+          <div v-else v-loading="loadingUtilizationMonth" class="util-table-wrap">
             <el-table
               :data="utilizationRows"
               border
               stripe
               size="small"
+              height="100%"
               class="schedule-list-table nest-table--polish util-table util-table--modern"
             >
               <el-table-column prop="lineLabel" label="設備" width="65" show-overflow-tooltip />
@@ -3673,6 +3674,10 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 .util-table-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.99) 40%, rgba(241, 245, 249, 0.96) 100%);
@@ -3680,7 +3685,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 16px 40px -20px rgba(30, 64, 175, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  overflow: auto;
+  overflow: hidden;
 }
 .util-table-wrap::before {
   content: '';
@@ -3694,9 +3699,17 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 .util-table-wrap :deep(.el-table) {
   position: relative;
   z-index: 1;
+  flex: 1 1 auto;
+  height: 100% !important;
   --el-table-border-color: rgba(226, 232, 240, 0.95);
   --el-table-header-bg-color: transparent;
   background: transparent;
+}
+.util-table-wrap :deep(.el-table__inner-wrapper) {
+  height: 100%;
+}
+.util-table-wrap :deep(.el-table__body-wrapper) {
+  overflow-y: auto !important;
 }
 .util-table--modern :deep(.el-table__inner-wrapper) {
   border-radius: 0 0 15px 15px;

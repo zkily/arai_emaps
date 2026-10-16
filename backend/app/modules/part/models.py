@@ -34,6 +34,22 @@ class PartStock(Base):
     remarks = Column(String(50), default="")
 
 
+class PartMonthlyForecast(Base):
+    """部品月次内示（part_monthly_forecast）"""
+
+    __tablename__ = "part_monthly_forecast"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    part_cd = Column(String(50), nullable=False, index=True, comment="部品CD")
+    year = Column(Integer, nullable=False, comment="年")
+    month = Column(Integer, nullable=False, comment="月 1-12")
+    forecast_qty = Column(Integer, nullable=False, default=0, comment="内示数")
+    source = Column(String(20), nullable=False, default="manual", comment="manual / from_product")
+    updated_by = Column(String(100), comment="更新者")
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class PartLog(Base):
     """部品受入ログ（part_logs）"""
     __tablename__ = "part_logs"

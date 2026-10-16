@@ -13,6 +13,8 @@ export interface PartMasterRow {
   id: number
   part_cd: string
   part_name: string
+  /** 別名 */
+  alias_name?: string | null
   category?: string | null
   /** 部品材料（使用材料、自由入力） */
   part_material?: string | null
@@ -40,6 +42,7 @@ export interface PartMasterRow {
 export interface PartMasterPayload {
   part_cd: string
   part_name: string
+  alias_name?: string | null
   category?: string | null
   part_material?: string | null
   kind?: PartKind
@@ -58,6 +61,7 @@ export interface PartMasterPayload {
 export function getPartList(params: {
   keyword?: string
   status?: number
+  supplierCd?: string
   page?: number
   pageSize?: number
 }) {

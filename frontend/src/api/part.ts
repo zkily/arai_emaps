@@ -5,6 +5,7 @@ import request from '@/shared/api/request'
 
 const PREFIX = '/api/part'
 
+/** 部品マスタに紐づく仕入先名一覧（仕入先マスタ全件ではない） */
 export function getPartStockSupplierNames(): Promise<{ success?: boolean; data?: string[] }> {
   return request.get(`${PREFIX}/stock/supplier-names`)
 }
@@ -134,4 +135,56 @@ export function importPartLogsFromCSV(
 /** 仕入先一覧（part_logs.supplier 去重） */
 export function getPartSupplierList(): Promise<{ success?: boolean; data?: string[] }> {
   return getPartReceivingSuppliers()
+}
+
+export interface PartForecastMonth {
+  month: number
+  forecast_qty: number
+  source: 'manual' | 'from_product' | null
+}
+
+export interface PartForecastPayload {
+  part_cd: string
+  part_name: string
+  year: number
+  months: PartForecastMonth[]
+  product_count?: number
+  applied?: boolean
+}
+
+export function getPartMonthlyForecast(
+  part_cd: string,
+  year: number,
+): Promise<{ success?: boolean; data?: PartForecastPayload }> {
+  return request.get(`${PREFIX}/forecast`, { params: { part_cd, year } })
+}
+
+export function savePartMonthlyForecast(body: {
+  part_cd: string
+  year: number
+  source?: 'manual' | 'from_product'
+  months: { month: number; forecast_qty: number }[]
+}): Promise<{ success?: boolean; data?: PartForecastPayload }> {
+  return request.put(`${PREFIX}/forecast`, body)
+}
+
+export function loadPartForecastFromProducts(body: {
+  part_cd: string
+  year: number
+  apply?: boolean
+}): Promise<{ success?: boolean; data?: PartForecastPayload }> {
+  return request.post(`${PREFIX}/forecast/from-products`, body)
+}
+
+/** 複数部品×指定年月の内示。戻り: { part_cd: { 'YYYY-MM': qty } } */
+export function getPartForecastBatch(
+  part_cds: string[],
+  months: string[],
+): Promise<{ success?: boolean; data?: Record<string, Record<string, number>> }> {
+  return request.get(`${PREFIX}/forecast/batch`, {
+    params: {
+      part_cds: part_cds.join(','),
+      months: months.join(','),
+    },
+  })
 }

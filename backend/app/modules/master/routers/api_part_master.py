@@ -51,6 +51,7 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
         "id": row.id,
         "part_cd": row.part_cd,
         "part_name": row.part_name,
+        "alias_name": row.alias_name,
         "category": row.category,
         "part_material": row.part_material,
         "kind": row.kind,
@@ -79,6 +80,7 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
 class PartIn(BaseModel):
     part_cd: str = Field(..., min_length=1, max_length=50)
     part_name: str = Field(..., min_length=1, max_length=200)
+    alias_name: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, max_length=100)
     part_material: Optional[str] = Field(None, max_length=100)
     kind: KindLiteral = "N"
@@ -96,6 +98,7 @@ class PartIn(BaseModel):
 
 class PartPatch(BaseModel):
     part_name: Optional[str] = Field(None, max_length=200)
+    alias_name: Optional[str] = Field(None, max_length=200)
     category: Optional[str] = Field(None, max_length=100)
     part_material: Optional[str] = Field(None, max_length=100)
     kind: Optional[KindLiteral] = None
@@ -115,6 +118,7 @@ class PartPatch(BaseModel):
 async def list_parts(
     keyword: Optional[str] = Query(None),
     status: Optional[int] = Query(None, ge=0, le=1),
+    supplier_cd: Optional[str] = Query(None, alias="supplierCd"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=10000, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
@@ -127,11 +131,14 @@ async def list_parts(
             or_(
                 PartMaster.part_cd.like(k),
                 PartMaster.part_name.like(k),
+                PartMaster.alias_name.like(k),
                 PartMaster.part_material.like(k),
             )
         )
     if status is not None:
         q = q.where(PartMaster.status == status)
+    if supplier_cd and supplier_cd.strip():
+        q = q.where(PartMaster.supplier_cd == supplier_cd.strip())
     cnt = await db.execute(select(func.count()).select_from(q.subquery()))
     total = cnt.scalar() or 0
     q = q.order_by(PartMaster.part_name, PartMaster.part_cd).offset((page - 1) * page_size).limit(page_size)
@@ -181,6 +188,7 @@ async def create_part(
     row = PartMaster(
         part_cd=body.part_cd.strip(),
         part_name=body.part_name.strip(),
+        alias_name=((body.alias_name or "").strip() or None),
         category=((body.category or "").strip() or None),
         part_material=((body.part_material or "").strip() or None),
         kind=body.kind,
@@ -216,6 +224,9 @@ async def update_part(
     data = body.model_dump(exclude_unset=True)
     if "part_name" in data and data["part_name"] is not None:
         row.part_name = str(data["part_name"]).strip()
+    if "alias_name" in data:
+        v = data["alias_name"]
+        row.alias_name = (str(v).strip() if v is not None else "") or None
     if "category" in data:
         v = data["category"]
         row.category = (str(v).strip() if v is not None else "") or None

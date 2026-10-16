@@ -185,3 +185,5 @@
 180_production_equipment_capacity.sql
 181_machines_availability_rate.sql
 182_machines_efficiency_to_availability_rate.sql
+183_part_monthly_forecast.sql
+184_parts_alias_name.sql

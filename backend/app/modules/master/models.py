@@ -602,6 +602,7 @@ class PartMaster(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     part_cd = Column(String(50), unique=True, nullable=False, index=True)
     part_name = Column(String(200), nullable=False)
+    alias_name = Column(String(200))
     category = Column(String(100))
     part_material = Column(String(100))
     kind = Column(String(1), nullable=False, default="N")

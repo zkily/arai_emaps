@@ -316,6 +316,7 @@ async def list_part_stocks(
                 PartMaster.part_material,
                 PartMaster.capacity_qty,
                 PartMaster.settlement_type,
+                PartMaster.alias_name,
             )
             .join(PartMaster, join_cond)
             .where(PartMaster.status != 0)
@@ -374,7 +375,12 @@ async def list_part_stocks(
             _stock_to_dict_with_parts_status(
                 row[0],
                 row[1],
-                {"part_material": row[2], "capacity_qty": row[3], "settlement_type": row[4]},
+                {
+                    "part_material": row[2],
+                    "capacity_qty": row[3],
+                    "settlement_type": row[4],
+                    "alias_name": row[5],
+                },
             )
             for row in raw_rows
         ]
@@ -764,26 +770,23 @@ async def get_part_reorder_suggestions(
 
 
 @router.get("/supplier-names")
-async def list_distinct_part_stock_supplier_names(
+async def list_part_master_supplier_names(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_purchase_operation("edit")),
 ):
-    """仕入先名一覧：part_stock.supplier_name を重複除去（NULL・空文字除く、名称昇順）"""
+    """仕入先名一覧：部品マスタ（parts）に紐づく仕入先のみ（suppliers 結合、名称昇順）"""
     q = (
-        select(distinct(PartStock.supplier_name))
-        .where(PartStock.supplier_name.isnot(None))
-        .where(PartStock.supplier_name != "")
-        .order_by(PartStock.supplier_name)
+        select(distinct(Supplier.supplier_name))
+        .select_from(PartMaster)
+        .join(Supplier, Supplier.supplier_cd == PartMaster.supplier_cd)
+        .where(PartMaster.status == 1)
+        .where(PartMaster.supplier_cd.isnot(None))
+        .where(PartMaster.supplier_cd != "")
+        .where(Supplier.supplier_name.isnot(None))
+        .where(Supplier.supplier_name != "")
+        .order_by(Supplier.supplier_name)
     )
-    try:
-        result = await db.execute(q)
-    except Exception as e:
-        if _is_missing_part_stock_table_error(e):
-            logger.warning(
-                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
-            )
-            return {"success": True, "data": []}
-        raise
+    result = await db.execute(q)
     raw = [row[0] for row in result.all() if row[0] is not None]
     names = sorted({str(n).strip() for n in raw if str(n).strip()})
     return {"success": True, "data": names}

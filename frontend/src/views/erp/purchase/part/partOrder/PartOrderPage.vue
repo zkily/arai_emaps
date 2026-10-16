@@ -53,6 +53,10 @@
           <el-icon><Operation /></el-icon>
           在庫計算
         </el-button>
+        <el-button class="action-btn forecast-btn" @click="openForecastDialog">
+          <el-icon><TrendCharts /></el-icon>
+          内示管理
+        </el-button>
       </div>
     </div>
 
@@ -243,6 +247,15 @@
             <el-button type="primary" @click="handlePrintOrder" class="print-btn">
               <el-icon><Printer /></el-icon>
               注文書発行
+            </el-button>
+            <el-button
+              type="success"
+              class="order-sheet-pdf-btn"
+              :loading="printPdfExporting"
+              @click="handleExportOrderSheetPdf"
+            >
+              <el-icon><Document /></el-icon>
+              PDF出力
             </el-button>
           </div>
           <div class="table-actions" v-if="activeTab === 'orderHistory'">
@@ -1089,6 +1102,8 @@
           <div class="osd-notes">
             <el-input v-model="printForm.note1" type="textarea" :rows="2" size="small" />
             <el-input v-model="printForm.note2" type="textarea" :rows="2" size="small" />
+            <el-input v-model="printForm.note3" type="textarea" :rows="2" size="small" />
+            <el-input v-model="printForm.note4" type="textarea" :rows="2" size="small" />
           </div>
         </div>
       </div>
@@ -1099,6 +1114,16 @@
             <el-icon><Document /></el-icon>{{ printFileName }}
           </span>
           <el-button size="small" @click="printConfirmDialogVisible = false">キャンセル</el-button>
+          <el-button
+            type="success"
+            size="small"
+            class="osd-footer__pdf"
+            :loading="printPdfExporting"
+            :disabled="!printItems.length"
+            @click="exportOrderSheetPdf"
+          >
+            <el-icon><Document /></el-icon>PDF出力
+          </el-button>
           <el-button
             type="primary"
             size="small"
@@ -1156,6 +1181,16 @@
           <span v-if="printSheetInfo" class="opv-meta">
             {{ printSheetInfo.parts }}品目 ／ {{ printSheetInfo.pages }}ページ ／ 合計 {{ formatCurrency(printTotals.amount) }}
           </span>
+          <el-button
+            type="success"
+            size="small"
+            class="opv-pdf"
+            :loading="printPdfExporting"
+            :disabled="!printItems.length"
+            @click="exportOrderSheetPdf"
+          >
+            <el-icon><Document /></el-icon>PDF出力
+          </el-button>
           <el-button type="primary" size="small" class="opv-issue" :disabled="!printItems.length" @click="openIssueFromPreview">
             <el-icon><Printer /></el-icon>注文書発行へ
           </el-button>
@@ -1455,11 +1490,103 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="forecastDialogVisible"
+      width="760px"
+      :close-on-click-modal="false"
+      :show-close="false"
+      append-to-body
+      align-center
+      class="part-forecast-dialog pb-std"
+    >
+      <template #header>
+        <div class="pfd-header">
+          <span class="pfd-icon"><el-icon><TrendCharts /></el-icon></span>
+          <div class="pfd-copy">
+            <span class="pfd-title">部品内示管理</span>
+            <p class="pfd-desc">部品を選び、各月の内示数を入力します。製品内示からの読込後は保存で確定します。</p>
+          </div>
+          <el-icon class="pfd-close" @click="forecastDialogVisible = false"><Close /></el-icon>
+        </div>
+      </template>
+
+      <div class="pfd-toolbar">
+        <div class="pfd-field">
+          <span class="pfd-label">部品</span>
+          <el-select
+            v-model="forecastPartCd"
+            filterable
+            remote
+            clearable
+            reserve-keyword
+            placeholder="部品を選択"
+            :remote-method="remoteFetchParts"
+            :loading="partSelectLoading"
+            class="pfd-part"
+            @visible-change="onPartSelectVisible"
+            @change="loadPartForecast"
+          >
+            <el-option
+              v-for="opt in partSelectOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+        <div class="pfd-field">
+          <span class="pfd-label">年</span>
+          <el-select v-model="forecastYear" class="pfd-year" @change="loadPartForecast">
+            <el-option v-for="y in forecastYearOptions" :key="y" :label="`${y}年`" :value="y" />
+          </el-select>
+        </div>
+      </div>
+
+      <div v-loading="forecastLoading" class="pfd-months">
+        <label v-for="m in forecastMonths" :key="m.month" class="pfd-month">
+          <span class="pfd-month__label">{{ m.month }}月</span>
+          <el-input-number
+            v-model="m.forecast_qty"
+            :min="0"
+            :max="99999999"
+            :precision="0"
+            :controls="false"
+            :value-on-clear="0"
+            :disabled="!forecastPartCd"
+            class="pfd-month__input"
+            @change="onForecastQtyEdit"
+          />
+        </label>
+      </div>
+
+      <template #footer>
+        <div class="pfd-footer">
+          <el-button
+            :disabled="!forecastPartCd"
+            :loading="forecastLoading"
+            @click="loadForecastFromProducts"
+          >
+            製品内示から読込
+          </el-button>
+          <span class="pfd-footer__spacer" />
+          <el-button @click="forecastDialogVisible = false">キャンセル</el-button>
+          <el-button
+            type="primary"
+            :disabled="!forecastPartCd"
+            :loading="forecastSaving"
+            @click="savePartForecast"
+          >
+            保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ShoppingCart,
@@ -1497,6 +1624,10 @@ import {
   savePartOrderPdf,
   cancelPartStockOrder,
   getPartReorderSuggestions,
+  getPartMonthlyForecast,
+  savePartMonthlyForecast,
+  loadPartForecastFromProducts,
+  getPartForecastBatch,
 } from '@/api/part'
 import type { PartReorderSuggestion } from '@/api/part'
 import ChartWrapper from '@/components/ChartWrapper.vue'
@@ -1542,7 +1673,8 @@ interface PartOrderItem {
   /** 受入数（在庫加算に使用。注文本数は注文履歴用） */
   receiving_qty: number
   order_bundle_quantity: number
-  /** 部品マスタ：部品材料・収容数・決済種類（一覧 API で付与） */
+  /** 部品マスタ：別名・部品材料・収容数・決済種類（一覧 API で付与） */
+  alias_name?: string | null
   part_material?: string | null
   capacity_qty?: number | null
   settlement_type?: string | null
@@ -1575,6 +1707,8 @@ const dataGenerationEndDate = ref('')
 const dataGenerationDialogVisible = ref(false)
 const printConfirmDialogVisible = ref(false)
 const printPdfSaving = ref(false)
+/** 注文書 PDF をブラウザへダウンロード中 */
+const printPdfExporting = ref(false)
 const printLoading = ref(false)
 /** 部品注文履歴の印刷・PDF出力 */
 const historyExportLoading = ref(false)
@@ -1592,7 +1726,6 @@ const lastSavedManualUsage = new Map<number, number>()
 const initialStockData = ref<InitialStockItem[]>([])
 /** 部品注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
 const orderHistoryData = ref<PartOrderItem[]>([])
-const activeTab = ref('stock') // デフォルトは部品日別在庫タブ
 const partMasterSyncLoading = ref(false)
 
 // 検索表单（默认日期为「日本时间」的当天）
@@ -1605,12 +1738,81 @@ const getTodayJapanStr = () => {
   return `${year}-${month}-${day}`
 }
 
+/** 期間・部品・仕入先・タブを localStorage に保持（更新／画面遷移後も復元） */
+const SEARCH_FILTER_STORAGE_KEY = 'smart-emaps:part-order-search-filter:v1'
+const SEARCH_FILTER_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const PART_ORDER_TABS = new Set(['stock', 'usage', 'receiving', 'order', 'orderHistory', 'initial'])
+
+type SavedPartOrderSearchFilter = {
+  savedAt: number
+  part_cd?: string
+  dateRange?: string[]
+  supplier?: string[]
+  activeTab?: string
+}
+
+const loadSavedSearchFilter = (): SavedPartOrderSearchFilter | null => {
+  try {
+    const raw = localStorage.getItem(SEARCH_FILTER_STORAGE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw) as SavedPartOrderSearchFilter
+    if (!data?.savedAt || Date.now() - data.savedAt > SEARCH_FILTER_TTL_MS) {
+      localStorage.removeItem(SEARCH_FILTER_STORAGE_KEY)
+      return null
+    }
+    return data
+  } catch {
+    return null
+  }
+}
+
+const savedSearchFilter = loadSavedSearchFilter()
+const todayJp = getTodayJapanStr()
+const restoredDateRange =
+  Array.isArray(savedSearchFilter?.dateRange) &&
+  savedSearchFilter.dateRange.length === 2 &&
+  typeof savedSearchFilter.dateRange[0] === 'string' &&
+  typeof savedSearchFilter.dateRange[1] === 'string'
+    ? ([savedSearchFilter.dateRange[0], savedSearchFilter.dateRange[1]] as string[])
+    : ([todayJp, todayJp] as string[])
+const restoredSupplier = Array.isArray(savedSearchFilter?.supplier)
+  ? savedSearchFilter.supplier.filter((s): s is string => typeof s === 'string' && !!s.trim())
+  : []
+const restoredTab =
+  typeof savedSearchFilter?.activeTab === 'string' && PART_ORDER_TABS.has(savedSearchFilter.activeTab)
+    ? savedSearchFilter.activeTab
+    : 'stock'
+
+const activeTab = ref(restoredTab)
 const searchForm = reactive({
   /** 空＝全件。部品マスタから選択（部品CD） */
-  part_cd: '',
-  dateRange: [getTodayJapanStr(), getTodayJapanStr()] as string[], // デフォルトは日本時間の当日
-  supplier: [] as string[],
+  part_cd: typeof savedSearchFilter?.part_cd === 'string' ? savedSearchFilter.part_cd : '',
+  dateRange: restoredDateRange,
+  supplier: restoredSupplier,
 })
+
+const saveSearchFilter = () => {
+  try {
+    localStorage.setItem(
+      SEARCH_FILTER_STORAGE_KEY,
+      JSON.stringify({
+        savedAt: Date.now(),
+        part_cd: searchForm.part_cd,
+        dateRange: searchForm.dateRange,
+        supplier: searchForm.supplier,
+        activeTab: activeTab.value,
+      } satisfies SavedPartOrderSearchFilter),
+    )
+  } catch {
+    // localStorage 不可の環境では保持しない
+  }
+}
+
+watch(
+  () => [searchForm.part_cd, searchForm.dateRange, searchForm.supplier, activeTab.value] as const,
+  () => saveSearchFilter(),
+  { deep: true },
+)
 
 const headerDateRangeText = computed(() => {
   const [start, end] = searchForm.dateRange || []
@@ -1665,11 +1867,16 @@ const ORDER_SHEET_PERSON_ROLES: { key: OrderSheetPersonRole; label: string }[] =
   { key: 'issuer', label: '発行者' },
 ]
 const ORDER_SHEET_PEOPLE_STORAGE_KEY = 'smart-emaps:part-order-sheet-people:v2'
+/** 常に候補へ含める（localStorage 既存データにもマージ） */
+const ORDER_SHEET_PEOPLE_SEED: Record<OrderSheetPersonRole, string[]> = {
+  approver: ['小森', '篠田'],
+  issuer: ['孫', '小森'],
+}
 
 const loadOrderSheetPeople = () => {
   const state = {
-    approver: ['小森'],
-    issuer: ['孫'],
+    approver: [...ORDER_SHEET_PEOPLE_SEED.approver],
+    issuer: [...ORDER_SHEET_PEOPLE_SEED.issuer],
     last: { approver: '小森', issuer: '孫' } as Record<OrderSheetPersonRole, string>,
   }
   try {
@@ -1677,6 +1884,9 @@ const loadOrderSheetPeople = () => {
     for (const { key } of ORDER_SHEET_PERSON_ROLES) {
       if (Array.isArray(saved?.[key])) state[key] = saved[key].filter((n: unknown) => typeof n === 'string')
       if (typeof saved?.last?.[key] === 'string') state.last[key] = saved.last[key]
+      for (const name of ORDER_SHEET_PEOPLE_SEED[key]) {
+        if (!state[key].includes(name)) state[key].push(name)
+      }
     }
   } catch {
     // 破損データは既定値で上書き
@@ -1734,6 +1944,9 @@ const printForm = reactive({
   note1: '1.支払期日には法定税率による消費税額及び地方消費税分を加算して支払います。',
   note2:
     '2.支払期日・支払方法・検査完了期日・有償支給原材料代金の決済期日及び方法については、令和8年7月1日の「支払方法等について」によります。',
+  note3:
+    '3.納期の回答ない場合は指定通りに入るものと受け取らさせて頂きます。有償支給代金の決済は、納品分の下請代金支払時にその使用原材料分を控除します。',
+  note4: '4.客先内示による発注のため、正式受注状況により変更になる場合があります。',
 })
 
 // 計算プロパティ - 現在データは直接バックエンドからフィルタリングされ、ここでは表示用のみ
@@ -1931,7 +2144,7 @@ const refreshListForActiveTab = () => {
   }
 }
 
-// 仕入先选项来自 /api/material/stock/supplier-names（material_stock.supplier_name 去重、名称排序）。label/value 均为 supplier_name（与列表筛选 suppliers 一致）
+// 仕入先选项：部品マスタに紐づく仕入先のみ（/api/part/stock/supplier-names）。label/value は supplier_name
 const fetchSupplierOptions = async () => {
   try {
     const result = await getPartStockSupplierNames()
@@ -2040,6 +2253,125 @@ const loadPartDropdownOptions = async (query: string) => {
     partSelectOptions.value = []
   } finally {
     partSelectLoading.value = false
+  }
+}
+
+const forecastDialogVisible = ref(false)
+const forecastPartCd = ref('')
+const forecastYear = ref(new Date().getFullYear())
+const forecastLoading = ref(false)
+const forecastSaving = ref(false)
+const forecastSource = ref<'manual' | 'from_product'>('manual')
+const forecastMonths = ref<{ month: number; forecast_qty: number }[]>(
+  Array.from({ length: 12 }, (_, i) => ({ month: i + 1, forecast_qty: 0 })),
+)
+const forecastYearOptions = computed(() => {
+  const y = new Date().getFullYear()
+  return [y - 1, y, y + 1, y + 2]
+})
+
+function resetForecastMonths() {
+  forecastMonths.value = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, forecast_qty: 0 }))
+  forecastSource.value = 'manual'
+}
+
+function openForecastDialog() {
+  forecastPartCd.value = searchForm.part_cd || ''
+  forecastYear.value = new Date().getFullYear()
+  resetForecastMonths()
+  forecastDialogVisible.value = true
+  if (forecastPartCd.value) void loadPartForecast()
+  else if (partSelectOptions.value.length === 0) loadPartDropdownOptions('')
+}
+
+function onForecastQtyEdit() {
+  forecastSource.value = 'manual'
+}
+
+async function loadPartForecast() {
+  if (!forecastPartCd.value) {
+    resetForecastMonths()
+    return
+  }
+  forecastLoading.value = true
+  try {
+    const res = await getPartMonthlyForecast(forecastPartCd.value, forecastYear.value)
+    const months = res?.data?.months || []
+    forecastMonths.value = Array.from({ length: 12 }, (_, i) => {
+      const hit = months.find((m) => m.month === i + 1)
+      return { month: i + 1, forecast_qty: Number(hit?.forecast_qty) || 0 }
+    })
+    forecastSource.value = 'manual'
+  } catch (error: any) {
+    if (!error?.response || error.response.status === 500) {
+      ElMessage.error('内示の取得に失敗しました')
+    }
+  } finally {
+    forecastLoading.value = false
+  }
+}
+
+async function loadForecastFromProducts() {
+  if (!forecastPartCd.value) {
+    ElMessage.warning('部品を選択してください')
+    return
+  }
+  forecastLoading.value = true
+  try {
+    const res = await loadPartForecastFromProducts({
+      part_cd: forecastPartCd.value,
+      year: forecastYear.value,
+      apply: false,
+    })
+    const data = res?.data
+    const months = data?.months || []
+    const total = months.reduce((sum, m) => sum + (Number(m.forecast_qty) || 0), 0)
+    if (!data?.product_count && total === 0) {
+      ElMessage.warning('この部品に紐づく製品内示がありません（BOMまたは月受注内示なし）')
+      return
+    }
+    forecastMonths.value = Array.from({ length: 12 }, (_, i) => {
+      const hit = months.find((m) => m.month === i + 1)
+      return { month: i + 1, forecast_qty: Number(hit?.forecast_qty) || 0 }
+    })
+    forecastSource.value = 'from_product'
+    ElMessage.success(
+      `製品内示を読み込みました（製品 ${data?.product_count || 0} 件）。保存で確定します。`,
+    )
+  } catch (error: any) {
+    if (!error?.response || error.response.status === 500) {
+      ElMessage.error('製品内示の読込に失敗しました')
+    }
+  } finally {
+    forecastLoading.value = false
+  }
+}
+
+async function savePartForecast() {
+  if (!guardPurchaseOperation(canEdit)) return
+  if (!forecastPartCd.value) {
+    ElMessage.warning('部品を選択してください')
+    return
+  }
+  forecastSaving.value = true
+  try {
+    await savePartMonthlyForecast({
+      part_cd: forecastPartCd.value,
+      year: forecastYear.value,
+      source: forecastSource.value,
+      months: forecastMonths.value.map((m) => ({
+        month: m.month,
+        forecast_qty: Number(m.forecast_qty) || 0,
+      })),
+    })
+    ElMessage.success('内示を保存しました')
+    forecastSource.value = 'manual'
+  } catch (error: any) {
+    if (!error?.response || error.response.status === 500) {
+      ElMessage.error('内示の保存に失敗しました')
+    }
+  } finally {
+    forecastSaving.value = false
   }
 }
 
@@ -3387,6 +3719,41 @@ const printFileName = computed(() => {
 const onPrintSupplierChange = () => {
   printForm.recipientCompany = printForm.supplier ? `${printForm.supplier} 御中` : ''
   printForm.recipientPersons = ''
+  void loadPrintForecast()
+}
+
+/** 注文書用：納入月の翌月・翌々月内示 { part_cd: { 'YYYY-MM': qty } } */
+const printForecastMap = ref<Record<string, Record<string, number>>>({})
+
+/** 基準月 YYYY-MM から +1〜+n 月の YYYY-MM 配列 */
+const forecastMonthsAfter = (ym: string, count: number): string[] => {
+  const m = (ym || '').match(/^(\d{4})-(\d{2})$/)
+  if (!m) return []
+  const y0 = Number(m[1])
+  const m0 = Number(m[2])
+  const out: string[] = []
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(y0, m0 - 1 + i, 1)
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  return out
+}
+
+const loadPrintForecast = async () => {
+  printForecastMap.value = {}
+  const month = printForm.month
+  const items = printItems.value
+  if (!month || !items.length) return
+  const cds = [...new Set(items.map((r) => (r.part_cd || '').trim()).filter(Boolean))]
+  const months = forecastMonthsAfter(month, 2)
+  if (!cds.length || months.length < 2) return
+  try {
+    const res = await getPartForecastBatch(cds, months)
+    printForecastMap.value = res?.data ?? {}
+  } catch (error) {
+    console.error('内示データの取得に失敗:', error)
+    printForecastMap.value = {}
+  }
 }
 
 const loadPrintOrders = async () => {
@@ -3415,10 +3782,12 @@ const loadPrintOrders = async () => {
         onPrintSupplierChange()
       }
     }
+    await loadPrintForecast()
   } catch (error) {
     console.error('注文データの取得に失敗:', error)
     ElMessage.error('注文データの取得に失敗しました')
     printOrders.value = []
+    printForecastMap.value = {}
   } finally {
     printLoading.value = false
   }
@@ -3439,6 +3808,60 @@ const handlePrintOrder = async () => {
   printOrders.value = []
   printConfirmDialogVisible.value = true
   await loadPrintOrders()
+}
+
+/** 一覧から：注文書と同じ HTML スタイルの PDF をダウンロード（発行ダイアログ経由） */
+const handleExportOrderSheetPdf = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+  const suppliers = (searchForm.supplier ?? []).map((s) => s.trim()).filter(Boolean)
+  if (suppliers.length === 0) {
+    ElMessage.warning('仕入先を選択してください（注文書は仕入先ごとに発行します）')
+    return
+  }
+  printSuppliersAuto.value = false
+  printSuppliers.value = suppliers
+  printForm.month = (searchForm.dateRange?.[0] || getTodayJapanStr()).slice(0, 7)
+  if (!suppliers.includes(printForm.supplier)) {
+    printForm.supplier = suppliers[0]
+    onPrintSupplierChange()
+  }
+  printOrders.value = []
+  printPdfExporting.value = true
+  try {
+    await loadPrintOrders()
+    await exportOrderSheetPdf()
+  } finally {
+    printPdfExporting.value = false
+  }
+}
+
+/** 注文書プレビュー／発行と同じ見た目の PDF を端末へ保存 */
+const exportOrderSheetPdf = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+  const items = printItems.value
+  if (items.length === 0) {
+    ElMessage.warning('対象の注文がありません')
+    return
+  }
+  const fileName = printFileName.value || `${(printForm.month || '').replace('-', '')}注文書.pdf`
+  printPdfExporting.value = true
+  try {
+    const blob = await generateOrderSheetImagePdfBlob(items)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`PDFを出力しました（${fileName}）`)
+  } catch (e: unknown) {
+    console.error('注文書PDF出力エラー:', e)
+    ElMessage.error((e as Error)?.message || 'PDF出力に失敗しました')
+  } finally {
+    printPdfExporting.value = false
+  }
 }
 
 const confirmPrint = async () => {
@@ -3678,12 +4101,73 @@ body {
 .os-grid tr.tier-bottom td { border-bottom-color: #64748b; }
 
 .os-spacer { flex: 1; min-height: 1mm; }
-.os-foot { flex-shrink: 0; height: 14mm; margin-top: 2mm; display: flex; align-items: stretch; gap: 5mm; }
+.os-forecast {
+  flex-shrink: 0;
+  align-self: flex-end;
+  width: 50%;
+  max-width: 140mm;
+  margin-top: 1.5mm;
+  padding: 1mm 0 0;
+  background: transparent;
+  border: none;
+}
+.os-forecast__title {
+  margin: 0 0 1mm;
+  font-size: 7.5pt;
+  font-weight: 800;
+  color: #334155;
+}
+.os-forecast__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.os-forecast__table th, .os-forecast__table td {
+  padding: 0.4mm 1.2mm;
+  font-size: 7pt;
+  line-height: 1.2;
+  border: 0.2mm solid #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.os-forecast__table thead th {
+  height: 4.2mm;
+  font-weight: 700;
+  text-align: center;
+  color: #1e293b;
+  background: #f1f5f9;
+}
+.os-forecast__table tbody td { height: 4.2mm; background: #fff; }
+.os-forecast__table td.cd { width: 28mm; text-align: center; font-variant-numeric: tabular-nums; }
+.os-forecast__table td.name { font-weight: 600; }
+.os-forecast__table td.qty {
+  width: 28mm;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.os-forecast__table tr.is-alt td { background: #fafafa; }
+.os-forecast__note {
+  margin: 1mm 0 0;
+  font-size: 6pt;
+  color: #64748b;
+}
+.os-page.is-forecast-only .os-forecast { margin-top: 0; flex: 1; }
+.os-foot {
+  flex-shrink: 0;
+  min-height: 0;
+  height: auto;
+  margin-top: 1.5mm;
+  display: flex;
+  align-items: stretch;
+  gap: 4mm;
+}
 .os-notes {
   flex: 1;
-  padding: 1.5mm 3mm;
-  font-size: 7pt;
-  line-height: 1.5;
+  padding: 0.8mm 2mm;
+  font-size: 6.2pt;
+  line-height: 1.25;
   color: #334155;
   background: #f8fafc;
   border-left: 0.8mm solid #6366f1;
@@ -3721,6 +4205,7 @@ body {
 interface OrderSheetMatrixRow {
   part_cd: string
   part_name: string
+  alias_name: string
   standard_spec: string
   part_material: string
   capacity_qty: number
@@ -3744,6 +4229,7 @@ const buildOrderSheetMatrix = (items: PartOrderItem[]): OrderSheetMatrixRow[] =>
       row = {
         part_cd: r.part_cd,
         part_name: r.part_name,
+        alias_name: (r.alias_name || '').trim(),
         standard_spec: r.standard_spec || '',
         part_material: (r.part_material || '').trim(),
         capacity_qty: Number(r.capacity_qty) || 0,
@@ -3795,8 +4281,8 @@ const OS_LAYOUT = {
   /** 1段表示の行高 / 複数段表示の1段あたりの行高 */
   rowH: 6.6,
   tierRowH: 5.2,
-  /** 最終ページの備考・合計欄 */
-  footH: 16,
+  /** 最終ページの備考・合計欄（注意事項4行・高さ可変） */
+  footH: 18,
 }
 
 /**
@@ -3866,8 +4352,9 @@ const generatePrintHtml = (items: PartOrderItem[]) => {
     ...Array<undefined>(Math.max(0, tierCols - t.length)).fill(undefined),
   ])
   // No・部品名・規格／材料・収容数・区分。コンパクト表示は日付列を広げるため部品名・規格を詰める
-  const fixedW = compact ? [6, 36, 18, 9, 11] : [6, 38, 24, 9, 11]
-  const tailW = [15, 15, 21]
+  // No・部品名・規格／材料・収容数・区分。単価・金額を詰め、規格を広げる
+  const fixedW = compact ? [6, 36, 27, 9, 11] : [6, 38, 33, 9, 11]
+  const tailW = [15, 11, 16]
   const dayW = (281 - [...fixedW, ...tailW].reduce((s, w) => s + w, 0)) / tiers[0].length
   const colgroup = `<colgroup>${[...fixedW, ...tiers[0].map(() => dayW), ...tailW]
     .map((w) => `<col style="width:${w.toFixed(2)}mm">`)
@@ -3923,13 +4410,13 @@ const generatePrintHtml = (items: PartOrderItem[]) => {
   const bodyRow = (r: OrderSheetMatrixRow, no: number) => {
     const alt = no % 2 === 0 ? ' is-alt' : ''
     const ppb = r.pieces_per_bundle !== 1 ? `<span class="ppb">入数${num(r.pieces_per_bundle)}</span>` : ''
-    /** 上段：規格、下段：部品マスタの部品材料 */
+    /** 上段：主表示、下段：副表示（別名／部品材料） */
     const stack = (main: string, sub: string) =>
       `<div class="l1">${main}</div>${sub ? `<div class="l2">${sub}</div>` : ''}`
     const stCls = OS_SETTLEMENT_CLASS[r.settlement_type] || 'st-other'
     const lead =
       `<td${span} class="c">${no}</td>` +
-      `<td${span} class="name">${escapeHtml(r.part_name)}</td>` +
+      `<td${span} class="name stack">${stack(escapeHtml(r.part_name), escapeHtml(r.alias_name))}</td>` +
       `<td${span} class="spec stack">${stack(escapeHtml(r.standard_spec) + ppb, escapeHtml(r.part_material))}</td>` +
       `<td${span} class="num">${r.capacity_qty ? num(r.capacity_qty) : ''}</td>` +
       `<td${span} class="c st">${r.settlement_type ? `<span class="${stCls}">${escapeHtml(r.settlement_type)}</span>` : ''}</td>`
@@ -3984,6 +4471,8 @@ const generatePrintHtml = (items: PartOrderItem[]) => {
       <div class="os-notes">
         <p>${escapeHtml(printForm.note1)}</p>
         <p>${escapeHtml(printForm.note2)}</p>
+        <p>${escapeHtml(printForm.note3)}</p>
+        <p>${escapeHtml(printForm.note4)}</p>
       </div>
       <div class="os-summary">
         <div><span>品目数</span><b>${num(rows.length)}</b></div>
@@ -3992,24 +4481,99 @@ const generatePrintHtml = (items: PartOrderItem[]) => {
       </div>
     </div>`
 
+  /** 内示参考表（部品×翌月・翌々月）。未登録・0 は空欄 */
+  const fcMonths = forecastMonthsAfter(printForm.month, 2)
+  const fcYm1 = fcMonths[0] || ''
+  const fcYm2 = fcMonths[1] || ''
+  const fcLabel = (ym: string) => {
+    const mm = ym.match(/^\d{4}-(\d{2})$/)
+    return mm ? `${Number(mm[1])}月内示` : '内示'
+  }
+  const fcSeen = new Set<string>()
+  const fcParts: { part_cd: string; part_name: string }[] = []
+  for (const r of rows) {
+    const cd = (r.part_cd || '').trim()
+    if (!cd || fcSeen.has(cd)) continue
+    fcSeen.add(cd)
+    fcParts.push({ part_cd: cd, part_name: r.part_name })
+  }
+  const fcMap = printForecastMap.value
+  const fcQtyCell = (cd: string, ym: string) => {
+    const q = Number(fcMap[cd]?.[ym] || 0)
+    return q > 0 ? num(q) : ''
+  }
+  const forecastTableHtml =
+    fcParts.length && fcYm1 && fcYm2
+      ? `
+    <div class="os-forecast">
+      <div class="os-forecast__title">内示参考（部品内示管理）</div>
+      <table class="os-forecast__table">
+        <colgroup>
+          <col style="width:28mm"><col><col style="width:28mm"><col style="width:28mm">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>部品CD</th><th>部品名</th>
+            <th>${escapeHtml(fcLabel(fcYm1))}</th><th>${escapeHtml(fcLabel(fcYm2))}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${fcParts
+            .map(
+              (p, i) => `<tr class="${i % 2 === 1 ? 'is-alt' : ''}">
+            <td class="cd">${escapeHtml(p.part_cd)}</td>
+            <td class="name">${escapeHtml(p.part_name)}</td>
+            <td class="qty">${fcQtyCell(p.part_cd, fcYm1)}</td>
+            <td class="qty">${fcQtyCell(p.part_cd, fcYm2)}</td>
+          </tr>`,
+            )
+            .join('')}
+        </tbody>
+      </table>
+      <p class="os-forecast__note">※ 部品内示管理の登録値（参考）。今回の注文数ではありません。</p>
+    </div>`
+      : ''
+
+  // 最終ページに内示表が収まるか（余白 mm）。収まらなければ内示のみの次ページ
+  const fcBlockH = fcParts.length
+    ? 5.5 + 4.2 + fcParts.length * 4.2 + 3.5
+    : 0
+  const lastPageRowCount = pages[pages.length - 1]?.length ?? 0
+  const rowH = multiTier ? OS_LAYOUT.tierRowH * tierCount : OS_LAYOUT.rowH
+  const headH = OS_LAYOUT.headRowH * Math.max(2, tierCount)
+  const bodyH = OS_LAYOUT.tableH - headH
+  const usedOnLast = lastPageRowCount * rowH
+  const availOnLast = bodyH - usedOnLast - OS_LAYOUT.footH
+  const forecastOnLast = Boolean(forecastTableHtml) && fcBlockH <= availOnLast + 1
+  const forecastExtraPage = Boolean(forecastTableHtml) && !forecastOnLast
+
   let no = 0
-  return pages
+  const mainPages = pages
     .map((pageRows, pi) => {
       const isLast = pi === pages.length - 1
       const body = pageRows.map((r) => bodyRow(r, ++no)).join('')
+      const showForecast = isLast && forecastOnLast
       return `
     <section class="os-page">
       ${headHtml}
       <table class="os-grid${multiTier ? ' is-multi-tier' : ''}${compact ? ' is-compact' : ''}">${colgroup}<thead>${thead}</thead><tbody>${body}</tbody></table>
       <div class="os-spacer"></div>
+      ${showForecast ? forecastTableHtml : ''}
       ${isLast ? footHtml : ''}
-      <div class="os-pagefoot">
-        <span>※ 表中の数値は各納入日の注文数。土曜は青、日曜は赤で表示</span>
-        <span>${escapeHtml(printForm.supplier)} ／ ${pi + 1} / ${pages.length}</span>
-      </div>
     </section>`
     })
     .join('')
+
+  const extraForecastPage = forecastExtraPage
+    ? `
+    <section class="os-page is-forecast-only">
+      ${headHtml}
+      <div class="os-spacer"></div>
+      ${forecastTableHtml}
+    </section>`
+    : ''
+
+  return mainPages + extraForecastPage
 }
 
 /** 注文書プレビュー：印刷と同じ HTML を画面表示用に（ページ間に余白・影） */
@@ -4201,9 +4765,10 @@ const confirmDataGeneration = async () => {
 
 // 生命周期
 onMounted(() => {
-  loadPartDropdownOptions('')
+  loadPartDropdownOptions(searchForm.part_cd || '')
   fetchData()
   fetchSupplierOptions()
+  saveSearchFilter()
 })
 </script>
 
@@ -6617,6 +7182,13 @@ onMounted(() => {
   --k-ico: #d97706;
   color: #92400e;
 }
+.po-modern .action-btn.forecast-btn {
+  --k-rgb: 13 148 136;
+  --k-tint: #ccfbf1;
+  --k-tint-h: #99f6e4;
+  --k-ico: #0d9488;
+  color: #115e59;
+}
 .po-modern .action-btn:hover,
 .po-modern .action-btn:focus-visible {
   color: rgb(var(--k-rgb));
@@ -6796,6 +7368,10 @@ onMounted(() => {
 .po-modern .table-actions .history-pdf-btn {
   --k-rgb: 124 58 237;
   border: 1px solid #6d28d9;
+}
+.po-modern .table-actions .order-sheet-pdf-btn {
+  --k-rgb: 16 185 129;
+  border: 1px solid #059669;
 }
 
 /* 表ヘッダー：タブ色の淡いグラデーション＋下端アクセント線 */
@@ -7500,8 +8076,11 @@ onMounted(() => {
   font-size: 12px;
   color: #475569;
 }
-.opv-issue {
+.opv-pdf {
   margin-left: auto;
+}
+.opv-issue {
+  margin-left: 0;
 }
 .opv-body {
   height: calc(96vh - 70px);
@@ -7820,6 +8399,21 @@ onMounted(() => {
   color: #64748b;
 }
 
+.osd-footer__pdf.el-button--success {
+  --k-rgb: 16 185 129;
+  border: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.osd-footer__pdf.el-button--success:not(.is-disabled):hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+}
+
+.osd-footer__pdf .el-icon {
+  margin-right: 4px;
+}
+
 .osd-footer__print.el-button--primary {
   --k-rgb: 99 102 241;
   border: none;
@@ -7842,5 +8436,126 @@ onMounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.part-forecast-dialog .el-dialog__header {
+  padding: 0;
+  margin: 0;
+}
+.part-forecast-dialog .el-dialog__body {
+  padding: 16px 18px 8px;
+}
+.pfd-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  color: #fff;
+  background: linear-gradient(125deg, #0f766e 0%, #0d9488 45%, #14b8a6 100%);
+}
+.pfd-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 20px;
+}
+.pfd-copy { min-width: 0; flex: 1; }
+.pfd-title { display: block; font-size: 16px; font-weight: 800; }
+.pfd-desc { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: rgba(255, 255, 255, 0.88); }
+.pfd-close { cursor: pointer; font-size: 18px; }
+.pfd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pfd-field { display: flex; align-items: center; gap: 8px; }
+.pfd-label { font-size: 13px; font-weight: 800; color: #115e59; }
+.pfd-part { width: 340px; }
+.pfd-year { width: 128px; }
+.part-forecast-dialog .pfd-part .el-select__wrapper,
+.part-forecast-dialog .pfd-year .el-select__wrapper {
+  min-height: 38px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+}
+.pfd-months {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.pfd-month {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(165deg, #ffffff 0%, #f0fdfa 55%, #ecfeff 100%);
+  border: 1px solid #99f6e4;
+  box-shadow:
+    0 1px 2px rgba(15, 118, 110, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pfd-month:hover {
+  border-color: #2dd4bf;
+  box-shadow:
+    0 4px 14px -8px rgba(13, 148, 136, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.pfd-month__label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #0f766e;
+}
+.pfd-month__input {
+  width: 100%;
+}
+.pfd-month__input .el-input__wrapper {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #99f6e4 inset;
+  transition: box-shadow 0.15s ease;
+}
+.pfd-month__input .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px #2dd4bf inset;
+}
+.pfd-month__input .el-input__wrapper.is-focus {
+  box-shadow:
+    0 0 0 1.5px #0d9488 inset,
+    0 0 0 3px rgba(13, 148, 136, 0.16);
+}
+.pfd-month__input .el-input__inner {
+  height: 42px;
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+  text-align: right;
+  line-height: 42px;
+}
+.pfd-month__input.is-disabled .el-input__wrapper {
+  background: #f1f5f9;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.pfd-month__input.is-disabled .el-input__inner {
+  color: #94a3b8;
+  -webkit-text-fill-color: #94a3b8;
+}
+.pfd-footer { display: flex; align-items: center; gap: 8px; width: 100%; }
+.pfd-footer__spacer { flex: 1; }
+@media (max-width: 768px) {
+  .pfd-months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pfd-part { width: 100%; }
+  .pfd-month__input .el-input__inner { font-size: 18px; }
 }
 </style>

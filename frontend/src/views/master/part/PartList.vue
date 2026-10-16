@@ -57,6 +57,15 @@
                 {{ t('master.part.keyword') }}: {{ filters.keyword }}
               </el-tag>
               <el-tag
+                v-if="filters.supplierCd"
+                closable
+                @close="handleClearFilter('supplierCd')"
+                type="success"
+                size="small"
+              >
+                {{ t('master.part.supplier') }}: {{ filterSupplierLabel }}
+              </el-tag>
+              <el-tag
                 v-if="filters.status === 0 || filters.status === 1"
                 closable
                 @close="handleClearFilter('status')"
@@ -104,7 +113,7 @@
 
       <div class="filters-grid">
         <el-row :gutter="16">
-          <el-col :lg="10" :md="12" :sm="24">
+          <el-col :lg="8" :md="12" :sm="24">
             <el-form-item :label="`🔍 ${t('master.part.keyword')}`">
               <el-input
                 v-model="filters.keyword"
@@ -113,6 +122,27 @@
                 style="width: 100%"
                 @keyup.enter="fetchList"
               />
+            </el-form-item>
+          </el-col>
+          <el-col :lg="8" :md="12" :sm="24">
+            <el-form-item :label="`🏭 ${t('master.part.supplier')}`">
+              <el-select
+                v-model="filters.supplierCd"
+                filterable
+                clearable
+                :loading="suppliersLoading"
+                :placeholder="t('master.part.supplierCdPh')"
+                style="width: 100%"
+                @change="onFilterSupplierChange"
+                @visible-change="onFilterSupplierVisible"
+              >
+                <el-option
+                  v-for="s in supplierRows"
+                  :key="s.supplier_cd"
+                  :label="formatSupplierOption(s)"
+                  :value="s.supplier_cd"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :lg="8" :md="12" :sm="24">
@@ -156,6 +186,12 @@
         <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="part-name">{{ row.part_name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="alias_name" :label="t('master.part.aliasName')" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.alias_name">{{ row.alias_name }}</span>
+            <span v-else class="muted-dash">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="category" :label="t('master.part.category')" width="110" show-overflow-tooltip>
@@ -323,6 +359,17 @@
                 <el-col :span="15">
                   <el-form-item :label="t('master.part.partName')" prop="part_name" class="part-dlg__fi">
                     <el-input v-model="form.part_name" maxlength="200" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="10">
+                <el-col :span="24">
+                  <el-form-item :label="t('master.part.aliasName')" class="part-dlg__fi">
+                    <el-input
+                      v-model="form.alias_name"
+                      maxlength="200"
+                      :placeholder="t('master.part.aliasNamePh')"
+                    />
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -592,12 +639,15 @@ function handlePageSizeChange() {
   fetchList()
 }
 
-const filters = ref<{ keyword: string; status?: number }>({ keyword: '' })
+const filters = ref<{ keyword: string; supplierCd: string; status?: number }>({
+  keyword: '',
+  supplierCd: '',
+})
 
 const hasActiveFilters = computed(() => {
   const kw = filters.value.keyword?.trim()
   const st = filters.value.status
-  return Boolean(kw) || st === 0 || st === 1
+  return Boolean(kw) || Boolean(filters.value.supplierCd) || st === 0 || st === 1
 })
 
 // ヘッダー統計カードの3Dチルト（マウス追従）
@@ -627,11 +677,21 @@ function resetStatTilt(e: MouseEvent) {
   })
 }
 
-function handleClearFilter(key: 'keyword' | 'status') {
+function handleClearFilter(key: 'keyword' | 'status' | 'supplierCd') {
   if (key === 'keyword') filters.value.keyword = ''
+  else if (key === 'supplierCd') filters.value.supplierCd = ''
   else filters.value.status = undefined
   page.value = 1
   fetchList()
+}
+
+function onFilterSupplierChange() {
+  page.value = 1
+  fetchList()
+}
+
+async function onFilterSupplierVisible(visible: boolean) {
+  if (visible && supplierRows.value.length === 0) await loadSuppliers()
 }
 
 const dlgVisible = ref(false)
@@ -643,6 +703,7 @@ const formRef = ref<FormInstance>()
 const form = reactive({
   part_cd: '',
   part_name: '',
+  alias_name: '' as string,
   category: '' as string,
   part_material: '' as string,
   kind: 'N' as PartKind,
@@ -716,6 +777,13 @@ function formatSupplierOption(s: Pick<Supplier, 'supplier_cd' | 'supplier_name'>
   return name ? `${s.supplier_cd} — ${name}` : s.supplier_cd
 }
 
+const filterSupplierLabel = computed(() => {
+  const cd = filters.value.supplierCd
+  if (!cd) return ''
+  const hit = supplierRows.value.find((s) => s.supplier_cd === cd)
+  return hit ? formatSupplierOption(hit) : cd
+})
+
 async function loadSuppliers() {
   suppliersLoading.value = true
   try {
@@ -754,7 +822,7 @@ function onCurrencyChange(c: string) {
 }
 
 function clearFilters() {
-  filters.value = { keyword: '', status: undefined }
+  filters.value = { keyword: '', supplierCd: '', status: undefined }
   page.value = 1
   fetchList()
 }
@@ -765,6 +833,7 @@ async function fetchList() {
     const st = filters.value.status
     const res = await getPartList({
       keyword: filters.value.keyword || undefined,
+      supplierCd: filters.value.supplierCd || undefined,
       status: st === 0 || st === 1 ? st : undefined,
       page: page.value,
       pageSize: pageSize.value,
@@ -783,6 +852,7 @@ function resetForm() {
   Object.assign(form, {
     part_cd: '',
     part_name: '',
+    alias_name: '',
     category: '',
     part_material: '',
     kind: 'N' as PartKind,
@@ -813,6 +883,7 @@ async function openForm(row?: PartMasterRow) {
     Object.assign(form, {
       part_cd: row.part_cd,
       part_name: row.part_name,
+      alias_name: row.alias_name || '',
       category: row.category || '',
       part_material: row.part_material || '',
       kind: (row.kind === 'T' || row.kind === 'N' || row.kind === 'F' ? row.kind : 'N') as PartKind,
@@ -847,6 +918,7 @@ async function submit() {
     if (isEdit.value && editId.value != null) {
       await updatePart(editId.value, {
         part_name: form.part_name,
+        alias_name: form.alias_name.trim() || null,
         category: form.category.trim() || null,
         part_material: form.part_material.trim() || null,
         kind: form.kind,
@@ -866,6 +938,7 @@ async function submit() {
       await createPart({
         part_cd: form.part_cd.trim(),
         part_name: form.part_name.trim(),
+        alias_name: form.alias_name.trim() || null,
         category: form.category.trim() || null,
         part_material: form.part_material.trim() || null,
         kind: form.kind,
@@ -911,6 +984,7 @@ const exportToCSV = async () => {
     const st = filters.value.status
     const allDataResponse = await getPartList({
       keyword: filters.value.keyword || undefined,
+      supplierCd: filters.value.supplierCd || undefined,
       status: st === 0 || st === 1 ? st : undefined,
       page: 1,
       pageSize: 10000,
@@ -1216,7 +1290,10 @@ const generateAndPrintQRCodes = async () => {
   }
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  void loadSuppliers()
+  fetchList()
+})
 </script>
 
 <style scoped>

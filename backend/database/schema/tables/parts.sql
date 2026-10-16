@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS `parts` (
   `id` int NOT NULL AUTO_INCREMENT COMMENT '主キー',
   `part_cd` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '部品CD（BOMの子品目CDと同一可）',
   `part_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '部品名',
+  `alias_name` varchar(200) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '別名',
   `category` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '分类',
   `part_material` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT '部品材料（使用材料）',
   `kind` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'N' COMMENT '種別 T/N/F',
