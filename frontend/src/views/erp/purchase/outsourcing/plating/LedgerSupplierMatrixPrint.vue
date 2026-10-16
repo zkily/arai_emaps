@@ -236,9 +236,10 @@ function cellHtml(cell: Cell | undefined, ymd: string): string {
   return `<td class="q ${dayClass(ymd)}">${qtyText}${defectText}</td>`
 }
 
-function totalHtml(qty: number, defect: number): string {
+function totalHtml(qty: number, defect: number, extraClass = ''): string {
   const defectText = defect ? `<span class="def">(${fmt(defect)})</span>` : ''
-  return `<td class="sum">${qty ? fmt(qty) : ''}${defectText}</td>`
+  const cls = ['sum', extraClass].filter(Boolean).join(' ')
+  return `<td class="${cls}">${qty ? fmt(qty) : ''}${defectText}</td>`
 }
 
 function printedAtLabel(): string {
@@ -247,57 +248,196 @@ function printedAtLabel(): string {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+function dayOfMonth(ymd: string): number {
+  return parseYmd(ymd).getDate()
+}
+
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return `${y}年${m}月`
+}
+
+function lastDayOfMonth(ym: string): number {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m, 0).getDate()
+}
+
+/** 期間に含まれる YYYY-MM を昇順で返す */
+function monthsInRange(start: string, end: string): string[] {
+  const list: string[] = []
+  const cursor = parseYmd(start)
+  cursor.setDate(1)
+  const endMonth = parseYmd(end)
+  endMonth.setDate(1)
+  while (cursor <= endMonth) {
+    list.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`)
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+  return list
+}
+
+/**
+ * 注文・受入印刷用：月ごとに必ず 1〜15 / 16〜末日 の2段に分ける。
+ * 列は期間内に含まれる日だけ（その半月に日が無ければ表自体を出さない）。
+ */
+function buildMonthHalves(
+  start: string,
+  end: string,
+): { ym: string; early: string[]; late: string[] }[] {
+  return monthsInRange(start, end).map((ym) => {
+    const last = lastDayOfMonth(ym)
+    const early: string[] = []
+    const late: string[] = []
+    for (let day = 1; day <= last; day++) {
+      const ymd = `${ym}-${String(day).padStart(2, '0')}`
+      if (ymd < start || ymd > end) continue
+      if (day <= 15) early.push(ymd)
+      else late.push(ymd)
+    }
+    return { ym, early, late }
+  })
+}
+
+function productRangeTotal(product: ProductRow, dates: string[]): { qty: number; defect: number } {
+  let qty = 0
+  let defect = 0
+  for (const d of dates) {
+    const cell = product.cells[d]
+    if (!cell) continue
+    qty += cell.qty
+    defect += cell.defect
+  }
+  return { qty, defect }
+}
+
+function renderMatrixTable(
+  products: ProductRow[],
+  dates: string[],
+  opts: {
+    caption?: string
+    sumLabel?: string
+    tall?: boolean
+    half?: 'early' | 'late'
+  },
+): string {
+  if (!dates.length) return ''
+  const colQty = new Map<string, number>()
+  const colDefect = new Map<string, number>()
+  for (const d of dates) {
+    colQty.set(d, 0)
+    colDefect.set(d, 0)
+  }
+  let grandQty = 0
+  let grandDefect = 0
+  const headDates = dates
+    .map((d) => `<th class="day ${dayClass(d)}">${dayHead(d)}<small>${WEEKDAYS[weekdayOf(d)]}</small></th>`)
+    .join('')
+  const body = products
+    .map((product, i) => {
+      const range = productRangeTotal(product, dates)
+      grandQty += range.qty
+      grandDefect += range.defect
+      const days = dates
+        .map((d) => {
+          const cell = product.cells[d]
+          colQty.set(d, (colQty.get(d) || 0) + (cell?.qty || 0))
+          colDefect.set(d, (colDefect.get(d) || 0) + (cell?.defect || 0))
+          return cellHtml(cell, d)
+        })
+        .join('')
+      const alt = i % 2 === 1 ? ' class="alt"' : ''
+      return `<tr${alt}><td class="cd">${esc(product.product_cd)}</td><td class="name">${esc(product.product_name)}</td>${days}${totalHtml(range.qty, range.defect)}</tr>`
+    })
+    .join('')
+  const footDays = dates
+    .map((d) => totalHtml(colQty.get(d) || 0, colDefect.get(d) || 0, dayClass(d)))
+    .join('')
+  const sumLabel = opts.sumLabel || '合計'
+  const halfCls = opts.half ? ` table-block--${opts.half}` : ''
+  const captionHtml = opts.caption
+    ? `<div class="table-caption${opts.half ? ` table-caption--${opts.half}` : ''}">${esc(opts.caption)}</div>`
+    : ''
+  return `
+    <div class="table-block${halfCls}">
+      ${captionHtml}
+      <table class="matrix-table${opts.tall ? ' is-tall' : ''}">
+        <thead>
+          <tr>
+            <th class="cd">製品CD</th>
+            <th class="name">製品名</th>
+            ${headDates}
+            <th class="sum">${esc(sumLabel)}</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+        <tfoot>
+          <tr>
+            <td class="label" colspan="2">${esc(sumLabel)}（${products.length} 製品）</td>
+            ${footDays}
+            ${totalHtml(grandQty, grandDefect)}
+          </tr>
+        </tfoot>
+      </table>
+    </div>`
+}
+
+function buildSupplierTables(block: SupplierBlock, dates: string[], start: string, end: string): string {
+  // 注文・受入とも：月ごとに上段(1〜15)・下段(16〜末日)の2表
+  const halves = buildMonthHalves(start, end)
+  const multiMonth = halves.length > 1
+  const parts: string[] = []
+  for (const { ym, early, late } of halves) {
+    const prefix = multiMonth ? `${monthLabel(ym)}　` : ''
+    if (early.length) {
+      parts.push(
+        renderMatrixTable(block.products, early, {
+          caption: `【上段】${prefix}1〜15日`,
+          sumLabel: '小計',
+          tall: true,
+          half: 'early',
+        }),
+      )
+    }
+    if (late.length) {
+      const lateEnd = dayOfMonth(late[late.length - 1])
+      parts.push(
+        renderMatrixTable(block.products, late, {
+          caption: `【下段】${prefix}16〜${lateEnd}日`,
+          sumLabel: '小計',
+          tall: true,
+          half: 'late',
+        }),
+      )
+    }
+  }
+  return (
+    parts.join('') ||
+    renderMatrixTable(block.products, dates, {
+      caption: '期間',
+      sumLabel: '合計',
+      tall: true,
+      half: 'early',
+    })
+  )
+}
+
 function buildHtml(rows: PlatingLedgerRow[], start: string, end: string): string {
   const dates = buildDates(start, end, rows)
   const blocks = buildBlocks(rows)
-  const dense = dates.length > 31
   const dataDaysOnly = spanDays(start, end) + 1 > MAX_FULL_DAYS
   const title = `${ledger.title}　${kindLabel.value}　外注先別二次元表`
   const period = `${formatSlash(start)} 〜 ${formatSlash(end)}`
   const note =
     props.kind === 'receiving'
-      ? 'セルの数値は受入数、（ ）内は不良数。土曜は青、日曜は赤。'
-      : 'セルの数値は注文数。土曜は青、日曜は赤。'
+      ? 'セルの数値は受入数、（ ）内は不良数。外注先ごとに上段（1〜15日）と下段（16〜末日）の2表。土曜は青、日曜は赤。'
+      : 'セルの数値は注文数。外注先ごとに上段（1〜15日）と下段（16〜末日）の2表。土曜は青、日曜は赤。'
   const omitNote = dataDaysOnly ? '期間が62日を超えるため、データのある日だけを表示しています。' : ''
   const printedAt = printedAtLabel()
 
-  const headDates = dates
-    .map((d) => {
-      return `<th class="day ${dayClass(d)}">${dayHead(d)}<small>${WEEKDAYS[weekdayOf(d)]}</small></th>`
-    })
-    .join('')
-
   return blocks
     .map((block, index) => {
-      const colQty = new Map<string, number>()
-      const colDefect = new Map<string, number>()
-      let grandQty = 0
-      let grandDefect = 0
-      for (const d of dates) {
-        colQty.set(d, 0)
-        colDefect.set(d, 0)
-      }
-      const body = block.products
-        .map((product, i) => {
-          grandQty += product.total
-          grandDefect += product.defectTotal
-          const days = dates
-            .map((d) => {
-              const cell = product.cells[d]
-              colQty.set(d, (colQty.get(d) || 0) + (cell?.qty || 0))
-              colDefect.set(d, (colDefect.get(d) || 0) + (cell?.defect || 0))
-              return cellHtml(cell, d)
-            })
-            .join('')
-          const alt = i % 2 === 1 ? ' class="alt"' : ''
-          return `<tr${alt}><td class="cd">${esc(product.product_cd)}</td><td class="name">${esc(product.product_name)}</td>${days}${totalHtml(product.total, product.defectTotal)}</tr>`
-        })
-        .join('')
-      const footDays = dates
-        .map((d) => totalHtml(colQty.get(d) || 0, colDefect.get(d) || 0).replace('class="sum"', `class="sum ${dayClass(d)}"`))
-        .join('')
       return `
-        <section class="sheet${index === blocks.length - 1 ? ' is-last' : ''}">
+        <section class="sheet sheet-split${index === blocks.length - 1 ? ' is-last' : ''}${props.kind === 'receiving' ? ' sheet-receiving' : ' sheet-order'}">
           <header class="head">
             <div>
               <div class="title">${esc(title)}</div>
@@ -305,24 +445,7 @@ function buildHtml(rows: PlatingLedgerRow[], start: string, end: string): string
             </div>
             <div class="issued">印刷　${esc(printedAt)}<br>${index + 1} / ${blocks.length} 外注先</div>
           </header>
-          <table class="${dense ? 'is-dense' : ''}">
-            <thead>
-              <tr>
-                <th class="cd">製品CD</th>
-                <th class="name">製品名</th>
-                ${headDates}
-                <th class="sum">合計</th>
-              </tr>
-            </thead>
-            <tbody>${body}</tbody>
-            <tfoot>
-              <tr>
-                <td class="label" colspan="2">合計（${block.products.length} 製品）</td>
-                ${footDays}
-                ${totalHtml(grandQty, grandDefect)}
-              </tr>
-            </tfoot>
-          </table>
+          ${buildSupplierTables(block, dates, start, end)}
           <footer class="foot">${esc(note)}${omitNote ? ` ${esc(omitNote)}` : ''}</footer>
         </section>`
     })
@@ -353,6 +476,28 @@ body {
 .title { font-size: 16pt; font-weight: 800; letter-spacing: 0.04em; }
 .meta { margin-top: 1mm; font-size: 10pt; font-weight: 700; }
 .issued { font-size: 8.5pt; line-height: 1.45; text-align: right; color: #334155; }
+.table-block { margin-bottom: 5mm; }
+.table-block:last-of-type { margin-bottom: 0; }
+.table-block--late {
+  margin-top: 5mm;
+  padding-top: 4mm;
+  border-top: 0.5mm dashed #1d4ed8;
+}
+.sheet-receiving .table-block--late { border-top-color: #0f766e; }
+.table-caption {
+  display: inline-block;
+  margin: 0 0 1.8mm;
+  padding: 1mm 3mm;
+  font-size: 10pt;
+  font-weight: 800;
+  color: #fff;
+  border-radius: 1.2mm;
+  background: #2563eb;
+}
+.table-caption--early { background: #2563eb; }
+.table-caption--late { background: #1d4ed8; }
+.sheet-receiving .table-caption--early { background: #0d9488; }
+.sheet-receiving .table-caption--late { background: #0e7490; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 th, td {
   border: 0.2mm solid #94a3b8;
@@ -364,6 +509,16 @@ th, td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+table.is-tall thead th { height: 9mm; padding: 1.2mm 0.6mm; font-size: 8.5pt; }
+table.is-tall thead th small { font-size: 7pt; margin-top: 0.3mm; }
+table.is-tall tbody td,
+table.is-tall tfoot td {
+  height: 8.5mm;
+  padding: 1.4mm 0.8mm;
+  font-size: 9pt;
+  line-height: 1.35;
+}
+table.is-tall .def { font-size: 8pt; }
 thead th {
   font-weight: 700;
   text-align: center;
@@ -380,9 +535,8 @@ tbody tr.alt td.sum { background: #e0e7ff; }
 .def { margin-left: 0.4mm; font-size: 6.5pt; font-weight: 700; color: #be123c; }
 tfoot td { font-weight: 800; background: #e2e8f0; }
 tfoot td.label { text-align: right; padding-right: 2mm; }
-.is-dense th, .is-dense td { font-size: 6pt; padding: 0.4mm 0.2mm; }
-.is-dense .def { font-size: 5.5pt; }
 .foot { margin-top: 2mm; font-size: 8pt; color: #475569; }
+.sheet-split .foot { margin-top: 2.5mm; }
 .kind-receiving .head { border-bottom-color: #0f766e; }
 .kind-receiving .title { color: #115e59; }
 .kind-receiving thead th { color: #115e59; background: #ccfbf1; }
